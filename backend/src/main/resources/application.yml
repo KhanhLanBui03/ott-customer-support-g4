@@ -1,0 +1,28 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: chat-app
+
+jwt:
+  secret: your-super-secret-key-change-in-production-min-256-bits
+  expiration: 86400000
+
+aws:
+  region: ap-southeast-1
+  dynamodb:
+    endpoint: http://localhost:8000
+  accessKey: your-access-key
+  secretKey: your-secret-key
+
+dynamodb:
+  tables:
+    users: chat_users
+    conversations: chat_conversations
+    messages: chat_messages
+
+cors:
+  allowed-origins:
+    - http://localhost:3000
+    - http://localhost:8081
