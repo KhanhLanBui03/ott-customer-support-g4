@@ -1,27 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-cursor-dark: #050507;
-  --color-cursor-accent: #00d992;
-  --color-cursor-mint: #2fd6a1;
-  --color-cursor-cream: #f2f2f2;
-  --color-cursor-error: #fb565b;
-  --color-cursor-success: #00d992;
+  --color-cursor-dark: #0f172a; /* Deep Slate Navy */
+  --color-cursor-accent: #6366f1; /* Indigo */
+  --color-cursor-violet: #8b5cf6; /* Violet */
+  --color-cursor-mint: #10b981; /* Emerald */
+  --color-cursor-cream: #f8fafc; /* Slate 50 */
+  --color-cursor-error: #ef4444; /* red 500 */
+  --color-cursor-success: #10b981; 
   
   --color-surface-100: #ffffff;
-  --color-surface-200: #f8f9fa;
-  --color-surface-300: #e9ecef;
-  --color-surface-400: #dee2e6;
+  --color-surface-200: #f1f5f9;
+  --color-surface-300: #e2e8f0;
+  --color-surface-400: #cbd5e1;
   
-  --font-serif: "system-ui", -apple-system, "Segoe UI", "Roboto", "Helvetica Neue", "Arial", sans-serif;
-  --font-mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", monospace;
+  --font-serif: "system-ui", -apple-system, sans-serif;
+  --font-mono: "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
 }
 
 :root {
-  --primary: #00d992;
-  --secondary: #3d3a39;
-  --background: #ffffff;
-  --foreground: #050507;
+  --primary: #6366f1;
+  --secondary: #475569;
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
 body {

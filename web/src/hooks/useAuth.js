@@ -1,9 +1,10 @@
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { setCredentials, logout as logoutAction } from '../store/authSlice';
 import { authApi } from '../api/authApi';
 
 export const useAuth = () => {
   const dispatch = useDispatch();
+  const { user, token, isAuthenticated, loading } = useSelector((state) => state.auth);
 
   const login = async (credentials) => {
     const response = await authApi.login(credentials);
@@ -15,8 +16,12 @@ export const useAuth = () => {
       user: {
         id: data.userId,
         phoneNumber: data.phoneNumber,
-        fullName: data.fullName,
-        avatar: data.avatar
+        firstName: data.firstName,
+        lastName: data.lastName,
+        fullName: data.fullName || (data.firstName || data.lastName ? `${data.lastName} ${data.firstName}`.trim() : data.phoneNumber),
+        avatar: data.avatarUrl || data.avatar,
+        bio: data.bio,
+        email: data.email
       }
     };
     
@@ -33,8 +38,12 @@ export const useAuth = () => {
       user: {
         id: data.userId,
         phoneNumber: data.phoneNumber,
-        fullName: data.fullName,
-        avatar: data.avatar
+        firstName: data.firstName,
+        lastName: data.lastName,
+        fullName: data.fullName || (data.firstName || data.lastName ? `${data.lastName} ${data.firstName}`.trim() : data.phoneNumber),
+        avatar: data.avatarUrl || data.avatar,
+        bio: data.bio,
+        email: data.email
       }
     };
     
@@ -46,5 +55,5 @@ export const useAuth = () => {
     dispatch(logoutAction());
   };
 
-  return { login, register, logout };
+  return { user, token, isAuthenticated, loading, login, register, logout };
 };

@@ -27,11 +27,17 @@ const Register = () => {
       return;
     }
 
+    const nameParts = formData.fullName.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'User';
+
     try {
       await register({
         phoneNumber: formData.phoneNumber,
-        fullName: formData.fullName,
-        password: formData.password
+        firstName,
+        lastName,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword
       });
       navigate('/');
     } catch (err) {
