@@ -22,6 +22,9 @@ axiosClient.interceptors.response.use(
   (response) => response.data,
   (error) => {
     if (error.response?.status === 401) {
+      if (error.config?.url?.includes('/auth/change-password')) {
+        return Promise.reject(error);
+      }
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (window.location.pathname !== '/login') {

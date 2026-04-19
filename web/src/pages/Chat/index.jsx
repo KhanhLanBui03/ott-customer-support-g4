@@ -7,9 +7,11 @@ import ChatWindow from '../../components/ChatWindow';
 import ConversationInfo from '../../components/ConversationInfo';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import ProfileModal from '../../components/ProfileModal';
+import ChangePasswordModal from '../../components/ChangePasswordModal';
 import SearchUserModal from '../../components/SearchUserModal';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import NotificationModal from '../../components/NotificationModal';
+import DeleteAccountModal from '../../components/DeleteAccountModal';
 import VideoCall from '../../components/VideoCall';
 import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin } from 'lucide-react';
 import { setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
@@ -32,10 +34,13 @@ const Chat = () => {
   useWebSocket(); // Initialize global real-time listener
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
 
   // Call management
   const [localStream, setLocalStream] = useState(null);
@@ -118,16 +123,61 @@ const Chat = () => {
     <div className="flex h-screen bg-white overflow-hidden font-sans">
       {/* 1. Global Icon Sidebar (Leftmost) */}
       <div className="w-[84px] flex-shrink-0 bg-cursor-dark flex flex-col items-center py-8 space-y-10 z-50">
-        <div 
-          onClick={() => setIsProfileOpen(true)}
-          className="w-14 h-14 rounded-2xl bg-white/5 p-0.5 border border-white/10 hover:scale-105 transition-transform cursor-pointer overflow-hidden shadow-xl shadow-black/20"
-        >
-          {user?.avatar ? (
-            <img src={user.avatar} alt="" className="w-full h-full object-cover rounded-2xl" />
-          ) : (
-            <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-2xl">
-               <User className="text-white/20" size={24} />
-            </div>
+        <div className="relative">
+          <div 
+            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            className="w-14 h-14 rounded-2xl bg-white/5 p-0.5 border border-white/10 hover:scale-105 transition-transform cursor-pointer overflow-hidden shadow-xl shadow-black/20"
+          >
+            {user?.avatar ? (
+              <img src={user.avatar} alt="" className="w-full h-full object-cover rounded-2xl" />
+            ) : (
+              <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-2xl">
+                 <User className="text-white/20" size={24} />
+              </div>
+            )}
+          </div>
+          
+          {isUserMenuOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsUserMenuOpen(false)}
+              ></div>
+              <div className="absolute top-0 left-20 ml-2 w-64 bg-[#1e2330] rounded-2xl shadow-2xl border border-white/10 py-2 z-50 animate-fade-in flex flex-col">
+                <div className="px-5 py-3 border-b border-white/10 mb-2">
+                  <h3 className="font-bold text-white truncate text-base">{user?.fullName || 'Người dùng'}</h3>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsProfileOpen(true);
+                  }}
+                  className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Hồ sơ của bạn
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsChangePasswordOpen(true);
+                  }}
+                  className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Đổi mật khẩu
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsDeleteAccountOpen(true);
+                  }}
+                  className="w-full text-left px-5 py-3 text-[14px] text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-colors border-t border-white/10"
+                >
+                  Xóa tài khoản
+                </button>
+              </div>
+            </>
           )}
         </div>
         
@@ -339,9 +389,11 @@ const Chat = () => {
 
       {/* Modals & Overlays */}
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
       <SearchUserModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <CreateGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} />
       <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
+      <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />
       
       <VideoCall 
         status={callStatus}

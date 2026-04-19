@@ -9,6 +9,7 @@ export const authApi = {
   },
   getProfile: () => axiosClient.get('/users/profile'),
   forgotPassword: (phoneNumber) => axiosClient.post('/auth/forgot-password', { phoneNumber }),
+  changePassword: (data) => axiosClient.post('/auth/change-password', data),
 };
 
 export default authApi;

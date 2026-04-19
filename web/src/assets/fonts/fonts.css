@@ -1,0 +1,15 @@
+/* 
+ * Thư mục này dùng để chứa các tệp font chữ dùng chung cho toàn bộ dự án.
+ * Nếu có các file font (.ttf, .woff2, .otf), hãy copy vào đây và import thông qua @font-face.
+ */
+
+@font-face {
+  font-family: 'Times New Roman';
+  src: local('Times New Roman'), local('Times');
+  font-display: swap;
+}
+
+/* Biến font toàn cục */
+:root {
+  --font-primary: 'Times New Roman', Times, serif;
+}
