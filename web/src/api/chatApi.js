@@ -30,6 +30,7 @@ export const chatApi = {
   deleteMessage: (conversationId, messageId) => axiosClient.delete(`/messages/${messageId}?conversationId=${encodeURIComponent(conversationId)}`),
   pinMessage: (conversationId, messageId) => axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`),
   unpinMessage: (conversationId, messageId) => axiosClient.delete(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`),
+  togglePinConversation: (conversationId) => axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-pin`),
 };
 
 export default chatApi;

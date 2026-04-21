@@ -9,7 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,50 +18,61 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AIService {
 
-    @Value("${google.gemini.api-key:}")
+    @Value("${spring.ai.google.genai.api-key:}")
     private String geminiApiKey;
 
-    @Value("${google.gemini.model:gemini-1.5-flash}")
+    @Value("${spring.ai.google.genai.chat.options.model:gemini-2.5-flash}")
     private String geminiModel;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
     public String generateResponse(String userMessage) {
-        if (geminiApiKey != null && !geminiApiKey.isEmpty() && !geminiApiKey.equals("your-gemini-key")) {
-            try {
-                return callGemini(userMessage);
-            } catch (Exception e) {
-                log.error("Gemini Error: {}", e.getMessage());
-            }
+        if (geminiApiKey == null || geminiApiKey.isEmpty()) {
+            return "Vui lòng cấu hình GEMINI_API_KEY để sử dụng trợ lý AI!";
         }
 
-        return "Xin lỗi, hệ thống AI đang bận hoặc gặp sự cố kết nối. Vui lòng thử lại sau giây lát!";
+        try {
+            return callGemini(userMessage);
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            log.error("Gemini API Error: {}", e.getStatusCode());
+            return "Trợ lý AI đang gặp lỗi kết nối.";
+        } catch (Exception e) {
+            log.error("Gemini Critical Error: ", e);
+            return "Xin lỗi, hệ thống AI đang gặp sự cố. Vui lòng thử lại sau!";
+        }
     }
 
     private String callGemini(String userPrompt) {
-        String url = "https://generativelanguage.googleapis.com/v1/models/" + geminiModel + ":generateContent?key=" + geminiApiKey;
-        
-        Map<String, Object> part = new HashMap<>();
-        String systemInstruction = "Bạn là 'ShopExpert AI', một trợ lý chuyên về thương mại điện tử. " +
-                "NHIỆM VỤ: Chỉ trả lời các câu hỏi liên quan đến mua sắm, giá cả, sản phẩm, cửa hàng và thương mại điện tử. " +
-                "QUY TẮC: Nếu người dùng hỏi về bất kỳ chủ đề nào khác KHÔNG liên quan đến thương mại điện tử (ví dụ: thơ ca, chính trị, thể thao, lập trình, v.v.), " +
-                "bạn bắt buộc phải trả lời lịch sự rằng: 'Xin lỗi, tôi là trợ lý chuyên về thương mại điện tử nên không thể trả lời câu hỏi này. Bạn có cần hỗ trợ gì về mua sắm không?'. " +
-                "Hãy trả lời bằng Tiếng Việt. " +
-                "Câu hỏi của người dùng: ";
-        part.put("text", systemInstruction + userPrompt);
-        
+        String url = "https://generativelanguage.googleapis.com/v1/models/" + geminiModel + ":generateContent?key="
+                + geminiApiKey;
+
+        // System Instruction - Chuyên gia Ecommerce
+        String systemInstruction = "BẠN LÀ: 'Ecommerce Expert AI' - trợ lý thông minh chuyên sâu về thương mại điện tử.\n"
+                +
+                "PHẠM VI TRẢ LỜI ĐƯỢC PHÉP:\n" +
+                "1. Giá cả sản phẩm, tư vấn kích cỡ (size).\n" +
+                "2. Thông tin tính năng, liệu, so sánh sản phẩm.\n" +
+                "3. Quy trình mua hàng, vận chuyển, đổi trả.\n\n" +
+                "QUY TẮC NGHIÊM NGẶT:\n" +
+                "- TUYỆT ĐỐI KHÔNG trả lời ngoài lĩnh vực thương mại điện tử.\n" +
+                "- Nếu hỏi ngoài phạm vi, hãy từ chối khéo léo và hướng về chủ đề mua sắm.\n" +
+                "- Phản hồi bằng Tiếng Việt.";
+
+        Map<String, Object> textPart = new HashMap<>();
+        textPart.put("text", systemInstruction + "\n\nCâu hỏi khách hàng: " + userPrompt);
+
         Map<String, Object> contentValue = new HashMap<>();
-        contentValue.put("parts", List.of(part));
-        
+        contentValue.put("parts", List.of(textPart));
+
         Map<String, Object> body = new HashMap<>();
         body.put("contents", List.of(contentValue));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        
+
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         Map<String, Object> response = restTemplate.postForObject(url, entity, Map.class);
-        
+
         if (response != null && response.containsKey("candidates")) {
             List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
             if (!candidates.isEmpty()) {
@@ -72,7 +82,6 @@ public class AIService {
                 return (String) parts.get(0).get("text");
             }
         }
-        throw new RuntimeException("Gemini empty response");
+        return "AI không trả về nội dung hợp lệ.";
     }
-
 }

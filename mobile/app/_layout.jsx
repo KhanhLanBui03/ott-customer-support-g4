@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
-import { store } from '../src/store/store';
+import store from '../src/store/store';
 import { restoreState } from '../src/store/authSlice';
 
 // Keep splash screen visible while we fetch auth state
@@ -12,13 +12,15 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutNav() {
   const [isReady, setIsReady] = useState(false);
   const dispatch = useDispatch();
-  const accessToken = useSelector((state) => state.auth.accessToken);
-  const isLoading = useSelector((state) => state.auth.loading);
+  const router = useRouter();
+  const segments = useSegments();
 
+  const { accessToken, loading: authLoading } = useSelector((state) => state.auth);
+
+  // 1. Restore State on mount
   useEffect(() => {
     const initiateApp = async () => {
       try {
-        // Restore state from SecureStore
         const token = await SecureStore.getItemAsync('accessToken');
         const refreshToken = await SecureStore.getItemAsync('refreshToken');
         const userJson = await SecureStore.getItemAsync('user');
@@ -38,22 +40,30 @@ function RootLayoutNav() {
       }
     };
 
-    if (!isLoading) {
-      initiateApp();
+    initiateApp();
+  }, [dispatch]);
+
+  // 2. Handle Redirects based on Auth State
+  useEffect(() => {
+    if (!isReady) return;
+
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!accessToken && !inAuthGroup) {
+      // Not logged in and trying to access main app -> Redirect to login
+      router.replace('/(auth)/login');
+    } else if (accessToken && inAuthGroup) {
+      // Logged in and trying to access auth screens -> Redirect to home
+      router.replace('/(main)');
     }
-  }, [isLoading, dispatch]);
+  }, [accessToken, isReady, segments]);
 
   if (!isReady) {
     return null;
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: accessToken ? 'fade' : 'none',
-      }}
-    >
+    <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(main)" options={{ headerShown: false }} />
     </Stack>

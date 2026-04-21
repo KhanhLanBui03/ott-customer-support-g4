@@ -15,6 +15,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/media")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class MediaController {
 
     private final S3Service s3Service;
@@ -24,15 +25,25 @@ public class MediaController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "general") String folder
     ) {
+        log.info("Received file upload request: {}, size: {} bytes, folder: {}", 
+            file.getOriginalFilename(), file.getSize(), folder);
+            
         if (file.isEmpty()) {
+            log.warn("File upload attempt with empty file");
             return ResponseEntity.badRequest().body(ApiResponse.error("File is empty", 400));
         }
 
-        String url = s3Service.uploadFile(file, folder);
-        return ResponseEntity.ok(ApiResponse.success(
-                Map.of("url", url, "fileName", file.getOriginalFilename()),
-                "File uploaded successfully"
-        ));
+        try {
+            String url = s3Service.uploadFile(file, folder);
+            log.info("File uploaded successfully to: {}", url);
+            return ResponseEntity.ok(ApiResponse.success(
+                    Map.of("url", url, "fileName", file.getOriginalFilename()),
+                    "File uploaded successfully"
+            ));
+        } catch (Exception e) {
+            log.error("Failed to upload file to S3: {}", file.getOriginalFilename(), e);
+            throw e; // Rethrow to let global exception handler handle it
+        }
     }
 
     @org.springframework.web.bind.annotation.GetMapping("/presigned-download")
