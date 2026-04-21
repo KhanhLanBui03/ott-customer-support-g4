@@ -20,7 +20,7 @@ export const userApi = {
 
   // Update current user profile
   updateProfile: (data) => {
-    // Expected: { fullName, avatar, status }
+    // Expected: { firstName, lastName, avatarUrl, bio, status }
     return axiosClient.put('/users/me', data);
   },
 

@@ -13,9 +13,9 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import MessageList from '../../components/MessageList';
-import MessageInput from '../../components/MessageInput';
-import { fetchMessages, sendMessage } from '../../store/chatSlice';
+import MessageList from '../../../src/components/MessageList';
+import MessageInput from '../../../src/components/MessageInput';
+import { fetchMessages, sendMessage } from '../../../src/store/chatSlice';
 
 /**
  * ChatDetailScreen (Mobile)
@@ -28,16 +28,20 @@ const ChatDetailScreen = () => {
   const { id: conversationId } = useLocalSearchParams();
 
   // Redux selectors
-  const messages = useSelector((state) => state.chat.messages);
-  const isLoading = useSelector((state) => state.chat.isLoading);
-  const isSending = useSelector((state) => state.chat.isSending || false);
-  const typingUsers = useSelector((state) => state.chat.typingUsers || []);
-  const onlineUsers = useSelector((state) => state.chat.onlineUsers || []);
+  const chatState = useSelector((state) => state.chat);
+  const messages = chatState.messages || [];
+  const isLoading = chatState.isLoading;
+  const isSending = chatState.isSending || false;
+  const typingUsers = chatState.typingUsers || [];
+  const onlineUsers = chatState.onlineUsers || [];
   const currentUser = useSelector((state) => state.auth.user);
-  const conversations = useSelector((state) => state.chat.conversations);
+  const conversations = chatState.conversations || [];
 
   // Get conversation details from Redux
-  const conversation = conversations?.find((c) => c.conversationId === conversationId);
+  const conversation = React.useMemo(() =>
+    conversations.find((c) => c.conversationId === conversationId),
+    [conversations, conversationId]
+  );
 
   // Fetch messages on mount when conversationId is available
   useEffect(() => {

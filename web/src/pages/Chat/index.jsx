@@ -177,7 +177,7 @@ const Chat = () => {
   );
 
   return (
-    <div className={`flex h-screen bg-white overflow-hidden font-sans relative ${isDark ? 'dark' : ''}`}>
+    <div className={`flex h-screen bg-white overflow-hidden font-times relative ${isDark ? 'dark' : ''}`}>
       {/* 1. Global Icon Sidebar (Desktop: Leftmost, Mobile: Bottom Nav) */}
       {(!isMobile || !activeConversationId) && (
         <div className={`
