@@ -90,9 +90,19 @@ public class MessageService {
                 publishMessageEvent(savedMessage);
                 
                 // Update denormalized last message in conversations
+                String lastMessageText = savedMessage.getContent();
+                if (lastMessageText == null || lastMessageText.isBlank()) {
+                    lastMessageText = switch (savedMessage.getType()) {
+                        case "IMAGE" -> "[Hình ảnh]";
+                        case "VIDEO" -> "[Video]";
+                        case "FILE" -> "[Tệp tin]";
+                        default -> "[Đính kèm]";
+                    };
+                }
+                
                 conversationService.updateLastMessage(
                     savedMessage.getConversationId(), 
-                    savedMessage.getContent(), 
+                    lastMessageText, 
                     savedMessage.getCreatedAt(), 
                     savedMessage.getSenderId()
                 );
@@ -328,6 +338,10 @@ public class MessageService {
             );
             
             Message savedBotMessage = messageRepository.save(botMessage);
+            // Ensure timestamp is set for real-time delivery
+            if (savedBotMessage.getCreatedAt() == null) {
+                savedBotMessage.setCreatedAt(System.currentTimeMillis());
+            }
             publishMessageEvent(savedBotMessage);
         }
     }

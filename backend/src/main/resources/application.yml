@@ -12,6 +12,14 @@ spring:
   profiles:
     active: dev
 
+  ai:
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY:}
+        chat:
+          options:
+            model: gemini-2.5-flash
+
   # Security
   security:
     user:
@@ -62,6 +70,7 @@ aws.dynamodb:
     stories: chat_stories
     contacts: chat_contacts
     devices: chat_devices
+    invitations: chat_group_invitations
 
 # S3 Configuration
 aws.s3:
@@ -97,12 +106,6 @@ cors:
 firebase:
   config-path: ${FIREBASE_CONFIG_PATH:}
   database-url: ${FIREBASE_DATABASE_URL:}
-
-# Google Gemini Configuration
-google:
-  gemini:
-    api-key: ${GEMINI_API_KEY:AIzaSyDIBlwRg1g9KvWlhxxJ1fj-siWX9N4an9g}
-    model: gemini-1.5-flash
 
 # Logging
 logging:

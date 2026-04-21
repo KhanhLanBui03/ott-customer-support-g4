@@ -9,17 +9,20 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import MessageList from '../../components/MessageList';
-import MessageInput from '../../components/MessageInput';
-import { fetchMessages, sendMessage } from '../../store/chatSlice';
+import { COLORS, SPACING, RADIUS, SHADOWS } from '../../../src/utils/theme';
+import CONFIG from '../../../src/config';
+import MessageList from '../../../src/components/MessageList';
+import MessageInput from '../../../src/components/MessageInput';
+import { fetchMessages, sendMessage } from '../../../src/store/chatSlice';
 
 /**
- * ChatDetailScreen (Mobile)
- * Detailed chat view for a specific conversation with Redux integration
+ * Premium ChatDetailScreen
+ * Fully themed chat screen with specialized AI Assistant headers.
  */
 
 const ChatDetailScreen = () => {
@@ -27,97 +30,93 @@ const ChatDetailScreen = () => {
   const router = useRouter();
   const { id: conversationId } = useLocalSearchParams();
 
-  // Redux selectors
-  const messages = useSelector((state) => state.chat.messages);
-  const isLoading = useSelector((state) => state.chat.isLoading);
-  const isSending = useSelector((state) => state.chat.isSending || false);
-  const typingUsers = useSelector((state) => state.chat.typingUsers || []);
-  const onlineUsers = useSelector((state) => state.chat.onlineUsers || []);
-  const currentUser = useSelector((state) => state.auth.user);
+  const themeMode = useSelector((state) => state.auth.theme || 'light');
+  const theme = COLORS[themeMode];
+
+  const messages = useSelector((state) => state.chat.messages[conversationId] || []);
+  const isLoading = useSelector((state) => state.chat.loading);
   const conversations = useSelector((state) => state.chat.conversations);
+  const currentUser = useSelector((state) => state.auth.user);
 
-  // Get conversation details from Redux
-  const conversation = conversations?.find((c) => c.conversationId === conversationId);
+  const conversation = conversations?.find((c) => (c.conversationId || c.id) === conversationId);
+  
+  const isAI = conversationId.includes(CONFIG.AI_BOT_ID) || 
+               conversation?.participants?.some(p => p.userId === CONFIG.AI_BOT_ID);
 
-  // Fetch messages on mount when conversationId is available
   useEffect(() => {
     if (conversationId) {
-      dispatch(fetchMessages(conversationId));
+      dispatch(fetchMessages({ conversationId }));
     }
   }, [conversationId, dispatch]);
 
   const handleSendMessage = (content) => {
     if (!content.trim() || !conversationId) return;
-
     dispatch(
       sendMessage({
         conversationId,
         content,
+        senderId: currentUser.userId,
+        senderName: `${currentUser.firstName} ${currentUser.lastName}`,
         type: 'TEXT',
       })
     );
   };
 
-  const handleBack = () => {
-    router.back();
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar barStyle={themeMode === 'dark' ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Messages Header */}
-        <View style={styles.messagesHeader}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={24} color="#667eea" />
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.border, backgroundColor: theme.background }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <MaterialCommunityIcons name="chevron-left" size={32} color={theme.text} />
           </TouchableOpacity>
+          
           <View style={styles.headerContent}>
-            {conversation?.avatar ? (
+            <View style={styles.avatarContainer}>
               <Image
-                source={{ uri: conversation.avatar }}
-                style={styles.headerAvatar}
+                source={{ uri: conversation?.avatarUrl || 'https://via.placeholder.com/100' }}
+                style={[styles.headerAvatar, { backgroundColor: theme.surfaceSecondary }]}
               />
-            ) : (
-              <View style={styles.headerAvatarPlaceholder}>
-                <Text style={styles.headerAvatarText}>
-                  {(conversation?.name || 'U')[0].toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <View style={styles.headerInfo}>
-              <Text style={styles.headerTitle}>{conversation?.name || 'Chat'}</Text>
-              {onlineUsers?.length > 0 && (
-                <Text style={styles.headerStatus}>Online</Text>
+              {isAI && (
+                <View style={styles.aiBadge}>
+                  <Text style={{ fontSize: 8 }}>✨</Text>
+                </View>
               )}
             </View>
+            
+            <View style={styles.headerInfo}>
+              <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
+                {isAI ? CONFIG.AI_BOT_NAME : conversation?.name || 'Chat'}
+              </Text>
+              <Text style={[styles.headerStatus, { color: COLORS.success }]}>
+                {isAI ? 'Trực tuyến • Phản hồi thức thì' : 'Đang hoạt động'}
+              </Text>
+            </View>
           </View>
+
           <TouchableOpacity style={styles.headerActionButton}>
-            <MaterialIcons name="info" size={24} color="#667eea" />
+            <MaterialCommunityIcons name="information-outline" size={24} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
 
-        {/* Messages List or Loading */}
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#667eea" />
-            <Text style={styles.loadingText}>Loading messages...</Text>
-          </View>
-        ) : (
+        {/* Content */}
+        <View style={styles.content}>
           <MessageList
-            messages={messages || []}
+            messages={messages}
             currentUserId={currentUser?.userId}
-            typingUsers={typingUsers}
-            onlineUsers={onlineUsers}
-            isLoading={false}
+            isLoading={isLoading && messages.length === 0}
           />
-        )}
+        </View>
 
-        {/* Message Input */}
+        {/* Input */}
         <MessageInput
           onSendMessage={handleSendMessage}
-          isLoading={isSending}
+          isLoading={isLoading && messages.length > 0}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -127,82 +126,61 @@ const ChatDetailScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
-
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6b7280',
-  },
-
-  messagesHeader: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    gap: 12,
+    gap: SPACING.xs,
   },
-
   backButton: {
-    padding: 8,
+    padding: 4,
   },
-
   headerContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING.sm,
   },
-
-  headerInfo: {
-    flex: 1,
+  avatarContainer: {
+    position: 'relative',
   },
-
   headerAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
   },
-
-  headerAvatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#667eea',
+  aiBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#fff',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.accent,
   },
-
-  headerAvatarText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+  headerInfo: {
+    flex: 1,
   },
-
   headerTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: '700',
   },
-
   headerStatus: {
-    fontSize: 12,
-    color: '#4ade80',
-    marginTop: 2,
+    fontSize: 11,
     fontWeight: '500',
   },
-
   headerActionButton: {
     padding: 8,
+  },
+  content: {
+    flex: 1,
   },
 });
 

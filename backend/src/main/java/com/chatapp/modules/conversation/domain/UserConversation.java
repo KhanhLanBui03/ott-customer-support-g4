@@ -51,4 +51,15 @@ public class UserConversation {
 
     @DynamoDBAttribute(attributeName = "nickname")
     private String nickname;
+
+    @DynamoDBAttribute(attributeName = "isPinned")
+    private Boolean isPinned;
+
+    public Boolean getIsPinned() {
+        return isPinned;
+    }
+
+    public void setIsPinned(Boolean isPinned) {
+        this.isPinned = isPinned;
+    }
 }

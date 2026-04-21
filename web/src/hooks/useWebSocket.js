@@ -56,7 +56,7 @@ export const useWebSocket = () => {
             const data = event.payload?.data || event.payload; 
             console.log('[STOMP] Processing GROUP INVITE:', data);
             dispatch(addPendingGroup(data));
-          } else if (event.eventType === 'CONVERSATION_UPDATE') {
+          } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
             dispatch(fetchConversations());
           }
         });

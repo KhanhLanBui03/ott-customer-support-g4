@@ -4,14 +4,15 @@ import { useChat } from '../../hooks/useChat';
 import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
 import { chatApi } from '../../api/chatApi';
-import { Phone, Video, Info, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus } from 'lucide-react';
+import { Phone, Video, Info, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon } from 'lucide-react';
 
-const ChatWindow = ({ conversationId, onStartCall, onToggleInfo, isInfoOpen }) => {
+const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBack }) => {
+  const conversationId = conversation?.conversationId;
   const { messages, fetchMessages, fetchConversations, messagesLoading, conversations } = useChat();
   const { user } = useSelector(state => state.auth);
   const [showPinsDropdown, setShowPinsDropdown] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const currentConv = conversations.find(c => c.conversationId === conversationId);
+  const currentConv = conversation || conversations.find(c => c.conversationId === conversationId);
 
   // Find the other member for status display in single chats
   const currentMember = currentConv?.members?.find(m => m.userId !== (user?.userId || user?.id));
@@ -32,7 +33,7 @@ const ChatWindow = ({ conversationId, onStartCall, onToggleInfo, isInfoOpen }) =
       try {
         await chatApi.deleteConversation(conversationId);
         fetchConversations(); // Update list and clear active
-        window.location.reload(); // Refresh to clear active state
+        if (onBack) onBack(); // Go back or clear selection without reload
       } catch (err) {
         console.error("Failed to delete conversation", err);
       }
@@ -58,70 +59,84 @@ const ChatWindow = ({ conversationId, onStartCall, onToggleInfo, isInfoOpen }) =
   }, [conversationId, fetchMessages]);
 
   return (
-    <div className="flex flex-col h-full bg-white relative">
+    <div className="flex-1 flex flex-col h-full bg-background transition-colors overflow-hidden">
       {/* Header */}
-      <div className="h-24 px-8 border-b border-gray-100 bg-white/80 backdrop-blur-xl flex items-center justify-between z-30 sticky top-0">
-        <div className="flex items-center space-x-5">
-          <div className="relative">
-            <div className="h-14 w-14 rounded-[22px] bg-surface-200 border border-cursor-dark/5 flex items-center justify-center overflow-hidden shadow-lg shadow-black/5">
-              {currentConv?.avatar ? (
+      <div className={`
+        ${onBack ? 'h-20 px-4' : 'h-[88px] px-8'} 
+        glass-premium flex items-center justify-between z-30 sticky top-0 transition-all
+      `}>
+        <div className="flex items-center space-x-3 overflow-hidden">
+          {onBack && (
+            <button 
+              onClick={onBack}
+              className="p-2 -ml-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          
+          <div className="relative flex-shrink-0">
+            <div className={`
+              ${onBack ? 'h-10 w-10 rounded-xl' : 'h-14 w-14 rounded-[22px]'} 
+              bg-surface-200 border border-cursor-dark/5 flex items-center justify-center overflow-hidden shadow-lg shadow-black/5
+            `}>
+              {currentConv?.isAI ? (
+                <div className="w-full h-full bg-indigo-600 flex items-center justify-center">
+                  <SparklesIcon className="text-white" size={onBack ? 20 : 28} />
+                </div>
+              ) : currentConv?.avatar ? (
                 <img src={currentConv.avatar} alt="" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-xl font-black text-cursor-dark/10 font-serif italic uppercase">
-                  {currentConv?.name?.charAt(0) || currentConv?.displayName?.charAt(0) || 'C'}
+                <span className={`${onBack ? 'text-sm' : 'text-xl'} font-black text-cursor-dark/10 font-serif italic uppercase`}>
+                  {currentConv?.name?.charAt(0) || 'C'}
                 </span>
               )}
             </div>
             {currentMember?.status === 'ONLINE' && (
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-white border-4 border-white flex items-center justify-center">
-                <div className="w-full h-full rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+              <div className={`absolute -bottom-0.5 -right-0.5 ${onBack ? 'w-3.5 h-3.5' : 'w-4.5 h-4.5'} rounded-full bg-background flex items-center justify-center`}>
+                <div className="w-full h-full rounded-full bg-emerald-500 status-glow shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
               </div>
             )}
           </div>
-          <div>
-            <h2 className="text-xl font-black text-cursor-dark tracking-tighter leading-none mb-1.5 flex items-center space-x-2">
-              <span>{currentConv?.name || currentConv?.displayName || 'Signal Hub'}</span>
-              <ShieldCheck size={16} className="text-cursor-accent" />
+          <div className="min-w-0">
+            <h2 className={`
+              ${onBack ? 'text-base' : 'text-xl'} 
+              font-black text-foreground tracking-tighter leading-none mb-1 flex items-center space-x-1.5 truncate
+            `}>
+              <span className="truncate">{currentConv?.name || 'Signal Hub'}</span>
+              {currentConv?.isAI ? (
+                <SparklesIcon size={onBack ? 14 : 16} className="text-indigo-500 animate-pulse" />
+              ) : (
+                <ShieldCheck size={onBack ? 14 : 16} className="text-cursor-accent flex-shrink-0" />
+              )}
             </h2>
             <div className="flex items-center space-x-2">
-              <span className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] ${currentMember?.status === 'ONLINE' ? 'text-green-500' : 'text-slate-400'}`}>
+              <span className={`text-[9px] font-mono font-black uppercase tracking-[0.1em] ${currentMember?.status === 'ONLINE' ? 'text-green-500' : 'text-slate-400'}`}>
                 {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : 'Node Active'}
               </span>
-              <span className="w-1 h-1 rounded-full bg-cursor-dark/10" />
-              <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-cursor-dark/20 text-xs">E2E Encrypted</span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center bg-surface-200 p-1.5 rounded-2xl border border-cursor-dark/5">
+        <div className="flex items-center space-x-2 sm:space-x-4">
+          <div className="hidden sm:flex items-center bg-surface-200 p-1 rounded-2xl border border-cursor-dark/5">
             <button
               onClick={onStartCall}
-              className="p-3 hover:bg-white hover:text-cursor-dark text-cursor-dark/40 rounded-xl transition-all shadow-sm hover:shadow-md"
+              className="p-2.5 hover:bg-white hover:text-cursor-dark text-cursor-dark/40 rounded-xl transition-all shadow-sm"
             >
-              <Phone size={20} />
+              <Phone size={18} />
             </button>
             <button
               onClick={onStartCall}
-              className="p-3 hover:bg-white hover:text-cursor-dark text-cursor-dark/40 rounded-xl transition-all shadow-sm hover:shadow-md"
+              className="p-2.5 hover:bg-white hover:text-cursor-dark text-cursor-dark/40 rounded-xl transition-all shadow-sm"
             >
-              <Video size={20} />
+              <Video size={18} />
             </button>
           </div>
-          <div className="w-[1px] h-8 bg-cursor-dark/10 mx-2" />
-          {currentConv?.type === 'GROUP' && (
-            <button 
-              onClick={onToggleInfo}
-              className="p-3 hover:bg-surface-200 text-cursor-dark/40 hover:text-indigo-600 rounded-xl transition-all"
-              title="Thêm thành viên"
-            >
-              <UserPlus size={20} />
-            </button>
-          )}
-
+          
           <button 
             onClick={onToggleInfo}
-            className={`p-3 rounded-xl transition-all ${isInfoOpen ? 'bg-surface-200 text-cursor-accent' : 'hover:bg-surface-200 text-cursor-dark/40'}`}
+            className={`p-2.5 rounded-xl transition-all ${isInfoOpen ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}
           >
             <Info size={20} />
           </button>
@@ -129,24 +144,27 @@ const ChatWindow = ({ conversationId, onStartCall, onToggleInfo, isInfoOpen }) =
           <div className="relative">
             <button
               onClick={() => setShowMoreMenu(!showMoreMenu)}
-              className={`p-3 hover:bg-surface-200 rounded-xl transition-all ${showMoreMenu ? 'bg-surface-200 text-cursor-accent' : 'text-cursor-dark/40'}`}
+              className={`p-3 relative z-50 rounded-xl transition-all ${showMoreMenu ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}
             >
               <MoreVertical size={20} />
             </button>
 
             {showMoreMenu && (
-              <div className="absolute top-full right-0 mt-2 w-56 bg-white/95 backdrop-blur-xl border border-slate-100 shadow-2xl rounded-[24px] p-2 z-50 animate-slide-up">
-                <button className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 rounded-2xl transition-colors">
-                  <Info size={16} className="text-slate-400" />
-                  <span>Thông tin hội thoại</span>
-                </button>
-                <div className="h-px bg-slate-50 my-1 mx-2" />
-                <button
-                  onClick={handleDeleteConversation}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-semibold text-red-500 hover:bg-red-50 rounded-2xl transition-colors"
+              <div className="absolute top-full right-0 mt-2 w-64 glass-premium shadow-2xl rounded-[24px] p-2 z-50 animate-msg">
+                <button 
+                  onClick={() => { onToggleInfo(); setShowMoreMenu(false); }}
+                  className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-foreground hover:bg-indigo-50 rounded-2xl transition-all"
                 >
-                  <Trash2 size={16} />
-                  <span>Xóa cuộc trò chuyện</span>
+                  <Info size={18} className="text-indigo-500" />
+                  <span>Conversation Info</span>
+                </button>
+                <div className="h-px bg-border my-1 mx-2" />
+                <button
+                  onClick={() => { handleDeleteConversation(); setShowMoreMenu(false); }}
+                  className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                >
+                  <Trash2 size={18} />
+                  <span>Delete History</span>
                 </button>
               </div>
             )}
@@ -154,42 +172,39 @@ const ChatWindow = ({ conversationId, onStartCall, onToggleInfo, isInfoOpen }) =
         </div>
       </div>
 
-      {/* Pinned Messages Bar with Dropdown Support */}
+      {/* Pinned Messages Bar */}
       {currentConv?.pinnedMessages && currentConv.pinnedMessages.length > 0 && (
         <div className="relative z-20">
           <div
             onClick={() => setShowPinsDropdown(!showPinsDropdown)}
-            className="bg-indigo-50/70 backdrop-blur-md border-b border-indigo-100/50 px-8 py-3 flex items-center justify-between cursor-pointer hover:bg-indigo-50 transition-colors"
+            className="bg-indigo-500/5 dark:bg-indigo-500/10 backdrop-blur-md border-b border-indigo-500/10 px-8 py-3.5 flex items-center justify-between cursor-pointer hover:bg-indigo-500/10 transition-colors group/pin-bar"
           >
-            <div className="flex items-center space-x-4 overflow-hidden flex-1 relative group/pin">
-              <div className="p-2.5 bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-200">
+            <div className="flex items-center space-x-4 overflow-hidden flex-1 relative">
+              <div className="p-2.5 bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 group-hover/pin-bar:scale-110 transition-transform">
                 <Pin size={14} fill="currentColor" />
               </div>
               <div className="flex-1 truncate">
-                <div className="flex items-center space-x-2">
-                  <p className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-indigo-500/60 leading-tight">
-                    {currentConv.pinnedMessages.length} Pinned Messages
-                  </p>
-                </div>
-                <p className="text-[14px] font-bold text-indigo-900 truncate mt-0.5">
-                  {currentConv.pinnedMessages[currentConv.pinnedMessages.length - 1].content || "Media Attachment"}
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 dark:text-indigo-400 leading-tight mb-0.5">
+                  {currentConv.pinnedMessages.length} Pinned Messages
+                </p>
+                <p className="text-[14px] font-bold text-slate-700 dark:text-slate-200 truncate">
+                  {currentConv?.pinnedMessages?.[currentConv.pinnedMessages.length - 1]?.content || "Media Attachment"}
                 </p>
               </div>
             </div>
             <div className="flex items-center space-x-3 ml-4">
-              {currentConv.pinnedMessages.length > 1 && (
-                <div className="text-indigo-400 group-hover:text-indigo-600 transition-colors">
-                  {showPinsDropdown ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </div>
-              )}
               <button
+                type="button"
                 onClick={async (e) => {
+                  e.preventDefault();
                   e.stopPropagation();
-                  const lastPinId = currentConv.pinnedMessages[currentConv.pinnedMessages.length - 1].messageId;
-                  await chatApi.unpinMessage(conversationId, lastPinId);
-                  fetchConversations();
+                  const lastPinId = currentConv?.pinnedMessages?.[currentConv.pinnedMessages.length - 1]?.messageId;
+                  if (lastPinId) {
+                    await chatApi.unpinMessage(conversationId, lastPinId);
+                    fetchConversations();
+                  }
                 }}
-                className="p-2 text-indigo-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
               >
                 <X size={18} />
               </button>
@@ -198,23 +213,25 @@ const ChatWindow = ({ conversationId, onStartCall, onToggleInfo, isInfoOpen }) =
 
           {/* Dropdown Content */}
           {showPinsDropdown && (
-            <div className="absolute top-full left-0 right-0 bg-white/95 backdrop-blur-xl border-b border-indigo-100 shadow-xl max-h-64 overflow-y-auto animate-slide-down">
-              {currentConv.pinnedMessages.slice(0).reverse().map((pin, i) => (
+            <div className="absolute top-full left-0 right-0 glass-premium shadow-2xl max-h-64 overflow-y-auto animate-msg border-t-0">
+              {currentConv?.pinnedMessages?.slice(0).reverse().map((pin, i) => (
                 <div
                   key={pin.messageId}
                   onClick={() => scrollToMessage(pin.messageId)}
-                  className="px-8 py-4 border-b border-indigo-50 flex items-center justify-between hover:bg-indigo-50/50 cursor-pointer transition-colors group"
+                  className="px-8 py-4 border-b border-indigo-500/5 flex items-center justify-between hover:bg-indigo-500/5 cursor-pointer transition-colors group"
                 >
                   <div className="flex-1 min-w-0 pr-4">
-                    <p className="text-[9px] font-black uppercase text-indigo-400 mb-1 tracking-tight">
+                    <p className="text-[9px] font-black uppercase text-indigo-500/60 mb-1 tracking-widest">
                       {pin.senderName || "Member"}
                     </p>
-                    <p className="text-sm font-medium text-slate-700 truncate line-clamp-1">
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate">
                       {pin.content || "Media Attachment"}
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={async (e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       await chatApi.unpinMessage(conversationId, pin.messageId);
                       fetchConversations();
@@ -242,7 +259,7 @@ const ChatWindow = ({ conversationId, onStartCall, onToggleInfo, isInfoOpen }) =
       </div>
 
       {/* Input Area */}
-      <div className="p-6 bg-white border-t border-gray-100">
+      <div className="p-4 sm:p-6 bg-sidebar border-t border-border transition-colors">
         <MessageInput conversationId={conversationId} />
       </div>
     </div>

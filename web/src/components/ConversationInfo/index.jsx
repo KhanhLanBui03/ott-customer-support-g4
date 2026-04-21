@@ -109,7 +109,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
      if (window.confirm('Rời khỏi cuộc trò chuyện này?')) {
         try {
            await chatApi.leaveConversation(conversationId);
-           window.location.reload();
+           fetchConversations();
+           onClose();
         } catch (err) {
            console.error(err);
         }
@@ -173,133 +174,130 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   };
 
   return (
-    <div className="w-[360px] h-full bg-white border-l border-slate-100 flex flex-col overflow-hidden animate-slide-left shadow-2xl z-40">
+    <div className="w-[360px] h-full bg-sidebar border-l border-border flex flex-col overflow-hidden animate-slide-left shadow-2xl z-40 transition-colors">
       {/* Header */}
-      <div className="h-16 px-6 border-b border-slate-50 flex items-center justify-between flex-shrink-0 bg-white/80 backdrop-blur-md">
-        <h3 className="text-lg font-black text-slate-800 tracking-tighter">Thông tin hội thoại</h3>
-        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+      <div className="h-[72px] px-6 border-b border-border flex items-center justify-between flex-shrink-0 glass-premium z-10">
+        <h3 className="text-[17px] font-black text-foreground tracking-tight">Conversation Info</h3>
+        <button onClick={onClose} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-all active:scale-90">
           <X size={20} />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-12">
         {/* Profile Info */}
-        <div className="p-8 flex flex-col items-center text-center space-y-4">
+        <div className="p-10 flex flex-col items-center text-center space-y-5">
           <div className="relative group">
-            <div className="w-24 h-24 rounded-[32px] bg-indigo-50 p-1 border-2 border-indigo-100 shadow-xl overflow-hidden shadow-indigo-100/50">
-               {conversation.avatarUrl ? (
-                 <img src={conversation.avatarUrl} alt="" className="w-full h-full object-cover rounded-[28px]" />
+            <div className="w-28 h-28 rounded-[36px] bg-indigo-50 dark:bg-slate-800 p-1 border-2 border-white dark:border-slate-700 shadow-2xl overflow-hidden group-hover:scale-105 transition-transform duration-500">
+               {conversation.avatarUrl || conversation.avatar ? (
+                 <img src={conversation.avatarUrl || conversation.avatar} alt="" className="w-full h-full object-cover rounded-[32px]" />
                ) : (
-                 <div className="w-full h-full flex items-center justify-center text-3xl font-black text-indigo-300">
+                 <div className="w-full h-full flex items-center justify-center text-3xl font-black text-slate-300 dark:text-slate-600 font-serif italic uppercase">
                     {conversation.name?.charAt(0) || 'C'}
                  </div>
                )}
             </div>
             {conversation.type === 'GROUP' && (
-              <div className="absolute bottom-0 right-0 w-8 h-8 bg-indigo-500 rounded-xl shadow-lg flex items-center justify-center text-white border-4 border-white">
-                  <ShieldCheck size={14} />
+              <div className="absolute -bottom-1 -right-1 w-9 h-9 bg-indigo-500 rounded-2xl shadow-xl flex items-center justify-center text-white border-4 border-white dark:border-[#0b0e14]">
+                  <Users size={16} />
               </div>
             )}
           </div>
           
-          <div>
-            <h4 className="text-xl font-black text-slate-800 tracking-tight leading-tight">{conversation.name || 'Hội thoại'}</h4>
-            <div className="flex items-center justify-center space-x-2 mt-1.5 focus-within:">
-               <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-slate-400">
-                 {conversation.type === 'GROUP' ? `${conversation.members?.length || 0} thành viên` : 'Tín hiệu trực tiếp'}
+          <div className="space-y-1">
+            <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{conversation.name || 'Conversation'}</h4>
+            <div className="flex items-center justify-center space-x-2">
+               <span className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full">
+                 {conversation.type === 'GROUP' ? `${conversation.members?.length || 0} Members` : 'Live Link'}
                </span>
             </div>
           </div>
         </div>
 
-        <div className="h-2 bg-slate-50 my-4" />
+        <div className="h-2 bg-slate-50 dark:bg-slate-900/50" />
 
         {/* Group Members Section */}
         {conversation.type === 'GROUP' && (
-           <div className="px-4 py-2">
+           <div className="px-4 py-3">
               <button 
                 onClick={() => toggleSection('members')}
-                className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 rounded-xl transition-colors"
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-white/5 rounded-2xl transition-all"
               >
-                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Thành viên nhóm</span>
-                 {sections.members ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+                 <span className="text-[11px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">Group Members</span>
+                 {sections.members ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
               </button>
               
               {sections.members && (
-                 <div className="mt-4 space-y-2 px-2">
+                 <div className="mt-4 space-y-3 px-2">
                     {isAdmin && (
                       <button 
                         onClick={handleFetchFriends}
-                        className="w-full flex items-center space-x-4 p-3 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all group"
+                        className="w-full flex items-center space-x-4 p-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-[24px] hover:scale-[1.02] active:scale-[0.98] transition-all group"
                       >
-                         <div className="w-10 h-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-md">
+                         <div className="w-10 h-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
                             <UserPlus size={18} />
                          </div>
-                         <span className="text-sm font-black">Mời người khác</span>
+                         <span className="text-[14px] font-black">Invite Participants</span>
                       </button>
                     )}
 
                     {isInviting && (
-                       <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                          <div className="bg-white w-full max-w-sm rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[70vh]">
-                             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                                <h4 className="font-black text-slate-800">Thêm vào nhóm</h4>
-                                <button onClick={() => setIsInviting(false)}><X size={20}/></button>
+                       <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
+                          <div className="bg-white dark:bg-[#1a1e26] w-full max-w-sm rounded-[36px] shadow-3xl overflow-hidden flex flex-col max-h-[75vh] animate-msg border border-white/10">
+                             <div className="p-8 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between bg-white/50 dark:bg-white/5 backdrop-blur-xl">
+                                <h4 className="font-black text-slate-900 dark:text-white text-lg tracking-tight">Add to Group</h4>
+                                <button onClick={() => setIsInviting(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors">
+                                  <X size={20} className="text-slate-400" />
+                                </button>
                              </div>
                              
-                             <div className="p-4 bg-slate-50 border-b border-slate-100">
+                             <div className="p-6 bg-slate-50/50 dark:bg-black/20">
                                 <div className="relative group">
-                                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
+                                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
                                    <input 
                                       type="text"
-                                      placeholder="Tìm tên hoặc số điện thoại..."
+                                      placeholder="Search by name or ID..."
                                       value={inviteSearch}
                                       onChange={(e) => setInviteSearch(e.target.value)}
                                       onKeyDown={(e) => e.key === 'Enter' && handleGlobalSearch()}
-                                      className="w-full pl-11 pr-20 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                      className="w-full pl-12 pr-24 py-3.5 bg-white dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl text-[15px] font-bold text-slate-700 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none transition-all shadow-sm"
                                    />
                                    <button 
                                       onClick={handleGlobalSearch}
                                       disabled={globalLoading}
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
                                    >
-                                      {globalLoading ? '...' : 'QUÉT'}
+                                      {globalLoading ? 'Scanning...' : 'SCAN'}
                                    </button>
                                 </div>
-                                {globalError && (
-                                   <p className="mt-2 text-[10px] font-bold text-red-500 px-1 flex items-center">
-                                      <Zap size={10} className="mr-1" /> {globalError}
-                                   </p>
-                                )}
                              </div>
 
-                             <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-2">
-                                   {inviteSearch ? 'Kết quả tìm kiếm' : 'Gợi ý bạn bè'}
+                             <div className="flex-1 overflow-y-auto p-6 space-y-3 no-scrollbar dark:bg-black/10">
+                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] px-2 mb-2">
+                                   {inviteSearch ? 'Matching Nodes' : 'Frequent Contacts'}
                                 </p>
                                 {friends.map(f => (
-                                   <div key={f.userId} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all border border-transparent hover:border-slate-100">
-                                      <div className="flex items-center space-x-3">
-                                         <div className="w-10 h-10 rounded-xl bg-slate-200 overflow-hidden shadow-sm">
+                                   <div key={f.userId} className="flex items-center justify-between p-3.5 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-[24px] transition-all border border-transparent hover:border-indigo-500/10">
+                                      <div className="flex items-center space-x-4">
+                                         <div className="w-11 h-11 rounded-2xl bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-800 overflow-hidden shadow-sm">
                                             {(f.avatarUrl || f.avatar) && <img src={f.avatarUrl || f.avatar} className="w-full h-full object-cover" />}
                                          </div>
                                          <div className="min-w-0">
-                                            <p className="text-sm font-bold text-slate-700 truncate">{f.fullName}</p>
-                                            <p className="text-[10px] font-mono font-black text-slate-400 uppercase tracking-tighter">{f.phoneNumber || 'Signal Node'}</p>
+                                            <p className="text-[15px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{f.fullName}</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">{f.phoneNumber || 'Signal Link'}</p>
                                          </div>
                                       </div>
                                       <button 
                                         onClick={() => handleInvite(f.userId)}
-                                        className="px-4 py-1.5 bg-indigo-500 text-white text-[10px] font-black rounded-lg uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-md shadow-indigo-100"
+                                        className="px-5 py-2 bg-indigo-500 text-white text-[10px] font-black rounded-xl uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 active:scale-90"
                                       >
-                                        Mời
+                                        Invite
                                       </button>
                                    </div>
                                 ))}
                                 {friends.length === 0 && !globalLoading && (
-                                   <div className="text-center py-12">
-                                      <p className="text-xs font-bold text-slate-300 italic">Không tìm thấy người dùng khả dụng</p>
-                                      <p className="text-[9px] text-slate-400 mt-1 mb-4 italic">Hãy thử nhập số điện thoại để quét toàn cầu</p>
+                                   <div className="text-center py-16 opacity-40">
+                                      <AlertTriangle size={32} className="mx-auto mb-4 text-slate-400" />
+                                      <p className="text-sm font-bold text-slate-500 italic">No available subjects detected</p>
                                    </div>
                                 )}
                              </div>
@@ -307,48 +305,48 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                        </div>
                     )}
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {conversation.members?.map(m => (
-                        <div key={m.userId} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-all group/member">
-                           <div className="flex items-center space-x-3">
-                              <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-white shadow-sm">
+                        <div key={m.userId} className="flex items-center justify-between p-3.5 hover:bg-slate-50 dark:hover:bg-white/5 rounded-[24px] transition-all group/member">
+                           <div className="flex items-center space-x-4">
+                              <div className="w-11 h-11 rounded-2xl bg-surface-200 dark:bg-slate-800 overflow-hidden border-2 border-white dark:border-slate-700 shadow-sm transition-transform group-hover/member:scale-110">
                                  {m.avatarUrl ? (
                                    <img src={m.avatarUrl} className="w-full h-full object-cover" />
                                  ) : (
-                                   <div className="w-full h-full flex items-center justify-center text-xs font-black text-slate-400">{m.fullName?.charAt(0)}</div>
+                                   <div className="w-full h-full flex items-center justify-center text-xs font-black text-slate-400 dark:text-slate-600 uppercase italic">{m.fullName?.charAt(0)}</div>
                                  )}
                               </div>
                               <div className="min-w-0">
-                                 <p className="text-sm font-bold text-slate-700 truncate">{m.fullName} {m.userId === user?.userId && '(Bạn)'}</p>
-                                 <div className="flex items-center space-x-2">
-                                    {m.role === 'OWNER' && <ShieldCheck size={10} className="text-indigo-500" />}
-                                    {m.role === 'ADMIN' && <Shield size={10} className="text-emerald-500" />}
-                                    <span className={`text-[8px] font-black uppercase tracking-widest ${
-                                      m.role === 'OWNER' ? 'text-indigo-500' : m.role === 'ADMIN' ? 'text-emerald-500' : 'text-slate-400'
+                                 <p className="text-[15px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{m.fullName} {m.userId === user?.userId && '(You)'}</p>
+                                 <div className="flex items-center space-x-2 mt-0.5">
+                                    {m.role === 'OWNER' && <ShieldCheck size={12} className="text-indigo-500" />}
+                                    {m.role === 'ADMIN' && <Shield size={12} className="text-emerald-500" />}
+                                    <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${
+                                      m.role === 'OWNER' ? 'text-indigo-500' : m.role === 'ADMIN' ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-600'
                                     }`}>
-                                      {m.role === 'OWNER' ? 'Chủ nhóm' : m.role === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
+                                      {m.role === 'OWNER' ? 'Prime Owner' : m.role === 'ADMIN' ? 'Technician' : 'Participant'}
                                     </span>
                                  </div>
                               </div>
                            </div>
                            
                            {isAdmin && m.userId !== user?.userId && m.role !== 'OWNER' && (
-                             <div className="flex items-center space-x-1 opacity-0 group-hover/member:opacity-100 transition-opacity">
+                             <div className="flex items-center space-x-1 opacity-0 group-hover/member:opacity-100 transition-all">
                                 {isOwner && m.role === 'MEMBER' && (
                                   <button 
                                     onClick={() => handlePromote(m.userId)}
-                                    className="p-1.5 text-slate-400 hover:text-emerald-500 transition-colors"
-                                    title="Thăng cấp Admin"
+                                    className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-xl transition-all"
+                                    title="Promote to Admin"
                                   >
-                                    <Shield size={14} />
+                                    <Shield size={16} />
                                   </button>
                                 )}
                                 <button 
                                   onClick={() => handleRemoveMember(m.userId)}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                                  title="Xóa khỏi nhóm"
+                                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                                  title="Eject Member"
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={16} />
                                 </button>
                              </div>
                            )}
@@ -357,7 +355,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                     </div>
                  </div>
               )}
-              <div className="h-2 bg-slate-50 my-4" />
+              <div className="h-px bg-slate-100 dark:bg-slate-800 my-4 mx-4" />
            </div>
         )}
 
@@ -367,46 +365,46 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
            <div className="py-2">
               <button 
                 onClick={() => toggleSection('media')}
-                className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 rounded-xl transition-colors"
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-white/5 rounded-2xl transition-all"
               >
-                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Ảnh/Video</span>
-                 {sections.media ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+                 <span className="text-[11px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">Shared Nodes (Media)</span>
+                 {sections.media ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
               </button>
               {sections.media && (
                 <div className="mt-4 px-2">
                    {mediaItems.length > 0 ? (
                      <>
-                       <div className="grid grid-cols-4 gap-2">
+                       <div className="grid grid-cols-3 gap-3">
                           {mediaItems.slice(0, 12).map((item, idx) => (
-                            <div key={idx} className="aspect-square bg-slate-100 rounded-xl border border-slate-100 overflow-hidden relative group cursor-pointer transition-all hover:scale-105 shadow-sm">
+                            <div key={idx} className="aspect-square bg-slate-100 dark:bg-slate-800 rounded-2xl border-2 border-white dark:border-slate-700 overflow-hidden relative group cursor-pointer transition-all hover:scale-105 shadow-md">
                                {item.type === 'IMAGE' ? (
                                  <img src={item.url} alt="" className="w-full h-full object-cover" />
                                ) : (
-                                 <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900">
-                                    <PlayCircle size={28} className="text-white opacity-80" />
-                                    <span className="text-[8px] font-black text-white/40 uppercase tracking-tighter mt-1">Video</span>
+                                 <div className="w-full h-full flex flex-col items-center justify-center bg-black/40">
+                                    <PlayCircle size={32} className="text-white drop-shadow-lg" />
                                  </div>
                                )}
                                <a 
                                  href={item.url} 
                                  download 
                                  onClick={e => e.stopPropagation()}
-                                 className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                 className="absolute inset-0 bg-indigo-600/60 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300"
                                >
-                                  <Download size={20} />
+                                  <Download size={24} />
                                </a>
                             </div>
                           ))}
                        </div>
                        {mediaItems.length > 12 && (
-                         <button className="w-full mt-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-[11px] font-black text-slate-500 uppercase tracking-widest rounded-xl transition-colors">
-                            Xem tất cả ({mediaItems.length})
+                         <button className="w-full mt-4 py-3 bg-slate-50 dark:bg-indigo-500/10 hover:bg-slate-100 dark:hover:bg-indigo-500/20 text-[10px] font-black text-slate-500 dark:text-indigo-400 uppercase tracking-[0.2em] rounded-2xl transition-all shadow-sm">
+                            Access Full Decryption ({mediaItems.length})
                          </button>
                        )}
                      </>
                    ) : (
-                     <div className="text-center py-6">
-                        <p className="text-xs font-medium text-slate-300 italic">Chưa có phương tiện chia sẻ</p>
+                     <div className="text-center py-12 opacity-30">
+                        <ImageIcon size={32} className="mx-auto mb-3" />
+                        <p className="text-xs font-bold italic tracking-tight">Zero media payloads</p>
                      </div>
                    )}
                 </div>
@@ -417,40 +415,41 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
            <div className="py-2">
               <button 
                 onClick={() => toggleSection('files')}
-                className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 rounded-xl transition-colors"
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-white/5 rounded-2xl transition-all"
               >
-                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest">File</span>
-                 {sections.files ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+                 <span className="text-[11px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">Document Registry</span>
+                 {sections.files ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
               </button>
               {sections.files && (
-                <div className="mt-2 space-y-2 px-2">
+                <div className="mt-3 space-y-2 px-2">
                    {fileItems.length > 0 ? (
                      <>
-                        {fileItems.slice(0, 4).map((file, idx) => (
-                           <div key={idx} className="flex items-center space-x-4 p-3 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100 transition-all group">
-                              <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center group-hover:bg-red-500 group-hover:text-white transition-colors shadow-sm">
+                        {fileItems.slice(0, 5).map((file, idx) => (
+                           <div key={idx} className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02]">
+                              <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 rounded-2xl flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-sm">
                                  <FileText size={24} />
                               </div>
                               <div className="flex-1 min-w-0">
-                                 <p className="text-sm font-bold text-slate-700 truncate">{file.name || 'Untitled Document'}</p>
-                                 <p className="text-[10px] font-mono font-black text-slate-400 uppercase tracking-tighter">
-                                    {formatFileSize(file.metadata?.fileSize || 0)} • {new Date(file.createdAt).toLocaleDateString('vi-VN')}
+                                 <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{file.name || 'Registry Entry'}</p>
+                                 <p className="text-[9px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.1em] mt-1">
+                                    {formatFileSize(file.metadata?.fileSize || 0)} • {new Date(file.createdAt).toLocaleDateString()}
                                  </p>
                               </div>
-                              <a href={file.url} download className="p-2 text-slate-300 hover:text-indigo-500 transition-colors">
-                                 <Download size={18} />
+                              <a href={file.url} download className="p-2 text-slate-300 hover:text-indigo-500 transition-all active:scale-90">
+                                 <Download size={20} />
                               </a>
                            </div>
                         ))}
-                        {fileItems.length > 4 && (
-                          <button className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-[11px] font-black text-slate-500 uppercase tracking-widest rounded-xl transition-colors">
-                             Xem tất cả ({fileItems.length})
+                        {fileItems.length > 5 && (
+                          <button className="w-full py-3 bg-slate-50 dark:bg-indigo-500/10 hover:bg-slate-100 dark:hover:bg-indigo-500/20 text-[10px] font-black text-slate-500 dark:text-indigo-400 uppercase tracking-[0.2em] rounded-2xl transition-all">
+                             Expand Registry ({fileItems.length})
                           </button>
                         )}
                      </>
                    ) : (
-                     <div className="text-center py-6">
-                        <p className="text-xs font-medium text-slate-300 italic">Chưa có tệp tin chia sẻ</p>
+                     <div className="text-center py-12 opacity-30">
+                        <FileText size={32} className="mx-auto mb-3" />
+                        <p className="text-xs font-bold italic tracking-tight">Empty file index</p>
                      </div>
                    )}
                 </div>
@@ -458,40 +457,46 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
            </div>
         </div>
 
-        <div className="h-2 bg-slate-50 my-4" />
+        <div className="h-2 bg-slate-50 dark:bg-slate-900/50 my-6" />
 
         {/* Security / Privacy */}
-        <div className="px-4 pb-8 space-y-2">
+        <div className="px-4 pb-12 space-y-3">
            <div className="py-2">
               <button 
                 onClick={() => toggleSection('security')}
-                className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 rounded-xl transition-colors"
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-white/5 rounded-2xl transition-all"
               >
-                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Thiết lập bảo mật</span>
-                 {sections.security ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+                 <span className="text-[11px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">Security Protocols</span>
+                 {sections.security ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
               </button>
               {sections.security && (
-                <div className="mt-2 space-y-1">
+                <div className="mt-4 px-2 space-y-2">
                    {conversation.type === 'GROUP' && (
                      <button 
                        onClick={handleLeaveGroup}
-                       className="w-full flex items-center space-x-4 px-4 py-3 hover:bg-orange-50 text-orange-600 rounded-2xl transition-colors"
+                       className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-orange-100 dark:hover:border-orange-500/20"
                      >
-                        <div className="w-10 h-10 rounded-xl bg-orange-100/50 flex items-center justify-center">
-                           <LogOut size={20} />
+                        <div className="w-11 h-11 rounded-2xl bg-orange-100/50 dark:bg-orange-500/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+                           <LogOut size={22} />
                         </div>
-                        <span className="text-sm font-bold">Rời khỏi nhóm</span>
+                        <span className="text-[15px] font-black tracking-tight">Abort Channel (Leave)</span>
                      </button>
                    )}
                    <button 
                     onClick={onClearHistory}
-                    className="w-full flex items-center space-x-4 px-4 py-3 hover:bg-red-50 text-red-500 rounded-2xl transition-colors"
+                    className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
                    >
-                      <div className="w-10 h-10 rounded-xl bg-red-100/50 flex items-center justify-center">
-                         <Trash2 size={20} />
+                      <div className="w-11 h-11 rounded-2xl bg-red-100/50 dark:bg-red-500/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+                         <Trash2 size={22} />
                       </div>
-                      <span className="text-sm font-bold">Xóa lịch sử trò chuyện</span>
+                      <span className="text-[15px] font-black tracking-tight">Purge Data Storage</span>
                    </button>
+                   
+                   <div className="mt-8 p-6 bg-slate-50 dark:bg-slate-800/40 rounded-[32px] border border-slate-100 dark:border-slate-800 text-center">
+                      <Shield size={32} className="mx-auto mb-4 text-emerald-500 opacity-60" />
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600">End-to-End Encryption</p>
+                      <p className="text-[9px] font-bold text-slate-300 dark:text-slate-700 mt-2 italic">Messages are secured with quantum-ready protocols. Only participants in this link have decoding rights.</p>
+                   </div>
                 </div>
               )}
            </div>

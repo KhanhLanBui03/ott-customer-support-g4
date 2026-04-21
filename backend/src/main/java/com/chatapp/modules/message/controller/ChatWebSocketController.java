@@ -49,7 +49,12 @@ public class ChatWebSocketController {
         String type = payload.get("type") != null ? (String) payload.get("type") : "TEXT";
         String replyToMessageId = (String) payload.get("replyToMessageId");
 
-        if (conversationId == null || content == null || content.isBlank()) {
+        @SuppressWarnings("unchecked")
+        List<String> mediaUrls = payload.get("mediaUrls") instanceof List
+                ? (List<String>) payload.get("mediaUrls")
+                : List.of();
+
+        if (conversationId == null || ((content == null || content.isBlank()) && mediaUrls.isEmpty())) {
             log.warn("Invalid WebSocket send payload from user {}", userId);
             return;
         }
@@ -64,11 +69,6 @@ public class ChatWebSocketController {
         } catch (Exception e) {
             log.warn("Could not resolve sender name for {}: {}", userId, e.getMessage());
         }
-
-        @SuppressWarnings("unchecked")
-        List<String> mediaUrls = payload.get("mediaUrls") instanceof List
-                ? (List<String>) payload.get("mediaUrls")
-                : List.of();
 
         SendMessageCommand command = SendMessageCommand.builder()
                 .conversationId(conversationId)

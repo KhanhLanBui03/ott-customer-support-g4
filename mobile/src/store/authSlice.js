@@ -155,6 +155,7 @@ const initialState = {
   error: null,
   otpSent: false,
   otpPhone: null,
+  theme: 'light', // 'light' or 'dark'
 };
 
 const authSlice = createSlice({
@@ -169,11 +170,20 @@ const authSlice = createSlice({
       state.otpSent = true;
     },
     restoreState: (state, action) => {
-      const { user, accessToken, refreshToken } = action.payload;
+      const { user, accessToken, refreshToken, theme } = action.payload;
       state.user = user;
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
       state.isAuthenticated = !!accessToken;
+      if (theme) state.theme = theme;
+    },
+    toggleTheme: (state) => {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+      if (Platform.OS !== 'web') {
+        SecureStore.setItemAsync('theme', state.theme);
+      } else {
+        localStorage.setItem('theme', state.theme);
+      }
     },
   },
   extraReducers: (builder) => {
@@ -270,5 +280,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setOtpPhoneNumber } = authSlice.actions;
+export const { clearError, setOtpPhoneNumber, toggleTheme, restoreState } = authSlice.actions;
 export default authSlice.reducer;
