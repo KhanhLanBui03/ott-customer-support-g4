@@ -101,21 +101,6 @@ export const conversationApi = {
     // Expected: { mutedUntil } - null to unmute, timestamp to mute until
     return axiosClient.put(`/conversations/${conversationId}/mute`, data);
   },
-
-  // Toggle pin status of a conversation
-  togglePinConversation: (conversationId) => {
-    return axiosClient.post(`/conversations/${conversationId}/toggle-pin`);
-  },
-
-  // Pin a specific message
-  pinMessage: (conversationId, messageId) => {
-    return axiosClient.post(`/conversations/${conversationId}/pin/${messageId}`);
-  },
-
-  // Unpin a specific message
-  unpinMessage: (conversationId, messageId) => {
-    return axiosClient.delete(`/conversations/${conversationId}/pin/${messageId}`);
-  },
 };
 
 export default { chatApi, conversationApi };

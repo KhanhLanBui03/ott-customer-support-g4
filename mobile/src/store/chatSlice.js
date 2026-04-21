@@ -66,18 +66,6 @@ export const markMessageAsRead = createAsyncThunk(
   }
 );
 
-export const togglePinConversation = createAsyncThunk(
-  'chat/togglePinConversation',
-  async (conversationId, { rejectWithValue }) => {
-    try {
-      await conversationApi.togglePinConversation(conversationId);
-      return { conversationId };
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to toggle pin');
-    }
-  }
-);
-
 const initialState = {
   conversations: [],
   currentConversation: null,
@@ -241,21 +229,6 @@ const chatSlice = createSlice({
       );
       if (messageIndex !== -1) {
         state.messages[state.currentConversationId][messageIndex].read = true;
-      }
-    });
-
-    // Toggle pin conversation
-    builder.addCase(togglePinConversation.fulfilled, (state, action) => {
-      const { conversationId } = action.payload;
-      const conversation = state.conversations.find(c => c.conversationId === conversationId);
-      if (conversation) {
-        conversation.pinned = !conversation.pinned;
-        // Re-sort conversations: pinned first, then by last message time
-        state.conversations.sort((a, b) => {
-          if (a.pinned && !b.pinned) return -1;
-          if (!a.pinned && b.pinned) return 1;
-          return (b.lastMessageTime || 0) - (a.lastMessageTime || 0);
-        });
       }
     });
   },

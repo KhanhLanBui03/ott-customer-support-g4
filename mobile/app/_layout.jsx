@@ -22,14 +22,12 @@ function RootLayoutNav() {
         const token = await SecureStore.getItemAsync('accessToken');
         const refreshToken = await SecureStore.getItemAsync('refreshToken');
         const userJson = await SecureStore.getItemAsync('user');
-        const theme = await SecureStore.getItemAsync('theme');
         
         if (token) {
           dispatch(restoreState({
             accessToken: token,
             refreshToken: refreshToken,
-            user: userJson ? JSON.parse(userJson) : null,
-            theme: theme || 'light'
+            user: userJson ? JSON.parse(userJson) : null
           }));
         }
       } catch (err) {

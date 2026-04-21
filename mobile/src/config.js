@@ -20,9 +20,8 @@ const CONFIG = {
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000,
   
-  // App Constants
-  AI_BOT_ID: 'shop-expert-ai-bot',
-  AI_BOT_NAME: 'ShopExpert AI',
+  // Cache Configuration
+  CACHE_EXPIRES_IN: 5 * 60 * 1000, // 5 minutes
 };
 
 export default CONFIG;
