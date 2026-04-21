@@ -51,7 +51,7 @@ public class User {
     private String bio;
 
     @DynamoDBAttribute(attributeName = "status")
-    private String status; // ONLINE, OFFLINE, AWAY
+    private String status; // ONLINE, OFFLINE, LOCKED
 
     @DynamoDBAttribute(attributeName = "lastSeenAt")
     private Long lastSeenAt;
@@ -104,6 +104,10 @@ public class User {
     }
 
     public void updateStatus(String status) {
+        if ("LOCKED".equals(this.status) && !"LOCKED".equals(status)) {
+            // Protect LOCKED status from being overwritten by ONLINE/OFFLINE
+            return;
+        }
         this.status = status;
         if ("ONLINE".equals(status)) {
             this.lastSeenAt = System.currentTimeMillis();

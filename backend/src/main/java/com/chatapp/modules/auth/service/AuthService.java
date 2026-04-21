@@ -57,20 +57,19 @@ public class AuthService {
     public Map<String, Object> checkUserStatus(String phoneNumber) {
         validationUtil.validatePhoneNumber(phoneNumber);
         String cleanPhone = validationUtil.cleanPhoneNumber(phoneNumber);
-        
+
         User user = userRepository.findByPhoneNumber(cleanPhone).orElse(null);
-        
+
         if (user == null) {
             return Map.of("exists", false, "verified", false, "phoneNumber", cleanPhone);
         }
-        
+
         return Map.of(
-            "exists", true, 
-            "verified", Boolean.TRUE.equals(user.getIsVerified()),
-            "phoneNumber", cleanPhone,
-            "firstName", user.getFirstName() != null ? user.getFirstName() : "",
-            "lastName", user.getLastName() != null ? user.getLastName() : ""
-        );
+                "exists", true,
+                "verified", Boolean.TRUE.equals(user.getIsVerified()),
+                "phoneNumber", cleanPhone,
+                "firstName", user.getFirstName() != null ? user.getFirstName() : "",
+                "lastName", user.getLastName() != null ? user.getLastName() : "");
     }
 
     /**
@@ -173,6 +172,10 @@ public class AuthService {
                 "newSessionId", response.getSessionId(),
                 "reason", "Logged in from another device")));
 
+        System.out.println("=================================================");
+        System.out.println("USER STATUS AT LOGIN: " + user.getStatus());
+        System.out.println("=================================================");
+
         // Update status to ONLINE
         user.updateStatus("ONLINE");
         userRepository.save(user);
@@ -264,7 +267,7 @@ public class AuthService {
     public void logout(String sessionId, String userId) {
         log.info("Logging out user: {} with session: {}", userId, sessionId);
         sessionService.invalidateSession(sessionId);
-        
+
         userRepository.findById(userId).ifPresent(user -> {
             user.updateStatus("OFFLINE");
             userRepository.save(user);
@@ -275,7 +278,7 @@ public class AuthService {
     public void logoutAllDevices(String userId) {
         log.info("Logging out all devices for user: {}", userId);
         sessionService.invalidateAllUserSessions(userId);
-        
+
         userRepository.findById(userId).ifPresent(user -> {
             user.updateStatus("OFFLINE");
             userRepository.save(user);
@@ -294,7 +297,7 @@ public class AuthService {
 
         // Verify old password
         if (!hashUtil.verifyPassword(oldPassword, user.getPasswordHash())) {
-            throw new BadCredentialsException("Current password is incorrect");
+            throw new ValidationException("Current password is incorrect");
         }
 
         // Validate new password
