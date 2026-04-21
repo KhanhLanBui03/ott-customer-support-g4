@@ -15,6 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/conversations")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class ConversationController {
 
     private final ConversationService conversationService;
@@ -79,7 +80,9 @@ public class ConversationController {
     public ResponseEntity<ApiResponse<List<com.chatapp.modules.conversation.domain.GroupInvitation>>> getPendingInvitations(
             HttpServletRequest request) {
         String userId = getUserId(request);
+        log.info("Fetching pending invitations for user: {}", userId);
         List<com.chatapp.modules.conversation.domain.GroupInvitation> res = conversationService.getPendingInvitations(userId);
+        log.info("Found {} pending invitations for user: {}", res.size(), userId);
         return ResponseEntity.ok(ApiResponse.success(res, "Pending invitations fetched successfully"));
     }
 
@@ -153,5 +156,15 @@ public class ConversationController {
         String userId = getUserId(request);
         conversationService.unpinMessage(userId, conversationId, messageId);
         return ResponseEntity.ok(ApiResponse.success(null, "Message unpinned successfully"));
+    }
+
+    @PostMapping("/{conversationId}/toggle-pin")
+    public ResponseEntity<ApiResponse<Void>> togglePin(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        log.info("Toggle pin requested for conversation: {} by user: {}", conversationId, userId);
+        conversationService.togglePin(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Pin status toggled successfully"));
     }
 }

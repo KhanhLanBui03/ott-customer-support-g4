@@ -82,7 +82,7 @@
 
 ### Monolith Module Breakdown
 
-```
+d
 src/main/java/com/chatapp/
 ├── ChatAppApplication.java
 ├── config/                          # Shared configurations

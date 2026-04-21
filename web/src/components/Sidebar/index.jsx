@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { 
-  Pin, FolderDown, Tag, Mail, UserPlus, BellOff, EyeOff, Clock, Trash2, AlertTriangle, ChevronRight
+  Pin, FolderDown, Tag, Mail, UserPlus, BellOff, EyeOff, Clock, Trash2, AlertTriangle, ChevronRight, MoreHorizontal
 } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
 
-const Sidebar = ({ conversations, onSelect, activeId, onContextMenu }) => {
+const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin }) => {
   const { user } = useSelector(state => state.auth);
 
   const formatLastSeen = (status, lastSeenAt) => {
@@ -28,14 +28,22 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu }) => {
     return `Last seen ${days}d ago`;
   };
 
+  const sortedConversations = [...conversations].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    const timeA = a.lastMessageTime || a.updatedAt || 0;
+    const timeB = b.lastMessageTime || b.updatedAt || 0;
+    return timeB - timeA;
+  });
+
   return (
-    <div className="flex flex-col h-full bg-slate-50/30 relative">
-      {conversations.length === 0 ? (
+    <div className="flex flex-col h-full bg-sidebar transition-colors relative">
+      {sortedConversations.length === 0 ? (
         <div className="p-12 text-center space-y-2">
-          <p className="text-[10px] font-mono font-black uppercase tracking-[0.3em] text-slate-300">Quiet Channel</p>
+          <p className="text-[10px] font-mono font-black uppercase tracking-[0.3em] text-foreground/40">Quiet Channel</p>
         </div>
       ) : (
-        conversations.map((conv) => {
+        sortedConversations.map((conv) => {
           const otherMember = conv.type === 'SINGLE' 
             ? conv.members?.find(m => m.userId !== (user?.userId || user?.id)) 
             : null;
@@ -44,72 +52,111 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu }) => {
             ? formatLastSeen(otherMember.status, otherMember.lastSeenAt)
             : '';
 
+          const isActive = activeId === conv.conversationId;
+
           return (
             <div
               key={conv.conversationId}
               onClick={() => onSelect(conv.conversationId)}
               onContextMenu={(e) => onContextMenu(e, conv.conversationId)}
-              className={`px-5 py-4 cursor-pointer flex items-center space-x-4 transition-all duration-300 relative group border-b border-slate-100/50 ${
-                activeId === conv.conversationId ? 'bg-white shadow-sm z-10' : 'hover:bg-white/50'
+              className={`px-5 py-4 cursor-pointer flex items-center space-x-4 transition-all duration-300 relative group border-b border-border/40 ${
+                isActive 
+                  ? 'bg-surface-200 shadow-sm z-10' 
+                  : conv.isPinned ? 'bg-slate-50/50 dark:bg-white/5' : 'hover:bg-surface-100/50'
               }`}
             >
+              {isActive && (
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-r-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+              )}
+              
               <div className="relative">
-                 <div className="h-12 w-12 rounded-2xl bg-slate-200 border border-slate-200/50 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-sm group-hover:scale-105 transition-transform duration-500">
+                 <div className={`
+                   h-13 w-13 rounded-2xl flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-500
+                   ${isActive ? 'scale-105 shadow-xl shadow-indigo-500/10' : 'group-hover:scale-105'}
+                   ${conv.avatarUrl ? '' : 'bg-surface-200 border-2 border-background'}
+                 `}>
                   {conv.avatarUrl ? (
                     <img src={conv.avatarUrl} alt={conv.name} className="h-full w-full object-cover" />
                   ) : (
-                    <span className="text-lg font-bold text-slate-400 uppercase">
+                    <span className="text-xl font-black text-foreground/40 font-serif italic uppercase">
                       {conv.name?.charAt(0) || 'C'}
                     </span>
                   )}
                  </div>
                  {otherMember?.status === 'ONLINE' && (
-                   <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-white flex items-center justify-center">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse" />
+                   <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background flex items-center justify-center">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 status-glow shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
                    </div>
                  )}
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline mb-0.5">
-                  <h3 className={`text-[14px] font-bold tracking-tight truncate ${activeId === conv.conversationId ? 'text-slate-900' : 'text-slate-700'}`}>
+                  <h3 className={`text-[15px] font-bold tracking-tight truncate ${isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-foreground'}`}>
                     {conv.name || 'Untitled'}
                   </h3>
-                  {conv.lastMessageTime && (
-                    <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap ml-2">
-                      {new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
+                  <div className="flex items-center space-x-1.5 ml-2">
+                    {conv.lastMessageTime && (
+                      <span className={`text-[10px] font-bold whitespace-nowrap uppercase tracking-tighter ${isActive ? 'text-indigo-500/70 dark:text-indigo-300/50' : 'text-foreground/40'}`}>
+                        {new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                    {conv.isPinned && (
+                      <Pin size={12} className="text-indigo-500 fill-indigo-500" />
+                    )}
+                  </div>
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <p className={`text-[12px] truncate leading-tight flex-1 pr-2 ${conv.unreadCount > 0 ? 'text-slate-900 font-bold' : 'text-slate-400 font-medium'}`}>
+                  <p className={`text-[13px] truncate leading-tight flex-1 pr-2 ${conv.unreadCount > 0 ? 'text-indigo-500 dark:text-indigo-400 font-bold' : 'text-foreground/60 font-medium'}`}>
                     {conv.lastMessage ? (
                       <>
                         {conv.lastMessageSenderId === (user?.userId || user?.id) && (
-                          <span className="text-indigo-400/80 mr-1 font-bold">You:</span>
+                          <span className="text-indigo-500 dark:text-indigo-400/70 mr-1 font-bold">You:</span>
                         )}
                         {conv.lastMessage}
                       </>
                     ) : (
-                      statusText || 'Direct Channel Established'
+                      <span className="italic text-foreground/30 text-[11px] font-bold">{statusText || 'Establishing Link...'}</span>
                     )}
                   </p>
                   
-                  {conv.unreadCount > 0 && (
-                    <div className="min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-200 animate-bounce">
-                      <span className="text-[9px] font-bold text-white">
-                        {conv.unreadCount > 5 ? '5+' : conv.unreadCount}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center">
+                    {conv.unreadCount > 0 && (
+                      <div className="min-w-[20px] h-[20px] px-1 bg-indigo-500 text-white rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20 animate-bounce">
+                        <span className="text-[10px] font-black">
+                          {conv.unreadCount > 5 ? '5+' : conv.unreadCount}
+                        </span>
+                      </div>
+                    )}
+
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTogglePin(conv.conversationId);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-surface-200 rounded-lg transition-all text-foreground/40 hover:text-indigo-500 shadow-sm border border-transparent hover:border-border/50 bg-background/50 backdrop-blur-sm"
+                      title={conv.isPinned ? "Bỏ ghim" : "Ghim"}
+                    >
+                      <Pin size={16} className={conv.isPinned ? "fill-indigo-500 text-indigo-500" : ""} />
+                    </button>
+
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onContextMenu(e, conv.conversationId);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-surface-200 rounded-lg transition-all text-foreground/40 hover:text-indigo-500 ml-1 shadow-sm border border-transparent hover:border-border/50 bg-background/50 backdrop-blur-sm"
+                    >
+                      <MoreHorizontal size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           );
         })
       )}
-
     </div>
   );
 };

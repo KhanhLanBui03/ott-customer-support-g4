@@ -18,6 +18,7 @@ public class ConversationResponse {
     private Long updatedAt;
     private List<MemberInfo> members;
     private List<PinnedMessage> pinnedMessages;
+    private Boolean isPinned;
 
     @Data
     @Builder

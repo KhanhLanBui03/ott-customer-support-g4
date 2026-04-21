@@ -46,10 +46,17 @@ public class MessageEventListener {
                 conversation.getMemberIds().forEach(memberId -> {
                     String destination = "/queue/messages";
                     log.debug("Sending {} to user {} at /user/{}{}", event.getEventType(), memberId, memberId, destination);
-                    
-                    // Sending to /user/{userId}/queue/messages
                     messagingTemplate.convertAndSendToUser(memberId, destination, event);
                 });
+            } else if (event.getConversationId().startsWith("SINGLE#") && event.getConversationId().contains("shop-expert-ai-bot")) {
+                // Special handling for virtual AI conversations
+                // Pattern: SINGLE#userId#shop-expert-ai-bot
+                String[] parts = event.getConversationId().split("#");
+                if (parts.length >= 2) {
+                    String userId = parts[1];
+                    log.info("Broadcasting virtual AI message event to user: {}", userId);
+                    messagingTemplate.convertAndSendToUser(userId, "/queue/messages", event);
+                }
             }
         } catch (Exception e) {
             log.error("Error broadcasting message event: {}", e.getMessage(), e);
