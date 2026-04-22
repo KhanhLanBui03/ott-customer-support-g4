@@ -44,6 +44,8 @@ public class AuthService {
 
     // In-memory login rate limiter
     private final ConcurrentHashMap<String, LoginAttempt> loginAttempts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> verifiedRegistrationEmails = new ConcurrentHashMap<>();
+    private static final long VERIFIED_EMAIL_TTL_MILLIS = 10 * 60 * 1000;
 
     /**
      * Check user status by phone number
@@ -319,12 +321,23 @@ public class AuthService {
      */
     public Map<String, Object> register(RegisterRequest request) {
 
+        validationUtil.validatePhoneNumber(request.getPhoneNumber());
+        validationUtil.validateEmail(request.getEmail());
+        validationUtil.validatePassword(request.getPassword());
+        validationUtil.validateName(request.getFirstName(), "First name");
+        validationUtil.validateName(request.getLastName(), "Last name");
+        request.validatePasswordMatch();
+
         String email = validationUtil.cleanEmail(request.getEmail());
 
         User user = userRepository.findByEmail(email).orElse(null);
 
         if (user != null && Boolean.TRUE.equals(user.getIsVerified())) {
             throw new ConflictException("Email already registered");
+        }
+
+        if (!isRegistrationEmailVerified(email)) {
+            throw new ValidationException("Email is not verified. Please verify OTP first.");
         }
 
         if (user == null) {
@@ -335,26 +348,31 @@ public class AuthService {
                     request.getFirstName(),
                     request.getLastName()
             );
+                } else {
+                    user.setPhoneNumber(request.getPhoneNumber());
+                    user.setPasswordHash(hashUtil.hashPassword(request.getPassword()));
+                    user.setFirstName(request.getFirstName());
+                    user.setLastName(request.getLastName());
         }
 
         user.setEmail(email);
-        user.setIsVerified(false);
+                user.setIsVerified(true);
+                user.setUpdatedAt(System.currentTimeMillis());
         userRepository.save(user);
 
-        otpService.generateAndSendOtp(email, "REGISTRATION");
+                verifiedRegistrationEmails.remove(email);
 
         return Map.of(
                 "email", email,
-                "otpRequired", true
+                    "registered", true
         );
     }
 
-    public LoginResponse verifyRegistrationOtp(VerifyOtpRequest request) {
+                public Map<String, Object> verifyRegistrationOtp(VerifyOtpRequest request) {
 
+                validationUtil.validateEmail(request.getEmail());
+                validationUtil.validateOtp(request.getOtpCode());
         String email = validationUtil.cleanEmail(request.getEmail());
-
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ValidationException("User not found"));
 
         // Use purpose from request if provided, otherwise default to REGISTRATION
         String purpose = request.getPurpose() != null && !request.getPurpose().isBlank()
@@ -365,10 +383,20 @@ public class AuthService {
             throw new ValidationException("OTP invalid or expired");
         }
 
-        user.setIsVerified(true);
-        userRepository.save(user);
+        long expiresAt = System.currentTimeMillis() + VERIFIED_EMAIL_TTL_MILLIS;
+        verifiedRegistrationEmails.put(email, expiresAt);
 
-        return generateLoginResponse(user, user.getPhoneNumber());
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setIsVerified(true);
+            user.setUpdatedAt(System.currentTimeMillis());
+            userRepository.save(user);
+        });
+
+        return Map.of(
+                "email", email,
+                "verified", true,
+                "purpose", purpose
+        );
     }
 
     public String sendOtp(String email, String purpose) {
@@ -395,5 +423,19 @@ public class AuthService {
             this.failCount = failCount;
             this.expiresAtMillis = expiresAtMillis;
         }
+    }
+
+    private boolean isRegistrationEmailVerified(String email) {
+        Long expiresAt = verifiedRegistrationEmails.get(email);
+        if (expiresAt == null) {
+            return false;
+        }
+
+        if (expiresAt <= System.currentTimeMillis()) {
+            verifiedRegistrationEmails.remove(email);
+            return false;
+        }
+
+        return true;
     }
 }
