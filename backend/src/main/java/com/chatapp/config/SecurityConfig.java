@@ -47,12 +47,14 @@ public class SecurityConfig {
                         "/api/v1/auth/resend-otp",
                         "/api/v1/auth/forgot-password",
                         "/api/v1/auth/reset-password",
+                        "/api/v1/auth/send-otp",
+                        "/api/v1/auth/send-otp/**",
                         "/api/v1/auth/health",
                         "/api/v1/media/**",
                         "/api/v1/public/**",
                         "/actuator/health",
                         "/swagger-ui/**",
-                        "/v3/api-docs/**"
+                        "/v3/api-docs/**",
         };
 
         private static final String[] WS_ENDPOINTS = {

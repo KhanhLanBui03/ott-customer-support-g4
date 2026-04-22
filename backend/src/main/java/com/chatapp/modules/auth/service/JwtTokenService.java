@@ -3,14 +3,14 @@ package com.chatapp.modules.auth.service;
 import com.chatapp.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JWT Token Service
- * Token generation, validation, and caching
+ * JWT Token Service - In-Memory Only (No Redis)
+ * Token validation and blacklist management
  */
 @Service
 @RequiredArgsConstructor
@@ -18,8 +18,17 @@ import java.util.concurrent.TimeUnit;
 public class JwtTokenService {
 
     private final JwtUtil jwtUtil;
-    private final RedisTemplate<String, Object> redisTemplate;
     private static final long TOKEN_BLACKLIST_TTL_HOURS = 25; // Slightly longer than token expiry
+
+    /**
+     * In-memory token blacklist with expiration
+     */
+    private final ConcurrentHashMap<String, TokenBlacklistEntry> tokenBlacklist = new ConcurrentHashMap<>();
+
+    /**
+     * In-memory token info cache with expiration
+     */
+    private final ConcurrentHashMap<String, TokenCacheEntry> tokenCache = new ConcurrentHashMap<>();
 
     /**
      * Validate token and check if it's blacklisted
@@ -30,9 +39,19 @@ public class JwtTokenService {
         }
 
         String tokenHash = hashToken(token);
-        String blacklistKey = "token:blacklist:" + tokenHash;
-        
-        return !Boolean.TRUE.equals(redisTemplate.hasKey(blacklistKey));
+        TokenBlacklistEntry entry = tokenBlacklist.get(tokenHash);
+
+        if (entry == null) {
+            return true; // Not blacklisted
+        }
+
+        // Check if expired
+        if (entry.expiresAtMillis <= System.currentTimeMillis()) {
+            tokenBlacklist.remove(tokenHash);
+            return true; // Expired, treat as not blacklisted
+        }
+
+        return false; // Still blacklisted
     }
 
     /**
@@ -41,15 +60,9 @@ public class JwtTokenService {
     public void blacklistToken(String token) {
         try {
             String tokenHash = hashToken(token);
-            String blacklistKey = "token:blacklist:" + tokenHash;
-            
-            redisTemplate.opsForValue().set(
-                    blacklistKey,
-                    "true",
-                    TOKEN_BLACKLIST_TTL_HOURS,
-                    TimeUnit.HOURS
-            );
-            
+            long expiresAt = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(TOKEN_BLACKLIST_TTL_HOURS);
+            tokenBlacklist.put(tokenHash, new TokenBlacklistEntry(expiresAt));
+
             log.debug("Token blacklisted: {}", tokenHash);
         } catch (Exception e) {
             log.error("Error blacklisting token", e);
@@ -62,14 +75,8 @@ public class JwtTokenService {
     public void cacheTokenInfo(String token, String userId, long ttlSeconds) {
         try {
             String tokenHash = hashToken(token);
-            String cacheKey = "token:info:" + tokenHash;
-            
-            redisTemplate.opsForValue().set(
-                    cacheKey,
-                    userId,
-                    ttlSeconds,
-                    TimeUnit.SECONDS
-            );
+            long expiresAt = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(ttlSeconds);
+            tokenCache.put(tokenHash, new TokenCacheEntry(userId, expiresAt));
         } catch (Exception e) {
             log.error("Error caching token info", e);
         }
@@ -81,9 +88,19 @@ public class JwtTokenService {
     public String getCachedUserId(String token) {
         try {
             String tokenHash = hashToken(token);
-            String cacheKey = "token:info:" + tokenHash;
-            Object userId = redisTemplate.opsForValue().get(cacheKey);
-            return userId != null ? userId.toString() : null;
+            TokenCacheEntry entry = tokenCache.get(tokenHash);
+
+            if (entry == null) {
+                return null;
+            }
+
+            // Check if expired
+            if (entry.expiresAtMillis <= System.currentTimeMillis()) {
+                tokenCache.remove(tokenHash);
+                return null;
+            }
+
+            return entry.userId;
         } catch (Exception e) {
             log.error("Error retrieving cached token info", e);
             return null;
@@ -95,5 +112,11 @@ public class JwtTokenService {
      */
     private String hashToken(String token) {
         return Integer.toHexString(token.hashCode());
+    }
+
+    private record TokenBlacklistEntry(long expiresAtMillis) {
+    }
+
+    private record TokenCacheEntry(String userId, long expiresAtMillis) {
     }
 }
