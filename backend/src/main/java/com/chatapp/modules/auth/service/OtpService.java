@@ -44,7 +44,7 @@ public class OtpService {
         String attemptsKey = buildAttemptsKey(email, purpose);
 
         // Save OTP in memory
-        otpStore.put(key, new InMemoryOtpEntry(hashed, expiresAtMillis()));
+        otpStore.put(key, new InMemoryOtpEntry(hashed, expiresAtMillis(purpose)));
 
         // Reset attempts
         attemptsStore.remove(attemptsKey);
@@ -76,12 +76,12 @@ public class OtpService {
         String hashed = getStoredHashedOtp(key);
 
         if (hashed == null) {
-            incrementAttempts(attemptsKey);
+            incrementAttempts(attemptsKey, purpose);
             return false;
         }
 
         if (!hashUtil.verifyPassword(otp, hashed)) {
-            incrementAttempts(attemptsKey);
+            incrementAttempts(attemptsKey, purpose);
             return false;
         }
 
@@ -96,11 +96,11 @@ public class OtpService {
     /**
      * Increment OTP verification attempts
      */
-    private void incrementAttempts(String key) {
+    private void incrementAttempts(String key, String purpose) {
         attemptsStore.compute(key, (k, existing) -> {
             long now = System.currentTimeMillis();
             if (existing == null || existing.expiresAtMillis <= now) {
-                return new InMemoryAttemptsEntry(1, expiresAtMillis());
+                return new InMemoryAttemptsEntry(1, expiresAtMillis(purpose));
             }
             return new InMemoryAttemptsEntry(existing.attempts + 1, existing.expiresAtMillis);
         });
@@ -133,8 +133,15 @@ public class OtpService {
         return entry.hashedOtp;
     }
 
-    private long expiresAtMillis() {
-        return System.currentTimeMillis() + Duration.ofSeconds(AppConstants.EXPIRATION.OTP_TTL_SECONDS).toMillis();
+    private long expiresAtMillis(String purpose) {
+        return System.currentTimeMillis() + Duration.ofSeconds(resolveTtlSeconds(purpose)).toMillis();
+    }
+
+    private long resolveTtlSeconds(String purpose) {
+        if ("REGISTRATION".equalsIgnoreCase(purpose)) {
+            return AppConstants.EXPIRATION.REGISTRATION_OTP_TTL_SECONDS;
+        }
+        return AppConstants.EXPIRATION.OTP_TTL_SECONDS;
     }
 
     private record InMemoryOtpEntry(String hashedOtp, long expiresAtMillis) {

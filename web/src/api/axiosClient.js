@@ -1,10 +1,8 @@
 import axios from 'axios';
+import { clearAuthValues, getAuthValue } from '../utils/storage';
 
 const clearAuthStorage = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('sessionId');
-  localStorage.removeItem('user');
+  clearAuthValues();
 };
 
 const axiosClient = axios.create({
@@ -16,9 +14,9 @@ const axiosClient = axios.create({
 
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    const userRaw = localStorage.getItem('user');
-    const sessionId = localStorage.getItem('sessionId');
+    const token = getAuthValue('token');
+    const userRaw = getAuthValue('user');
+    const sessionId = getAuthValue('sessionId');
     const userId = userRaw ? JSON.parse(userRaw)?.id : null;
 
     if (token) {

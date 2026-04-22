@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { addMessage, recallMessage, removeMessage, fetchConversations } from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup } from '../store/notificationSlice';
+import { logout as authLogout } from '../store/authSlice';
 import { initSocket, getStompClient } from '../utils/socket';
 
 export const useWebSocket = () => {
@@ -52,6 +53,10 @@ export const useWebSocket = () => {
             } else {
                 dispatch(fetchConversations());
             }
+          } else if (event.eventType === 'FORCE_LOGOUT') {
+            console.log('[STOMP] Force logout received:', event);
+            dispatch(authLogout());
+            window.location.href = '/login';
           } else if (event.eventType === 'GROUP_INVITE') {
             const data = event.payload?.data || event.payload; 
             console.log('[STOMP] Processing GROUP INVITE:', data);

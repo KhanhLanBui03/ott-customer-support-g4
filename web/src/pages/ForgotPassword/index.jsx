@@ -1,14 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, Lock, Mail, Shield } from 'lucide-react';
+import { ArrowRight, Lock, Mail, Shield } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
-  const { forgotPassword, resetPassword, sendOtp } = useAuth();
+  const { forgotPassword, resetPassword } = useAuth();
+  const COOLDOWN_MS = 3 * 60 * 1000;
 
   const [step, setStep] = useState('request');
-  const [method, setMethod] = useState('forgot-password');
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -16,28 +16,47 @@ const ForgotPassword = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const methodOptions = useMemo(
-    () => [
-      {
-        id: 'forgot-password',
-        title: 'Cach 1',
-        subtitle: 'POST /api/v1/auth/forgot-password',
-        description: 'Gui OTP qua endpoint forgot-password, sau do reset password binh thuong.',
-      },
-      {
-        id: 'explicit-purpose',
-        title: 'Cach 2',
-        subtitle: 'POST /api/v1/auth/send-otp?purpose=FORGOT_PASSWORD',
-        description: 'Gui OTP voi purpose truyen ro rang, sau do reset password voi purpose cung gia tri.',
-      },
-    ],
-    [],
-  );
-
-  const activeMethod = methodOptions.find((option) => option.id === method) || methodOptions[0];
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   const extractMessage = (err, fallback) => err?.response?.data?.message || fallback;
+
+  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+  const cooldownKey = normalizedEmail ? `forgot-password-cooldown:${normalizedEmail}` : '';
+  const cooldownRemainingMs = Math.max(0, cooldownUntil - now);
+  const cooldownRemainingSeconds = Math.ceil(cooldownRemainingMs / 1000);
+  const isCooldownActive = cooldownRemainingMs > 0;
+
+  const applyCooldown = (targetEmail) => {
+    const nextAllowedAt = Date.now() + COOLDOWN_MS;
+    setCooldownUntil(nextAllowedAt);
+    if (targetEmail) {
+      localStorage.setItem(`forgot-password-cooldown:${targetEmail}`, String(nextAllowedAt));
+    }
+  };
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (!cooldownKey) {
+      setCooldownUntil(0);
+      return;
+    }
+
+    const storedCooldown = Number(localStorage.getItem(cooldownKey) || 0);
+    if (storedCooldown > Date.now()) {
+      setCooldownUntil(storedCooldown);
+    } else {
+      localStorage.removeItem(cooldownKey);
+      setCooldownUntil(0);
+    }
+  }, [cooldownKey]);
 
   const resetForm = () => {
     setStep('request');
@@ -55,27 +74,18 @@ const ForgotPassword = () => {
 
     const normalizedEmail = email.trim();
     if (!normalizedEmail) {
-      setError('Vui long nhap email');
+      setError('Please enter your email');
       return;
     }
 
     try {
       setLoading(true);
-      const response =
-        method === 'forgot-password'
-          ? await forgotPassword(normalizedEmail)
-          : await sendOtp(normalizedEmail, 'FORGOT_PASSWORD');
-      const devOtp = response?.devOtp || response?.message || response?.data?.devOtp;
+      await forgotPassword(normalizedEmail);
       setStep('reset');
-      setSuccess(
-        devOtp
-          ? `OTP test: ${devOtp}`
-          : method === 'forgot-password'
-          ? 'OTP da duoc gui qua forgot-password endpoint.'
-          : 'OTP da duoc gui voi purpose FORGOT_PASSWORD.',
-      );
+      applyCooldown(normalizedEmail);
+      setSuccess('OTP has been sent to your email.');
     } catch (err) {
-      setError(extractMessage(err, 'Khong the gui OTP'));
+      setError(extractMessage(err, 'Unable to send OTP'));
     } finally {
       setLoading(false);
     }
@@ -87,20 +97,17 @@ const ForgotPassword = () => {
 
     const normalizedEmail = email.trim();
     if (!normalizedEmail) {
-      setError('Vui long nhap email');
+      setError('Please enter your email');
       return;
     }
 
     try {
       setLoading(true);
-      const response =
-        method === 'forgot-password'
-          ? await forgotPassword(normalizedEmail)
-          : await sendOtp(normalizedEmail, 'FORGOT_PASSWORD');
-      const devOtp = response?.devOtp || response?.message || response?.data?.devOtp;
-      setSuccess(devOtp ? `OTP test: ${devOtp}` : 'Da gui lai ma OTP.');
+      await forgotPassword(normalizedEmail);
+      applyCooldown(normalizedEmail);
+      setSuccess('OTP has been resent to your email.');
     } catch (err) {
-      setError(extractMessage(err, 'Khong the gui lai OTP'));
+      setError(extractMessage(err, 'Unable to resend OTP'));
     } finally {
       setLoading(false);
     }
@@ -112,17 +119,17 @@ const ForgotPassword = () => {
     setSuccess('');
 
     if (newPassword.length < 8) {
-      setError('Mat khau moi phai co it nhat 8 ky tu');
+      setError('New password must be at least 8 characters');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Mat khau xac nhan khong khop');
+      setError('Password confirmation does not match');
       return;
     }
 
     if (!otpCode.trim()) {
-      setError('Vui long nhap ma OTP');
+      setError('Please enter the OTP code');
       return;
     }
 
@@ -134,17 +141,19 @@ const ForgotPassword = () => {
         newPassword,
       };
 
-      if (method === 'explicit-purpose') {
-        payload.purpose = 'FORGOT_PASSWORD';
-      }
-
       await resetPassword(payload);
       navigate('/login');
     } catch (err) {
-      setError(extractMessage(err, 'Dat lai mat khau that bai'));
+      setError(extractMessage(err, 'Password reset failed'));
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatCooldown = (remainingSeconds) => {
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
   };
 
   return (
@@ -158,7 +167,7 @@ const ForgotPassword = () => {
         <div className="text-center space-y-2">
           <h2 className="text-4xl font-black text-white tracking-tighter">Password Recovery</h2>
           <p className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-white/20">
-            {step === 'request' ? 'Choose request method' : 'Reset Password'}
+            {step === 'request' ? 'Request OTP' : 'Reset Password'}
           </p>
         </div>
 
@@ -193,72 +202,10 @@ const ForgotPassword = () => {
               />
             </div>
 
-            {step === 'request' && (
-              <div className="space-y-3">
-                <p className="text-[10px] font-mono font-black uppercase tracking-[0.25em] text-white/30">
-                  Chon cach gui OTP
-                </p>
-
-                <div className="grid gap-3">
-                  {methodOptions.map((option) => {
-                    const selected = option.id === method;
-
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => {
-                          setMethod(option.id);
-                          setSuccess('');
-                          setError('');
-                        }}
-                        className={`text-left rounded-3xl border p-4 transition-all ${
-                          selected
-                            ? 'border-cursor-accent bg-cursor-accent/10 shadow-2xl shadow-cursor-accent/10'
-                            : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className={`text-xs font-mono font-black uppercase tracking-[0.2em] ${selected ? 'text-cursor-accent' : 'text-white/40'}`}>
-                              {option.title}
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-white">{option.subtitle}</p>
-                            <p className="mt-2 text-xs leading-6 text-white/60">{option.description}</p>
-                          </div>
-                          <div
-                            className={`mt-1 h-3 w-3 rounded-full border ${
-                              selected ? 'border-cursor-accent bg-cursor-accent' : 'border-white/25 bg-transparent'
-                            }`}
-                          />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {step === 'reset' && (
               <div className="rounded-3xl border border-cursor-accent/20 bg-cursor-accent/5 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-mono font-black uppercase tracking-[0.25em] text-cursor-accent">
-                      Dang dung {activeMethod.title}
-                    </p>
-                    <p className="mt-1 text-sm text-white/70">{activeMethod.subtitle}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-[10px] font-mono font-black uppercase tracking-[0.2em] text-white/60 transition-colors hover:text-white"
-                  >
-                    <ChevronLeft size={12} />
-                    Doi cach
-                  </button>
-                </div>
                 <p className="text-xs leading-6 text-white/50">
-                  Hay nhap OTP da gui toi email va dat mat khau moi. Phuong thuc nay khong co buoc xac minh rieng.
+                  Enter the OTP sent to your email and set a new password.
                 </p>
               </div>
             )}
@@ -314,16 +261,16 @@ const ForgotPassword = () => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (step === 'request' && isCooldownActive)}
             className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-4xl font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3 disabled:opacity-60"
           >
             <span>
               {loading
-                ? 'Dang xu ly...'
+                ? 'Processing...'
                 : step === 'request'
-                ? activeMethod.id === 'forgot-password'
-                  ? 'Send OTP'
-                  : 'Gui OTP'
+                ? isCooldownActive
+                  ? `Wait ${formatCooldown(cooldownRemainingSeconds)}`
+                  : 'Send OTP'
                 : 'Reset Password'}
             </span>
             <ArrowRight size={20} />
@@ -332,12 +279,18 @@ const ForgotPassword = () => {
           {step === 'reset' && (
             <button
               type="button"
-              disabled={loading}
+              disabled={loading || isCooldownActive}
               onClick={handleResendOtp}
               className="w-full py-3 text-white/70 hover:text-cursor-accent transition-colors text-xs font-mono uppercase tracking-[0.2em] disabled:opacity-60"
             >
-              Gui lai OTP
+              {isCooldownActive ? `Resend in ${formatCooldown(cooldownRemainingSeconds)}` : 'Resend OTP'}
             </button>
+          )}
+
+          {step === 'request' && isCooldownActive && (
+            <p className="text-center text-[10px] font-mono font-black uppercase tracking-[0.2em] text-white/35">
+              You can resend after {formatCooldown(cooldownRemainingSeconds)}
+            </p>
           )}
         </form>
 

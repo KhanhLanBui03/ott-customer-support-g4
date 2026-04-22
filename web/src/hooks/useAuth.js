@@ -23,13 +23,17 @@ const mapAuthPayload = (data) => ({
 
 export const useAuth = () => {
   const dispatch = useDispatch();
-  const { user, token, isAuthenticated, loading, refreshToken, sessionId } = useSelector((state) => state.auth);
+  const { user, token, isAuthenticated, loading, refreshToken, sessionId, rememberMe } = useSelector((state) => state.auth);
 
-  const login = async (credentials) => {
+  const login = async (credentials, options = {}) => {
+    const { remember = true } = options;
     const response = await authApi.login(credentials);
     const data = response.data || response;
 
-    const authData = mapAuthPayload(data);
+    const authData = {
+      ...mapAuthPayload(data),
+      rememberMe: remember,
+    };
     dispatch(setCredentials(authData));
     return authData;
   };
@@ -89,6 +93,7 @@ export const useAuth = () => {
     token,
     refreshToken,
     sessionId,
+    rememberMe,
     isAuthenticated,
     loading,
     login,
