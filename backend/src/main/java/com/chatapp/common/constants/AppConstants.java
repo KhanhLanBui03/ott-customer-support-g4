@@ -22,6 +22,7 @@ public class AppConstants {
     }
 
     public static class EXPIRATION {
+        public static final long REGISTRATION_OTP_TTL_SECONDS = 2 * 60; // 2 minutes
         public static final long OTP_TTL_SECONDS = 5 * 60; // 5 minutes
         public static final long SESSION_TTL_SECONDS = 24 * 60 * 60; // 24 hours
         public static final long STORY_TTL_SECONDS = 24 * 60 * 60; // 24 hours
@@ -31,8 +32,8 @@ public class AppConstants {
     }
 
     public static class RETRY {
-        public static final int LOGIN_FAIL_THRESHOLD = 3;
-        public static final long LOGIN_LOCKOUT_MINUTES = 3;
+        public static final int LOGIN_FAIL_THRESHOLD = 5;
+        public static final long LOGIN_LOCKOUT_MINUTES = 5;
         public static final int OTP_MAX_ATTEMPTS = 3;
     }
 

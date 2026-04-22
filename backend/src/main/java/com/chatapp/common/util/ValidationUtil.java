@@ -47,6 +47,14 @@ public class ValidationUtil {
     }
 
     /**
+     * Clean email
+     */
+    public String cleanEmail(String email) {
+        if (email == null) return null;
+        return email.trim().toLowerCase();
+    }
+
+    /**
      * Validate password strength
      * - At least 8 characters
      * - At least one uppercase letter

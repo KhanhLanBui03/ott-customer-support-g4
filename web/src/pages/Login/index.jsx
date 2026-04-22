@@ -1,23 +1,49 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Zap, Shield, Phone, Lock, ArrowRight } from 'lucide-react';
+import { Zap, Shield, Mail, Lock, ArrowRight } from 'lucide-react';
+import { getAuthPersist, getRememberedEmail, setRememberedEmail } from '../../utils/storage';
 
 const Login = () => {
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(getAuthPersist());
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const rememberedEmail = getRememberedEmail();
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      await login({ phoneNumber, password });
+      await login({ email, password }, { remember: rememberMe });
+      if (rememberMe) {
+        setRememberedEmail(email.trim());
+      } else {
+        setRememberedEmail('');
+      }
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Signal mismatch. Access denied.');
+      const message = err?.response?.data?.message || 'Signal mismatch. Access denied.';
+      if (/not verified/i.test(message)) {
+        navigate('/register', {
+          state: {
+            email,
+            unverified: true,
+            message,
+          },
+        });
+        return;
+      }
+      setError(message);
     }
   };
 
@@ -52,15 +78,15 @@ const Login = () => {
           <div className="space-y-6">
             <div className="relative group">
               <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent transition-colors">
-                <Phone size={18} />
+                <Mail size={18} />
               </div>
               <input
-                type="text"
+                type="email"
                 required
-                className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/[0.08] transition-all placeholder:text-white/10 font-medium"
-                placeholder="Phone Address"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
+                placeholder="Email Address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             
@@ -71,7 +97,7 @@ const Login = () => {
               <input
                 type="password"
                 required
-                className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/[0.08] transition-all placeholder:text-white/10 font-medium"
+                className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
                 placeholder="Secure Key"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -79,7 +105,16 @@ const Login = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-[10px] font-mono font-black uppercase tracking-widest text-white/40 hover:text-white/70 transition-colors cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-white/30 bg-transparent"
+              />
+              Remember Me
+            </label>
             <Link to="/forgot-password" size={18} className="text-[10px] font-mono font-black uppercase tracking-widest text-white/20 hover:text-white transition-colors">
               Recover Link Data
             </Link>
@@ -87,7 +122,7 @@ const Login = () => {
 
           <button
             type="submit"
-            className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-[32px] font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
+            className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-4xl font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
           >
             <span>Establish Connection</span>
             <ArrowRight size={20} />

@@ -4,175 +4,162 @@ import com.chatapp.common.constants.AppConstants;
 import com.chatapp.common.util.HashUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
- * OTP Service
- * Generates, stores, and verifies One-Time Password
+ * OTP Service - In-Memory Only (No Redis)
+ * Generates, stores, and verifies One-Time Password using in-memory store
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("unused")
 public class OtpService {
 
-    private final RedisTemplate<String, Object> redisTemplate;
     private final HashUtil hashUtil;
-    private final SmsService smsService;
-    private final ConcurrentHashMap<String, String> inMemoryOtp = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Integer> inMemoryAttempts = new ConcurrentHashMap<>();
+    private final EmailService emailService;
+
+    /**
+     * In-memory OTP store with TTL
+     * Note: suitable for local/dev. For multi-instance production, use DynamoDB instead.
+     */
+    private final ConcurrentHashMap<String, InMemoryOtpEntry> otpStore = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, InMemoryAttemptsEntry> attemptsStore = new ConcurrentHashMap<>();
 
     /**
      * Generate and send OTP
      * @return the generated OTP code (for development purposes)
      */
-    public String generateAndSendOtp(String phoneNumber, String purpose) {
-        String otpCode = hashUtil.generateRandomCode(6);
-        String hashedOtp = hashUtil.hashPassword(otpCode); // Hash for security
+    public String generateAndSendOtp(String email, String purpose) {
 
-        String key = "otp:" + phoneNumber + ":" + purpose;
-        String attemptsKey = "otp:attempts:" + phoneNumber + ":" + purpose;
+        email = normalize(email);
 
-        try {
-            redisTemplate.opsForValue().set(
-                    key,
-                    hashedOtp,
-                    AppConstants.EXPIRATION.OTP_TTL_SECONDS,
-                    TimeUnit.SECONDS
-            );
-            redisTemplate.delete(attemptsKey);
-        } catch (Exception ex) {
-            inMemoryOtp.put(key, hashedOtp);
-            inMemoryAttempts.remove(attemptsKey);
-            log.warn("Redis unavailable, OTP switched to in-memory: {}", ex.getMessage());
-        }
+        String otp = hashUtil.generateRandomCode(6);
+        String hashed = hashUtil.hashPassword(otp);
 
-        // Send real SMS via Twilio
-        try {
-            smsService.sendOtp(phoneNumber, otpCode);
-        } catch (Exception ex) {
-            log.error("Failed to send real SMS via Twilio for {}. Reason: {}. Continuing with in-memory OTP.", phoneNumber, ex.getMessage());
-        }
-        
-        log.info("OTP processed for {} (purpose: {}).", phoneNumber, purpose);
-        return otpCode;
+        String key = buildKey(email, purpose);
+        String attemptsKey = buildAttemptsKey(email, purpose);
+
+        // Save OTP in memory
+        otpStore.put(key, new InMemoryOtpEntry(hashed, expiresAtMillis(purpose)));
+
+        // Reset attempts
+        attemptsStore.remove(attemptsKey);
+
+        // Send email
+        emailService.sendOtp(email, otp);
+
+        log.info("OTP sent to {} (in-memory store)", email);
+        return otp;
     }
 
     /**
      * Verify OTP
      */
-    public boolean verifyOtp(String phoneNumber, String otpCode, String purpose) {
-        String key = "otp:" + phoneNumber + ":" + purpose;
-        String attemptsKey = "otp:attempts:" + phoneNumber + ":" + purpose;
+    public boolean verifyOtp(String email, String otp, String purpose) {
 
-        // Check max attempts
-        int attempts;
-        try {
-            Object attemptsObj = redisTemplate.opsForValue().get(attemptsKey);
-            attempts = attemptsObj != null ? (Integer) attemptsObj : 0;
-        } catch (Exception ex) {
-            attempts = inMemoryAttempts.getOrDefault(attemptsKey, 0);
-        }
+        email = normalize(email);
+
+        String key = buildKey(email, purpose);
+        String attemptsKey = buildAttemptsKey(email, purpose);
+
+        int attempts = getAttempts(attemptsKey);
 
         if (attempts >= AppConstants.RETRY.OTP_MAX_ATTEMPTS) {
-            log.warn("OTP verification failed: Max attempts exceeded for {}", phoneNumber);
+            log.warn("OTP verification locked for {} - max attempts exceeded", email);
             return false;
         }
 
-        // Get stored OTP
-        Object storedOtpObj;
-        try {
-            storedOtpObj = redisTemplate.opsForValue().get(key);
-        } catch (Exception ex) {
-            storedOtpObj = inMemoryOtp.get(key);
-        }
-        if (storedOtpObj == null) {
-            log.warn("OTP verification failed: OTP not found or expired for {}", phoneNumber);
-            incrementOtpAttempt(attemptsKey);
+        String hashed = getStoredHashedOtp(key);
+
+        if (hashed == null) {
+            incrementAttempts(attemptsKey, purpose);
             return false;
         }
 
-        String storedOtp = (String) storedOtpObj;
-
-        // Verify OTP (compare hashes)
-        if (!hashUtil.verifyPassword(otpCode, storedOtp)) {
-            log.warn("OTP verification failed: Invalid code for {}", phoneNumber);
-            incrementOtpAttempt(attemptsKey);
+        if (!hashUtil.verifyPassword(otp, hashed)) {
+            incrementAttempts(attemptsKey, purpose);
             return false;
         }
 
-        // OTP verified - delete it
-        try {
-            redisTemplate.delete(key);
-            redisTemplate.delete(attemptsKey);
-        } catch (Exception ex) {
-            inMemoryOtp.remove(key);
-            inMemoryAttempts.remove(attemptsKey);
-        }
+        // Success → cleanup
+        otpStore.remove(key);
+        attemptsStore.remove(attemptsKey);
 
-        log.info("OTP verified successfully for {}", phoneNumber);
+        log.info("OTP verified successfully for {}", email);
         return true;
     }
 
     /**
      * Increment OTP verification attempts
      */
-    private void incrementOtpAttempt(String attemptsKey) {
-        try {
-            redisTemplate.opsForValue().increment(attemptsKey);
-            redisTemplate.expire(attemptsKey, AppConstants.EXPIRATION.OTP_TTL_SECONDS, TimeUnit.SECONDS);
-        } catch (Exception ex) {
-            inMemoryAttempts.merge(attemptsKey, 1, Integer::sum);
-        }
+    private void incrementAttempts(String key, String purpose) {
+        attemptsStore.compute(key, (k, existing) -> {
+            long now = System.currentTimeMillis();
+            if (existing == null || existing.expiresAtMillis <= now) {
+                return new InMemoryAttemptsEntry(1, expiresAtMillis(purpose));
+            }
+            return new InMemoryAttemptsEntry(existing.attempts + 1, existing.expiresAtMillis);
+        });
     }
 
-    /**
-     * Check if OTP is still valid
-     */
-    public boolean isOtpValid(String phoneNumber, String purpose) {
-        String key = "otp:" + phoneNumber + ":" + purpose;
-        try {
-            return Boolean.TRUE.equals(redisTemplate.hasKey(key));
-        } catch (Exception ex) {
-            return inMemoryOtp.containsKey(key);
-        }
-    }
-
-    /**
-     * Get remaining OTP attempts
-     */
-    public int getRemainingOtpAttempts(String phoneNumber, String purpose) {
-        String attemptsKey = "otp:attempts:" + phoneNumber + ":" + purpose;
-        Object attemptsObj;
-        try {
-            attemptsObj = redisTemplate.opsForValue().get(attemptsKey);
-        } catch (Exception ex) {
-            attemptsObj = inMemoryAttempts.get(attemptsKey);
-        }
-        
-        if (attemptsObj == null) {
-            return AppConstants.RETRY.OTP_MAX_ATTEMPTS;
+    private int getAttempts(String key) {
+        InMemoryAttemptsEntry entry = attemptsStore.get(key);
+        if (entry == null) {
+            return 0;
         }
 
-        int attempts = (Integer) attemptsObj;
-        return Math.max(0, AppConstants.RETRY.OTP_MAX_ATTEMPTS - attempts);
+        if (entry.expiresAtMillis <= System.currentTimeMillis()) {
+            attemptsStore.remove(key);
+            return 0;
+        }
+        return entry.attempts;
     }
 
-    /**
-     * Clear OTP
-     */
-    public void clearOtp(String phoneNumber, String purpose) {
-        String key = "otp:" + phoneNumber + ":" + purpose;
-        String attemptsKey = "otp:attempts:" + phoneNumber + ":" + purpose;
-        try {
-            redisTemplate.delete(key);
-            redisTemplate.delete(attemptsKey);
-        } catch (Exception ex) {
-            inMemoryOtp.remove(key);
-            inMemoryAttempts.remove(attemptsKey);
+    private String getStoredHashedOtp(String key) {
+        InMemoryOtpEntry entry = otpStore.get(key);
+        if (entry == null) {
+            return null;
         }
+
+        if (entry.expiresAtMillis <= System.currentTimeMillis()) {
+            otpStore.remove(key);
+            return null;
+        }
+
+        return entry.hashedOtp;
     }
+
+    private long expiresAtMillis(String purpose) {
+        return System.currentTimeMillis() + Duration.ofSeconds(resolveTtlSeconds(purpose)).toMillis();
+    }
+
+    private long resolveTtlSeconds(String purpose) {
+        if ("REGISTRATION".equalsIgnoreCase(purpose)) {
+            return AppConstants.EXPIRATION.REGISTRATION_OTP_TTL_SECONDS;
+        }
+        return AppConstants.EXPIRATION.OTP_TTL_SECONDS;
+    }
+
+    private record InMemoryOtpEntry(String hashedOtp, long expiresAtMillis) {
+    }
+
+    private record InMemoryAttemptsEntry(int attempts, long expiresAtMillis) {
+    }
+
+    private String buildKey(String email, String purpose) {
+        return "otp:" + email + ":" + purpose;
+    }
+
+    private String buildAttemptsKey(String email, String purpose) {
+        return "otp:attempts:" + email + ":" + purpose;
+    }
+
+    private String normalize(String email) {
+        return email.toLowerCase().trim();
+    }
+
 }

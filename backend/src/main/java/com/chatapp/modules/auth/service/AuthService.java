@@ -18,19 +18,15 @@ import com.chatapp.modules.auth.dto.response.TokenResponse;
 import com.chatapp.modules.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Objects;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Authentication Service
+ * Authentication Service - In-Memory Only (No Redis)
  * Handles user registration, login, token management
  */
 @Service
@@ -43,13 +39,13 @@ public class AuthService {
     private final HashUtil hashUtil;
     private final ValidationUtil validationUtil;
     private final OtpService otpService;
-    private final JwtTokenService jwtTokenService;
     private final SessionService sessionService;
-    private final RedisTemplate<String, Object> redisTemplate;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
-    @Value("${spring.profiles.active:dev}")
-    private String activeProfile;
+    // In-memory login rate limiter
+    private final ConcurrentHashMap<String, LoginAttempt> loginAttempts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> verifiedRegistrationEmails = new ConcurrentHashMap<>();
+    private static final long VERIFIED_EMAIL_TTL_MILLIS = 10 * 60 * 1000;
 
     /**
      * Check user status by phone number
@@ -73,100 +69,43 @@ public class AuthService {
     }
 
     /**
-     * Register new user
-     */
-    public Map<String, Object> register(RegisterRequest request) {
-        log.info("Registering new user with phone: {}", request.getPhoneNumber());
-
-        // Validate input
-        validationUtil.validatePhoneNumber(request.getPhoneNumber());
-        validationUtil.validatePassword(request.getPassword());
-        validationUtil.validateName(request.getFirstName(), "First name");
-        validationUtil.validateName(request.getLastName(), "Last name");
-        request.validatePasswordMatch();
-
-        // Check if user already exists
-        String cleanPhone = validationUtil.cleanPhoneNumber(request.getPhoneNumber());
-        User user = userRepository.findByPhoneNumber(cleanPhone).orElse(null);
-        if (user != null && Boolean.TRUE.equals(user.getIsVerified())) {
-            throw new ConflictException("User", cleanPhone + " already registered");
-        }
-
-        String passwordHash = hashUtil.hashPassword(request.getPassword());
-        if (user == null) {
-            String userId = UUID.randomUUID().toString();
-            user = User.create(userId, cleanPhone, passwordHash, request.getFirstName(), request.getLastName());
-            log.info("Created pending user registration: {}", userId);
-        } else {
-            user.setPasswordHash(passwordHash);
-            user.setFirstName(request.getFirstName());
-            user.setLastName(request.getLastName());
-            user.setUpdatedAt(System.currentTimeMillis());
-        }
-
-        if (request.getEmail() != null) {
-            validationUtil.validateEmail(request.getEmail());
-            user.setEmail(request.getEmail());
-        }
-
-        // Auto-verify in dev mode to bypass Twilio SMS limitation
-        if ("dev".equals(activeProfile)) {
-            user.setIsVerified(true);
-            log.info("Auto-verified user in dev mode: {}", cleanPhone);
-        } else {
-            user.setIsVerified(false);
-        }
-
-        userRepository.save(user);
-
-        String otpCode = otpService.generateAndSendOtp(cleanPhone, "REGISTRATION");
-        return Map.of(
-                "phoneNumber", cleanPhone,
-                "otpRequired", true,
-                "purpose", "REGISTRATION",
-                "devOtp", otpCode // Include OTP for development UI alert
-        );
-    }
-
-    /**
      * Login user
      */
     public LoginResponse login(LoginRequest request) {
-        log.info("Login attempt for phone: {}", request.getPhoneNumber());
+        log.info("Login attempt for email: {}", request.getEmail());
 
         // Validate input
-        validationUtil.validatePhoneNumber(request.getPhoneNumber());
-        String cleanPhone = validationUtil.cleanPhoneNumber(request.getPhoneNumber());
+        validationUtil.validateEmail(request.getEmail());
+        String cleanEmail = validationUtil.cleanEmail(request.getEmail());
 
         // Check login attempts
-        checkLoginAttempts(cleanPhone);
+        checkLoginAttempts(cleanEmail);
 
         // Verify credentials
-        User user = userRepository.findByPhoneNumber(cleanPhone)
-                .orElseThrow(() -> {
-                    incrementLoginFailCount(cleanPhone);
-                    throw new BadCredentialsException(MessageConstants.Error.INVALID_CREDENTIALS);
-                });
+        User user = userRepository.findByEmail(cleanEmail).orElse(null);
+        if (user == null) {
+            incrementLoginFailCount(cleanEmail);
+            throw new BadCredentialsException(MessageConstants.Error.INVALID_CREDENTIALS);
+        }
         if (!Boolean.TRUE.equals(user.getIsVerified())) {
-            throw new ValidationException("Phone number is not verified. Please verify OTP first.");
+            throw new ValidationException("Email is not verified. Please verify OTP first.");
         }
 
         if (!hashUtil.verifyPassword(request.getPassword(), user.getPasswordHash())) {
-            incrementLoginFailCount(cleanPhone);
+            incrementLoginFailCount(cleanEmail);
             throw new BadCredentialsException(MessageConstants.Error.INVALID_CREDENTIALS);
         }
 
         // Reset login attempts
-        clearLoginAttempts(cleanPhone);
+        clearLoginAttempts(cleanEmail);
 
         // Single Session Login: Invalidate all existing sessions
         sessionService.invalidateAllUserSessions(user.getUserId());
 
         // Generate new session/token
-        LoginResponse response = generateLoginResponse(user, cleanPhone);
+        LoginResponse response = generateLoginResponse(user, user.getPhoneNumber());
 
-        // Notify other devices to logout via WebSocket (if they don't match the new
-        // session)
+        // Notify other devices to logout via WebSocket (if they don't match the new session)
         eventPublisher.publishEvent(MessageEvent.of("FORCE_LOGOUT", "SYSTEM", Map.of(
                 "userId", user.getUserId(),
                 "newSessionId", response.getSessionId(),
@@ -215,55 +154,20 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional
-    public LoginResponse verifyRegistrationOtp(VerifyOtpRequest request) {
-        validationUtil.validatePhoneNumber(request.getPhoneNumber());
-        validationUtil.validateOtp(request.getOtpCode());
-        String cleanPhone = validationUtil.cleanPhoneNumber(request.getPhoneNumber());
-        String purpose = request.getPurpose() != null && !request.getPurpose().isBlank()
-                ? request.getPurpose()
-                : "REGISTRATION";
-
-        User user = userRepository.findByPhoneNumber(cleanPhone)
-                .orElseThrow(() -> new ValidationException("User not found"));
-
-        boolean valid = otpService.verifyOtp(cleanPhone, request.getOtpCode(), purpose);
-        if (!valid) {
-            throw new ValidationException("OTP is invalid or expired");
-        }
-
-        user.setIsVerified(true);
-        user.setUpdatedAt(System.currentTimeMillis());
-        userRepository.save(user);
-
-        // Single Session Login: Invalidate existing sessions even on verification
-        sessionService.invalidateAllUserSessions(user.getUserId());
-
-        LoginResponse response = generateLoginResponse(user, cleanPhone);
-
-        eventPublisher.publishEvent(MessageEvent.of("FORCE_LOGOUT", "SYSTEM", Map.of(
-                "userId", user.getUserId(),
-                "newSessionId", response.getSessionId(),
-                "reason", "Logged in from another device")));
-
-        return response;
-    }
-
-    public String resendRegistrationOtp(String phoneNumber) {
-        validationUtil.validatePhoneNumber(phoneNumber);
-        String cleanPhone = validationUtil.cleanPhoneNumber(phoneNumber);
-        User user = userRepository.findByPhoneNumber(cleanPhone)
+    public String resendRegistrationOtp(String email) {
+        validationUtil.validateEmail(email);
+        String cleanEmail = validationUtil.cleanEmail(email);
+        User user = userRepository.findByEmail(cleanEmail)
                 .orElseThrow(() -> new ValidationException("User not found"));
         if (Boolean.TRUE.equals(user.getIsVerified())) {
             throw new ValidationException("User is already verified");
         }
-        return otpService.generateAndSendOtp(cleanPhone, "REGISTRATION");
+        return otpService.generateAndSendOtp(cleanEmail, "REGISTRATION");
     }
 
     /**
      * Logout user
      */
-    @Transactional
     public void logout(String sessionId, String userId) {
         log.info("Logging out user: {} with session: {}", userId, sessionId);
         sessionService.invalidateSession(sessionId);
@@ -274,7 +178,6 @@ public class AuthService {
         });
     }
 
-    @Transactional
     public void logoutAllDevices(String userId) {
         log.info("Logging out all devices for user: {}", userId);
         sessionService.invalidateAllUserSessions(userId);
@@ -288,7 +191,6 @@ public class AuthService {
     /**
      * Change password
      */
-    @Transactional
     public void changePassword(String userId, String oldPassword, String newPassword) {
         log.info("Changing password for user: {}", userId);
 
@@ -311,26 +213,33 @@ public class AuthService {
         log.info("Password changed successfully for user: {}", userId);
     }
 
-    public String forgotPassword(String phoneNumber) {
-        validationUtil.validatePhoneNumber(phoneNumber);
-        String cleanPhone = validationUtil.cleanPhoneNumber(phoneNumber);
-        User user = userRepository.findByPhoneNumber(cleanPhone)
-                .orElseThrow(() -> new ValidationException("User not found"));
+    public String forgotPassword(String email) {
+        validationUtil.validateEmail(email);
+        String cleanEmail = validationUtil.cleanEmail(email);
+        if (userRepository.findByEmail(cleanEmail).isEmpty()) {
+            throw new ValidationException("User not found");
+        }
 
-        return otpService.generateAndSendOtp(cleanPhone, "FORGOT_PASSWORD");
+        return otpService.generateAndSendOtp(cleanEmail, "FORGOT_PASSWORD");
     }
 
-    @Transactional
-    public void resetPassword(String phoneNumber, String otpCode, String newPassword) {
-        validationUtil.validatePhoneNumber(phoneNumber);
+    public void resetPassword(String email, String otpCode, String newPassword, String purpose) {
+        // Validate inputs FIRST before consuming OTP
+        validationUtil.validateEmail(email);
         validationUtil.validateOtp(otpCode);
         validationUtil.validatePassword(newPassword);
 
-        String cleanPhone = validationUtil.cleanPhoneNumber(phoneNumber);
-        User user = userRepository.findByPhoneNumber(cleanPhone)
+        String cleanEmail = validationUtil.cleanEmail(email);
+        User user = userRepository.findByEmail(cleanEmail)
                 .orElseThrow(() -> new ValidationException("User not found"));
 
-        boolean valid = otpService.verifyOtp(cleanPhone, otpCode, "FORGOT_PASSWORD");
+        // Use purpose from request if provided, otherwise default to FORGOT_PASSWORD
+        String otpPurpose = purpose != null && !purpose.isBlank()
+                ? purpose
+                : "FORGOT_PASSWORD";
+
+        // NOW verify OTP (only after all validation passes)
+        boolean valid = otpService.verifyOtp(cleanEmail, otpCode, otpPurpose);
         if (!valid) {
             throw new ValidationException("OTP is invalid or expired");
         }
@@ -368,48 +277,165 @@ public class AuthService {
     }
 
     /**
-     * Check login attempts - lock account if too many failures
+     * Check login attempts - lock account if too many failures (in-memory)
      */
     private void checkLoginAttempts(String phoneNumber) {
-        try {
-            String key = "ratelimit:login:" + phoneNumber;
-            Object attempts = redisTemplate.opsForValue().get(key);
-
-            if (attempts != null) {
-                int failAttempts = (Integer) attempts;
-                if (failAttempts >= AppConstants.RETRY.LOGIN_FAIL_THRESHOLD) {
+        LoginAttempt attempt = loginAttempts.get(phoneNumber);
+        if (attempt != null) {
+            // Check if entry is still valid
+            if (attempt.expiresAtMillis > System.currentTimeMillis()) {
+                if (attempt.failCount >= AppConstants.RETRY.LOGIN_FAIL_THRESHOLD) {
                     throw new ValidationException(
                             "Account locked. Try again after " +
                                     AppConstants.RETRY.LOGIN_LOCKOUT_MINUTES + " minutes");
                 }
+            } else {
+                // Entry expired, remove it
+                loginAttempts.remove(phoneNumber);
             }
-        } catch (Exception ex) {
-            log.warn("Skip login rate-limit check because Redis is unavailable: {}", ex.getMessage());
         }
     }
 
     /**
-     * Increment login failure count
+     * Increment login failure count (in-memory)
      */
     private void incrementLoginFailCount(String phoneNumber) {
-        try {
-            String key = "ratelimit:login:" + phoneNumber;
-            redisTemplate.opsForValue().increment(key);
-            redisTemplate.expire(key, AppConstants.RETRY.LOGIN_LOCKOUT_MINUTES, TimeUnit.MINUTES);
-        } catch (Exception ex) {
-            log.warn("Skip increment login fail count because Redis is unavailable: {}", ex.getMessage());
-        }
+        long expiresAt = System.currentTimeMillis() + (AppConstants.RETRY.LOGIN_LOCKOUT_MINUTES * 60 * 1000);
+        loginAttempts.compute(phoneNumber, (k, existing) -> {
+            if (existing == null) {
+                return new LoginAttempt(1, expiresAt);
+            }
+            return new LoginAttempt(existing.failCount + 1, expiresAt);
+        });
     }
 
     /**
-     * Clear login failure count
+     * Clear login failure count (in-memory)
      */
     private void clearLoginAttempts(String phoneNumber) {
-        try {
-            String key = "ratelimit:login:" + phoneNumber;
-            redisTemplate.delete(key);
-        } catch (Exception ex) {
-            log.warn("Skip clearing login attempts because Redis is unavailable: {}", ex.getMessage());
+        loginAttempts.remove(phoneNumber);
+    }
+
+    /**
+     * Verify email to register account
+     */
+    public Map<String, Object> register(RegisterRequest request) {
+
+        validationUtil.validatePhoneNumber(request.getPhoneNumber());
+        validationUtil.validateEmail(request.getEmail());
+        validationUtil.validatePassword(request.getPassword());
+        validationUtil.validateName(request.getFirstName(), "First name");
+        validationUtil.validateName(request.getLastName(), "Last name");
+        request.validatePasswordMatch();
+
+        String email = validationUtil.cleanEmail(request.getEmail());
+
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        if (user != null && Boolean.TRUE.equals(user.getIsVerified())) {
+            throw new ConflictException("Email already registered");
         }
+
+        if (!isRegistrationEmailVerified(email)) {
+            throw new ValidationException("Email is not verified. Please verify OTP first.");
+        }
+
+        if (user == null) {
+            user = User.create(
+                    UUID.randomUUID().toString(),
+                    request.getPhoneNumber(),
+                    hashUtil.hashPassword(request.getPassword()),
+                    request.getFirstName(),
+                    request.getLastName()
+            );
+                } else {
+                    user.setPhoneNumber(request.getPhoneNumber());
+                    user.setPasswordHash(hashUtil.hashPassword(request.getPassword()));
+                    user.setFirstName(request.getFirstName());
+                    user.setLastName(request.getLastName());
+        }
+
+        user.setEmail(email);
+                user.setIsVerified(true);
+                user.setUpdatedAt(System.currentTimeMillis());
+        userRepository.save(user);
+
+                verifiedRegistrationEmails.remove(email);
+
+        return Map.of(
+                "email", email,
+                    "registered", true
+        );
+    }
+
+                public Map<String, Object> verifyRegistrationOtp(VerifyOtpRequest request) {
+
+                validationUtil.validateEmail(request.getEmail());
+                validationUtil.validateOtp(request.getOtpCode());
+        String email = validationUtil.cleanEmail(request.getEmail());
+
+        // Use purpose from request if provided, otherwise default to REGISTRATION
+        String purpose = request.getPurpose() != null && !request.getPurpose().isBlank()
+                ? request.getPurpose()
+                : "REGISTRATION";
+
+        if (!otpService.verifyOtp(email, request.getOtpCode(), purpose)) {
+            throw new ValidationException("OTP invalid or expired");
+        }
+
+        long expiresAt = System.currentTimeMillis() + VERIFIED_EMAIL_TTL_MILLIS;
+        verifiedRegistrationEmails.put(email, expiresAt);
+
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setIsVerified(true);
+            user.setUpdatedAt(System.currentTimeMillis());
+            userRepository.save(user);
+        });
+
+        return Map.of(
+                "email", email,
+                "verified", true,
+                "purpose", purpose
+        );
+    }
+
+    public String sendOtp(String email, String purpose) {
+
+        validationUtil.validateEmail(email);
+        String cleanEmail = validationUtil.cleanEmail(email);
+
+        // Optional: check user tồn tại
+        // if (userRepository.findByEmail(cleanEmail).isEmpty()) {
+        //     throw new ValidationException("User not found");
+        // }
+
+        return otpService.generateAndSendOtp(cleanEmail, purpose);
+    }
+
+    /**
+     * In-memory login attempt tracker
+     */
+    private static class LoginAttempt {
+        final int failCount;
+        final long expiresAtMillis;
+
+        LoginAttempt(int failCount, long expiresAtMillis) {
+            this.failCount = failCount;
+            this.expiresAtMillis = expiresAtMillis;
+        }
+    }
+
+    private boolean isRegistrationEmailVerified(String email) {
+        Long expiresAt = verifiedRegistrationEmails.get(email);
+        if (expiresAt == null) {
+            return false;
+        }
+
+        if (expiresAt <= System.currentTimeMillis()) {
+            verifiedRegistrationEmails.remove(email);
+            return false;
+        }
+
+        return true;
     }
 }

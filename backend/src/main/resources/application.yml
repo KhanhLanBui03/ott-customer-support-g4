@@ -30,19 +30,6 @@ spring:
       name: admin
       password: admin123
 
-  # Redis
-  redis:
-    host: localhost
-    port: 6379
-    timeout: 60000
-    password:
-    database: 0
-    jedis:
-      pool:
-        max-active: 20
-        max-idle: 10
-        min-idle: 5
-
   # Jackson
   jackson:
     serialization:
@@ -50,9 +37,25 @@ spring:
     deserialization:
       fail-on-unknown-properties: false
 
+  # Mail / SMTP
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: 20102004hinh@gmail.com
+    password: ekvsgwrigrwecsgp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 # JWT Configuration
 jwt:
-  secret: your-super-secret-key-change-in-production-must-be-256-bits-or-more
+  secret: c8e09fddda9e192d16c485affabc61c9f4bca77a60c19d448f3a6e8475b9f0a4e0d1f69bca8d21f1123b8f0f8a0b8d12
   expiration: 86400000  # 24 hours in milliseconds
   refresh-expiration: 604800000  # 7 days
 

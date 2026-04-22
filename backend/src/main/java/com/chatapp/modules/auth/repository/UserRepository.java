@@ -63,11 +63,7 @@ public class UserRepository {
         DynamoDBQueryExpression<User> query = new DynamoDBQueryExpression<User>()
                 .withHashKeyValues(hashKey)
                 .withIndexName("email-index")
-                .withConsistentRead(false)
-                .withRangeKeyCondition("sk", new com.amazonaws.services.dynamodbv2.model.Condition()
-                        .withComparisonOperator(com.amazonaws.services.dynamodbv2.model.ComparisonOperator.EQ)
-                        .withAttributeValueList(
-                                new com.amazonaws.services.dynamodbv2.model.AttributeValue().withS("profile")));
+                .withConsistentRead(false);
 
         List<User> users = dynamoDBMapper.query(User.class, query);
         if (users.isEmpty()) {
