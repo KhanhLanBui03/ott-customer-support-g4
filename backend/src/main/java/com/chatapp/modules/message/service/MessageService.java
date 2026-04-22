@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.UUID;
@@ -115,7 +114,6 @@ public class MessageService {
     /**
      * Mark message as read (Query)
      */
-    @Transactional
     public void markMessageAsRead(String conversationId, String messageId, String userId) {
         log.info("Marking message {} as read by user {}", messageId, userId);
 
@@ -132,7 +130,6 @@ public class MessageService {
     /**
      * Recall message
      */
-    @Transactional
     public void recallMessage(String conversationId, String messageId, String userId) {
         log.info("Recalling message: {} by user: {}", messageId, userId);
 
@@ -159,7 +156,6 @@ public class MessageService {
     /**
      * Edit message
      */
-    @Transactional
     public void editMessage(String conversationId, String messageId, String updatedContent, String userId) {
         log.info("Editing message: {} by user: {}", messageId, userId);
 
@@ -190,7 +186,6 @@ public class MessageService {
     /**
      * Delete message
      */
-    @Transactional
     public void deleteMessage(String conversationId, String messageId, String userId) {
         log.info("Deleting message: {} by user: {}", messageId, userId);
 
@@ -209,7 +204,6 @@ public class MessageService {
     /**
      * Add reaction to message
      */
-    @Transactional
     public void addReaction(String conversationId, String messageId, String emoji, String userId) {
         log.info("Adding reaction {} to message: {} by user: {}", emoji, messageId, userId);
 
@@ -236,7 +230,6 @@ public class MessageService {
     /**
      * Remove reaction from message
      */
-    @Transactional
     public void removeReaction(String conversationId, String messageId, String emoji, String userId) {
         log.info("Removing reaction {} from message: {} by user: {}", emoji, messageId, userId);
 

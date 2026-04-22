@@ -48,17 +48,13 @@ public class AuthController {
      * Register new user
      * POST /api/v1/auth/register
      */
-    @PostMapping("/register")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> register(
-            @Valid @RequestBody RegisterRequest request) {
-
-        log.info("Register request for phone: {}", request.getPhoneNumber());
-
-        Map<String, Object> response = authService.register(request);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(response, MessageConstants.Success.REGISTRATION_SUCCESS));
-    }
+//    @PostMapping("/register")
+//    public ResponseEntity<ApiResponse<Map<String, Object>>> register(
+//            @Valid @RequestBody RegisterRequest request) {
+//        Map<String, Object> response = authService.register(request);
+//        return ResponseEntity.status(HttpStatus.CREATED)
+//                .body(ApiResponse.success(response, MessageConstants.Success.REGISTRATION_SUCCESS));
+//    }
 
     /**
      * Login user
@@ -67,8 +63,6 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @Valid @RequestBody LoginRequest request) {
-
-        log.info("Login request for phone: {}", request.getPhoneNumber());
 
         LoginResponse response = authService.login(request);
 
@@ -96,38 +90,20 @@ public class AuthController {
         return refresh(request);
     }
 
-    @PostMapping("/verify-otp")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyOtp(
-            @Valid @RequestBody VerifyOtpRequest request) {
-        LoginResponse response = authService.verifyRegistrationOtp(request);
-
-        // Dùng HashMap thay Map.of() để tránh null
-        // ✅ SỬA — flatten ra giống login response
-        Map<String, Object> result = new HashMap<>();
-        result.put("userId", response.getUserId());
-        result.put("phoneNumber", response.getPhoneNumber());
-        result.put("firstName", response.getFirstName() != null ? response.getFirstName() : "");
-        result.put("lastName", response.getLastName() != null ? response.getLastName() : "");
-        result.put("fullName", response.getFullName() != null ? response.getFullName() : "");
-        result.put("avatarUrl", response.getAvatarUrl() != null ? response.getAvatarUrl() : "");
-        result.put("bio", response.getBio() != null ? response.getBio() : "");
-        result.put("email", response.getEmail() != null ? response.getEmail() : "");
-        result.put("accessToken", response.getAccessToken());
-        result.put("refreshToken", response.getRefreshToken());
-        result.put("tokenType", response.getTokenType());
-        result.put("expiresIn", response.getExpiresIn());
-        result.put("sessionId", response.getSessionId() != null ? response.getSessionId() : "");
-
-        return ResponseEntity.ok(ApiResponse.success(result, "OTP verified successfully"));
-    }
+//    @PostMapping("/verify-otp")
+//    public ResponseEntity<ApiResponse<Object>> verifyOtp(
+//            @Valid @RequestBody VerifyOtpRequest request) {
+//
+//        return ResponseEntity.ok(ApiResponse.success(request, "OTP verified successfully"));
+//    }
 
     @PostMapping("/resend-otp")
     public ResponseEntity<ApiResponse<Map<String, Object>>> resendOtp(
             @RequestBody Map<String, String> request) {
-        String phoneNumber = request.get("phoneNumber");
-        String otpCode = authService.resendRegistrationOtp(phoneNumber);
+        String email = request.get("email");
+        String otpCode = authService.resendRegistrationOtp(email);
         return ResponseEntity.ok(ApiResponse.success(
-                Map.of("phoneNumber", phoneNumber, "resent", true, "devOtp", otpCode),
+                Map.of("email", email, "resent", true, "devOtp", otpCode),
                 "OTP resent successfully"));
     }
 
@@ -191,18 +167,18 @@ public class AuthController {
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Map<String, Object>>> forgotPassword(
             @Valid @RequestBody com.chatapp.modules.auth.dto.request.ForgotPasswordRequest request) {
-        log.info("Forgot password request for phone: {}", request.getPhoneNumber());
-        String otpCode = authService.forgotPassword(request.getPhoneNumber());
+        log.info("Forgot password request for email: {}", request.getEmail());
+        String otpCode = authService.forgotPassword(request.getEmail());
         return ResponseEntity.ok(ApiResponse.success(
-                Map.of("phoneNumber", request.getPhoneNumber(), "devOtp", otpCode),
+                Map.of("email", request.getEmail(), "devOtp", otpCode),
                 "OTP sent successfully"));
     }
 
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
             @Valid @RequestBody com.chatapp.modules.auth.dto.request.ResetPasswordRequest request) {
-        log.info("Reset password request for phone: {}", request.getPhoneNumber());
-        authService.resetPassword(request.getPhoneNumber(), request.getOtpCode(), request.getNewPassword());
+        log.info("Reset password request for email: {}", request.getEmail());
+        authService.resetPassword(request.getEmail(), request.getOtpCode(), request.getNewPassword(), request.getPurpose());
         return ResponseEntity.ok(ApiResponse.success(null, "Password reset successfully"));
     }
 
@@ -213,5 +189,28 @@ public class AuthController {
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<String>> health() {
         return ResponseEntity.ok(ApiResponse.success("OK", "Auth service is healthy"));
+    }
+
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
+        return ResponseEntity.ok(authService.register(req));
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<?> verify(@RequestBody VerifyOtpRequest req) {
+        return ResponseEntity.ok(authService.verifyRegistrationOtp(req));
+    }
+
+    @PostMapping("/send-otp")
+    public ResponseEntity<ApiResponse<String>> sendOtp(
+            @RequestParam String email,
+            @RequestParam(defaultValue = "GENERAL") String purpose) {
+
+        String otp = authService.sendOtp(email, purpose);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("OTP sent successfully", otp) // ⚠ dev only
+        );
     }
 }

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Zap, Shield, Phone, Lock, ArrowRight } from 'lucide-react';
+import { Zap, Shield, Mail, Lock, ArrowRight } from 'lucide-react';
 
 const Login = () => {
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -14,10 +14,21 @@ const Login = () => {
     e.preventDefault();
     setError('');
     try {
-      await login({ phoneNumber, password });
+      await login({ email, password });
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Signal mismatch. Access denied.');
+      const message = err?.response?.data?.message || 'Signal mismatch. Access denied.';
+      if (/not verified/i.test(message)) {
+        navigate('/register', {
+          state: {
+            email,
+            unverified: true,
+            message,
+          },
+        });
+        return;
+      }
+      setError(message);
     }
   };
 
@@ -52,15 +63,15 @@ const Login = () => {
           <div className="space-y-6">
             <div className="relative group">
               <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent transition-colors">
-                <Phone size={18} />
+                <Mail size={18} />
               </div>
               <input
-                type="text"
+                type="email"
                 required
                 className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/[0.08] transition-all placeholder:text-white/10 font-medium"
-                placeholder="Phone Address"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="Email Address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             
