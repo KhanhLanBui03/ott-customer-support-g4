@@ -5,14 +5,8 @@ import {
   Text,
   ActivityIndicator,
   StyleSheet,
-  Animated,
 } from 'react-native';
 import ChatBubble from './ChatBubble';
-
-/**
- * MessageList Component (Mobile)
- * Displays list of messages in a conversation
- */
 
 const MessageList = ({
   messages = [],
@@ -23,12 +17,13 @@ const MessageList = ({
 }) => {
   const flatListRef = useRef(null);
 
-  // Auto-scroll to bottom when new message arrives
   useEffect(() => {
     if (messages.length > 0) {
-      flatListRef.current?.scrollToEnd({ animated: true });
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
-  }, [messages]);
+  }, [messages, typingUsers]);
 
   const renderMessage = ({ item }) => (
     <ChatBubble
@@ -39,7 +34,7 @@ const MessageList = ({
   );
 
   const renderTypingIndicator = () => {
-    if (typingUsers.length === 0) return null;
+    if (!typingUsers || typingUsers.length === 0) return null;
 
     return (
       <View style={styles.typingContainer}>
@@ -48,11 +43,6 @@ const MessageList = ({
           <View style={styles.typingDot} />
           <View style={styles.typingDot} />
         </View>
-        <Text style={styles.typingText}>
-          {typingUsers.length === 1
-            ? `${typingUsers[0]} is typing...`
-            : `${typingUsers.length} people are typing...`}
-        </Text>
       </View>
     );
   };
@@ -66,26 +56,16 @@ const MessageList = ({
     );
   }
 
-  if (messages.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>No messages yet</Text>
-        <Text style={styles.emptySubtitle}>Start a conversation!</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <FlatList
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
-        keyExtractor={(item) => item.messageId || item.id}
+        keyExtractor={(item) => item.messageId || item.id || Math.random().toString()}
         ListFooterComponent={renderTypingIndicator}
-        onEndReachedThreshold={0.5}
-        scrollEventThrottle={16}
         contentContainerStyle={styles.listContent}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
     </View>
   );
@@ -96,71 +76,39 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-
   listContent: {
-    paddingVertical: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
   },
-
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
-
   loadingText: {
     marginTop: 12,
     fontSize: 14,
     color: '#667eea',
   },
-
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
-
   typingContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    paddingLeft: 48, // Căn lề để khớp với tin nhắn có avatar
+    paddingVertical: 8,
   },
-
   typingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     backgroundColor: '#f3f4f6',
     borderRadius: 18,
+    alignSelf: 'flex-start',
   },
-
   typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#d1d5db',
-  },
-
-  typingText: {
-    fontSize: 12,
-    color: '#9ca3af',
   },
 });
 

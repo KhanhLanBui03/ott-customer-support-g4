@@ -15,6 +15,7 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'expo-router';
 import { logoutUser, restoreState } from '../../src/store/authSlice';
+import { clearChatState } from '../../src/store/chatSlice';
 import { userApi } from '../../src/api/userApi';
 import * as SecureStore from 'expo-secure-store';
 

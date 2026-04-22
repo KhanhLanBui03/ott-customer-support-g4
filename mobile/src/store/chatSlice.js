@@ -1,248 +1,113 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { chatApi, conversationApi } from '../api/chatApi';
+import { sendMessageViaSocket } from '../utils/socket';
 
-/**
- * Chat Slice - Redux state management for messages and conversations
- * Same implementation for Web and Mobile
- */
-
-export const fetchConversations = createAsyncThunk(
-  'chat/fetchConversations',
-  async (params, { rejectWithValue }) => {
-    try {
-      const response = await conversationApi.getConversations(params);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch conversations');
-    }
-  }
-);
-
-export const fetchMessages = createAsyncThunk(
-  'chat/fetchMessages',
-  async ({ conversationId, params }, { rejectWithValue }) => {
-    try {
-      const response = await chatApi.getMessages(conversationId, params);
-      return { conversationId, messages: response.data.messages };
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch messages');
-    }
-  }
-);
-
-export const sendMessage = createAsyncThunk(
-  'chat/sendMessage',
-  async (messageData, { rejectWithValue }) => {
-    try {
-      const response = await chatApi.sendMessage(messageData);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to send message');
-    }
-  }
-);
-
-export const createConversation = createAsyncThunk(
-  'chat/createConversation',
-  async (conversationData, { rejectWithValue }) => {
-    try {
-      const response = await conversationApi.createConversation(conversationData);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create conversation');
-    }
-  }
-);
-
-export const markMessageAsRead = createAsyncThunk(
-  'chat/markMessageAsRead',
-  async (messageId, { rejectWithValue }) => {
-    try {
-      const response = await chatApi.markAsRead(messageId);
-      return { messageId, ...response.data };
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to mark as read');
-    }
-  }
-);
-
-const initialState = {
-  conversations: [],
-  currentConversation: null,
-  currentConversationId: null,
-  messages: {},
-  typingUsers: {},
-  loading: false,
-  error: null,
-  unreadCount: 0,
+const getRealId = (state, id) => {
+  if (!id) return id;
+  if (id.includes('#')) return id;
+  const conv = state.conversations.find(c => c.conversationId.includes(id) || id.includes(c.conversationId));
+  return conv ? conv.conversationId : id;
 };
+
+export const fetchConversations = createAsyncThunk('chat/fetchConversations', async (params, { rejectWithValue }) => {
+  try {
+    const response = await conversationApi.getConversations(params);
+    return response.data.data || response.data;
+  } catch (error) { return rejectWithValue(error.response?.data?.message); }
+});
+
+export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, { rejectWithValue, getState }) => {
+  try {
+    const id = typeof arg === 'string' ? arg : arg.conversationId;
+    const state = getState().chat;
+    const realId = getRealId(state, id);
+    const response = await chatApi.getMessages(realId, arg?.params);
+    const data = response.data.data || response.data;
+    const messages = data.messages || data || [];
+
+    // Lấy ID thật từ server trả về để đồng bộ hóa
+    const serverId = messages[0]?.conversationId || realId;
+    return { conversationId: serverId, originalId: id, messages };
+  } catch (error) { return rejectWithValue(error.response?.data?.message); }
+});
+
+export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageData, { rejectWithValue, getState }) => {
+  try {
+    const state = getState();
+    const currentUser = state.auth.user;
+    const realId = getRealId(state.chat, messageData.conversationId);
+
+    const payload = {
+      conversationId: realId,
+      content: messageData.content,
+      type: 'TEXT',
+      senderId: currentUser?.userId
+    };
+
+    sendMessageViaSocket(payload);
+    const response = await chatApi.sendMessage(payload);
+    return response.data.data || response.data;
+  } catch (error) { return rejectWithValue(error.response?.data?.message); }
+});
 
 const chatSlice = createSlice({
   name: 'chat',
-  initialState,
+  initialState: { conversations: [], messages: {}, loading: false },
   reducers: {
-    setCurrentConversation: (state, action) => {
-      state.currentConversationId = action.payload;
-      state.currentConversation = state.conversations.find(
-        (c) => c.conversationId === action.payload
-      );
-    },
     addMessage: (state, action) => {
       const { conversationId, message } = action.payload;
-      if (!state.messages[conversationId]) {
-        state.messages[conversationId] = [];
-      }
-      state.messages[conversationId].push(message);
-    },
-    updateMessage: (state, action) => {
-      const { conversationId, messageId, updates } = action.payload;
-      if (state.messages[conversationId]) {
-        const msgIndex = state.messages[conversationId].findIndex(
-          (m) => m.messageId === messageId
-        );
-        if (msgIndex !== -1) {
-          state.messages[conversationId][msgIndex] = {
-            ...state.messages[conversationId][msgIndex],
-            ...updates,
-          };
+      const msg = message.payload || message;
+      if (!msg?.content) return;
+
+      const realId = msg.conversationId || getRealId(state, conversationId);
+      if (!state.messages[realId]) state.messages[realId] = [];
+
+      const isDuplicate = state.messages[realId].some(m => {
+        if (msg.messageId && m.messageId === msg.messageId) return true;
+        const t1 = new Date(m.createdAt || Date.now()).getTime();
+        const t2 = new Date(msg.createdAt || Date.now()).getTime();
+        return m.content === msg.content && Math.abs(t1 - t2) < 2000;
+      });
+
+      if (!isDuplicate) {
+        state.messages[realId].push(msg);
+        const conv = state.conversations.find(c => c.conversationId === realId);
+        if (conv) {
+          conv.lastMessage = msg.content;
+          conv.updatedAt = msg.createdAt || new Date().toISOString();
         }
       }
     },
-    removeMessage: (state, action) => {
-      const { conversationId, messageId } = action.payload;
-      if (state.messages[conversationId]) {
-        state.messages[conversationId] = state.messages[conversationId].filter(
-          (m) => m.messageId !== messageId
-        );
-      }
-    },
-    setTypingUser: (state, action) => {
-      const { conversationId, userId, isTyping } = action.payload;
-      if (!state.typingUsers[conversationId]) {
-        state.typingUsers[conversationId] = new Set();
-      }
-      if (isTyping) {
-        state.typingUsers[conversationId].add(userId);
-      } else {
-        state.typingUsers[conversationId].delete(userId);
-      }
-    },
-    clearTypingUsers: (state, action) => {
-      const { conversationId } = action.payload;
-      if (state.typingUsers[conversationId]) {
-        state.typingUsers[conversationId].clear();
-      }
-    },
-    addReaction: (state, action) => {
-      const { conversationId, messageId, emoji } = action.payload;
-      if (state.messages[conversationId]) {
-        const msgIndex = state.messages[conversationId].findIndex(
-          (m) => m.messageId === messageId
-        );
-        if (msgIndex !== -1) {
-          const msg = state.messages[conversationId][msgIndex];
-          if (!msg.reactions) {
-            msg.reactions = {};
-          }
-          if (!msg.reactions[emoji]) {
-            msg.reactions[emoji] = [];
-          }
-          msg.reactions[emoji].push(new Date().getTime());
-        }
-      }
-    },
-    clearError: (state) => {
-      state.error = null;
-    },
+    clearChatState: (state) => {
+      state.conversations = [];
+      state.messages = {};
+    }
   },
   extraReducers: (builder) => {
-    // Fetch conversations
     builder
-      .addCase(fetchConversations.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
       .addCase(fetchConversations.fulfilled, (state, action) => {
-        state.loading = false;
-        state.conversations = action.payload.conversations || [];
-        state.unreadCount = action.payload.unreadCount || 0;
-      })
-      .addCase(fetchConversations.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      });
-
-    // Fetch messages
-    builder
-      .addCase(fetchMessages.pending, (state) => {
-        state.loading = true;
+        state.conversations = action.payload.conversations || action.payload || [];
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
-        state.loading = false;
-        const { conversationId, messages } = action.payload;
+        const { conversationId, originalId, messages } = action.payload;
+        // Double-mapping: Lưu vào cả ID thật và ID từ URL để không bao giờ mất tin
         state.messages[conversationId] = messages;
-      })
-      .addCase(fetchMessages.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      });
-
-    // Send message
-    builder
-      .addCase(sendMessage.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+        if (originalId && originalId !== conversationId) {
+          state.messages[originalId] = messages;
+        }
       })
       .addCase(sendMessage.fulfilled, (state, action) => {
-        state.loading = false;
-        const { conversationId, messageId } = action.payload;
-        if (!state.messages[conversationId]) {
-          state.messages[conversationId] = [];
-        }
-        state.messages[conversationId].push(action.payload);
-      })
-      .addCase(sendMessage.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+        const msg = action.payload;
+        const rid = msg.conversationId;
+        if (!state.messages[rid]) state.messages[rid] = [];
+        const isDuplicate = state.messages[rid].some(m =>
+          (msg.messageId && m.messageId === msg.messageId) ||
+          (m.content === msg.content && Math.abs(new Date(m.createdAt || Date.now()).getTime() - new Date(msg.createdAt || Date.now()).getTime()) < 2000)
+        );
+        if (!isDuplicate) state.messages[rid].push(msg);
       });
-
-    // Create conversation
-    builder
-      .addCase(createConversation.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(createConversation.fulfilled, (state, action) => {
-        state.loading = false;
-        state.conversations.unshift(action.payload);
-        state.currentConversationId = action.payload.conversationId;
-        state.currentConversation = action.payload;
-      })
-      .addCase(createConversation.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      });
-
-    // Mark message as read
-    builder.addCase(markMessageAsRead.fulfilled, (state, action) => {
-      const messageIndex = state.messages[state.currentConversationId]?.findIndex(
-        (m) => m.messageId === action.payload.messageId
-      );
-      if (messageIndex !== -1) {
-        state.messages[state.currentConversationId][messageIndex].read = true;
-      }
-    });
   },
 });
 
-export const {
-  setCurrentConversation,
-  addMessage,
-  updateMessage,
-  removeMessage,
-  setTypingUser,
-  clearTypingUsers,
-  addReaction,
-  clearError,
-} = chatSlice.actions;
-
+export const { addMessage, clearChatState } = chatSlice.actions;
 export default chatSlice.reducer;

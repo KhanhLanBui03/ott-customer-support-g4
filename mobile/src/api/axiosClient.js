@@ -28,10 +28,10 @@ axiosClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor cho Response: Xử lý lỗi 401 (Hết hạn Token)
+// Interceptor cho Response: Xử lý bóc tách dữ liệu và lỗi 401
 axiosClient.interceptors.response.use(
   (response) => {
-    // Nếu backend trả về bọc trong object data { code, message, data }
+    // Trả về response.data (chính là object ApiResponse { success, message, data })
     return response.data;
   },
   async (error) => {

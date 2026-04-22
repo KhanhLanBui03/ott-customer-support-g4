@@ -15,45 +15,45 @@ export const useAuth = () => {
   );
 
   const login = useCallback(
-    (phoneNumber, password, deviceId = 'mobile-device', deviceName = 'Mobile App') => {
-      return dispatch(
-        loginUser({
-          phoneNumber,
-          password,
-          deviceId,
-          deviceName,
-        })
-      );
+    (identifier, password, deviceId = 'mobile-device', deviceName = 'Mobile App') => {
+      // Identifier can be email or phoneNumber
+      const loginData = identifier.includes('@')
+        ? { email: identifier, password, deviceId, deviceName }
+        : { phoneNumber: identifier, password, deviceId, deviceName };
+
+      return dispatch(loginUser(loginData));
     },
     [dispatch]
   );
 
   const register = useCallback(
-    (phoneNumber, password, confirmPassword, fullName) => {
-      const nameParts = (fullName || '').trim().split(/\s+/).filter(Boolean);
-      const firstName = nameParts[0] || 'User';
-      const lastName = nameParts.slice(1).join(' ') || 'Mobile';
-
-      return dispatch(
-        registerUser({
-          phoneNumber,
-          password,
-          confirmPassword,
-          firstName,
-          lastName,
-        })
-      );
+    (registerData) => {
+      return dispatch(registerUser(registerData));
     },
     [dispatch]
   );
 
+  const sendOtp = useCallback(
+    (email, purpose = 'REGISTRATION') => {
+      return authApi.sendOtp(email, purpose);
+    },
+    []
+  );
+
+  const checkPhone = useCallback(
+    (phone) => {
+      return authApi.checkUserStatus(phone);
+    },
+    []
+  );
+
   const verify = useCallback(
-    (phoneNumber, otp) => {
+    (email, otp, purpose = 'REGISTRATION') => {
       return dispatch(
         verifyOtp({
-          phoneNumber,
+          email,
           otpCode: otp,
-          purpose: 'REGISTRATION',
+          purpose,
         })
       );
     },
@@ -85,6 +85,8 @@ export const useAuth = () => {
     accessToken,
     login,
     register,
+    sendOtp,
+    checkPhone,
     verify,
     resend,
     logout,
