@@ -256,6 +256,7 @@ public class ConversationService {
                     .unreadCount(uc.getUnreadCount())
                     .members(members)
                     .pinnedMessages(fullConv != null ? fetchPinnedMessages(fullConv) : new ArrayList<>())
+                    .isPinned(uc.getIsPinned() != null && uc.getIsPinned())
                     .build();
         }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
     }
@@ -298,6 +299,7 @@ public class ConversationService {
                 .updatedAt(conv.getUpdatedAt())
                 .members(members)
                 .pinnedMessages(fetchPinnedMessages(conv))
+                .isPinned(userConv.getIsPinned() != null && userConv.getIsPinned())
                 .build();
     }
 
@@ -320,27 +322,51 @@ public class ConversationService {
     }
 
     public void pinMessage(String userId, String conversationId, String messageId) {
+        log.info("Pinning message {} in conversation {} by user {}", messageId, conversationId, userId);
         Conversation conv = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
         if (!conv.getMemberIds().contains(userId)) {
+            log.warn("User {} not authorized to pin in conversation {}", userId, conversationId);
             throw new ValidationException("Not authorized");
         }
         if (conv.getPinnedMessageIds() == null) {
             conv.setPinnedMessageIds(new HashSet<>());
         }
-        conv.getPinnedMessageIds().add(messageId);
+        Set<String> pins = new HashSet<>(conv.getPinnedMessageIds());
+        pins.add(messageId);
+        conv.setPinnedMessageIds(pins);
         conversationRepository.save(conv);
+        log.info("Message {} pinned successfully in conversation {}", messageId, conversationId);
+        
+        // Broadcast via WebSocket
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_PIN", conversationId, Map.of("messageId", messageId)));
     }
 
     public void unpinMessage(String userId, String conversationId, String messageId) {
+        log.info("Unpinning message {} in conversation {} by user {}", messageId, conversationId, userId);
         Conversation conv = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
         if (!conv.getMemberIds().contains(userId)) {
+            log.warn("User {} not authorized to unpin in conversation {}", userId, conversationId);
             throw new ValidationException("Not authorized");
         }
         if (conv.getPinnedMessageIds() != null) {
-            conv.getPinnedMessageIds().remove(messageId);
-            conversationRepository.save(conv);
+            Set<String> pins = new HashSet<>(conv.getPinnedMessageIds());
+            boolean removed = pins.remove(messageId);
+            log.info("After removal, pins size: {}", pins.size());
+            if (removed) {
+                conv.setPinnedMessageIds(pins.isEmpty() ? null : pins);
+                log.info("Setting pinnedMessageIds to: {}", conv.getPinnedMessageIds());
+                conversationRepository.save(conv);
+                log.info("Message {} unpinned successfully (removed=true, nowEmpty={}) from conversation {}", messageId, pins.isEmpty(), conversationId);
+                
+                // Broadcast via WebSocket
+                eventPublisher.publishEvent(MessageEvent.of("MESSAGE_UNPIN", conversationId, Map.of("messageId", messageId)));
+            } else {
+                log.warn("Message {} was NOT found in pinned set of conversation {}", messageId, conversationId);
+            }
+        } else {
+            log.warn("Conversation {} has no pinned messages to remove", conversationId);
         }
     }
 
@@ -508,5 +534,17 @@ public class ConversationService {
 
     public void deleteConversationForUser(String userId, String conversationId) {
         userConversationRepository.findById(userId, conversationId).ifPresent(userConversationRepository::delete);
+    }
+
+    public void togglePin(String userId, String conversationId) {
+        log.info("Processing pin toggle for user {} and conversation {}", userId, conversationId);
+        userConversationRepository.findById(userId, conversationId).ifPresentOrElse(uc -> {
+            boolean current = uc.getIsPinned() != null && uc.getIsPinned();
+            uc.setIsPinned(!current);
+            userConversationRepository.save(uc);
+            log.info("Pin status updated for user {}: {} -> {}", userId, current, !current);
+        }, () -> {
+            log.warn("UserConversation not found for pinning: user {}, conv {}", userId, conversationId);
+        });
     }
 }

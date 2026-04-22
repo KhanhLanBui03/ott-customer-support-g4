@@ -65,6 +65,18 @@ export default function MainLayout() {
           href: null, // Hide from tab bar
         }}
       />
+      <Tabs.Screen
+        name="edit-profile"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="change-password"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }

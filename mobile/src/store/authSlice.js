@@ -116,32 +116,17 @@ export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (_, { rejectWithValue }) => {
     try {
-      await authApi.logout();
-      
-      // Clear persistence
-      if (Platform.OS !== 'web') {
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await SecureStore.deleteItemAsync('user');
-      } else {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-      }
+      // Always clear local storage first
+      await SecureStore.deleteItemAsync('accessToken');
+      await SecureStore.deleteItemAsync('refreshToken');
+      await SecureStore.deleteItemAsync('user');
+
+      // Try to notify backend, but don't wait for it if it fails
+      authApi.logout().catch(err => console.log('Logout API failed, but local state cleared'));
       
       return null;
     } catch (error) {
-       // Still clear persistence even if logout fails
-       if (Platform.OS !== 'web') {
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await SecureStore.deleteItemAsync('user');
-      } else {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-      }
-      return rejectWithValue(error.response?.data?.message || 'Logout failed');
+      return rejectWithValue('Logout failed');
     }
   }
 );
@@ -270,5 +255,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setOtpPhoneNumber } = authSlice.actions;
+export const { clearError, setOtpPhoneNumber, restoreState } = authSlice.actions;
 export default authSlice.reducer;

@@ -35,7 +35,7 @@ public class SendMessageCommand {
         if ((content == null || content.isBlank()) && (mediaUrls == null || mediaUrls.isEmpty())) {
             throw new IllegalArgumentException("Message content or media is required");
         }
-        if (content.length() > 10000) {
+        if (content != null && content.length() > 10000) {
             throw new IllegalArgumentException("Message too long (max 10000 chars)");
         }
     }
