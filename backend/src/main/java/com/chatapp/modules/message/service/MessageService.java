@@ -28,6 +28,7 @@ public class MessageService {
     private final ApplicationEventPublisher eventPublisher;
     private final com.chatapp.modules.ai.service.AIService aiService;
     private final com.chatapp.modules.conversation.service.ConversationService conversationService;
+    private final com.chatapp.modules.conversation.repository.UserConversationRepository userConversationRepository;
 
     private static final String AI_BOT_ID = "shop-expert-ai-bot";
     private static final String AI_BOT_NAME = "ShopExpert AI";
@@ -74,6 +75,10 @@ public class MessageService {
                         .content(repliedMessage.getContent())
                         .senderName(repliedMessage.getSenderName())
                         .build());
+            }
+
+            if (command.getForwardedFrom() != null) {
+                message.setForwardedFrom(command.getForwardedFrom());
             }
 
             if (command.getIsEncrypted() != null && command.getIsEncrypted()) {
@@ -125,7 +130,6 @@ public class MessageService {
     /**
      * Mark message as read (Query)
      */
-    @Transactional
     public void markMessageAsRead(String conversationId, String messageId, String userId) {
         log.info("Marking message {} as read by user {}", messageId, userId);
 
@@ -142,26 +146,31 @@ public class MessageService {
     /**
      * Recall message
      */
-    @Transactional
     public void recallMessage(String conversationId, String messageId, String userId) {
-        log.info("Recalling message: {} by user: {}", messageId, userId);
+        log.info("Attempting to recall message: {} by user: {}", messageId, userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
 
         // Verify ownership
         if (!message.getSenderId().equals(userId)) {
+            log.warn("Recall failed: User {} is not the sender of message {}", userId, messageId);
             throw new IllegalArgumentException("Only message sender can recall");
         }
 
-        // Can only recall within 5 minutes
+        // Can only recall within 5 minutes (REMOVE LIMIT TEMPORARILY FOR TESTING)
+        /*
         long ageMs = System.currentTimeMillis() - message.getCreatedAt();
         if (ageMs > 5 * 60 * 1000) {
+            log.warn("Recall failed: Message {} is too old ({}ms)", messageId, ageMs);
             throw new IllegalArgumentException("Can only recall messages within 5 minutes");
         }
+        */
 
         message.recall();
-        messageRepository.save(message);
+        Message saved = messageRepository.save(message);
+        log.info("Message recall successful and saved: id={}, isRecalled={}, content={}", 
+                 saved.getMessageId(), saved.getIsRecalled(), saved.getContent());
 
         publishMessageRecalledEvent(conversationId, messageId);
     }
@@ -169,7 +178,6 @@ public class MessageService {
     /**
      * Edit message
      */
-    @Transactional
     public void editMessage(String conversationId, String messageId, String updatedContent, String userId) {
         log.info("Editing message: {} by user: {}", messageId, userId);
 
@@ -200,26 +208,27 @@ public class MessageService {
     /**
      * Delete message
      */
-    @Transactional
     public void deleteMessage(String conversationId, String messageId, String userId) {
-        log.info("Deleting message: {} by user: {}", messageId, userId);
+        log.info("Deleting message: {} for user: {} (Soft delete)", messageId, userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
 
-        // Verify ownership (admin can also delete)
-        if (!message.getSenderId().equals(userId) && !isAdmin(userId)) {
-            throw new IllegalArgumentException("Only message sender or admin can delete");
+        if (message.getHiddenForUsers() == null) {
+            message.setHiddenForUsers(new java.util.ArrayList<>());
         }
 
-        messageRepository.deleteById(conversationId, messageId);
+        if (!message.getHiddenForUsers().contains(userId)) {
+            message.getHiddenForUsers().add(userId);
+            messageRepository.save(message);
+        }
+
         publishMessageDeletedEvent(conversationId, messageId);
     }
 
     /**
      * Add reaction to message
      */
-    @Transactional
     public void addReaction(String conversationId, String messageId, String emoji, String userId) {
         log.info("Adding reaction {} to message: {} by user: {}", emoji, messageId, userId);
 
@@ -246,7 +255,6 @@ public class MessageService {
     /**
      * Remove reaction from message
      */
-    @Transactional
     public void removeReaction(String conversationId, String messageId, String emoji, String userId) {
         log.info("Removing reaction {} from message: {} by user: {}", emoji, messageId, userId);
 
@@ -275,9 +283,15 @@ public class MessageService {
     /**
      * Get conversation messages (paginated)
      */
-    public java.util.List<Message> getConversationMessages(String conversationId, int limit) {
+    public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId) {
+        Long joinedAt = userConversationRepository.findById(currentUserId, conversationId)
+                .map(uc -> uc.getJoinedAt())
+                .orElse(0L);
+
         return messageRepository.findByConversationId(conversationId).stream()
                 .filter(m -> m.getCreatedAt() != null) // Skip messages with null timestamps
+                .filter(m -> m.getCreatedAt() >= joinedAt) // NEW: Filter messages before user joined/re-joined
+                .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter hidden messages
                 .sorted((m1, m2) -> Long.compare(
                         m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L,
                         m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L

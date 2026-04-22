@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { chatApi } from '../api/chatApi';
+import { friendApi } from '../api/friendApi';
 
 export const fetchConversations = createAsyncThunk(
   'chat/fetchConversations',
@@ -13,10 +14,24 @@ export const fetchConversations = createAsyncThunk(
   }
 );
 
+export const fetchFriends = createAsyncThunk(
+  'chat/fetchFriends',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await friendApi.getFriends();
+      return response.data || response;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
 const initialState = {
   conversations: [],
   activeConversationId: null,
   messages: {},
+  typingUsers: {}, // { conversationId: [ { userId, name } ] }
+  friends: [],
   loading: false,
 };
 
@@ -87,7 +102,7 @@ const chatSlice = createSlice({
         const msg = state.messages[conversationId].find(m => m.messageId === messageId);
         if (msg) {
           msg.isRecalled = true;
-          msg.content = "[This message was recalled]";
+          msg.content = "[Tin nhắn đã bị thu hồi]";
         }
       }
     },
@@ -95,6 +110,37 @@ const chatSlice = createSlice({
       const { conversationId, messageId } = action.payload;
       if (state.messages[conversationId]) {
         state.messages[conversationId] = state.messages[conversationId].filter(m => m.messageId !== messageId);
+      }
+    },
+    setTyping: (state, action) => {
+      const { conversationId, userId, name, isTyping } = action.payload;
+      if (!state.typingUsers[conversationId]) {
+        state.typingUsers[conversationId] = [];
+      }
+      
+      if (isTyping) {
+        if (!state.typingUsers[conversationId].find(u => u.userId === userId)) {
+          state.typingUsers[conversationId].push({ userId, name });
+        }
+      } else {
+        state.typingUsers[conversationId] = state.typingUsers[conversationId].filter(u => u.userId !== userId);
+      }
+    },
+    pinMessageOptimistic: (state, action) => {
+      const { conversationId, messageId } = action.payload;
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv) {
+        if (!conv.pinnedMessages) conv.pinnedMessages = [];
+        if (!conv.pinnedMessages.find(m => m.messageId === messageId)) {
+          conv.pinnedMessages.push({ messageId });
+        }
+      }
+    },
+    unpinMessageOptimistic: (state, action) => {
+      const { conversationId, messageId } = action.payload;
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv && conv.pinnedMessages) {
+        conv.pinnedMessages = conv.pinnedMessages.filter(m => m.messageId !== messageId);
       }
     },
   },
@@ -109,6 +155,9 @@ const chatSlice = createSlice({
       })
       .addCase(fetchConversations.rejected, (state) => {
         state.loading = false;
+      })
+      .addCase(fetchFriends.fulfilled, (state, action) => {
+        state.friends = action.payload;
       });
   },
 });
@@ -121,6 +170,9 @@ export const {
     addOptimisticMessage,
     updateMessageStatus,
     recallMessage,
-    removeMessage 
+    removeMessage,
+    setTyping,
+    pinMessageOptimistic,
+    unpinMessageOptimistic
 } = chatSlice.actions;
 export default chatSlice.reducer;

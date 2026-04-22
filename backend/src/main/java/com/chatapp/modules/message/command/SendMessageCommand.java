@@ -23,6 +23,7 @@ public class SendMessageCommand {
     private String type; // TEXT, IMAGE, FILE, etc.
     private List<String> mediaUrls;
     private String replyToMessageId;
+    private com.chatapp.modules.message.domain.Message.ForwardInfo forwardedFrom;
     private Boolean isEncrypted;
 
     public void validate() {

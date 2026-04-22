@@ -1,15 +1,19 @@
 import { useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { chatApi } from '../api/chatApi';
-import { setConversations, setActiveConversation, setMessages, addMessage, fetchConversations } from '../store/chatSlice';
+import { setConversations, setActiveConversation, setMessages, addMessage, fetchConversations, fetchFriends } from '../store/chatSlice';
 
 export const useChat = () => {
   const dispatch = useDispatch();
-  const { conversations, activeConversationId, messages, loading } = useSelector(state => state.chat);
+  const { conversations, activeConversationId, messages, friends, loading } = useSelector(state => state.chat);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
   const fetchConversationsAction = useCallback(async () => {
     dispatch(fetchConversations());
+  }, [dispatch]);
+  
+  const fetchFriendsAction = useCallback(async () => {
+    dispatch(fetchFriends());
   }, [dispatch]);
 
   const fetchMessages = useCallback(async (conversationId) => {
@@ -85,7 +89,9 @@ export const useChat = () => {
     create,
     inviteMember,
     acceptGroupInvitation,
-    removeMember
+    removeMember,
+    friends,
+    fetchFriends: fetchFriendsAction
   };
 };
 

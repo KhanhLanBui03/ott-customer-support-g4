@@ -3,19 +3,41 @@ import { useSelector } from 'react-redux';
 import { useChat } from '../../hooks/useChat';
 import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
+import ForwardModal from '../ForwardModal';
 import { chatApi } from '../../api/chatApi';
 import { Phone, Video, Info, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon } from 'lucide-react';
+import GroupAvatar from '../GroupAvatar';
 
-const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBack }) => {
+const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBack, onRefreshMessages }) => {
   const conversationId = conversation?.conversationId;
-  const { messages, fetchMessages, fetchConversations, messagesLoading, conversations } = useChat();
   const { user } = useSelector(state => state.auth);
+  const { messages, fetchMessages, fetchConversations, messagesLoading, conversations, friends, fetchFriends } = useChat();
   const [showPinsDropdown, setShowPinsDropdown] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [forwardingMessage, setForwardingMessage] = useState(null);
+  const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (replyingTo) {
+      console.log('[DEBUG] Replying to set:', replyingTo);
+    }
+  }, [replyingTo]);
+  
+  const localOnRefresh = onRefreshMessages || fetchConversations;
+ 
+  useEffect(() => {
+    fetchFriends();
+  }, [fetchFriends]);
+
   const currentConv = conversation || conversations.find(c => c.conversationId === conversationId);
 
   // Find the other member for status display in single chats
-  const currentMember = currentConv?.members?.find(m => m.userId !== (user?.userId || user?.id));
+  const currentMember = currentConv?.members?.find(m => {
+    const mId = String(m.userId || m.id || '');
+    const uId = String(user?.id || user?.userId || '');
+    return mId !== uId && mId !== '';
+  });
 
   const formatLastSeen = (status, lastSeenAt) => {
     if (status === 'ONLINE') return 'Online';
@@ -55,6 +77,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
       fetchMessages(conversationId);
       setShowPinsDropdown(false); // Reset dropdown when switching convs
       setShowMoreMenu(false);
+      setReplyingTo(null);
     }
   }, [conversationId, fetchMessages]);
 
@@ -76,22 +99,10 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
           )}
           
           <div className="relative flex-shrink-0">
-            <div className={`
-              ${onBack ? 'h-10 w-10 rounded-xl' : 'h-14 w-14 rounded-[22px]'} 
-              bg-surface-200 border border-cursor-dark/5 flex items-center justify-center overflow-hidden shadow-lg shadow-black/5
-            `}>
-              {currentConv?.isAI ? (
-                <div className="w-full h-full bg-indigo-600 flex items-center justify-center">
-                  <SparklesIcon className="text-white" size={onBack ? 20 : 28} />
-                </div>
-              ) : currentConv?.avatar ? (
-                <img src={currentConv.avatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className={`${onBack ? 'text-sm' : 'text-xl'} font-black text-cursor-dark/10 font-serif italic uppercase`}>
-                  {currentConv?.name?.charAt(0) || 'C'}
-                </span>
-              )}
-            </div>
+            <GroupAvatar 
+              conversation={currentConv} 
+              size={onBack ? 'h-10 w-10' : 'h-14 w-14'} 
+            />
             {currentMember?.status === 'ONLINE' && (
               <div className={`absolute -bottom-0.5 -right-0.5 ${onBack ? 'w-3.5 h-3.5' : 'w-4.5 h-4.5'} rounded-full bg-background flex items-center justify-center`}>
                 <div className="w-full h-full rounded-full bg-emerald-500 status-glow shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
@@ -111,9 +122,33 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
               )}
             </h2>
             <div className="flex items-center space-x-2">
-              <span className={`text-[9px] font-mono font-black uppercase tracking-[0.1em] ${currentMember?.status === 'ONLINE' ? 'text-green-500' : 'text-slate-400'}`}>
+              <span className={`text-[9px] font-mono font-black uppercase tracking-[0.1em] ${currentMember?.status === 'ONLINE' ? 'text-green-500' : 'text-slate-400 dark:text-slate-500'}`}>
                 {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : 'Node Active'}
               </span>
+              
+              {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (
+                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border ${
+                  Array.isArray(friends) && friends.some(f => {
+                    const fId = String(f.userId || f.id || f.friendId || '');
+                    const mId = String(currentMember?.userId || currentMember?.id || '');
+                    return fId === mId && fId !== '';
+                  }) 
+                    ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' 
+                    : 'text-amber-500 border-amber-500/20 bg-amber-500/5'
+                }`}>
+                  {Array.isArray(friends) && friends.some(f => {
+                    const fId = String(f.userId || f.id || f.friendId || '');
+                    const mId = String(currentMember?.userId || currentMember?.id || '');
+                    return fId === mId && fId !== '';
+                  }) ? 'Bạn bè' : 'Người lạ'}
+                </span>
+              )}
+              
+              {currentConv?.type === 'GROUP' && (
+                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-indigo-500/20 bg-indigo-500/5 text-indigo-500 tracking-wider">
+                  Nhóm trò chuyện
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -122,13 +157,13 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
           <div className="hidden sm:flex items-center bg-surface-200 p-1 rounded-2xl border border-cursor-dark/5">
             <button
               onClick={onStartCall}
-              className="p-2.5 hover:bg-white hover:text-cursor-dark text-cursor-dark/40 rounded-xl transition-all shadow-sm"
+              className="p-2.5 hover:bg-white hover:text-cursor-dark text-slate-500 dark:text-slate-400 rounded-xl transition-all shadow-sm"
             >
               <Phone size={18} />
             </button>
             <button
               onClick={onStartCall}
-              className="p-2.5 hover:bg-white hover:text-cursor-dark text-cursor-dark/40 rounded-xl transition-all shadow-sm"
+              className="p-2.5 hover:bg-white hover:text-cursor-dark text-slate-500 dark:text-slate-400 rounded-xl transition-all shadow-sm"
             >
               <Video size={18} />
             </button>
@@ -254,14 +289,33 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
           conversationId={conversationId}
           messages={messages[conversationId] || []}
           loading={messagesLoading}
-          onRefresh={fetchConversations}
+          onRefresh={localOnRefresh}
+          onReply={setReplyingTo}
+          onForward={(msg) => {
+            setForwardingMessage(msg);
+            setIsForwardModalOpen(true);
+          }}
         />
       </div>
 
       {/* Input Area */}
-      <div className="p-4 sm:p-6 bg-sidebar border-t border-border transition-colors">
-        <MessageInput conversationId={conversationId} />
+      <div className="p-4 sm:p-6 bg-sidebar border-t border-border transition-colors relative z-50">
+        <MessageInput 
+          conversationId={conversationId} 
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
+        />
       </div>
+
+      {/* Forward Modal */}
+      <ForwardModal 
+        isOpen={isForwardModalOpen}
+        onClose={() => {
+          setIsForwardModalOpen(false);
+          setForwardingMessage(null);
+        }}
+        messageToForward={forwardingMessage}
+      />
     </div>
   );
 };

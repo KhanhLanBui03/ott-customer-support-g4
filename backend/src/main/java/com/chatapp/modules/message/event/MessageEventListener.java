@@ -48,14 +48,18 @@ public class MessageEventListener {
                     log.debug("Sending {} to user {} at /user/{}{}", event.getEventType(), memberId, memberId, destination);
                     messagingTemplate.convertAndSendToUser(memberId, destination, event);
                 });
-            } else if (event.getConversationId().startsWith("SINGLE#") && event.getConversationId().contains("shop-expert-ai-bot")) {
-                // Special handling for virtual AI conversations
-                // Pattern: SINGLE#userId#shop-expert-ai-bot
+            } else if (event.getConversationId().startsWith("SINGLE#")) {
+                // FALLBACK: If conversation not found in DB but is a SINGLE pattern, 
+                // parse IDs directly from string (SINGLE#id1#id2)
                 String[] parts = event.getConversationId().split("#");
-                if (parts.length >= 2) {
-                    String userId = parts[1];
-                    log.info("Broadcasting virtual AI message event to user: {}", userId);
-                    messagingTemplate.convertAndSendToUser(userId, "/queue/messages", event);
+                if (parts.length >= 3) {
+                    for (int i = 1; i < parts.length; i++) {
+                        String memberId = parts[i];
+                        if (memberId.equals("shop-expert-ai-bot")) continue;
+                        
+                        log.info("Broadcasting SINGLE event {} from ID-pattern to user: {}", event.getEventType(), memberId);
+                        messagingTemplate.convertAndSendToUser(memberId, "/queue/messages", event);
+                    }
                 }
             }
         } catch (Exception e) {

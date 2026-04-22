@@ -151,10 +151,15 @@ public class Message {
         }
     }
 
+    @DynamoDBAttribute(attributeName = "hiddenForUsers")
+    private java.util.List<String> hiddenForUsers;
+
     public void recall() {
         this.isRecalled = true;
         this.recalledAt = System.currentTimeMillis();
-        this.content = "[This message was recalled]";
+        this.content = "[Tin nhắn đã bị thu hồi]";
+        this.type = "TEXT";
+        this.mediaUrls = new java.util.ArrayList<>();
     }
 
     public void editContent(String newContent) {
