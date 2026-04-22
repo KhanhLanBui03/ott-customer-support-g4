@@ -47,6 +47,15 @@ public class ConversationController {
         return ResponseEntity.ok(ApiResponse.success(res, "Conversations fetched successfully"));
     }
 
+    @PutMapping("/{conversationId}/read")
+    public ResponseEntity<ApiResponse<Void>> markAsRead(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        conversationService.markAsRead(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Conversation marked as read"));
+    }
+
     @GetMapping("/{conversationId}")
     public ResponseEntity<ApiResponse<ConversationResponse>> getConversationDetail(
             HttpServletRequest request,
@@ -74,6 +83,15 @@ public class ConversationController {
         String userId = getUserId(request);
         conversationService.acceptGroupInvitation(userId, invitationId);
         return ResponseEntity.ok(ApiResponse.success(null, "Invitation accepted"));
+    }
+
+    @PostMapping("/invitations/{invitationId}/reject")
+    public ResponseEntity<ApiResponse<Void>> rejectInvitation(
+            HttpServletRequest request,
+            @PathVariable String invitationId) {
+        String userId = getUserId(request);
+        conversationService.rejectGroupInvitation(userId, invitationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Invitation rejected"));
     }
 
     @GetMapping("/invitations/pending")

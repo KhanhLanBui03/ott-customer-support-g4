@@ -1,11 +1,23 @@
 import React from 'react';
 import { Users, Sparkles as SparklesIcon } from 'lucide-react';
+import { useSelector } from 'react-redux';
 
 const GroupAvatar = ({ conversation, size = "h-12 w-12", isLarge = false, isActive = false }) => {
+  const { user } = useSelector(state => state.auth);
+  
   if (!conversation) return null;
 
   const { type, avatarUrl, avatar, name, members = [], isAI } = conversation;
-  const displayAvatar = avatarUrl || avatar;
+  let displayAvatar = avatarUrl || avatar;
+
+  // Fallback to the other member's avatar for SINGLE conversations
+  if (type === 'SINGLE' && !displayAvatar && members.length > 0) {
+    const myId = user?.userId || user?.id;
+    const otherMember = members.find(m => m.userId !== myId);
+    if (otherMember && otherMember.avatarUrl) {
+      displayAvatar = otherMember.avatarUrl;
+    }
+  }
 
   const containerClasses = `
     ${size} flex-shrink-0 relative overflow-hidden transition-all duration-500

@@ -64,12 +64,19 @@ const Chat = () => {
   useEffect(() => {
     fetchConversations();
     // Fetch initial notifications
-    friendApi.getPendingRequests().then(res => {
-      dispatch(setPendingRequests(res.data || []));
-    });
-    chatApi.getPendingInvitations().then(res => {
-      dispatch(setPendingGroups(res.data || []));
-    });
+    const fetchNotifications = () => {
+      friendApi.getPendingRequests().then(res => {
+        dispatch(setPendingRequests(res.data || []));
+      }).catch(() => {});
+      chatApi.getPendingInvitations().then(res => {
+        dispatch(setPendingGroups(res.data || []));
+      }).catch(() => {});
+    };
+    fetchNotifications();
+    
+    // Auto-refresh notifications every 30 seconds as fallback
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
   }, [fetchConversations, dispatch]);
 
   useEffect(() => {

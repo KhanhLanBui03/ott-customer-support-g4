@@ -3,11 +3,13 @@ import axiosClient from './axiosClient';
 export const chatApi = {
   getConversations: () => axiosClient.get('/conversations'),
   getMessages: (conversationId) => axiosClient.get(`/messages/${encodeURIComponent(conversationId)}`),
+  markConversationAsRead: (conversationId) => axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/read`),
   createConversation: (data) => axiosClient.post('/conversations', data),
   
   // Member & Invitation management
   inviteMember: (conversationId, userId) => axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/invite`, { userId }),
   acceptGroupInvitation: (invitationId) => axiosClient.post(`/conversations/invitations/${encodeURIComponent(invitationId)}/accept`),
+  rejectGroupInvitation: (invitationId) => axiosClient.post(`/conversations/invitations/${encodeURIComponent(invitationId)}/reject`),
   getPendingInvitations: () => axiosClient.get('/conversations/invitations/pending'),
   removeMember: (conversationId, userId) => axiosClient.delete(`/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}`),
   assignRole: (conversationId, userId, role) => axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}/role`, { role }),
@@ -31,6 +33,11 @@ export const chatApi = {
   pinMessage: (conversationId, messageId) => axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`),
   unpinMessage: (conversationId, messageId) => axiosClient.delete(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`),
   togglePinConversation: (conversationId) => axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-pin`),
+  
+  // Vote actions
+  createVote: (conversationId, data) => axiosClient.post(`/messages/${encodeURIComponent(conversationId)}/vote`, data),
+  submitVote: (conversationId, messageId, data) => axiosClient.put(`/messages/${encodeURIComponent(conversationId)}/vote/${messageId}`, data),
+  closeVote: (conversationId, messageId) => axiosClient.put(`/messages/${encodeURIComponent(conversationId)}/vote/${messageId}/close`),
 };
 
 export default chatApi;

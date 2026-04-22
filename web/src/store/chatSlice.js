@@ -50,7 +50,7 @@ const chatSlice = createSlice({
       state.messages[conversationId] = messages;
     },
     addMessage: (state, action) => {
-      const { conversationId, message } = action.payload;
+      const { conversationId, message, currentUserId } = action.payload;
       if (!state.messages[conversationId]) {
         state.messages[conversationId] = [];
       }
@@ -75,6 +75,18 @@ const chatSlice = createSlice({
       if (conv) {
         conv.lastMessage = message.content;
         conv.lastMessageTime = message.createdAt;
+
+        // Increment unread count if it's not the active conversation and NOT from current user
+        if (state.activeConversationId !== conversationId && message.senderId !== currentUserId) {
+          conv.unreadCount = (conv.unreadCount || 0) + 1;
+        }
+
+        // Move the conversation to the top
+        const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
+        if (idx !== -1) {
+           const [item] = state.conversations.splice(idx, 1);
+           state.conversations.unshift(item);
+        }
       }
     },
     addOptimisticMessage: (state, action) => {
@@ -94,6 +106,15 @@ const chatSlice = createSlice({
       if (state.messages[conversationId]) {
         const msg = state.messages[conversationId].find(m => m.messageId === messageId);
         if (msg) msg.status = status;
+      }
+    },
+    updateMessage: (state, action) => {
+      const { conversationId, message } = action.payload;
+      if (state.messages[conversationId]) {
+        const idx = state.messages[conversationId].findIndex(m => m.messageId === message.messageId);
+        if (idx !== -1) {
+          state.messages[conversationId][idx] = message;
+        }
       }
     },
     recallMessage: (state, action) => {
@@ -143,6 +164,33 @@ const chatSlice = createSlice({
         conv.pinnedMessages = conv.pinnedMessages.filter(m => m.messageId !== messageId);
       }
     },
+    optimisticVote: (state, action) => {
+      const { conversationId, messageId, optionIds, userId } = action.payload;
+      const messages = state.messages[conversationId];
+      if (!messages) return;
+
+      const msg = messages.find(m => m.messageId === messageId);
+      if (msg && msg.type === 'VOTE' && msg.vote) {
+        msg.vote.options.forEach(opt => {
+          if (!opt.voterIds) opt.voterIds = [];
+          
+          if (optionIds.includes(opt.optionId)) {
+            if (!opt.voterIds.includes(userId)) {
+              opt.voterIds.push(userId);
+            }
+          } else {
+            opt.voterIds = opt.voterIds.filter(id => id !== userId);
+          }
+        });
+      }
+    },
+    resetUnreadCount: (state, action) => {
+      const conversationId = action.payload;
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv) {
+        conv.unreadCount = 0;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -173,6 +221,10 @@ export const {
     removeMessage,
     setTyping,
     pinMessageOptimistic,
-    unpinMessageOptimistic
+    unpinMessageOptimistic,
+    updateUserPresence,
+    updateMessage,
+    optimisticVote,
+    resetUnreadCount
 } = chatSlice.actions;
 export default chatSlice.reducer;

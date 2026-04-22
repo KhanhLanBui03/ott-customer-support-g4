@@ -6,6 +6,8 @@ export const friendApi = {
     rejectRequest: (requesterId) => axiosClient.post(`/friends/reject/${requesterId}`),
     getFriends: () => axiosClient.get('/friends'),
     getPendingRequests: () => axiosClient.get('/friends/pending'),
+    blockUser: (friendId) => axiosClient.post(`/friends/block/${encodeURIComponent(friendId)}`),
+    unblockUser: (friendId) => axiosClient.post(`/friends/unblock/${encodeURIComponent(friendId)}`),
 };
 
 export default friendApi;

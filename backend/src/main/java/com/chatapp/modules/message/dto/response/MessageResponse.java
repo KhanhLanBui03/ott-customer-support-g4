@@ -39,6 +39,30 @@ public class MessageResponse {
     @JsonProperty("isEncrypted")
     private Boolean isEncrypted;
 
+    private VoteInfoDTO vote;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VoteInfoDTO {
+        private String question;
+        private List<VoteOptionDTO> options;
+        private Boolean allowMultiple;
+        private Long deadline;
+        private Boolean isClosed;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VoteOptionDTO {
+        private String optionId;
+        private String text;
+        private List<String> voterIds;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor

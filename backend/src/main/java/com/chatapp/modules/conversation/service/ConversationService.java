@@ -50,8 +50,27 @@ public class ConversationService {
                     uc.setLastMessage(content);
                     uc.setLastMessageSenderId(senderId);
                     uc.setUpdatedAt(timestamp);
+                    
+                    // Increment unread count if sender is not this member
+                    if (!memberId.equals(senderId)) {
+                        int currentUnread = uc.getUnreadCount() != null ? uc.getUnreadCount() : 0;
+                        uc.setUnreadCount(currentUnread + 1);
+                    }
+                    
                     userConversationRepository.save(uc);
                 });
+            }
+            
+            // Broadcast update to all members to refresh their conversation list (including unread count)
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, Map.of()));
+        });
+    }
+
+    public void markAsRead(String userId, String conversationId) {
+        userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
+            if (uc.getUnreadCount() != null && uc.getUnreadCount() > 0) {
+                uc.setUnreadCount(0);
+                userConversationRepository.save(uc);
             }
         });
     }
@@ -111,6 +130,28 @@ public class ConversationService {
                     .updatedAt(now)
                     .build();
             userConversationRepository.save(uc);
+        }
+        
+        // Push a SYSTEM message that the group was created
+        if (isGroup) {
+            com.chatapp.modules.auth.domain.User creator = userRepository.findById(currentUserId).orElse(null);
+            String creatorName = creator != null ? creator.getFullName() : "Một người dùng";
+            
+            Message createMsg = Message.builder()
+                    .conversationId(conv.getConversationId())
+                    .messageId(java.util.UUID.randomUUID().toString())
+                    .senderId("SYSTEM")
+                    .senderName("Hệ thống")
+                    .content(creatorName + " đã tạo nhóm.")
+                    .type("SYSTEM")
+                    .status("SENT")
+                    .createdAt(now)
+                    .isRecalled(false)
+                    .isEncrypted(false)
+                    .build();
+            
+            messageRepository.save(createMsg);
+            updateLastMessage(conv.getConversationId(), createMsg.getContent(), createMsg.getCreatedAt(), "SYSTEM");
         }
 
         return getConversationDetail(conv.getConversationId(), currentUserId);
@@ -393,16 +434,30 @@ public class ConversationService {
                 .build();
         
         groupInvitationRepository.save(invitation);
+        
+        // Re-read from DB to get the auto-generated invitationId
+        log.info("Saved invitation, invitationId = {}", invitation.getInvitationId());
 
         // Notify the invitee via WebSocket
         try {
-            com.chatapp.modules.message.event.MessageEvent event = 
-                com.chatapp.modules.message.event.MessageEvent.of("GROUP_INVITE", "SYSTEM", invitation);
+            // Build a simple Map payload to ensure all fields are serialized properly
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("invitationId", invitation.getInvitationId());
+            payload.put("inviterId", inviterId);
+            payload.put("inviteeId", inviteeId);
+            payload.put("conversationId", conversationId);
+            payload.put("groupName", conv.getName());
+            payload.put("status", "PENDING");
+            payload.put("createdAt", invitation.getCreatedAt());
             
-            log.info("Direct-Broadcasting group invite to user: {}", inviteeId);
+            com.chatapp.modules.message.event.MessageEvent event = 
+                com.chatapp.modules.message.event.MessageEvent.of("GROUP_INVITE", "SYSTEM", payload);
+            
+            log.info("Direct-Broadcasting group invite to user: {} with invitationId: {}", inviteeId, invitation.getInvitationId());
             messagingTemplate.convertAndSendToUser(inviteeId, "/queue/messages", event);
+            log.info("WebSocket send completed for GROUP_INVITE to user: {}", inviteeId);
         } catch (Exception e) {
-            log.error("Failed to notify invitee via WebSocket", e);
+            log.error("Failed to notify invitee via WebSocket: {}", e.getMessage(), e);
         }
     }
 
@@ -425,10 +480,38 @@ public class ConversationService {
         addMemberToGroup(invite.getInviterId(), invite.getConversationId(), inviteeId);
     }
 
+    public void rejectGroupInvitation(String inviteeId, String invitationId) {
+        com.chatapp.modules.conversation.domain.GroupInvitation invite = groupInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+
+        if (!invite.getInviteeId().equals(inviteeId)) {
+            throw new ValidationException("This invitation is not for you");
+        }
+
+        if (!"PENDING".equals(invite.getStatus())) {
+            throw new ValidationException("Invitation is already " + invite.getStatus());
+        }
+
+        invite.setStatus("REJECTED");
+        groupInvitationRepository.save(invite);
+    }
+
     public List<com.chatapp.modules.conversation.domain.GroupInvitation> getPendingInvitations(String userId) {
-        return groupInvitationRepository.findByInviteeId(userId).stream()
+        log.info("Fetching pending invitations for user: {}", userId);
+        List<com.chatapp.modules.conversation.domain.GroupInvitation> keysOnly = groupInvitationRepository.findByInviteeId(userId);
+        
+        // GSI usually projects KEYS_ONLY by default. We must fetch full items by their HashKeys.
+        List<com.chatapp.modules.conversation.domain.GroupInvitation> all = new java.util.ArrayList<>();
+        for (com.chatapp.modules.conversation.domain.GroupInvitation keyItem : keysOnly) {
+            groupInvitationRepository.findById(keyItem.getInvitationId()).ifPresent(all::add);
+        }
+        
+        log.info("Found {} full invitations for user: {}", all.size(), userId);
+        List<com.chatapp.modules.conversation.domain.GroupInvitation> pending = all.stream()
                 .filter(i -> "PENDING".equals(i.getStatus()))
                 .collect(java.util.stream.Collectors.toList());
+        log.info("Found {} pending invitations for user: {}", pending.size(), userId);
+        return pending;
     }
 
     private void addMemberToGroup(String adminId, String conversationId, String newMemberId) {
@@ -457,6 +540,30 @@ public class ConversationService {
                 com.chatapp.modules.message.event.MessageEvent.of("CONVERSATION_UPDATE", "SYSTEM", getConversationDetail(conversationId, newMemberId));
             
             messagingTemplate.convertAndSendToUser(newMemberId, "/queue/messages", event);
+            
+            // Create system message for the new member
+            com.chatapp.modules.auth.domain.User memberUser = userRepository.findById(newMemberId).orElse(null);
+            String memberName = memberUser != null ? memberUser.getFullName() : ((memberUser != null && memberUser.getFirstName() != null) ? memberUser.getFirstName() : "Một thành viên");
+            
+            Message sysMsg = Message.builder()
+                    .conversationId(conversationId)
+                    .messageId(java.util.UUID.randomUUID().toString())
+                    .senderId("SYSTEM")
+                    .senderName("Hệ thống")
+                    .content(memberName + " vừa tham gia nhóm.")
+                    .type("SYSTEM")
+                    .status("SENT")
+                    .createdAt(System.currentTimeMillis())
+                    .isRecalled(false)
+                    .isEncrypted(false)
+                    .build();
+            
+            messageRepository.save(sysMsg);
+            updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+            
+            // Broadcast the new system message to everyone
+            eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+            
         } catch (Exception e) {
             log.error("Failed to notify new member via WebSocket", e);
         }
@@ -489,6 +596,31 @@ public class ConversationService {
         conversationRepository.save(conv);
 
         userConversationRepository.findById(memberId, conversationId).ifPresent(userConversationRepository::delete);
+        
+        // Push SYSTEM message for removal
+        User adminUser = userRepository.findById(adminId).orElse(null);
+        User targetUser = userRepository.findById(memberId).orElse(null);
+        String adminName = adminUser != null ? adminUser.getFullName() : "Quản trị viên";
+        String targetName = targetUser != null ? targetUser.getFullName() : "một thành viên";
+        
+        String content = isSelf ? (adminName + " đã rời nhóm.") : (adminName + " đã xóa " + targetName + " khỏi nhóm.");
+        
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(content)
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+        
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
     }
 
     public void assignRole(String adminId, String conversationId, String memberId, String newRole) {
@@ -503,6 +635,32 @@ public class ConversationService {
             uc.setRole(newRole);
             userConversationRepository.save(uc);
         });
+        
+        // Push SYSTEM message for role assignment
+        User adminUser = userRepository.findById(adminId).orElse(null);
+        User targetUser = userRepository.findById(memberId).orElse(null);
+        String adminName = adminUser != null ? adminUser.getFullName() : "Trưởng nhóm";
+        String targetName = targetUser != null ? targetUser.getFullName() : "một thành viên";
+        
+        String roleLabel = "ADMIN".equals(newRole) ? "phó nhóm" : "thành viên";
+        String actionVerb = "ADMIN".equals(newRole) ? "bổ nhiệm" : "giáng cấp";
+        
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(adminName + " đã " + actionVerb + " " + targetName + " làm " + roleLabel + ".")
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+                
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
     }
 
     public void updateNickname(String userId, String conversationId, String memberId, String nickname) {

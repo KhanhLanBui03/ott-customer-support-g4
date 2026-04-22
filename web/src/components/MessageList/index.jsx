@@ -1,10 +1,25 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward } from 'lucide-react';
-import { chatApi } from '../../api/chatApi';
-import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic } from '../../store/chatSlice';
+import { PhoneOff, Shield, CheckCheck, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2 } from 'lucide-react';
+import chatApi from '../../api/chatApi';
+import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
+import VoteDetailsModal from '../VoteDetailsModal';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
+
+// Zalo-style colors for group chat member names
+const MEMBER_COLORS = [
+  'text-indigo-500', 'text-emerald-500', 'text-orange-500', 'text-pink-500',
+  'text-cyan-500', 'text-violet-500', 'text-amber-600', 'text-rose-500',
+  'text-teal-500', 'text-blue-500', 'text-red-500', 'text-lime-600'
+];
+
+const getMemberColor = (senderId, members) => {
+  if (!members || !senderId) return 'text-foreground/40';
+  const idx = members.findIndex(m => m.userId === senderId);
+  if (idx === -1) return 'text-foreground/40';
+  return MEMBER_COLORS[idx % MEMBER_COLORS.length];
+};
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward }) => {
   const formatMessageTime = (timestamp) => {
@@ -42,6 +57,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [optimisticReactions, setOptimisticReactions] = useState({}); // { messageId: [reactions] }
   const [wallpaper, setWallpaper] = useState(localStorage.getItem(`chat_wallpaper_${conversationId}`));
+  const [isVoteDetailsOpen, setIsVoteDetailsOpen] = useState(false);
+  const [selectedVote, setSelectedVote] = useState(null);
 
   useEffect(() => {
     // Sync wallpaper when switching conversations
@@ -61,16 +78,16 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
-  useEffect(() => {
-    const scrollToBottom = (instant = false) => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTo({
-          top: scrollRef.current.scrollHeight,
-          behavior: instant ? 'instant' : 'smooth'
-        });
-      }
-    };
+  const scrollToBottom = (instant = false) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: instant ? 'instant' : 'smooth'
+      });
+    }
+  };
 
+  useEffect(() => {
     // Instant scroll on new messages
     scrollToBottom(true);
 
@@ -180,6 +197,43 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     }
   };
 
+  const handleVote = async (messageId, optionId, allowMultiple, currentSelection) => {
+    try {
+      let newOptionIds = [];
+      if (allowMultiple) {
+        if (currentSelection.includes(optionId)) {
+          newOptionIds = currentSelection.filter(id => id !== optionId);
+        } else {
+          newOptionIds = [...currentSelection, optionId];
+        }
+      } else {
+        newOptionIds = [optionId];
+      }
+
+      // Optimistic Update
+      dispatch(optimisticVote({ 
+        conversationId, 
+        messageId, 
+        optionIds: newOptionIds, 
+        userId: user?.userId || user?.id 
+      }));
+
+      await chatApi.submitVote(conversationId, messageId, { optionIds: newOptionIds });
+    } catch (err) {
+      console.error('Failed to submit vote:', err);
+    }
+  };
+
+  const handleCloseVote = async (messageId) => {
+    try {
+      await chatApi.closeVote(conversationId, messageId);
+      // Cập nhật sẽ được xử lý qua WebSocket event
+    } catch (err) {
+      console.error('Failed to close vote:', err);
+      alert('Không thể khóa cuộc bình chọn. Vui lòng thử lại sau.');
+    }
+  };
+
   const renderReactions = (messageId, serverReactions, isMe) => {
     const currentUserId = user?.userId || user?.id;
     const localReactions = optimisticReactions[messageId] || [];
@@ -284,7 +338,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         <div className="flex-1 flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[40px] opacity-60">
           <Shield size={32} className="text-slate-200 dark:text-slate-700 mb-4" />
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 text-center leading-loose">
-            Zero messages detected<br />Channel is secure
+            Chưa có tin nhắn nào<br />Hãy bắt đầu trò chuyện!
           </p>
         </div>
       ) : (
@@ -300,16 +354,31 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
           const isMe = msg.senderId === (user?.userId || user?.id);
           const isCall = msg.type === 'CALL_LOG' || msg.content?.includes('Call');
+          const isSystem = msg.type === 'SYSTEM';
           const isRecalled = msg.isRecalled;
           const isPinned = pinnedIds.includes(msg.messageId);
 
           if (showDateHeader) {
             dateHeader = (
               <div key={`header-${timestamp}`} className="flex justify-center my-10 first:mt-0">
-                <div className="px-5 py-1.5 bg-surface-300/40 backdrop-blur-md rounded-full border border-border/80 shadow-sm transition-all group hover:scale-105 active:scale-95">
-                  <span className="text-[10px] font-bold text-foreground/70 uppercase tracking-[0.2em]">{msgDate}</span>
+                <div className="px-5 py-1.5 bg-slate-100 dark:bg-surface-300/40 backdrop-blur-md rounded-full border border-slate-200 dark:border-border/80 shadow-sm transition-all group hover:scale-105 active:scale-95">
+                  <span className="text-[10px] font-black text-slate-500 dark:text-foreground/70 uppercase tracking-[0.2em]">{msgDate}</span>
                 </div>
               </div>
+            );
+          }
+
+          if (isSystem) {
+            return (
+              <React.Fragment key={msg.messageId || index}>
+                {dateHeader}
+                <div className="flex justify-center my-6 group relative">
+                   <div className="px-5 py-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-full border border-indigo-100 dark:border-indigo-500/10 flex items-center space-x-2 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/50"></span>
+                      <span className="text-[11px] font-black text-indigo-700/80 dark:text-indigo-200/60 uppercase tracking-widest">{msg.content}</span>
+                   </div>
+                </div>
+              </React.Fragment>
             );
           }
 
@@ -318,10 +387,10 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
               {dateHeader}
               <div
                 id={`msg-${msg.messageId}`}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group animate-msg relative mb-6 last:mb-0`}
+                className={`flex flex-col ${msg.type === 'VOTE' ? 'items-center w-full' : (isMe ? 'items-end' : 'items-start')} group animate-msg relative mb-6 last:mb-0`}
               >
-                <div className={`flex items-end max-w-[85%] sm:max-w-[75%] space-x-3 ${isMe ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                  {!isMe && (
+                <div className={`flex items-end ${msg.type === 'VOTE' ? 'w-full justify-center max-w-full' : 'max-w-[85%] sm:max-w-[75%] space-x-3 ' + (isMe ? 'flex-row-reverse space-x-reverse' : '')}`}>
+                  {!isMe && msg.type !== 'VOTE' && (
                     <div className="w-9 h-9 rounded-2xl bg-surface-200 flex-shrink-0 mb-1 overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform">
                       {(msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
                         <img 
@@ -356,12 +425,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                       </div>
                     )}
 
-                    {!isMe && (
-                       <p className="text-[10px] font-black text-foreground/40 uppercase tracking-widest ml-1 mb-1">
-                          {msg.senderName || 'Member'}
+                    {!isMe && msg.type !== 'VOTE' && (
+                       <p className={`text-[10px] font-black uppercase tracking-widest ml-1 mb-1 ${currentConv?.type === 'GROUP' ? getMemberColor(msg.senderId, currentConv?.members) : 'text-foreground/40'}`}>
+                          {msg.senderName || 'Thành viên'}
                        </p>
                     )}
-                    
+
+                    {msg.type === 'VOTE' && (
+                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400/80 mb-2 text-center w-full">
+                          {msg.senderName || 'Thành viên'} đã tạo một bình chọn
+                       </p>
+                    )}
                     {isRecalled ? (
                       <div className="px-6 py-3.5 bg-surface-200/80 text-foreground/40 rounded-[22px] border border-border flex items-center space-x-3 italic">
                         <Trash2 size={14} className="opacity-50" />
@@ -377,6 +451,164 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           <p className="text-sm font-black tracking-tight text-foreground">{msg.content}</p>
                         </div>
                       </div>
+                    ) : (msg.type === 'VOTE' && msg.vote) ? (
+                      (() => {
+                      const totalVoters = msg.vote.options.reduce((sum, o) => sum + (o.voterIds?.length || 0), 0);
+                      const isClosed = msg.vote.isClosed || (msg.vote.deadline && msg.vote.deadline < Date.now());
+                      const isCreator = msg.senderId === meId;
+                      
+                      return (
+                        <div className={`w-full max-w-[340px] bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500`}>
+                          <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-br from-indigo-500/5 to-transparent">
+                            <div className="flex items-start justify-between mb-4">
+                               <div className="space-y-1">
+                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Cuộc bình chọn</p>
+                                 <h4 className="text-[16px] font-black text-slate-900 dark:text-white leading-tight">{msg.vote.question}</h4>
+                               </div>
+                               <div className={cn(
+                                 "p-2.5 rounded-xl transition-all shadow-sm",
+                                 isClosed ? "bg-red-500/10 text-red-500 shadow-red-500/10" : "bg-indigo-500/10 text-indigo-500 shadow-indigo-500/10"
+                               )}>
+                                 {isClosed ? <Lock size={18} /> : <BarChart2 size={18} />}
+                               </div>
+                            </div>
+                            
+                            {msg.vote.allowMultiple && !isClosed && (
+                              <p className="text-[9px] font-black text-indigo-500/80 uppercase tracking-widest bg-indigo-500/5 border border-indigo-500/10 w-fit px-2.5 py-1 rounded-lg">Chọn nhiều phương án</p>
+                            )}
+                            
+                            {isClosed && (
+                              <p className="text-[9px] font-black text-red-500 uppercase tracking-widest bg-red-500/5 border border-red-500/10 w-fit px-2.5 py-1 rounded-lg flex items-center space-x-1">
+                                <Lock size={10} />
+                                <span>Bình chọn đã kết thúc</span>
+                              </p>
+                            )}
+                          </div>
+                          
+                          <div className="p-5 space-y-3 bg-slate-50/30 dark:bg-slate-900/30">
+                            {msg.vote.options.map((opt) => {
+                              const voterIds = opt.voterIds || [];
+                              const percent = totalVoters > 0 ? (voterIds.length / totalVoters) * 100 : 0;
+                              const isSelected = voterIds.includes(meId);
+                              const mySelections = msg.vote.options.filter(o => o.voterIds?.includes(meId)).map(o => o.optionId);
+
+                              return (
+                                <div key={opt.optionId} className="space-y-2 group/opt">
+                                  <button
+                                    disabled={isClosed}
+                                    onClick={() => handleVote(msg.messageId, opt.optionId, msg.vote.allowMultiple, mySelections)}
+                                    className={cn(
+                                      "w-full text-left p-4 rounded-[20px] transition-all relative overflow-hidden border-2",
+                                      isSelected 
+                                        ? 'bg-indigo-500/10 border-indigo-500 shadow-lg shadow-indigo-500/5 ring-1 ring-indigo-500/20' 
+                                        : 'bg-white dark:bg-slate-800 border-transparent hover:border-slate-200 dark:hover:border-slate-700 shadow-sm',
+                                      isClosed && "opacity-80 scale-[0.99] grayscale-[0.3]"
+                                    )}
+                                  >
+                                    <div 
+                                      className="absolute left-0 top-0 bottom-0 bg-indigo-500/5 transition-all duration-1000 ease-out" 
+                                      style={{ width: `${percent}%` }}
+                                    />
+                                    
+                                    <div className="relative flex items-center justify-between z-10">
+                                      <div className="flex items-center space-x-3">
+                                        <div className={cn(
+                                          "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300",
+                                          isSelected ? "bg-indigo-500 border-indigo-500" : "border-slate-200 dark:border-slate-700"
+                                        )}>
+                                          {isSelected && <CheckCheck size={10} className="text-white" />}
+                                        </div>
+                                        <span className={cn(
+                                          "text-[14px] font-bold",
+                                          isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'
+                                        )}>
+                                          {opt.text}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-[12px] font-black text-slate-400">{voterIds.length}</span>
+                                      </div>
+                                    </div>
+                                  </button>
+                                  
+                                  {voterIds.length > 0 && (
+                                    <div className="flex items-center space-x-2 px-2">
+                                      <div className="flex -space-x-2 overflow-hidden items-center translate-y-[-2px]">
+                                        {voterIds.slice(0, 5).map((vId, idx) => {
+                                          const voter = currentConv?.members?.find(m => m.userId === vId);
+                                          return (
+                                            <div key={vId} className="w-6 h-6 rounded-lg border-2 border-white dark:border-slate-900 bg-slate-100 dark:bg-slate-800 overflow-hidden shadow-sm">
+                                              {voter?.avatarUrl ? (
+                                                <img src={voter.avatarUrl} className="w-full h-full object-cover" />
+                                              ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-[8px] font-black uppercase tracking-tighter text-slate-400">
+                                                  {(voter?.fullName || '?').charAt(0)}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                        {voterIds.length > 5 && (
+                                          <div className="w-6 h-6 rounded-lg border-2 border-white dark:border-slate-900 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                            <span className="text-[8px] font-black text-slate-400">+{voterIds.length - 5}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          
+                          <div className="p-4 px-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+                             <div className="flex items-center justify-between mb-4">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                  {totalVoters} người đã bầu
+                                </span>
+                                <button 
+                                  onClick={() => {
+                                    setSelectedVote(msg.vote);
+                                    setIsVoteDetailsOpen(true);
+                                  }}
+                                  className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 transition-colors uppercase tracking-widest flex items-center space-x-1.5 p-1.5 rounded-lg hover:bg-indigo-500/5 group"
+                                >
+                                  <span>Xem chi tiết</span>
+                                  <Info size={12} className="group-hover:rotate-12 transition-transform" />
+                                </button>
+                             </div>
+
+                             {/* Creator Actions */}
+                             {(isCreator || (msg.vote.deadline && !isClosed)) && (
+                               <div className="flex items-center justify-between pt-4 border-t border-dashed border-slate-100 dark:border-slate-800">
+                                  {msg.vote.deadline && !isClosed ? (
+                                    <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-400 italic">
+                                      <Clock size={12} />
+                                      <span>Hết hạn: {new Date(msg.vote.deadline).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} {new Date(msg.vote.deadline).toLocaleDateString('vi-VN')}</span>
+                                    </div>
+                                  ) : <div />}
+
+                                  {!isClosed && isCreator && (
+                                    <button 
+                                      onClick={() => handleCloseVote(msg.messageId)}
+                                      className="text-[10px] font-black text-slate-400 hover:text-red-500 transition-colors uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl hover:bg-red-500/10 flex items-center space-x-2"
+                                    >
+                                      <Lock size={12} />
+                                      <span>Chốt kết quả</span>
+                                    </button>
+                                  )}
+
+                                  {isClosed && (
+                                    <div className="w-full flex justify-center">
+                                       <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] opacity-40 italic">ĐÃ KẾT THÚC</span>
+                                    </div>
+                                  )}
+                               </div>
+                             )}
+                          </div>
+                        </div>
+                      );
+                    })()
                     ) : (
                       <div className="relative">
                         {/* Reaction Picker on Hover */}
@@ -533,13 +765,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           )}
                         </div>
                         {/* Render Reactions Badge */}
-                        {renderReactions(msg.messageId, msg.reactions, isMe)}
+                        {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className={`flex items-center space-x-3 mt-2 ${isMe ? 'flex-row-reverse space-x-reverse mr-4' : 'ml-14'}`}>
+                <div className={`flex items-center space-x-3 mt-2 ${msg.type === 'VOTE' ? 'justify-center' : (isMe ? 'flex-row-reverse space-x-reverse mr-4' : 'ml-14')}`}>
                   <span className="text-[9px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">
                     {formatMessageTime(msg.createdAt)}
                   </span>
@@ -579,9 +811,24 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       )}
       <div ref={bottomRef} className="h-px w-full clear-both" />
       </div>
+      </div>
+
+      {activeMenu && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setActiveMenu(null)}
+        />
+      )}
+
+      {/* Vote Details Modal */}
+      <VoteDetailsModal 
+        isOpen={isVoteDetailsOpen}
+        onClose={() => setIsVoteDetailsOpen(false)}
+        vote={selectedVote}
+        members={currentConv?.members}
+      />
     </div>
-  </div>
-);
+  );
 };
 
 export default MessageList;

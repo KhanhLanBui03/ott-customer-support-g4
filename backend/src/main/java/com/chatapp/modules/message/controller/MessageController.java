@@ -7,6 +7,8 @@ import com.chatapp.modules.auth.repository.UserRepository;
 import com.chatapp.modules.message.command.SendMessageCommand;
 import com.chatapp.modules.message.domain.Message;
 import com.chatapp.modules.message.dto.request.SendMessageRequest;
+import com.chatapp.modules.message.dto.CreateVoteRequest;
+import com.chatapp.modules.message.dto.SubmitVoteRequest;
 import com.chatapp.modules.message.dto.response.MessageResponse;
 import com.chatapp.modules.message.service.MessageService;
 import jakarta.validation.Valid;
@@ -140,6 +142,37 @@ public class MessageController {
         return ResponseEntity.ok(ApiResponse.success(null, "Message marked as read"));
     }
 
+    @PostMapping("/{conversationId}/vote")
+    public ResponseEntity<ApiResponse<MessageResponse>> createVote(
+            @PathVariable String conversationId,
+            @RequestBody CreateVoteRequest request,
+            Authentication authentication
+    ) {
+        Message message = messageService.createVoteMessage(conversationId, getAuthUserId(authentication), request);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote created successfully"));
+    }
+
+    @PutMapping("/{conversationId}/vote/{messageId}")
+    public ResponseEntity<ApiResponse<MessageResponse>> submitVote(
+            @PathVariable String conversationId,
+            @PathVariable String messageId,
+            @RequestBody SubmitVoteRequest request,
+            Authentication authentication
+    ) {
+        Message message = messageService.submitVote(conversationId, messageId, getAuthUserId(authentication), request);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote submitted successfully"));
+    }
+
+    @PutMapping("/{conversationId}/vote/{messageId}/close")
+    public ResponseEntity<ApiResponse<MessageResponse>> closeVote(
+            @PathVariable String conversationId,
+            @PathVariable String messageId,
+            Authentication authentication
+    ) {
+        Message message = messageService.closeVote(conversationId, messageId, getAuthUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote closed successfully"));
+    }
+
     private String getAuthUserId(Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             throw new ValidationException("Unauthorized");
@@ -174,6 +207,19 @@ public class MessageController {
                 .reactions(message.getReactions())
                 .createdAt(message.getCreatedAt())
                 .isEncrypted(message.getIsEncrypted())
+                .vote(message.getVote() == null ? null : MessageResponse.VoteInfoDTO.builder()
+                        .question(message.getVote().getQuestion())
+                        .allowMultiple(message.getVote().getAllowMultiple())
+                        .deadline(message.getVote().getDeadline())
+                        .isClosed(message.getVote().getIsClosed())
+                        .options(message.getVote().getOptions() == null ? null : message.getVote().getOptions().stream()
+                                .map(o -> MessageResponse.VoteOptionDTO.builder()
+                                        .optionId(o.getOptionId())
+                                        .text(o.getText())
+                                        .voterIds(o.getVoterIds())
+                                        .build())
+                                .collect(Collectors.toList()))
+                        .build())
                 .forwardedFrom(message.getForwardedFrom() == null ? null : MessageResponse.ForwardInfoDTO.builder()
                         .messageId(message.getForwardedFrom().getMessageId())
                         .conversationId(message.getForwardedFrom().getConversationId())

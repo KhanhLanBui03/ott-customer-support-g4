@@ -60,6 +60,9 @@ public class Message {
     @DynamoDBAttribute(attributeName = "isRecalled")
     private Boolean isRecalled;
 
+    @DynamoDBAttribute(attributeName = "updatedAt")
+    private Long updatedAt;
+
     @DynamoDBAttribute(attributeName = "forwardedFrom")
     private ForwardInfo forwardedFrom;
 
@@ -69,12 +72,39 @@ public class Message {
     @DynamoDBAttribute(attributeName = "reactions")
     private Map<String, List<String>> reactions; // emoji -> [userId1, userId2...]
 
+    @DynamoDBAttribute(attributeName = "vote")
+    private VoteInfo vote;
+
     @DynamoDBAttribute(attributeName = "createdAt")
     @DynamoDBIndexRangeKey(globalSecondaryIndexName = "senderIndex")
     private Long createdAt;
 
     @DynamoDBAttribute(attributeName = "isEncrypted")
     private Boolean isEncrypted;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @DynamoDBDocument
+    public static class VoteInfo {
+        private String question;
+        private List<VoteOption> options;
+        private Boolean allowMultiple;
+        private Long deadline;
+        private Boolean isClosed;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @DynamoDBDocument
+    public static class VoteOption {
+        private String optionId;
+        private String text;
+        private List<String> voterIds;
+    }
 
     @Data
     @Builder

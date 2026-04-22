@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { chatApi } from '../api/chatApi';
-import { setConversations, setActiveConversation, setMessages, addMessage, fetchConversations, fetchFriends } from '../store/chatSlice';
+import { setConversations, setActiveConversation, setMessages, addMessage, fetchConversations, fetchFriends, resetUnreadCount } from '../store/chatSlice';
 
 export const useChat = () => {
   const dispatch = useDispatch();
@@ -33,7 +33,13 @@ export const useChat = () => {
 
   const selectConversation = useCallback((id) => {
     dispatch(setActiveConversation(id));
-    fetchMessages(id);
+    if (id) {
+       // Optimistic Reset
+       dispatch(resetUnreadCount(id));
+       // Mark read in backend
+       chatApi.markConversationAsRead(id).catch(err => console.error("Failed to mark as read", err));
+       fetchMessages(id);
+    }
   }, [dispatch, fetchMessages]);
 
   const create = useCallback(async (type, memberIds, name = null) => {
@@ -71,11 +77,11 @@ export const useChat = () => {
   const removeMember = useCallback(async (conversationId, userId) => {
     try {
       await chatApi.removeMember(conversationId, userId);
-      await fetchConversations();
+      await fetchConversationsAction();
     } catch (err) {
       console.error("Failed to remove member", err);
     }
-  }, [fetchConversations]);
+  }, [fetchConversationsAction]);
 
   return {
     conversations,

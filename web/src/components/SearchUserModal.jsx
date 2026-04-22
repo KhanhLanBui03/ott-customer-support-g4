@@ -12,9 +12,11 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
   const [loading, setLoading] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [error, setError] = useState('');
-  const { create, selectConversation } = useChat();
+  const { create, selectConversation, friends } = useChat();
 
   if (!isOpen) return null;
+
+  const isFriend = foundUser && friends?.some(f => f.userId === foundUser.userId);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -30,7 +32,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
       const userData = response.data || response;
       setFoundUser(userData);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Signal node not found');
+      setError(err.response?.data?.message || err.message || 'Không tìm thấy người dùng này');
     } finally {
       setLoading(false);
     }
@@ -43,7 +45,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
       await friendApi.sendRequest(foundUser.userId);
       setRequestSent(true);
     } catch (err) {
-      setError('Signal synchronization failed');
+      setError('Gửi lời mời kết bạn thất bại');
     } finally {
       setLoading(false);
     }
@@ -59,10 +61,10 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
         if (convId) selectConversation(convId);
         onClose();
       } else {
-        setError(result.error?.message || 'Failed to establish channel');
+        setError(result.error?.message || 'Không thể tạo cuộc trò chuyện');
       }
     } catch (err) {
-      setError('Failed to establish channel');
+      setError('Không thể tạo cuộc trò chuyện');
     } finally {
       setLoading(false);
     }
@@ -78,8 +80,8 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
   const content = (
     <div className="flex flex-col space-y-6 p-8 bg-surface-200">
       <div className="space-y-6">
-        <p className="text-[11px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1 italic">
-          Broadcast node search requires a valid telephone signal address to establish peer connection.
+        <p className="text-[11px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.1em] px-1 italic">
+          Vui lòng nhập số điện thoại hợp lệ để tìm kiếm bạn bè và bắt đầu trò chuyện.
         </p>
         
         <form onSubmit={handleSearch} className="flex space-x-3">
@@ -87,7 +89,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-cursor-dark/40 group-focus-within:text-cursor-accent transition-colors" size={18} />
             <input
               type="text"
-              placeholder="Signal node address..."
+              placeholder="Nhập số điện thoại..."
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               disabled={loading}
@@ -98,9 +100,9 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
           <button
             type="submit"
             disabled={loading || !phoneNumber.trim()}
-            className="px-6 bg-cursor-dark text-cursor-cream rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[10px] hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg"
+            className="px-6 bg-cursor-dark text-cursor-cream rounded-2xl font-mono font-black uppercase tracking-[0.1em] text-[11px] hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg"
           >
-            {loading ? '...' : 'SCAN'}
+            {loading ? '...' : 'TÌM KIẾM'}
           </button>
         </form>
 
@@ -134,24 +136,29 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
             <div className="flex flex-col gap-3">
               <button
                 onClick={handleStartChat}
-                className="w-full py-4 bg-cursor-dark text-cursor-cream rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
+                className="w-full py-4 bg-cursor-dark text-cursor-cream rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
               >
                 <MessageSquare size={16} />
-                <span>Establish Signal</span>
+                <span>Nhắn tin</span>
               </button>
 
-              {!requestSent ? (
+              {isFriend ? (
+                <div className="w-full py-4 bg-indigo-50 border border-indigo-100/50 text-indigo-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 cursor-default">
+                  <User size={16} />
+                  <span>Bạn bè</span>
+                </div>
+              ) : !requestSent ? (
                 <button
                   onClick={handleAddFriend}
-                  className="w-full py-4 bg-surface-300 text-cursor-dark rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] hover:bg-surface-400 transition-all flex items-center justify-center space-x-3"
+                  className="w-full py-4 bg-surface-300 text-cursor-dark rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] hover:bg-surface-400 transition-all flex items-center justify-center space-x-3"
                 >
                   <UserPlus size={16} />
-                  <span>Sync Peer</span>
+                  <span>Kết bạn</span>
                 </button>
               ) : (
-                <div className="w-full py-4 bg-cursor-success/5 border border-cursor-success/10 text-cursor-success rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] flex items-center justify-center space-x-3">
+                <div className="w-full py-4 bg-cursor-success/5 border border-cursor-success/10 text-cursor-success rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
                   <Check size={16} />
-                  <span>Handshake Sent</span>
+                  <span>Đã gửi lời mời</span>
                 </div>
               )}
             </div>
@@ -167,7 +174,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-cursor-cream/40 animate-fade-in">
       <div className="bg-surface-200 w-full max-w-lg rounded-[40px] shadow-2xl border border-cursor-dark/5 relative overflow-hidden">
         <div className="h-20 flex items-center justify-between px-10 border-b border-cursor-dark/5 bg-surface-100/30 backdrop-blur-md">
-          <h2 className="font-serif italic font-black text-cursor-dark uppercase tracking-[0.2em] text-[12px]">Broadcast Scanner</h2>
+          <h2 className="font-serif italic font-black text-cursor-dark uppercase tracking-[0.1em] text-[13px]">Tìm kiếm bạn bè</h2>
           <button onClick={handleClose} className="p-2 hover:bg-black/5 rounded-xl text-cursor-dark/40 transition-colors">
             <X size={24} />
           </button>
