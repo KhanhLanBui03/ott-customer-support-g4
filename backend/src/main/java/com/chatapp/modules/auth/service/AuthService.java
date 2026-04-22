@@ -329,11 +329,25 @@ public class AuthService {
         request.validatePasswordMatch();
 
         String email = validationUtil.cleanEmail(request.getEmail());
+        String cleanPhone = validationUtil.cleanPhoneNumber(request.getPhoneNumber());
+
+        // Kiểm tra số điện thoại đã tồn tại chưa
+        userRepository.findByPhoneNumber(cleanPhone).ifPresent(existingUser -> {
+            String existingEmail = existingUser.getEmail();
+            // Nếu user đã verify và có email, nhưng email đó khác với email đang đăng ký -> SĐT đã bị chiếm dụng
+            if (Boolean.TRUE.equals(existingUser.getIsVerified()) && existingEmail != null && !existingEmail.equals(email)) {
+                throw new ConflictException("Số điện thoại này đã được sử dụng bởi một tài khoản khác.");
+            }
+            // Nếu user đã verify nhưng email bị null (trường hợp hiếm) -> Cũng báo lỗi để tránh NullPointer sau này
+            if (Boolean.TRUE.equals(existingUser.getIsVerified()) && existingEmail == null) {
+                throw new ConflictException("Số điện thoại này đã được xác thực bởi một tài khoản khác.");
+            }
+        });
 
         User user = userRepository.findByEmail(email).orElse(null);
 
         if (user != null && Boolean.TRUE.equals(user.getIsVerified())) {
-            throw new ConflictException("Email already registered");
+            throw new ConflictException("Gmail này đã được đăng ký, vui lòng thử lại gmail khác!");
         }
 
         if (!isRegistrationEmailVerified(email)) {
@@ -404,10 +418,14 @@ public class AuthService {
         validationUtil.validateEmail(email);
         String cleanEmail = validationUtil.cleanEmail(email);
 
-        // Optional: check user tồn tại
-        // if (userRepository.findByEmail(cleanEmail).isEmpty()) {
-        //     throw new ValidationException("User not found");
-        // }
+        // Ràng buộc: Nếu là đăng ký, phải kiểm tra Gmail đã tồn tại chưa
+        if ("REGISTRATION".equals(purpose)) {
+            userRepository.findByEmail(cleanEmail).ifPresent(user -> {
+                if (Boolean.TRUE.equals(user.getIsVerified())) {
+                    throw new ConflictException("Gmail này đã được đăng ký, vui lòng thử lại gmail khác!");
+                }
+            });
+        }
 
         return otpService.generateAndSendOtp(cleanEmail, purpose);
     }

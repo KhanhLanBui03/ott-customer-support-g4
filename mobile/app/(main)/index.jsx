@@ -1,273 +1,153 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  Image,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchConversations } from '../../src/store/chatSlice';
+import { MaterialIcons } from '@expo/vector-icons';
+import CONFIG from '../../src/config';
 
 const HomeScreen = () => {
   const router = useRouter();
   const dispatch = useDispatch();
-
-  // Get data from Redux
-  const { conversations, loading, error } = useSelector((state) => state.chat);
+  const { conversations, loading } = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
   const [refreshing, setRefreshing] = useState(false);
 
+  const BASE_URL = CONFIG.API_URL.split('/api')[0];
+
   useEffect(() => {
-    loadData();
+    dispatch(fetchConversations());
   }, []);
 
-  const loadData = () => {
-    dispatch(fetchConversations());
-  };
-
-  const onRefresh = React.useCallback(async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
     await dispatch(fetchConversations());
     setRefreshing(false);
-  }, [dispatch]);
+  };
 
-  const renderChatItem = ({ item }) => {
-    // Determine the display name and avatar (the other person in the conversation)
-    const isGroup = item.isGroup;
-    let displayName = item.name;
-    let displayAvatar = item.avatar;
+  const getAvatarUrl = (url, name) => {
+    if (!url) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=667eea&color=fff&size=128&bold=true`;
+    if (url.startsWith('http')) return url;
+    return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
 
-    if (!isGroup && item.participants) {
-      const otherParticipant = item.participants.find(p => p.userId !== currentUser?.userId);
-      if (otherParticipant) {
-        displayName = otherParticipant.name || otherParticipant.phoneNumber;
-        displayAvatar = otherParticipant.avatar;
-      }
-    }
+  const renderConversationItem = ({ item }) => {
+    // Logic lấy member giống Web: Tìm người không phải mình
+    const members = item.members || item.participants || [];
+const otherMember = item.type === 'SINGLE'
+  ? members.find(m => (m.userId || m.id) !== (currentUser?.userId || currentUser?.id))
+  : null;
+
+// SỬA TẠI ĐÂY: Thêm fallback item.name nếu không tìm thấy otherMember
+const displayName = item.type === 'SINGLE'
+  ? (otherMember?.name || otherMember?.firstName || item.name || 'Người dùng')
+  : (item.name || 'Nhóm chat');
+
+    const avatarUrl = getAvatarUrl(
+      item.type === 'SINGLE'
+        ? (otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic)
+        : (item.avatarUrl || item.avatar),
+      displayName
+    );
+
+    const isOnline = otherMember?.status === 'ONLINE' || otherMember?.isOnline === true;
 
     return (
       <TouchableOpacity
-        style={styles.chatItem}
-        onPress={() => router.push(`/(main)/chat/${item.conversationId}`)}
+        style={styles.conversationItem}
+        onPress={() => router.push(`/chat/${item.conversationId}`)}
       >
-        <Image
-          source={{ uri: displayAvatar || `https://ui-avatars.com/api/?name=${displayName || 'Chat'}` }}
-          style={styles.avatar}
-        />
-        <View style={styles.chatInfo}>
-          <View style={styles.chatHeader}>
-            <Text style={styles.userName} numberOfLines={1}>
-              {displayName || 'Unknown'}
+        <View style={styles.avatarContainer}>
+          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          {isOnline && <View style={styles.onlineBadge} />}
+        </View>
+        <View style={styles.conversationInfo}>
+          <View style={styles.conversationHeader}>
+            <Text style={styles.conversationName} numberOfLines={1}>{displayName}</Text>
+            <Text style={styles.conversationTime}>
+              {item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
             </Text>
-            <Text style={styles.time}>{item.lastMessageTime || ''}</Text>
           </View>
-          <View style={styles.chatFooter}>
-            <Text style={styles.lastMessage} numberOfLines={1}>
-              {item.lastMessage || 'No messages yet'}
-            </Text>
-            {item.unreadCount > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{item.unreadCount}</Text>
-              </View>
-            )}
-          </View>
+          <Text style={styles.lastMessage} numberOfLines={1}>
+            {item.lastMessage || 'Chưa có tin nhắn'}
+          </Text>
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <TouchableOpacity style={styles.searchButton}>
-          <MaterialIcons name="search" size={28} color="#111827" />
+          <MaterialIcons name="search" size={24} color="#1f2937" />
         </TouchableOpacity>
       </View>
 
-      {/* Loading & Error States */}
-      {loading && conversations.length === 0 && !refreshing ? (
-        <View style={styles.centerContainer}>
+      {loading && !refreshing && conversations.length === 0 ? (
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#667eea" />
-        </View>
-      ) : error ? (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadData}>
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={conversations}
+          renderItem={renderConversationItem}
           keyExtractor={(item) => item.conversationId}
-          renderItem={renderChatItem}
           contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <MaterialIcons name="chat-bubble-outline" size={64} color="#d1d5db" />
-              <Text style={styles.emptyText}>No conversations yet</Text>
-              <Text style={styles.emptySubText}>Start a new chat with your friends!</Text>
+              <Text style={styles.emptyText}>Chưa có cuộc hội thoại nào</Text>
             </View>
           }
         />
       )}
-
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab}>
-        <MaterialIcons name="chat" size={24} color="#fff" />
-      </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#1f2937' },
+  searchButton: { padding: 8, backgroundColor: '#f3f4f6', borderRadius: 12 },
+  listContent: { paddingHorizontal: 16 },
+  conversationItem: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  searchButton: {
-    padding: 5,
-  },
-  listContent: {
-    paddingBottom: 80,
-  },
-  chatItem: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#f3f4f6',
-  },
-  chatInfo: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  time: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  chatFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  lastMessage: {
-    fontSize: 14,
-    color: '#6b7280',
-    flex: 1,
-    marginRight: 10,
-  },
-  unreadBadge: {
-    backgroundColor: '#667eea',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  fab: {
+  avatarContainer: { position: 'relative' },
+  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#f3f4f6' },
+  onlineBadge: {
     position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#667eea',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    right: 2,
+    bottom: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4ade80',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  errorText: {
-    color: '#ef4444',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#667eea',
-    borderRadius: 8,
-  },
-  retryText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 10,
-  },
-  emptySubText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 5,
-  },
+  conversationInfo: { flex: 1, marginLeft: 16 },
+  conversationHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  conversationName: { fontSize: 16, fontWeight: '600', color: '#1f2937' },
+  conversationTime: { fontSize: 12, color: '#9ca3af' },
+  lastMessage: { fontSize: 14, color: '#6b7280' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100 },
+  emptyText: { color: '#9ca3af', fontSize: 16 },
 });
 
 export default HomeScreen;

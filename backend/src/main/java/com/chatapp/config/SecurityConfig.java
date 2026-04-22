@@ -49,6 +49,8 @@ public class SecurityConfig {
                         "/api/v1/auth/reset-password",
                         "/api/v1/auth/send-otp",
                         "/api/v1/auth/send-otp/**",
+                        "/api/v1/auth/check/**",
+                        "/api/v1/auth/check",
                         "/api/v1/auth/health",
                         "/api/v1/media/**",
                         "/api/v1/public/**",
@@ -94,7 +96,11 @@ public class SecurityConfig {
                 CorsConfiguration configuration = new CorsConfiguration();
                 configuration.setAllowedOriginPatterns(Arrays.asList(
                                 "http://localhost:*",
-                                "http://127.0.0.1:*"));
+                                "http://127.0.0.1:*",
+                                "http://172.*",
+                                "http://192.*",
+                                "http://10.*",
+                                "*")); // Cho phép tất cả trong môi trường dev
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
                 configuration.setAllowedHeaders(Arrays.asList(
                                 "Content-Type",

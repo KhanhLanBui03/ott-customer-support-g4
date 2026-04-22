@@ -45,9 +45,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         log.info("Registering STOMP endpoints");
 
+        // Endpoint cho Web (có SockJS)
         registry.addEndpoint("/ws/chat")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
+
+        // Endpoint thuần cho Mobile (không SockJS)
+        registry.addEndpoint("/ws/mobile")
+                .setAllowedOriginPatterns("*");
 
         registry.addEndpoint("/ws/notifications")
                 .setAllowedOriginPatterns("*")

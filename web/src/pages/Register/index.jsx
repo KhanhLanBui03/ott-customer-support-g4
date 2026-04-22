@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { authApi } from '../../api/authApi';
 import { Zap, User, Phone, Lock, ArrowRight, Shield, CheckCircle2 } from 'lucide-react';
 
 const Register = () => {
@@ -23,6 +24,7 @@ const Register = () => {
   const [now, setNow] = useState(Date.now());
 
   const [error, setError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -108,7 +110,40 @@ const Register = () => {
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    if (name === 'phoneNumber') {
+      setPhoneError('');
+    }
+  };
+
+  const validatePhone = async (phone) => {
+    if (!phone) {
+      setPhoneError('Số điện thoại không được để trống');
+      return false;
+    }
+    if (!/^0(3|5|7|8|9)\d{8}$/.test(phone)) {
+      setPhoneError('Số điện thoại không hợp lệ (ví dụ: 0912345678)');
+      return false;
+    }
+    try {
+      const statusRes = await authApi.checkUserStatus(phone);
+      const statusData = statusRes.data?.data || statusRes.data || statusRes;
+      if (statusData.exists) {
+        setPhoneError('Số điện thoại này đã được sử dụng');
+        return false;
+      }
+      setPhoneError('');
+      return true;
+    } catch (err) {
+      console.error('Lỗi kiểm tra SĐT:', err);
+      // Nếu API lỗi 401 hoặc lỗi khác, có thể tạm thời bỏ qua kiểm tra trùng lặp nhưng vẫn báo log
+      return true;
+    }
+  };
+
+  const handlePhoneBlur = () => {
+    validatePhone(formData.phoneNumber);
   };
 
   const handleSendVerificationCode = async () => {
@@ -117,17 +152,17 @@ const Register = () => {
 
     const email = formData.email.trim().toLowerCase();
     if (!email) {
-      setError('Please enter your Gmail address');
+      setError('Vui lòng nhập địa chỉ Gmail của bạn');
       return;
     }
 
     if (!/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
-      setError('Please enter a valid Gmail address');
+      setError('Vui lòng nhập đúng định dạng Gmail (ví dụ: user@gmail.com)');
       return;
     }
 
     if (isOtpCooldownActive) {
-      setError(`Please wait ${formatOtpCooldown(otpRemainingSeconds)} before requesting another code`);
+      setError(`Vui lòng đợi ${formatOtpCooldown(otpRemainingSeconds)} trước khi yêu cầu mã mới`);
       return;
     }
 
@@ -137,9 +172,14 @@ const Register = () => {
       setFormData((prev) => ({ ...prev, email }));
       setVerificationCodeSent(true);
       startOtpCooldown(email);
-      setSuccess(`Verification code sent to ${email}. The code is valid for 2 minutes.`);
+      setSuccess(`Mã xác thực đã được gửi đến ${email}. Mã có hiệu lực trong 2 phút.`);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Unable to send verification code');
+      const message = err?.response?.data?.message;
+      if (message && (message.includes('already exists') || message.includes('đã tồn tại'))) {
+        setError('Gmail này đã được đăng ký. Vui lòng sử dụng Gmail khác hoặc đăng nhập.');
+      } else {
+        setError(message || 'Không thể gửi mã xác thực. Vui lòng thử lại sau.');
+      }
     } finally {
       setLoading(false);
     }
@@ -152,12 +192,12 @@ const Register = () => {
 
     const email = formData.email.trim().toLowerCase();
     if (!email) {
-      setError('Please enter your Gmail address');
+      setError('Vui lòng nhập địa chỉ Gmail của bạn');
       return;
     }
 
     if (!otpCode.trim()) {
-      setError('Please enter the OTP code');
+      setError('Vui lòng nhập mã OTP');
       return;
     }
 
@@ -174,9 +214,9 @@ const Register = () => {
 
       setVerifiedEmail(email);
       setStep('register');
-      setSuccess('Gmail verified. Now complete your account details.');
+      setSuccess('Xác thực Gmail thành công. Vui lòng hoàn tất thông tin tài khoản.');
     } catch (err) {
-      setError(err?.response?.data?.message || 'OTP verification failed');
+      setError(err?.response?.data?.message || 'Mã xác thực không chính xác hoặc đã hết hạn');
     } finally {
       setLoading(false);
     }
@@ -187,7 +227,7 @@ const Register = () => {
     setSuccess('');
 
     if (isOtpCooldownActive) {
-      setError(`Please wait ${formatOtpCooldown(otpRemainingSeconds)} before resending OTP`);
+      setError(`Vui lòng đợi ${formatOtpCooldown(otpRemainingSeconds)} trước khi gửi lại mã`);
       return;
     }
 
@@ -196,9 +236,9 @@ const Register = () => {
       const email = formData.email.trim().toLowerCase();
       await sendOtp(email, 'REGISTRATION');
       startOtpCooldown(email);
-      setSuccess(`Verification code has been resent to ${email}.`);
+      setSuccess(`Mã xác thực đã được gửi lại đến ${email}.`);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Unable to resend OTP');
+      setError(err?.response?.data?.message || 'Không thể gửi lại mã OTP');
     } finally {
       setLoading(false);
     }
@@ -207,42 +247,56 @@ const Register = () => {
   const handleCreateAccount = async (e) => {
     e.preventDefault();
     setError('');
+    setPhoneError('');
     setSuccess('');
 
     if (!verifiedEmail) {
-      setError('Please verify your Gmail first');
+      setError('Vui lòng xác thực Gmail của bạn trước');
       setStep('verify-email');
       return;
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Password confirmation does not match');
+    if (!formData.phoneNumber) {
+      setPhoneError('Số điện thoại không được để trống');
       return;
     }
 
-    if (!/^0\d{9}$/.test(formData.phoneNumber)) {
-      setError('Phone number must match format 0XXXXXXXXX');
+    if (!/^0(3|5|7|8|9)\d{8}$/.test(formData.phoneNumber)) {
+      setPhoneError('Số điện thoại không hợp lệ. Vui lòng nhập định dạng 0XXXXXXXXX (10 chữ số)');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Mật khẩu xác nhận không khớp');
       return;
     }
 
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError('Mật khẩu phải có ít nhất 8 ký tự');
       return;
     }
 
     if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(formData.password)) {
-      setError('Password must include lowercase, uppercase, number, and special character');
+      setError('Mật khẩu không đáp ứng đủ yêu cầu bảo mật');
       return;
     }
 
     if (!agreedToPolicies) {
-      setError('Please accept the terms and privacy policy');
+      setError('Bạn cần đồng ý với các điều khoản và chính sách');
       return;
     }
 
     try {
       setLoading(true);
-      await register({
+
+      // Kiểm tra lại lần cuối trước khi submit
+      const isPhoneValid = await validatePhone(formData.phoneNumber);
+      if (!isPhoneValid) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await register({
         phoneNumber: formData.phoneNumber,
         email: verifiedEmail,
         firstName: formData.firstName,
@@ -251,18 +305,25 @@ const Register = () => {
         confirmPassword: formData.confirmPassword,
       });
 
-      navigate('/login', {
-        state: {
-          email: verifiedEmail,
-          message: 'Account created successfully. You can sign in now.',
-        },
-      });
+      setSuccess('Tài khoản đã tạo thành công! Đang chuyển hướng về trang đăng nhập...');
+
+      // Đợi 3 giây trước khi chuyển hướng
+      setTimeout(() => {
+        navigate('/login', {
+          state: {
+            email: verifiedEmail,
+            message: 'Đăng ký tài khoản thành công. Bạn có thể đăng nhập ngay bây giờ.',
+          },
+        });
+      }, 3000);
+
     } catch (err) {
-      setError(err?.response?.data?.message || 'Registration failed');
+      setError(err?.response?.data?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.');
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-cursor-dark relative overflow-hidden font-sans">
@@ -279,7 +340,7 @@ const Register = () => {
           <div className="text-center space-y-2">
             <h2 className="text-4xl font-black text-white tracking-tighter">New Node</h2>
             <p className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-white/20">
-              Initialize Signal Unit Registration
+              KHỞI TẠO ĐĂNG KÝ TÀI KHOẢN
             </p>
           </div>
         </div>
@@ -308,7 +369,7 @@ const Register = () => {
                     type="email"
                     required
                     className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Your Gmail"
+                    placeholder="Nhập Gmail của bạn"
                     value={formData.email}
                     onChange={handleChange}
                   />
@@ -317,7 +378,7 @@ const Register = () => {
                 {verificationCodeSent && (
                   <>
                     <p className="text-[11px] font-mono text-white/60 px-1">
-                      Enter the verification code sent to your Gmail inbox.
+                      Nhập mã xác thực đã được gửi đến hộp thư Gmail của bạn.
                     </p>
                     <div className="relative group">
                       <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent">
@@ -327,7 +388,7 @@ const Register = () => {
                         type="text"
                         required
                         className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                        placeholder="Verification code"
+                        placeholder="Mã xác thực"
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value)}
                       />
@@ -345,7 +406,7 @@ const Register = () => {
                     type="email"
                     disabled
                     className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white/50 text-sm focus:outline-none"
-                    placeholder="Verified Gmail"
+                    placeholder="Gmail đã xác thực"
                     value={verifiedEmail}
                   />
                 </div>
@@ -359,7 +420,7 @@ const Register = () => {
                     type="text"
                     required
                     className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="First name"
+                    placeholder="Tên"
                     value={formData.firstName}
                     onChange={handleChange}
                   />
@@ -374,7 +435,7 @@ const Register = () => {
                     type="text"
                     required
                     className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Last name"
+                    placeholder="Họ"
                     value={formData.lastName}
                     onChange={handleChange}
                   />
@@ -388,11 +449,17 @@ const Register = () => {
                     name="phoneNumber"
                     type="text"
                     required
-                    className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Phone number (0XXXXXXXXX)"
+                    onBlur={handlePhoneBlur}
+                    className={`w-full pl-16 pr-6 py-4 bg-white/5 border ${phoneError ? 'border-red-500' : 'border-white/10'} rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium`}
+                    placeholder="Số điện thoại (0XXXXXXXXX)"
                     value={formData.phoneNumber}
                     onChange={handleChange}
                   />
+                  {phoneError && (
+                    <p className="mt-2 ml-2 text-[10px] font-mono font-black uppercase text-red-500 animate-shake">
+                      {phoneError}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -402,7 +469,7 @@ const Register = () => {
                       type="password"
                       required
                       className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                      placeholder="Password"
+                      placeholder="Mật khẩu"
                       value={formData.password}
                       onChange={handleChange}
                     />
@@ -413,7 +480,7 @@ const Register = () => {
                       type="password"
                       required
                       className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                      placeholder="Confirm"
+                      placeholder="Xác nhận"
                       value={formData.confirmPassword}
                       onChange={handleChange}
                     />
@@ -422,27 +489,27 @@ const Register = () => {
 
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <p className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-white/45">
-                    Password Requirements
+                    Yêu cầu mật khẩu
                   </p>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.minLength ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.minLength ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>At least 8 characters</span>
+                    <span>Ít nhất 8 ký tự</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.lower ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.lower ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Contains lowercase letter</span>
+                    <span>Chứa chữ cái thường</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.upper ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.upper ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Contains uppercase letter</span>
+                    <span>Chứa chữ cái in hoa</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.number ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.number ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Contains a number</span>
+                    <span>Chứa ít nhất một chữ số</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.special ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.special ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Contains special character (@$!%*?&)</span>
+                    <span>Chứa ký tự đặc biệt (@$!%*?&)</span>
                   </div>
                 </div>
 
@@ -454,7 +521,7 @@ const Register = () => {
                     className="mt-0.5 h-4 w-4 rounded border-white/30 bg-transparent"
                   />
                   <span>
-                    I agree to the Terms of Service and Privacy Policy for personal data processing.
+                    Tôi đồng ý với các Điều khoản Dịch vụ và Chính sách Bảo mật thông tin cá nhân.
                   </span>
                 </label>
               </>
@@ -470,10 +537,10 @@ const Register = () => {
             >
               <span>
                 {loading
-                  ? 'Processing...'
+                  ? 'Đang xử lý...'
                   : isOtpCooldownActive
-                  ? `Request code in ${formatOtpCooldown(otpRemainingSeconds)}`
-                  : 'Send Verification Code'}
+                  ? `Yêu cầu lại sau ${formatOtpCooldown(otpRemainingSeconds)}`
+                  : 'Gửi mã xác thực'}
               </span>
               <ArrowRight size={20} />
             </button>
@@ -485,7 +552,7 @@ const Register = () => {
               disabled={loading}
               className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-4xl font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3 disabled:opacity-60"
             >
-              <span>{loading ? 'Processing...' : step === 'register' ? 'Create Account' : 'Verify Gmail Code'}</span>
+              <span>{loading ? 'Đang xử lý...' : step === 'register' ? 'Tạo tài khoản' : 'Xác thực mã Gmail'}</span>
               <ArrowRight size={20} />
             </button>
           )}
@@ -497,27 +564,27 @@ const Register = () => {
               onClick={handleResendOtp}
               className="w-full py-4 bg-white/10 text-white rounded-2xl font-black tracking-tight text-sm border border-white/10 hover:bg-white/20 transition-all disabled:opacity-50"
             >
-              {isOtpCooldownActive ? `Resend in ${formatOtpCooldown(otpRemainingSeconds)}` : 'Resend OTP'}
+              {isOtpCooldownActive ? `Gửi lại sau ${formatOtpCooldown(otpRemainingSeconds)}` : 'Gửi lại mã OTP'}
             </button>
           )}
 
           {step === 'verify-email' && (
             <p className="text-center text-[10px] font-mono font-black uppercase tracking-widest text-white/30">
-              Step 1/2: Verify your Gmail with OTP
+              Bước 1/2: Xác thực Gmail bằng OTP
             </p>
           )}
 
           {step === 'register' && (
             <p className="text-center text-[10px] font-mono font-black uppercase tracking-widest text-white/30">
-              Step 2/2: Complete account details
+              Bước 2/2: Hoàn tất thông tin tài khoản
             </p>
           )}
         </form>
 
         <p className="text-center text-[11px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
-          Existing Hub{' '}
+          Đã có tài khoản?{' '}
           <Link to="/login" className="text-cursor-accent hover:underline">
-            Synchronize
+            Đăng nhập ngay
           </Link>
         </p>
       </div>
