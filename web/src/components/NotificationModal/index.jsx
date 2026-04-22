@@ -4,7 +4,7 @@ import { X, Check, UserMinus, Bell, User, Users } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
 import { chatApi } from '../../api/chatApi';
 import { removePendingFriend, removePendingGroup } from '../../store/notificationSlice';
-import { fetchConversations } from '../../store/chatSlice';
+import { fetchConversations, fetchFriends } from '../../store/chatSlice';
 
 const NotificationModal = ({ isOpen, onClose }) => {
   const { pendingFriends, pendingGroups } = useSelector(state => state.notification);
@@ -17,6 +17,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
       await friendApi.acceptRequest(userId);
       dispatch(removePendingFriend(userId));
       dispatch(fetchConversations());
+      dispatch(fetchFriends());
     } catch (err) {
       console.error("Failed to accept friend request", err);
     }

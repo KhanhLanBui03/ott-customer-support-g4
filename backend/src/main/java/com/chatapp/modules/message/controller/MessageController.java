@@ -30,9 +30,11 @@ public class MessageController {
     @GetMapping("/{conversationId}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMessages(
             @PathVariable String conversationId,
-            @RequestParam(defaultValue = "20") int limit
+            @RequestParam(defaultValue = "20") int limit,
+            Authentication authentication
     ) {
-        List<MessageResponse> messages = messageService.getConversationMessages(conversationId, limit)
+        String currentUserId = getAuthUserId(authentication);
+        List<MessageResponse> messages = messageService.getConversationMessages(conversationId, limit, currentUserId)
                 .stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
@@ -63,6 +65,11 @@ public class MessageController {
                 .mediaUrls(request.getMediaUrls())
                 .replyToMessageId(request.getReplyToMessageId())
                 .isEncrypted(request.getIsEncrypted())
+                .forwardedFrom(request.getForwardedFrom() == null ? null : Message.ForwardInfo.builder()
+                        .messageId(request.getForwardedFrom().getMessageId())
+                        .conversationId(request.getForwardedFrom().getConversationId())
+                        .senderName(request.getForwardedFrom().getSenderName())
+                        .build())
                 .build();
 
         Message message = messageService.sendMessage(command);
@@ -167,6 +174,11 @@ public class MessageController {
                 .reactions(message.getReactions())
                 .createdAt(message.getCreatedAt())
                 .isEncrypted(message.getIsEncrypted())
+                .forwardedFrom(message.getForwardedFrom() == null ? null : MessageResponse.ForwardInfoDTO.builder()
+                        .messageId(message.getForwardedFrom().getMessageId())
+                        .conversationId(message.getForwardedFrom().getConversationId())
+                        .senderName(message.getForwardedFrom().getSenderName())
+                        .build())
                 .build();
     }
 }

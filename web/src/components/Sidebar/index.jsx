@@ -4,8 +4,9 @@ import {
   Pin, FolderDown, Tag, Mail, UserPlus, BellOff, EyeOff, Clock, Trash2, AlertTriangle, ChevronRight, MoreHorizontal
 } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
+import GroupAvatar from '../GroupAvatar';
 
-const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin }) => {
+const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin, onDelete }) => {
   const { user } = useSelector(state => state.auth);
 
   const formatLastSeen = (status, lastSeenAt) => {
@@ -70,19 +71,11 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
               )}
               
               <div className="relative">
-                 <div className={`
-                   h-13 w-13 rounded-2xl flex-shrink-0 flex items-center justify-center overflow-hidden transition-all duration-500
-                   ${isActive ? 'scale-105 shadow-xl shadow-indigo-500/10' : 'group-hover:scale-105'}
-                   ${conv.avatarUrl ? '' : 'bg-surface-200 border-2 border-background'}
-                 `}>
-                  {conv.avatarUrl ? (
-                    <img src={conv.avatarUrl} alt={conv.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-xl font-black text-foreground/40 font-serif italic uppercase">
-                      {conv.name?.charAt(0) || 'C'}
-                    </span>
-                  )}
-                 </div>
+                 <GroupAvatar 
+                   conversation={conv} 
+                   size="h-13 w-13" 
+                   isActive={isActive} 
+                 />
                  {otherMember?.status === 'ONLINE' && (
                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background flex items-center justify-center">
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 status-glow shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
@@ -123,9 +116,9 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                   
                   <div className="flex items-center">
                     {conv.unreadCount > 0 && (
-                      <div className="min-w-[20px] h-[20px] px-1 bg-indigo-500 text-white rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20 animate-bounce">
-                        <span className="text-[10px] font-black">
-                          {conv.unreadCount > 5 ? '5+' : conv.unreadCount}
+                      <div className="min-w-[18px] h-[18px] px-1 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-500/30 animate-in zoom-in duration-300">
+                        <span className="text-[9px] font-black leading-none">
+                          {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
                         </span>
                       </div>
                     )}
@@ -149,6 +142,17 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                       className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-surface-200 rounded-lg transition-all text-foreground/40 hover:text-indigo-500 ml-1 shadow-sm border border-transparent hover:border-border/50 bg-background/50 backdrop-blur-sm"
                     >
                       <MoreHorizontal size={18} />
+                    </button>
+
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(conv.conversationId);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all text-foreground/40 hover:text-red-500 ml-1 shadow-sm border border-transparent hover:border-red-100 bg-background/50 backdrop-blur-sm"
+                      title="Xóa hội thoại"
+                    >
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>

@@ -27,5 +27,17 @@ public class SendMessageRequest {
 
     private String replyToMessageId;
 
+    private ForwardInfoDTO forwardedFrom;
+
     private Boolean isEncrypted; // Default false
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ForwardInfoDTO {
+        private String messageId;
+        private String conversationId;
+        private String senderName;
+    }
 }

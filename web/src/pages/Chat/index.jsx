@@ -31,6 +31,7 @@ const Chat = () => {
     conversations, 
     activeConversationId, 
     fetchConversations, 
+    fetchMessages,
     selectConversation,
     loading 
   } = useChat();
@@ -172,143 +173,149 @@ const Chat = () => {
   const isMobile = useMediaQuery('(max-width: 1024px)');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredConversations = conversations.filter(conv => 
-    (conv.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredConversations = conversations.filter(conv => {
+    const searchLower = searchTerm.toLowerCase();
+    
+    // 1. Check conversation name
+    if ((conv.name || '').toLowerCase().includes(searchLower)) return true;
+    
+    // 2. Check all members' names inside the conversation
+    if (conv.members && Array.isArray(conv.members)) {
+      return conv.members.some(m => 
+        (m.fullName || '').toLowerCase().includes(searchLower)
+      );
+    }
+    
+    return false;
+  });
 
   return (
-    <div className={`flex h-screen bg-white overflow-hidden font-times relative ${isDark ? 'dark' : ''}`}>
+    <div className={`flex h-screen bg-background overflow-hidden font-primary relative ${isDark ? 'dark' : ''}`}>
       {/* 1. Global Icon Sidebar (Desktop: Leftmost, Mobile: Bottom Nav) */}
       {(!isMobile || !activeConversationId) && (
         <div className={`
           ${isMobile 
-            ? 'fixed bottom-0 left-0 right-0 h-16 w-full flex-row space-y-0 px-4 items-center justify-around border-t border-slate-100' 
-            : 'w-[84px] flex-col py-8 space-y-10 border-r border-slate-100'}
-          flex flex-shrink-0 bg-cursor-dark z-50
+            ? 'fixed bottom-0 left-0 right-0 h-20 w-full flex-row px-6 items-center justify-around border-t border-white/5 bg-[#0b0e14]/95 backdrop-blur-xl' 
+            : 'w-[88px] flex-col py-9 space-y-8 items-center border-r border-white/5 bg-[#0b0e14]'}
+          flex flex-shrink-0 z-50
         `}>
-          <div className="relative">
+          <div className="relative group">
             <div 
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className={`
-                ${isMobile ? 'w-10 h-10' : 'w-14 h-14'}
-                rounded-2xl bg-white/5 p-0.5 border border-white/10 hover:scale-105 transition-transform cursor-pointer overflow-hidden shadow-xl shadow-black/20
+                ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                rounded-2xl bg-white/5 p-0.5 border border-white/10 hover:border-indigo-500/50 hover:scale-105 transition-all cursor-pointer overflow-hidden shadow-2xl
               `}
             >
               {user?.avatar ? (
                 <img src={user.avatar} alt="" className="w-full h-full object-cover rounded-2xl" />
               ) : (
                 <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-2xl">
-                   <User className="text-white/20" size={isMobile ? 18 : 24} />
+                   <User className="text-white/20" size={isMobile ? 20 : 24} />
                 </div>
               )}
             </div>
             
+            {/* Active Indicator for User */}
+            {!isMobile && (
+              <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-500 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
+
             {isUserMenuOpen && (
               <>
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setIsUserMenuOpen(false)}
-                ></div>
+                <div className="fixed inset-0 z-40" onClick={() => setIsUserMenuOpen(false)}></div>
                 <div className={`
                   absolute bg-[#1e2330] rounded-2xl shadow-2xl border border-white/10 py-2 z-50 animate-fade-in flex flex-col
-                  ${isMobile ? 'bottom-full left-0 mb-4 w-48' : 'top-0 left-20 ml-2 w-64'}
+                  ${isMobile ? 'bottom-full left-0 mb-4 w-56' : 'top-0 left-20 ml-2 w-64'}
                 `}>
                   <div className="px-5 py-3 border-b border-white/10 mb-2">
                     <h3 className="font-bold text-white truncate text-base">{user?.fullName || 'Người dùng'}</h3>
                   </div>
-                  
-                  <button 
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      setIsProfileOpen(true);
-                    }}
-                    className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Hồ sơ của bạn
-                  </button>
-                  
-                  <button 
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      setIsChangePasswordOpen(true);
-                    }}
-                    className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Đổi mật khẩu
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      setIsDeleteAccountOpen(true);
-                    }}
-                    className="w-full text-left px-5 py-3 text-[14px] text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-colors border-t border-white/10"
-                  >
-                    Xóa tài khoản
-                  </button>
+                  <button onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }} className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors">Hồ sơ của bạn</button>
+                  <button onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }} className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors">Đổi mật khẩu</button>
+                  <button onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }} className="w-full text-left px-5 py-3 text-[14px] text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-colors border-t border-white/10">Xóa tài khoản</button>
                 </div>
               </>
             )}
           </div>
         
-        <nav className={`flex ${isMobile ? 'flex-row items-center space-x-1' : 'flex-col space-y-6'} flex-1 justify-around w-full`}>
-          <button className={`
-            ${isMobile ? 'p-2' : 'p-4'}
-            bg-cursor-accent text-white rounded-[22px] shadow-lg shadow-cursor-accent/30 group relative transition-all
-          `}>
-            <MessageSquare size={isMobile ? 22 : 24} fill="currentColor" className="opacity-80" />
-          </button>
+        <nav className={`flex ${isMobile ? 'flex-row items-center flex-1 justify-around h-full' : 'flex-col space-y-6 items-center'} w-full`}>
+          <div className="relative group">
+            <button className={`
+              ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+              flex items-center justify-center bg-indigo-600 text-white rounded-[22px] shadow-lg shadow-indigo-600/30 group relative transition-all active:scale-95
+            `}>
+              <MessageSquare size={isMobile ? 22 : 24} fill="currentColor" className="opacity-90" />
+            </button>
+            {!isMobile && (
+              <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full" />
+            )}
+          </div>
           
-            <button 
-              onClick={() => setIsNotificationOpen(true)}
-              className={`
-                ${isMobile ? 'p-2' : 'p-4'}
-                text-white/30 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group relative
-              `}
-            >
-              <Bell size={isMobile ? 22 : 24} />
-              {unreadCount > 0 && (
-                <div className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full flex items-center justify-center border-2 border-cursor-dark">
-                  <span className="text-[9px] font-black text-white">{unreadCount}</span>
-                </div>
+            <div className="relative group">
+              <button 
+                onClick={() => setIsNotificationOpen(true)}
+                className={`
+                  ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                  flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
+                `}
+              >
+                <Bell size={isMobile ? 22 : 24} />
+                {unreadCount > 0 && (
+                  <div className="absolute top-2 right-2 min-w-[20px] h-[20px] px-1 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#0b0e14]">
+                    <span className="text-[10px] font-black text-white">{unreadCount}</span>
+                  </div>
+                )}
+              </button>
+              {!isMobile && (
+                <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
-            </button>
+            </div>
 
+            <div className="relative group">
+              <button 
+                onClick={handleSelectAI}
+                className={`
+                  ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                  flex items-center justify-center text-indigo-400 group relative transition-all bg-indigo-500/10 hover:bg-indigo-500/20 rounded-[22px] active:scale-95
+                `}
+              >
+                <SparklesIcon size={isMobile ? 22 : 24} fill="currentColor" className="opacity-90" />
+                <div className="absolute inset-0 bg-indigo-500/10 blur-xl rounded-full scale-110 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+              {!isMobile && (
+                <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+            </div>
+          
+          <div className="relative group">
             <button 
-              onClick={handleSelectAI}
+              onClick={() => setIsSearchOpen(true)}
               className={`
-                ${isMobile ? 'p-2' : 'p-4'}
-                text-indigo-400 group relative transition-all bg-indigo-500/10 hover:bg-indigo-500/20 rounded-[22px]
+                ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all active:scale-95
               `}
-              title="Trợ lý AI"
             >
-              <SparklesIcon size={isMobile ? 22 : 24} fill="currentColor" className="opacity-80" />
-              <div className="absolute inset-0 bg-indigo-500/10 blur-xl rounded-full scale-110 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Users size={isMobile ? 22 : 24} />
             </button>
-          
-          <button 
-            onClick={() => setIsSearchOpen(true)}
-            className={`
-              ${isMobile ? 'p-2' : 'p-4'}
-              text-white/30 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group relative
-            `}
-          >
-            <Users size={isMobile ? 22 : 24} />
-          </button>
-          
-          {!isMobile && (
-            <button className="p-4 text-white/30 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group relative">
-              <Settings size={24} />
-            </button>
-          )}
+            {!isMobile && (
+              <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
+          </div>
         </nav>
         
         {!isMobile && (
-          <button 
-            onClick={logout}
-            className="p-4 text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all"
-          >
-            <LogOut size={24} />
-          </button>
+          <div className="flex flex-col space-y-4 items-center">
+             <button className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 rounded-2xl transition-all active:scale-95">
+                <Settings size={24} />
+             </button>
+             <button 
+              onClick={logout}
+              className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all active:scale-95"
+            >
+              <LogOut size={24} />
+            </button>
+          </div>
         )}
       </div>
     )}
@@ -393,6 +400,7 @@ const Chat = () => {
                 }}
                 onContextMenu={handleSidebarContextMenu}
                 onTogglePin={handleTogglePin}
+                onDelete={handleDeleteConversation}
                 activeId={activeConversationId}
               />
             )}
@@ -411,6 +419,7 @@ const Chat = () => {
                 onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                 isInfoOpen={isInfoOpen}
                 onBack={isMobile ? () => selectConversation(null) : undefined}
+                onRefreshMessages={() => fetchMessages(activeConversationId)}
               />
             ) : !isMobile ? (
               <div className="flex-1 flex flex-col items-center justify-center text-cursor-dark/10 p-12">
@@ -432,7 +441,7 @@ const Chat = () => {
             <ConversationInfo 
               conversation={activeConversation}
               onClose={() => setIsInfoOpen(false)}
-              onClearHistory={() => {}}
+              onClearHistory={() => handleDeleteConversation(activeConversationId)}
             />
           )}
 
@@ -442,7 +451,7 @@ const Chat = () => {
                <ConversationInfo 
                 conversation={activeConversation}
                 onClose={() => setIsInfoOpen(false)}
-                onClearHistory={() => {}}
+                onClearHistory={() => handleDeleteConversation(activeConversationId)}
               />
             </div>
           )}
