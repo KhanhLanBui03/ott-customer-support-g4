@@ -109,19 +109,26 @@ public class FriendshipService {
     }
 
     public List<FriendshipResponse> getFriends(String userId) {
-        List<Friendship> sent = friendshipRepository.findByRequesterId(userId);
-        List<Friendship> received = friendshipRepository.findByAddresseeId(userId);
-
         List<FriendshipResponse> friends = new ArrayList<>();
 
-        // Friends are where status is ACCEPTED
-        for (Friendship f : sent) {
-            if (Friendship.Status.ACCEPTED.name().equals(f.getStatus())) {
+        // Friends where current user is requester (Base table lookup - full attributes)
+        List<Friendship> initiated = friendshipRepository.findByRequesterId(userId);
+        
+        // Friends where current user is addressee (GSI lookup - keys only)
+        List<Friendship> receivedKeysOnly = friendshipRepository.findByAddresseeId(userId);
+        List<Friendship> received = new ArrayList<>();
+        for (Friendship keyItem : receivedKeysOnly) {
+            friendshipRepository.find(keyItem.getRequesterId(), keyItem.getAddresseeId())
+                .ifPresent(received::add);
+        }
+
+        for (Friendship f : initiated) {
+            if (Friendship.Status.ACCEPTED.name().equals(f.getStatus()) || Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
                 friends.add(mapToResponse(f.getAddresseeId(), f.getStatus(), true));
             }
         }
         for (Friendship f : received) {
-            if (Friendship.Status.ACCEPTED.name().equals(f.getStatus())) {
+            if (Friendship.Status.ACCEPTED.name().equals(f.getStatus()) || Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
                 friends.add(mapToResponse(f.getRequesterId(), f.getStatus(), false));
             }
         }
@@ -130,11 +137,57 @@ public class FriendshipService {
     }
 
     public List<FriendshipResponse> getPendingRequests(String userId) {
-        List<Friendship> received = friendshipRepository.findByAddresseeId(userId);
+        List<Friendship> receivedKeysOnly = friendshipRepository.findByAddresseeId(userId);
+        List<Friendship> received = new ArrayList<>();
+        for (Friendship keyItem : receivedKeysOnly) {
+            friendshipRepository.find(keyItem.getRequesterId(), keyItem.getAddresseeId())
+                .ifPresent(received::add);
+        }
+        
         return received.stream()
                 .filter(f -> Friendship.Status.PENDING.name().equals(f.getStatus()))
                 .map(f -> mapToResponse(f.getRequesterId(), f.getStatus(), false))
                 .collect(Collectors.toList());
+    }
+
+    public void blockUser(String blockerId, String blockedId) {
+        log.info("User {} blocking user {}", blockerId, blockedId);
+        
+        // Remove existing friendship in any direction before blocking
+        friendshipRepository.find(blockerId, blockedId).ifPresent(friendshipRepository::delete);
+        friendshipRepository.find(blockedId, blockerId).ifPresent(friendshipRepository::delete);
+
+        Friendship blocked = Friendship.builder()
+                .requesterId(blockerId)
+                .addresseeId(blockedId)
+                .status(Friendship.Status.BLOCKED.name())
+                .createdAt(System.currentTimeMillis())
+                .updatedAt(System.currentTimeMillis())
+                .build();
+        
+        friendshipRepository.save(blocked);
+    }
+
+    public void unblockUser(String blockerId, String blockedId) {
+        log.info("User {} unblocking user {}", blockerId, blockedId);
+        friendshipRepository.find(blockerId, blockedId).ifPresent(f -> {
+            if (Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
+                f.setStatus(Friendship.Status.ACCEPTED.name());
+                f.setUpdatedAt(System.currentTimeMillis());
+                friendshipRepository.save(f);
+            }
+        });
+    }
+
+    public boolean isBlocked(String userA, String userB) {
+        // Check if A blocked B
+        Optional<Friendship> f1 = friendshipRepository.find(userA, userB);
+        if (f1.isPresent() && Friendship.Status.BLOCKED.name().equals(f1.get().getStatus())) {
+            return true;
+        }
+        // Check if B blocked A
+        Optional<Friendship> f2 = friendshipRepository.find(userB, userA);
+        return f2.isPresent() && Friendship.Status.BLOCKED.name().equals(f2.get().getStatus());
     }
 
     private FriendshipResponse mapToResponse(String friendId, String status, boolean isRequester) {

@@ -85,7 +85,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
 
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline mb-0.5">
-                  <h3 className={`text-[15px] font-bold tracking-tight truncate ${isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-foreground'}`}>
+                  <h3 className={`text-[15px] tracking-tight truncate ${isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-foreground'} ${conv.unreadCount > 0 ? 'font-black' : 'font-bold'}`}>
                     {conv.name || 'Untitled'}
                   </h3>
                   <div className="flex items-center space-x-1.5 ml-2">
@@ -104,13 +104,15 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                   <p className={`text-[13px] truncate leading-tight flex-1 pr-2 ${conv.unreadCount > 0 ? 'text-indigo-500 dark:text-indigo-400 font-bold' : 'text-foreground/60 font-medium'}`}>
                     {conv.lastMessage ? (
                       <>
-                        {conv.lastMessageSenderId === (user?.userId || user?.id) && (
-                          <span className="text-indigo-500 dark:text-indigo-400/70 mr-1 font-bold">You:</span>
-                        )}
+                        {conv.lastMessageSenderId === (user?.userId || user?.id) ? (
+                          <span className="text-indigo-500 dark:text-indigo-400/70 mr-1 font-bold">Bạn:</span>
+                        ) : conv.type === 'GROUP' && conv.lastMessageSenderName ? (
+                          <span className="text-foreground/50 mr-1 font-bold">{conv.lastMessageSenderName.split(' ').pop()}:</span>
+                        ) : null}
                         {conv.lastMessage}
                       </>
                     ) : (
-                      <span className="italic text-foreground/30 text-[11px] font-bold">{statusText || 'Establishing Link...'}</span>
+                      <span className="italic text-foreground/30 text-[11px] font-bold">{statusText || 'Bắt đầu trò chuyện...'}</span>
                     )}
                   </p>
                   
@@ -118,7 +120,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                     {conv.unreadCount > 0 && (
                       <div className="min-w-[18px] h-[18px] px-1 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-500/30 animate-in zoom-in duration-300">
                         <span className="text-[9px] font-black leading-none">
-                          {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
+                          {conv.unreadCount > 2 ? '2+' : conv.unreadCount}
                         </span>
                       </div>
                     )}

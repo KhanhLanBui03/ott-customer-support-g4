@@ -10,9 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.List;
+import java.util.UUID;
+import java.util.ArrayList;
 
 /**
  * Message Service
@@ -28,6 +30,8 @@ public class MessageService {
     private final com.chatapp.modules.ai.service.AIService aiService;
     private final com.chatapp.modules.conversation.service.ConversationService conversationService;
     private final com.chatapp.modules.conversation.repository.UserConversationRepository userConversationRepository;
+    private final com.chatapp.modules.auth.repository.UserRepository userRepository;
+    private final com.chatapp.modules.contact.service.FriendshipService friendshipService;
 
     private static final String AI_BOT_ID = "shop-expert-ai-bot";
     private static final String AI_BOT_NAME = "ShopExpert AI";
@@ -41,9 +45,22 @@ public class MessageService {
         try {
             // Validate command
             command.validate();
+            log.info("Processing message from {} to {}", command.getSenderId(), command.getConversationId());
+        
+        // Check for block (1-1 chats only)
+        if (command.getConversationId().startsWith("SINGLE#")) {
+            String[] parts = command.getConversationId().split("#");
+            if (parts.length >= 3) {
+                String userA = parts[1];
+                String userB = parts[2];
+                if (friendshipService.isBlocked(userA, userB)) {
+                    log.warn("Blocked message attempt: {} and {} have a block relationship", userA, userB);
+                    throw new com.chatapp.common.exception.ValidationException("Không thể gửi tin nhắn. Người dùng đã bị chặn.");
+                }
+            }
+        }
 
-            // Create message entity
-            String messageId = UUID.randomUUID().toString();
+        String messageId = UUID.randomUUID().toString();
             String type = command.getType() != null ? command.getType() : "TEXT";
             String senderName = command.getSenderName();
             if (senderName == null || senderName.trim().isEmpty() || "null null".equals(senderName) || "null".equals(senderName)) {
@@ -361,5 +378,161 @@ public class MessageService {
 
     private boolean isAdmin(String userId) {
         return "ADMIN".equalsIgnoreCase(userId) || "admin".equalsIgnoreCase(userId);
+    }
+
+    public Message createVoteMessage(String conversationId, String userId, com.chatapp.modules.message.dto.CreateVoteRequest request) {
+        log.info("Creating vote in {} by {}", conversationId, userId);
+        
+        // Fetch sender name from User table first
+        com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+        String senderName = user != null ? user.getFullName() : "Unknown";
+        
+        // Fallback to UserConversation nickname if available
+        userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
+            if (uc.getNickname() != null && !uc.getNickname().isBlank()) {
+                // We keep senderName logic consistent with other messages
+            }
+        });
+
+        String messageId = UUID.randomUUID().toString();
+        
+        List<Message.VoteOption> options = new ArrayList<>();
+        if (request.getOptions() != null) {
+            for (String optText : request.getOptions()) {
+                options.add(Message.VoteOption.builder()
+                        .optionId(UUID.randomUUID().toString())
+                        .text(optText)
+                        .voterIds(new ArrayList<>())
+                        .build());
+            }
+        }
+
+        Message.VoteInfo voteInfo = Message.VoteInfo.builder()
+                .question(request.getQuestion())
+                .options(options)
+                .allowMultiple(request.getAllowMultiple() != null ? request.getAllowMultiple() : false)
+                .deadline(request.getDeadline())
+                .isClosed(false)
+                .build();
+
+        Message message = Message.create(
+                conversationId,
+                messageId,
+                userId,
+                senderName,
+                "{" + request.getQuestion() + "}",
+                "VOTE"
+        );
+        message.setVote(voteInfo);
+        
+        Message saved = messageRepository.save(message);
+        publishMessageEvent(saved);
+        
+        conversationService.updateLastMessage(conversationId, "[Bình chọn] " + request.getQuestion(), saved.getCreatedAt(), "SYSTEM");
+        
+        // NEW: Auto-pin the poll message
+        try {
+            conversationService.pinMessage(userId, conversationId, saved.getMessageId());
+        } catch (Exception e) {
+            log.warn("Failed to auto-pin vote message: {}", e.getMessage());
+        }
+        
+        return saved;
+    }
+
+    public Message closeVote(String conversationId, String messageId, String userId) {
+        log.info("Closing vote {} by user {}", messageId, userId);
+        
+        Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+
+        if (!"VOTE".equals(message.getType()) || message.getVote() == null) {
+            throw new com.chatapp.common.exception.ValidationException("Not a vote message");
+        }
+
+        // Only creator can close
+        if (!message.getSenderId().equals(userId)) {
+            throw new com.chatapp.common.exception.ValidationException("Only creator can close the vote");
+        }
+
+        message.getVote().setIsClosed(true);
+        message.setUpdatedAt(System.currentTimeMillis());
+        
+        Message saved = messageRepository.save(message);
+        
+        // Broadcast the update
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, saved));
+        
+        // Push a SYSTEM message about closing
+        try {
+            String content = message.getSenderName() + " đã khóa cuộc bình chọn: " + message.getVote().getQuestion();
+            Message sysMsg = Message.builder()
+                    .conversationId(conversationId)
+                    .messageId(java.util.UUID.randomUUID().toString())
+                    .senderId("SYSTEM")
+                    .senderName("Hệ thống")
+                    .content(content)
+                    .type("SYSTEM")
+                    .status("SENT")
+                    .createdAt(System.currentTimeMillis())
+                    .isRecalled(false)
+                    .isEncrypted(false)
+                    .build();
+            
+            messageRepository.save(sysMsg);
+            eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+        } catch (Exception e) {
+            log.error("Failed to push system message for closed vote", e);
+        }
+
+        return saved;
+    }
+
+    public Message submitVote(String conversationId, String messageId, String userId, com.chatapp.modules.message.dto.SubmitVoteRequest request) {
+        Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
+                .orElseThrow(() -> new NotFoundException("Message not found"));
+
+        if (!"VOTE".equals(message.getType()) || message.getVote() == null) {
+            throw new com.chatapp.common.exception.ValidationException("Not a vote message");
+        }
+
+        Message.VoteInfo vote = message.getVote();
+        if (vote.getIsClosed() != null && vote.getIsClosed()) {
+            throw new com.chatapp.common.exception.ValidationException("Vote is closed");
+        }
+
+        boolean allowMultiple = vote.getAllowMultiple() != null && vote.getAllowMultiple();
+        List<String> targetOptionIds = request.getOptionIds() != null ? request.getOptionIds() : new ArrayList<>();
+
+        if (!allowMultiple && targetOptionIds.size() > 1) {
+            throw new com.chatapp.common.exception.ValidationException("Multiple choices are not allowed");
+        }
+
+        boolean changed = false;
+        for (Message.VoteOption opt : vote.getOptions()) {
+            if (opt.getVoterIds() == null) {
+                opt.setVoterIds(new ArrayList<>());
+            }
+            boolean isSelected = targetOptionIds.contains(opt.getOptionId());
+            boolean hasVoted = opt.getVoterIds().contains(userId);
+
+            if (isSelected && !hasVoted) {
+                opt.getVoterIds().add(userId);
+                changed = true;
+            } else if (!isSelected && hasVoted) {
+                opt.getVoterIds().remove(userId);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            message.setUpdatedAt(System.currentTimeMillis());
+            messageRepository.save(message);
+            
+            // Broadcast MESSAGE_UPDATE instead of MESSAGE_NEW
+            eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, message));
+        }
+
+        return message;
     }
 }

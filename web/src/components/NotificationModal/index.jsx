@@ -42,6 +42,15 @@ const NotificationModal = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleRejectGroup = async (invitationId) => {
+    try {
+        await chatApi.rejectGroupInvitation(invitationId);
+        dispatch(removePendingGroup(invitationId));
+    } catch (err) {
+        console.error("Failed to reject group invite", err);
+    }
+  };
+
   const totalNotifications = pendingFriends.length + pendingGroups.length;
 
   return (
@@ -139,6 +148,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
                           Tham gia ngay
                         </button>
                         <button 
+                          onClick={() => handleRejectGroup(invite.invitationId)}
                           className="px-4 py-2.5 bg-white text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-50 hover:text-red-500 border border-slate-100 transition-all"
                         >
                           <X size={14} />

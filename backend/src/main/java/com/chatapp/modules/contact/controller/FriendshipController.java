@@ -38,6 +38,20 @@ public class FriendshipController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/block/{friendId}")
+    public ResponseEntity<Void> blockUser(@PathVariable String friendId) {
+        String userId = getCurrentUserId();
+        friendshipService.blockUser(userId, friendId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/unblock/{friendId}")
+    public ResponseEntity<Void> unblockUser(@PathVariable String friendId) {
+        String userId = getCurrentUserId();
+        friendshipService.unblockUser(userId, friendId);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping
     public ResponseEntity<List<FriendshipResponse>> getFriends() {
         return ResponseEntity.ok(friendshipService.getFriends(getCurrentUserId()));

@@ -5,7 +5,9 @@ import com.chatapp.modules.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
@@ -18,6 +20,23 @@ import java.security.Principal;
 public class PresenceEventListener {
 
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void handleApplicationReady() {
+        log.info("Resetting all user statuses to OFFLINE on startup...");
+        try {
+            Iterable<User> allUsers = userRepository.findAll();
+            for (User u : allUsers) {
+                if ("ONLINE".equals(u.getStatus())) {
+                    u.setStatus("OFFLINE");
+                    userRepository.save(u);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to reset user statuses", e);
+        }
+    }
 
     @EventListener
     public void handleWebSocketConnectListener(org.springframework.web.socket.messaging.SessionConnectedEvent event) {
@@ -45,10 +64,20 @@ public class PresenceEventListener {
 
     private void updateUserStatus(String userId, String status) {
         userRepository.findById(userId).ifPresent(user -> {
-            user.setStatus(status);
-            user.setLastSeenAt(System.currentTimeMillis());
-            user.setUpdatedAt(System.currentTimeMillis());
+            user.updateStatus(status);
             userRepository.save(user);
+            
+            // Broadcast the presence update to all connected users
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("userId", userId);
+            payload.put("status", status);
+            payload.put("lastSeenAt", user.getLastSeenAt());
+            
+            try {
+                messagingTemplate.convertAndSend("/topic/presence", payload);
+            } catch (Exception e) {
+                log.error("Failed to broadcast presence update", e);
+            }
         });
     }
 }

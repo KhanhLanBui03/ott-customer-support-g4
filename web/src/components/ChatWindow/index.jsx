@@ -5,7 +5,8 @@ import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
 import ForwardModal from '../ForwardModal';
 import { chatApi } from '../../api/chatApi';
-import { Phone, Video, Info, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon } from 'lucide-react';
+import { Phone, Video, Info, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle } from 'lucide-react';
+import { friendApi } from '../../api/friendApi';
 import GroupAvatar from '../GroupAvatar';
 
 const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBack, onRefreshMessages }) => {
@@ -58,6 +59,40 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
         if (onBack) onBack(); // Go back or clear selection without reload
       } catch (err) {
         console.error("Failed to delete conversation", err);
+      }
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!currentMember) return;
+    const friendId = currentMember.userId || currentMember.id;
+    const isBlocked = Array.isArray(friends) && friends.some(f => 
+      String(f.userId || f.id || f.friendId) === String(friendId) && f.status === 'BLOCKED'
+    );
+
+    if (window.confirm(isBlocked ? 'Bỏ chặn người dùng này?' : 'Chặn người dùng này? Họ sẽ không thể gửi tin nhắn cho bạn.')) {
+      try {
+        if (isBlocked) {
+          await friendApi.unblockUser(friendId);
+        } else {
+          await friendApi.blockUser(friendId);
+        }
+        fetchFriends();
+        fetchConversations();
+      } catch (err) {
+        console.error("Failed to block/unblock user", err);
+      }
+    }
+  };
+
+  const handleDisbandGroup = async () => {
+    if (window.confirm('GIẢI TÁN NHÓM? Tất cả tin nhắn và thành viên sẽ bị xóa vĩnh viễn.')) {
+      try {
+        await chatApi.disbandGroup(conversationId);
+        fetchConversations();
+        if (onBack) onBack();
+      } catch (err) {
+        console.error("Failed to disband group", err);
       }
     }
   };
@@ -128,19 +163,29 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
               
               {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (
                 <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border ${
-                  Array.isArray(friends) && friends.some(f => {
-                    const fId = String(f.userId || f.id || f.friendId || '');
-                    const mId = String(currentMember?.userId || currentMember?.id || '');
-                    return fId === mId && fId !== '';
-                  }) 
-                    ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' 
-                    : 'text-amber-500 border-amber-500/20 bg-amber-500/5'
+                  (() => {
+                    const friend = Array.isArray(friends) && friends.find(f => {
+                      const fId = String(f.userId || f.id || f.friendId || '');
+                      const mId = String(currentMember?.userId || currentMember?.id || '');
+                      return fId === mId && fId !== '';
+                    });
+                    if (friend?.status === 'BLOCKED') return 'text-red-500 border-red-500/20 bg-red-500/5';
+                    return friend?.status === 'ACCEPTED' 
+                      ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' 
+                      : 'text-amber-500 border-amber-500/20 bg-amber-500/5';
+                  })()
                 }`}>
-                  {Array.isArray(friends) && friends.some(f => {
-                    const fId = String(f.userId || f.id || f.friendId || '');
-                    const mId = String(currentMember?.userId || currentMember?.id || '');
-                    return fId === mId && fId !== '';
-                  }) ? 'Bạn bè' : 'Người lạ'}
+                  {(() => {
+                    const friend = Array.isArray(friends) && friends.find(f => {
+                      const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+                      const mId = String(currentMember?.userId || currentMember?.id || '').toLowerCase();
+                      return fId !== '' && fId === mId;
+                    });
+                    
+                    if (friend?.status === 'BLOCKED') return 'Bị chặn';
+                    if (friend?.status === 'ACCEPTED') return 'Bạn bè';
+                    return 'Người lạ';
+                  })()}
                 </span>
               )}
               
@@ -199,8 +244,34 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
                   className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-all"
                 >
                   <Trash2 size={18} />
-                  <span>Delete History</span>
+                  <span>Xóa lịch sử</span>
                 </button>
+
+                {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (
+                  <>
+                    <div className="h-px bg-border my-1 mx-2" />
+                    <button
+                      onClick={() => { handleBlockUser(); setShowMoreMenu(false); }}
+                      className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-red-600 hover:bg-red-50 rounded-2xl transition-all"
+                    >
+                      <Ban size={18} />
+                      <span>{Array.isArray(friends) && friends.some(f => String(f.userId || f.id || f.friendId) === String(currentMember?.userId || currentMember?.id) && f.status === 'BLOCKED') ? 'Bỏ chặn' : 'Chặn người dùng'}</span>
+                    </button>
+                  </>
+                )}
+
+                {currentConv?.type === 'GROUP' && currentConv?.members?.find(m => String(m.userId || m.id) === String(user?.userId || user?.id))?.role === 'OWNER' && (
+                  <>
+                    <div className="h-px bg-border my-1 mx-2" />
+                    <button
+                      onClick={() => { handleDisbandGroup(); setShowMoreMenu(false); }}
+                      className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-red-700 hover:bg-red-50 rounded-2xl transition-all"
+                    >
+                      <AlertCircle size={18} />
+                      <span>Giải tán nhóm</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
