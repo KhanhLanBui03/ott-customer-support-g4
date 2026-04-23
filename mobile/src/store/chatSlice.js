@@ -2,17 +2,33 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { chatApi, conversationApi } from '../api/chatApi';
 import { sendMessageViaSocket } from '../utils/socket';
 
-const getRealId = (state, id) => {
+// Hàm hỗ trợ tìm Conversation ID chuẩn - ĐÃ NÂNG CẤP ĐỂ THÔNG MINH HƠN
+export const getRealId = (state, id) => {
   if (!id) return id;
+  // Nếu ID đã có định dạng chuẩn (có dấu #), dùng luôn
   if (id.includes('#')) return id;
-  const conv = state.conversations.find(c => c.conversationId.includes(id) || id.includes(c.conversationId));
-  return conv ? conv.conversationId : id;
+  
+  // 1. Tìm trong danh sách conversations (đây là nguồn chuẩn nhất)
+  const conv = (state.conversations || []).find(c => 
+    c.conversationId === id || 
+    c.conversationId.includes(id) || 
+    id.includes(c.conversationId)
+  );
+  if (conv) return conv.conversationId;
+
+  // 2. Tìm trong danh sách tin nhắn hiện có
+  const keys = Object.keys(state.messages || {});
+  const longKey = keys.find(key => key.includes('#') && key.includes(id));
+  if (longKey) return longKey;
+
+  return id;
 };
 
 export const fetchConversations = createAsyncThunk('chat/fetchConversations', async (params, { rejectWithValue }) => {
   try {
     const response = await conversationApi.getConversations(params);
-    return response.data.data || response.data;
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : (data.conversations || []);
   } catch (error) { return rejectWithValue(error.response?.data?.message); }
 });
 
@@ -21,13 +37,13 @@ export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, 
     const id = typeof arg === 'string' ? arg : arg.conversationId;
     const state = getState().chat;
     const realId = getRealId(state, id);
+    
     const response = await chatApi.getMessages(realId, arg?.params);
     const data = response.data.data || response.data;
-    const messages = data.messages || data || [];
+    const messages = Array.isArray(data) ? data : (data.messages || []);
 
-    // Lấy ID thật từ server trả về để đồng bộ hóa
-    const serverId = messages[0]?.conversationId || realId;
-    return { conversationId: serverId, originalId: id, messages };
+    const serverConversationId = messages.length > 0 ? messages[0].conversationId : realId;
+    return { conversationId: serverConversationId, originalId: id, messages };
   } catch (error) { return rejectWithValue(error.response?.data?.message); }
 });
 
@@ -41,7 +57,7 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
       conversationId: realId,
       content: messageData.content,
       type: 'TEXT',
-      senderId: currentUser?.userId
+      senderId: currentUser?.userId || currentUser?.id
     };
 
     sendMessageViaSocket(payload);
@@ -52,62 +68,61 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
 
 const chatSlice = createSlice({
   name: 'chat',
-  initialState: { conversations: [], messages: {}, loading: false },
+  initialState: { conversations: [], messages: {}, currentConversationId: null, loading: false },
   reducers: {
+    setCurrentConversation: (state, action) => {
+      state.currentConversationId = action.payload;
+    },
     addMessage: (state, action) => {
       const { conversationId, message } = action.payload;
-      const msg = message.payload || message;
-      if (!msg?.content) return;
+      if (!message || !message.content) return;
 
-      const realId = msg.conversationId || getRealId(state, conversationId);
+      const incomingId = message.conversationId || conversationId;
+      const realId = getRealId(state, incomingId);
+
+      console.log(`[Store] Adding message to ${realId} (from incoming: ${incomingId})`);
+
       if (!state.messages[realId]) state.messages[realId] = [];
 
-      const isDuplicate = state.messages[realId].some(m => {
-        if (msg.messageId && m.messageId === msg.messageId) return true;
-        const t1 = new Date(m.createdAt || Date.now()).getTime();
-        const t2 = new Date(msg.createdAt || Date.now()).getTime();
-        return m.content === msg.content && Math.abs(t1 - t2) < 2000;
-      });
+      const isDuplicate = message.messageId 
+        ? state.messages[realId].some(m => m.messageId === message.messageId)
+        : state.messages[realId].some(m => m.content === message.content && Math.abs((m.createdAt || 0) - (message.createdAt || 0)) < 1000);
 
       if (!isDuplicate) {
-        state.messages[realId].push(msg);
-        const conv = state.conversations.find(c => c.conversationId === realId);
-        if (conv) {
-          conv.lastMessage = msg.content;
-          conv.updatedAt = msg.createdAt || new Date().toISOString();
+        state.messages[realId] = [...state.messages[realId], message];
+        
+        const convIdx = state.conversations.findIndex(c => c.conversationId === realId);
+        if (convIdx !== -1) {
+            state.conversations[convIdx].lastMessage = message.content;
+            state.conversations[convIdx].updatedAt = message.createdAt || Date.now();
         }
       }
-    },
-    clearChatState: (state) => {
-      state.conversations = [];
-      state.messages = {};
     }
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchConversations.fulfilled, (state, action) => {
-        state.conversations = action.payload.conversations || action.payload || [];
+        state.conversations = action.payload;
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
         const { conversationId, originalId, messages } = action.payload;
-        // Double-mapping: Lưu vào cả ID thật và ID từ URL để không bao giờ mất tin
         state.messages[conversationId] = messages;
-        if (originalId && originalId !== conversationId) {
-          state.messages[originalId] = messages;
+        if (originalId && originalId !== conversationId && state.messages[originalId]) {
+           delete state.messages[originalId];
         }
       })
       .addCase(sendMessage.fulfilled, (state, action) => {
         const msg = action.payload;
-        const rid = msg.conversationId;
-        if (!state.messages[rid]) state.messages[rid] = [];
-        const isDuplicate = state.messages[rid].some(m =>
-          (msg.messageId && m.messageId === msg.messageId) ||
-          (m.content === msg.content && Math.abs(new Date(m.createdAt || Date.now()).getTime() - new Date(msg.createdAt || Date.now()).getTime()) < 2000)
-        );
-        if (!isDuplicate) state.messages[rid].push(msg);
+        if (msg) {
+            const rid = getRealId(state, msg.conversationId);
+            if (!state.messages[rid]) state.messages[rid] = [];
+            if (!state.messages[rid].some(m => m.messageId === msg.messageId)) {
+                state.messages[rid] = [...state.messages[rid], msg];
+            }
+        }
       });
   },
 });
 
-export const { addMessage, clearChatState } = chatSlice.actions;
+export const { addMessage, setCurrentConversation } = chatSlice.actions;
 export default chatSlice.reducer;

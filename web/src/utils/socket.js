@@ -17,26 +17,30 @@ export const initSocket = (token) => {
   currentToken = token;
   const socketUrl = import.meta.env.VITE_WS_URL_STOMP || 'http://localhost:8080/ws/chat';
   
+  console.log('[STOMP] Creating new STOMP client, URL:', socketUrl);
+
   stompClient = new Client({
     webSocketFactory: () => new SockJS(socketUrl),
     connectHeaders: {
       Authorization: `Bearer ${token}`,
     },
+    // Auto-reconnect every 5 seconds when disconnected
+    reconnectDelay: 5000,
+    // Heartbeat: client sends every 10s, expects server every 10s
+    heartbeatIncoming: 10000,
+    heartbeatOutgoing: 10000,
     onConnect: () => {
-      console.log('[STOMP] Connected');
-      
-      // Subscribe to personal calling signals
-      // The topic is /topic/calls.<userId> but backend uses convertAndSendToUser 
-      // or similar if using principal, but here it's specifically /topic/calls.<userId>
-      
-      // Wait, we need the userId to subscribe to the correct topic.
-      // Alternatively, the backend could use /user/queue/calls.
+      console.log('[STOMP] ✅ Connected to server');
     },
     onStompError: (frame) => {
-      console.error('[STOMP] Error:', frame.headers['message']);
+      console.error('[STOMP] ❌ STOMP Error:', frame.headers['message']);
+      console.error('[STOMP] Error details:', frame.body);
     },
-    onWebSocketClose: () => {
-      console.log('[STOMP] Disconnected');
+    onWebSocketClose: (evt) => {
+      console.log('[STOMP] 🔌 WebSocket Disconnected, will auto-reconnect...');
+    },
+    onWebSocketError: (evt) => {
+      console.error('[STOMP] ❌ WebSocket Error:', evt);
     }
   });
 

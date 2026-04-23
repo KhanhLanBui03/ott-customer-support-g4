@@ -165,9 +165,9 @@ const ForgotPassword = () => {
 
       <div className="max-w-md w-full p-12 space-y-10 relative z-10 animate-fade-in">
         <div className="text-center space-y-2">
-          <h2 className="text-4xl font-black text-white tracking-tighter">Password Recovery</h2>
+          <h2 className="text-4xl font-black text-white tracking-tighter">Khôi phục mật khẩu</h2>
           <p className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-white/20">
-            {step === 'request' ? 'Request OTP' : 'Reset Password'}
+            {step === 'request' ? 'Gửi mã OTP' : 'Đặt lại mật khẩu'}
           </p>
         </div>
 
@@ -268,10 +268,10 @@ const ForgotPassword = () => {
               {loading
                 ? 'Processing...'
                 : step === 'request'
-                ? isCooldownActive
-                  ? `Wait ${formatCooldown(cooldownRemainingSeconds)}`
-                  : 'Send OTP'
-                : 'Reset Password'}
+                  ? isCooldownActive
+                    ? `Wait ${formatCooldown(cooldownRemainingSeconds)}`
+                    : 'Gửi OTP'
+                  : 'Reset Password'}
             </span>
             <ArrowRight size={20} />
           </button>
@@ -297,7 +297,7 @@ const ForgotPassword = () => {
         <p className="text-center text-[11px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
           Back to{' '}
           <Link to="/login" className="text-cursor-accent hover:underline">
-            Login
+            Đăng nhập
           </Link>
         </p>
       </div>
