@@ -3,9 +3,14 @@ import { View, Text, StyleSheet, Image } from 'react-native';
 import { useSelector } from 'react-redux';
 import CONFIG from '../config';
 
-const ChatBubble = ({ message, isOwn }) => {
+const ChatBubble = ({ message, isOwn: initialIsOwn }) => {
+  const { user } = useSelector(state => state.auth);
   const conversations = useSelector(state => state.chat.conversations);
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
+
+  // So sánh ID người gửi với ID người dùng hiện tại để xác định vị trí bubble
+  const currentUserId = user?.userId || user?.id;
+  const isOwn = initialIsOwn || (message.senderId === currentUserId && currentUserId !== undefined);
 
   const getAvatarUrl = (url, name) => {
     if (!url) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=random&color=fff&size=128&bold=true`;

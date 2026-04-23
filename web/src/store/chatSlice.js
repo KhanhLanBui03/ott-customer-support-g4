@@ -191,6 +191,19 @@ const chatSlice = createSlice({
         conv.unreadCount = 0;
       }
     },
+    updateUserPresence: (state, action) => {
+      const { userId, status } = action.payload || {};
+      if (!userId) return;
+      // Update presence across all conversations that include this user
+      state.conversations.forEach(conv => {
+        if (conv.members && Array.isArray(conv.members)) {
+          const member = conv.members.find(m => (m.userId || m.id) === userId);
+          if (member) {
+            member.status = status;
+          }
+        }
+      });
+    },
   },
   extraReducers: (builder) => {
     builder

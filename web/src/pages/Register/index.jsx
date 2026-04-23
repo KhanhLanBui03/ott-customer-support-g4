@@ -338,7 +338,7 @@ const Register = () => {
             <Zap size={40} className="text-cursor-accent" fill="currentColor" />
           </div>
           <div className="text-center space-y-2">
-            <h2 className="text-4xl font-black text-white tracking-tighter">New Node</h2>
+            <h2 className="text-4xl font-black text-white tracking-tighter">Chat app</h2>
             <p className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-white/20">
               KHỞI TẠO ĐĂNG KÝ TÀI KHOẢN
             </p>
@@ -539,8 +539,8 @@ const Register = () => {
                 {loading
                   ? 'Đang xử lý...'
                   : isOtpCooldownActive
-                  ? `Yêu cầu lại sau ${formatOtpCooldown(otpRemainingSeconds)}`
-                  : 'Gửi mã xác thực'}
+                    ? `Yêu cầu lại sau ${formatOtpCooldown(otpRemainingSeconds)}`
+                    : 'Gửi mã xác thực'}
               </span>
               <ArrowRight size={20} />
             </button>
