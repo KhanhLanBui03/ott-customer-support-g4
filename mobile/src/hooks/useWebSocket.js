@@ -10,6 +10,8 @@ import {
   offMessageReceive,
   onUserTyping,
   offUserTyping,
+  onUserStatusChange,
+  offUserStatusChange,
   emitSendMessage,
   emitTypingStart,
   emitTypingStop,
@@ -42,6 +44,18 @@ export const useWebSocket = () => {
 
     onMessageReceive(handleMessageReceive);
     return () => offMessageReceive(handleMessageReceive);
+  }, [dispatch]);
+
+  // Nhận cập nhật trạng thái online/offline
+  useEffect(() => {
+    const handleStatusChange = (statusData) => {
+      console.log('[WS] User status changed:', statusData.userId, statusData.status);
+      // Fetch lại conversations để cập nhật member status
+      dispatch(fetchConversations());
+    };
+
+    onUserStatusChange(handleStatusChange);
+    return () => offUserStatusChange(handleStatusChange);
   }, [dispatch]);
 
   const sendMessageRealtime = useCallback((conversationId, messageData) => {

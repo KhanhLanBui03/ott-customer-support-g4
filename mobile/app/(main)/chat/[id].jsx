@@ -1,19 +1,24 @@
-import React, { useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
-import { fetchMessages, sendMessage, setCurrentConversation, getRealId, fetchConversations } from '../../../src/store/chatSlice';
+import MessageModal from '../../../src/components/MessageModal';
+import { fetchMessages, sendMessage, setCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, updateMessageReactions } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 
 const ChatDetailScreen = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { id: conversationId } = useLocalSearchParams();
-  
+  const { id: rawConversationId } = useLocalSearchParams();
+  const conversationId = useMemo(() => decodeURIComponent(rawConversationId || ''), [rawConversationId]);
+
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
   // KÍCH HOẠT WEBSOCKET TRỰC TIẾP TẠI ĐÂY
   const { sendMessageRealtime } = useWebSocket();
 
@@ -22,69 +27,159 @@ const ChatDetailScreen = () => {
   const conversations = chatState.conversations || [];
 
   // Xác định ID chuẩn
-  const realId = useMemo(() => getRealId(chatState, conversationId), [chatState, conversationId]);
+  const realId = useMemo(() => getRealId(chatState, conversationId, currentUser?.userId || currentUser?.id), [chatState, conversationId, currentUser]);
   const messages = chatState.messages[realId] || [];
   const conversation = conversations.find(c => c.conversationId === realId);
   const isLoading = chatState.loading;
 
+  // Effect 1: Khởi tạo chat - chạy khi conversationId hoặc currentUser thay đổi
   useEffect(() => {
-    const initChat = async () => {
-      if (!conversationId) return;
+    if (!conversationId || !currentUser) return;
 
+    const initChat = async () => {
       // 1. Đồng bộ danh sách hội thoại nếu cần
       if (conversations.length === 0) {
         await dispatch(fetchConversations());
       }
 
-      // 2. Thiết lập ID hiện tại
-      const actualId = getRealId(chatState, conversationId);
-      dispatch(setCurrentConversation(actualId));
-      
-      // 3. Tải tin nhắn cũ
+      // 2. Tải tin nhắn - Để fetchMessages tự giải quyết realId bằng getState() mới nhất
       dispatch(fetchMessages(conversationId));
+      
+      // 3. Cập nhật ID hiện tại vào store (dùng để highlight hoặc socket)
+      // Chúng ta gọi getRealId ở đây với dữ liệu mới nhất từ selector
+      const latestRealId = getRealId(chatState, conversationId, currentUser.userId || currentUser.id);
+      dispatch(setCurrentConversation(latestRealId));
     };
 
     initChat();
-    
+
     return () => {
       dispatch(setCurrentConversation(null));
+      dispatch(clearReplyingTo());
     };
-  }, [conversationId, dispatch, conversations.length]);
+  }, [conversationId, currentUser?.userId, currentUser?.id, dispatch]);
 
-  const handleSendMessage = (content) => {
+  // Effect 2: Refresh thông tin hội thoại định kỳ (avatar, status) - KHÔNG re-fetch messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      dispatch(fetchConversations());
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [dispatch]);
+
+  const handleSendMessage = (content, replyToMessageId) => {
     if (!content.trim() || !realId) return;
 
-    // Gửi qua Redux (để lưu DB và cập nhật UI)
     dispatch(sendMessage({
       conversationId: realId,
       content,
-      type: 'TEXT'
+      type: 'TEXT',
+      replyToMessageId
     }));
   };
 
-  const otherParticipant = useMemo(() => {
-    if (!conversation?.participants) return null;
-    return conversation.participants.find(p => p.userId !== (currentUser?.userId || currentUser?.id));
+  const handleReaction = async (messageId, emoji) => {
+    try {
+      await dispatch(updateMessageReactions({ conversationId: realId, messageId, reactions: { [emoji]: [currentUser.userId] } }));
+      // Gọi API thực tế
+      const { chatApi } = require('../../../src/api/chatApi');
+      await chatApi.addReaction(messageId, realId, { emoji });
+    } catch (error) {
+      console.error('Reaction error:', error);
+    }
+  };
+
+  const displayName = useMemo(() => {
+    if (conversation?.type === 'GROUP') return conversation.name || 'Nhóm chat';
+    
+    if (conversation?.type === 'SINGLE') {
+      const currentUserId = String(currentUser?.userId || currentUser?.id || '');
+      const otherParticipant = (conversation.members || []).find(p => {
+        const pId = String(p.userId || p.id || '');
+        return pId !== '' && pId !== currentUserId;
+      });
+      return otherParticipant?.fullName || otherParticipant?.name || otherParticipant?.username || 'Người dùng';
+    }
+    
+    return conversation?.name || 'Chat';
   }, [conversation, currentUser]);
 
-  const displayName = otherParticipant?.name || conversation?.name || 'Chat';
-  const otherAvatar = otherParticipant?.avatar || otherParticipant?.avatarUrl || otherParticipant?.profilePic || conversation?.avatar;
-  const isOnline = otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true;
+  const otherAvatar = useMemo(() => {
+    if (conversation?.type === 'GROUP') return conversation.avatarUrl || conversation.avatar;
+    
+    const currentUserId = String(currentUser?.userId || currentUser?.id || '');
+    const otherParticipant = (conversation?.members || []).find(p => String(p.userId || p.id) !== currentUserId);
+    return otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic;
+  }, [conversation, currentUser]);
+
+  const isOnline = useMemo(() => {
+    if (conversation?.type === 'GROUP') return false;
+    const currentUserId = String(currentUser?.userId || currentUser?.id || '');
+    const otherParticipant = (conversation?.members || []).find(p => String(p.userId || p.id) !== currentUserId);
+    return otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true;
+  }, [conversation, currentUser]);
 
   const headerAvatarUrl = otherAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=128&bold=true`;
 
+  const handleLoadMore = async () => {
+    if (realId) {
+      await dispatch(fetchMessages({ conversationId: realId, loadMore: true }));
+    }
+  };
+
+  const handleLongPressMessage = (message) => {
+    setSelectedMessage(message);
+    setModalVisible(true);
+  };
+
+  const handleModalAction = (type, message) => {
+    switch (type) {
+      case 'reply':
+        dispatch(setReplyingTo(message));
+        break;
+      case 'copy':
+        // Sử dụng Clipboard an toàn
+        try {
+          const { Clipboard } = require('react-native');
+          if (Clipboard && Clipboard.setString) {
+            Clipboard.setString(message.content);
+          } else {
+             const { NativeModules } = require('react-native');
+             if (NativeModules.Clipboard) {
+               NativeModules.Clipboard.setString(message.content);
+             }
+          }
+        } catch (e) {
+          console.log('Clipboard not available');
+        }
+        break;
+      case 'delete':
+        Alert.alert('Xác nhận', 'Bạn có muốn xóa tin nhắn này?', [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Xóa', onPress: () => {} } // Sẽ implement API sau
+        ]);
+        break;
+      default:
+        console.log('Action not implemented:', type);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={styles.container} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={styles.messagesHeader}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <MaterialIcons name="arrow-back" size={24} color="#667eea" />
           </TouchableOpacity>
-          <View style={styles.headerContent}>
+          <TouchableOpacity 
+            style={styles.headerContent} 
+            onPress={() => router.push(`/chat-info/${encodeURIComponent(realId)}`)}
+          >
             <View style={styles.headerAvatarContainer}>
               <Image source={{ uri: headerAvatarUrl }} style={styles.headerAvatar} />
               {isOnline && <View style={styles.headerOnlineBadge} />}
@@ -95,23 +190,35 @@ const ChatDetailScreen = () => {
                 {isOnline ? 'Online' : 'Offline'}
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
-
+ 
         <View style={styles.chatArea}>
           {isLoading && messages.length === 0 ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#667eea" />
             </View>
           ) : (
-            <MessageList 
-                messages={messages} 
-                currentUserId={currentUser?.userId || currentUser?.id} 
+            <MessageList
+              messages={messages}
+              currentUserId={currentUser?.userId || currentUser?.id}
+              onLoadMore={handleLoadMore}
+              onReact={handleReaction}
+              onLongPress={handleLongPressMessage}
             />
           )}
         </View>
 
         <MessageInput onSendMessage={handleSendMessage} />
+
+        <MessageModal
+          visible={modalVisible}
+          message={selectedMessage}
+          isOwn={selectedMessage?.senderId === (currentUser?.userId || currentUser?.id)}
+          onClose={() => setModalVisible(false)}
+          onAction={handleModalAction}
+          onReact={handleReaction}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

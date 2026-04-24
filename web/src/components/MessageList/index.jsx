@@ -392,16 +392,16 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                 <div className={`flex items-end ${msg.type === 'VOTE' ? 'w-full justify-center max-w-full' : 'max-w-[85%] sm:max-w-[75%] space-x-3 ' + (isMe ? 'flex-row-reverse space-x-reverse' : '')}`}>
                   {!isMe && msg.type !== 'VOTE' && (
                     <div className="w-9 h-9 rounded-2xl bg-surface-200 flex-shrink-0 mb-1 overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform">
-                      {(msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
-                        <img 
-                          src={msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl} 
-                          className="w-full h-full object-cover" 
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-foreground/40 font-black italic uppercase text-sm">
-                          {msg.senderName?.charAt(0) || '?'}
-                        </div>
-                      )}
+                      {(() => {
+                        const freshMember = currentConv?.members?.find(m => String(m.userId || m.id) === String(msg.senderId));
+                        const avatar = freshMember?.avatarUrl || freshMember?.avatar || msg.senderAvatarUrl || msg.senderAvatar;
+                        if (avatar) return <img src={avatar} className="w-full h-full object-cover" />;
+                        return (
+                          <div className="w-full h-full flex items-center justify-center text-foreground/40 font-black italic uppercase text-sm">
+                            {(freshMember?.fullName || msg.senderName || '?').charAt(0)}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -413,27 +413,71 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         <span className="text-[10px] font-bold italic text-foreground/60">Được chuyển tiếp</span>
                       </div>
                     )}
-
                     {/* Reply To Preview */}
                     {msg.replyTo && (
                       <div 
                         onClick={() => scrollToMessage(msg.replyTo.messageId)}
                         className={`mb-1 p-2.5 rounded-2xl bg-surface-100/50 backdrop-blur-sm border-l-4 border-indigo-500 cursor-pointer hover:bg-surface-100 transition-all max-w-sm ${isMe ? 'mr-1' : 'ml-1'}`}
                       >
-                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.1em] mb-0.5">{msg.replyTo.senderName}</p>
+                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.1em] mb-0.5">
+                           {(() => {
+                             const repliedId = String(msg.replyTo.senderId || '');
+                             const currentMeId = String(user?.userId || user?.id || '');
+                             if (repliedId === currentMeId) return 'Bạn';
+                             
+                             // Tìm kiếm thông tin thành viên mới nhất trong TẤT CẢ hội thoại
+                             let freshName = msg.replyTo.senderName;
+                             if (Array.isArray(conversations)) {
+                               for (const c of conversations) {
+                                 const found = (c.members || []).find(m => String(m.userId || m.id) === repliedId);
+                                 if (found) {
+                                   freshName = found.fullName || found.name || found.username || freshName;
+                                   break;
+                                 }
+                               }
+                             }
+                             return freshName;
+                           })()}
+                         </p>
                          <p className="text-[12px] text-foreground/60 truncate italic">{msg.replyTo.content || '[Attachment]'}</p>
                       </div>
                     )}
-
+ 
                     {!isMe && msg.type !== 'VOTE' && (
                        <p className={`text-[10px] font-black uppercase tracking-widest ml-1 mb-1 ${currentConv?.type === 'GROUP' ? getMemberColor(msg.senderId, currentConv?.members) : 'text-foreground/40'}`}>
-                          {msg.senderName || 'Thành viên'}
+                          {(() => {
+                            const senderIdStr = String(msg.senderId || '');
+                            let freshSenderName = msg.senderName;
+                            if (Array.isArray(conversations)) {
+                               for (const c of conversations) {
+                                 const found = (c.members || []).find(m => String(m.userId || m.id) === senderIdStr);
+                                 if (found) {
+                                   freshSenderName = found.fullName || found.name || found.username || freshSenderName;
+                                   break;
+                                 }
+                               }
+                            }
+                            return freshSenderName || 'Thành viên';
+                          })()}
                        </p>
                     )}
-
+ 
                     {msg.type === 'VOTE' && (
                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400/80 mb-2 text-center w-full">
-                          {msg.senderName || 'Thành viên'} đã tạo một bình chọn
+                          {(() => {
+                            const creatorIdStr = String(msg.senderId || '');
+                            let freshCreatorName = msg.senderName;
+                            if (Array.isArray(conversations)) {
+                               for (const c of conversations) {
+                                 const found = (c.members || []).find(m => String(m.userId || m.id) === creatorIdStr);
+                                 if (found) {
+                                   freshCreatorName = found.fullName || found.name || found.username || freshCreatorName;
+                                   break;
+                                 }
+                               }
+                            }
+                            return freshCreatorName || 'Thành viên';
+                          })()} đã tạo một bình chọn
                        </p>
                     )}
                     {isRecalled ? (

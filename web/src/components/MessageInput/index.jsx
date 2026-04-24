@@ -226,7 +226,17 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           <div className="flex items-center space-x-3 overflow-hidden">
             <div className="w-1 h-8 bg-indigo-500 rounded-full flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.1em] mb-0.5">Đang trả lời {replyingTo.senderName}</p>
+              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.1em] mb-0.5">
+                Đang trả lời {(() => {
+                  const repliedId = String(replyingTo.senderId || '');
+                  const myId = String(user?.userId || user?.id || '');
+                  if (repliedId === myId) return 'Bạn';
+                  
+                  const currentConv = conversations.find(c => c.conversationId === conversationId);
+                  const freshMember = currentConv?.members?.find(m => String(m.userId || m.id) === repliedId);
+                  return freshMember?.fullName || freshMember?.name || replyingTo.senderName;
+                })()}
+              </p>
               <p className="text-[13px] text-foreground/60 truncate font-semibold">{replyingTo.content || '[Attachment]'}</p>
             </div>
           </div>

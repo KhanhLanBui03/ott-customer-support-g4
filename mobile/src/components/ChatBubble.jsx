@@ -1,16 +1,68 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import { useSelector } from 'react-redux';
+import React, { useState, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Image, 
+  TouchableOpacity, 
+  Animated, 
+  PanResponder, 
+} from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
+import { useRouter } from 'expo-router';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import CONFIG from '../config';
+import { setReplyingTo } from '../store/chatSlice';
 
-const ChatBubble = ({ message, isOwn: initialIsOwn }) => {
+const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
+  const router = useRouter();
+  const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const conversations = useSelector(state => state.chat.conversations);
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
 
-  // So sánh ID người gửi với ID người dùng hiện tại để xác định vị trí bubble
-  const currentUserId = user?.userId || user?.id;
-  const isOwn = initialIsOwn || (message.senderId === currentUserId && currentUserId !== undefined);
+  const currentUserIdStr = String(user?.userId || user?.id || '');
+  const isOwn = initialIsOwn || (currentUserIdStr !== '' && String(message.senderId || '') === currentUserIdStr);
+
+  // Animation for swipe to reply
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Nhạy hơn (dx > 10) và đảm bảo là vuốt ngang
+        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // Cho phép vuốt sang trái (âm), giới hạn tối đa -80 để tạo cảm giác chắc chắn
+        if (gestureState.dx < 0) {
+          const limitedDx = Math.max(gestureState.dx, -30);
+          translateX.setValue(limitedDx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // Rút ngắn biên độ kích hoạt từ -50 xuống -40
+        if (gestureState.dx < -10) {
+          // Kích hoạt trả lời
+          dispatch(setReplyingTo(message));
+        }
+        // Luôn trả về vị trí cũ mượt mà với hiệu ứng Spring nhanh hơn
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100, // Tăng độ nảy
+          friction: 8
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        // Đảm bảo không bị kẹt khi bị gián đoạn
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true
+        }).start();
+      }
+    })
+  ).current;
 
   const getAvatarUrl = (url, name) => {
     if (!url) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=random&color=fff&size=128&bold=true`;
@@ -20,15 +72,19 @@ const ChatBubble = ({ message, isOwn: initialIsOwn }) => {
 
   const senderInfo = React.useMemo(() => {
     if (isOwn) return null;
+    const msgSenderId = String(message.senderId || '');
     for (const conv of conversations) {
       const members = conv.members || conv.participants || [];
-      const found = members.find(m => m.userId === message.senderId);
+      const found = members.find(m => String(m.userId || m.id || '') === msgSenderId);
       if (found) return found;
     }
     return null;
   }, [conversations, message.senderId, isOwn]);
 
-  const avatarUrl = getAvatarUrl(message.senderAvatar || senderInfo?.avatar || senderInfo?.profilePic, message.senderName || senderInfo?.name);
+  const avatarUrl = getAvatarUrl(
+    senderInfo?.avatarUrl || senderInfo?.avatar || senderInfo?.profilePic || message.senderAvatar,
+    senderInfo?.fullName || senderInfo?.name || message.senderName
+  );
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -38,24 +94,92 @@ const ChatBubble = ({ message, isOwn: initialIsOwn }) => {
     } catch (e) { return ''; }
   };
 
+  const renderReactions = () => {
+    if (!message.reactions || Object.keys(message.reactions).length === 0) return null;
+
+    return (
+      <View style={[styles.reactionsContainer, isOwn ? styles.ownReactions : styles.otherReactions]}>
+        {Object.entries(message.reactions).map(([emoji, users]) => (
+          Array.isArray(users) && users.length > 0 && (
+            <View key={emoji} style={styles.reactionBadge}>
+              <Text style={styles.reactionEmoji}>{emoji}</Text>
+              <Text style={styles.reactionCount}>{users.length > 1 ? users.length : ''}</Text>
+            </View>
+          )
+        ))}
+      </View>
+    );
+  };
+
   return (
-    <View style={[styles.container, isOwn ? styles.ownContainer : styles.otherContainer]}>
+    <Animated.View 
+      {...panResponder.panHandlers}
+      style={[
+        styles.container, 
+        isOwn ? styles.ownContainer : styles.otherContainer,
+        { transform: [{ translateX }] }
+      ]}
+    >
       {!isOwn && (
-        <View style={styles.avatarContainer}>
+        <TouchableOpacity 
+          style={styles.avatarContainer}
+          onPress={() => router.push(`/chat-info/${encodeURIComponent(message.conversationId)}`)}
+        >
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-        </View>
+        </TouchableOpacity>
       )}
 
-      <View style={[styles.messageWrapper, isOwn ? styles.ownWrapper : styles.otherWrapper]}>
-        {!isOwn && <Text style={styles.senderName}>{message.senderName || senderInfo?.name || 'User'}</Text>}
+      <TouchableOpacity 
+        activeOpacity={0.8}
+        onLongPress={onLongPress}
+        style={[styles.messageWrapper, isOwn ? styles.ownWrapper : styles.otherWrapper]}
+      >
+        {!isOwn && (
+          <Text style={styles.senderName}>
+            {senderInfo?.fullName || senderInfo?.name || message.senderName || 'User'}
+          </Text>
+        )}
+        
         <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble]}>
+          {/* Reply Section - SỬA LẠI LAYOUT NGANG */}
+          {message.replyTo && (
+            <View style={[styles.replyBubble, isOwn ? styles.ownReplyBubble : styles.otherReplyBubble]}>
+              <View style={styles.replyLine} />
+              <View style={styles.replyContent}>
+                <Text style={styles.replySender} numberOfLines={1}>
+                  {(() => {
+                    const repliedUserId = String(message.replyTo.senderId || '');
+                    const currentMeId = String(user?.userId || user?.id || '');
+                    const isMeReplied = repliedUserId !== '' && repliedUserId === currentMeId;
+                    if (isMeReplied) return 'Bạn';
+                    
+                    // Tìm tên mới nhất trong danh sách hội thoại với so sánh String an toàn
+                    let freshRepliedName = message.replyTo.senderName;
+                    for (const conv of conversations) {
+                      const found = (conv.members || []).find(m => String(m.userId || m.id || '') === repliedUserId);
+                      if (found) {
+                        freshRepliedName = found.fullName || found.name || found.username;
+                        break;
+                      }
+                    }
+                    return freshRepliedName;
+                  })()}
+                </Text>
+                <Text style={styles.replyText} numberOfLines={1}>{message.replyTo.content}</Text>
+              </View>
+            </View>
+          )}
+
           <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>
             {message.isRecalled ? '[Tin nhắn đã thu hồi]' : message.content}
           </Text>
         </View>
+        
+        {renderReactions()}
+        
         <Text style={styles.time}>{formatTime(message.createdAt || Date.now())}</Text>
-      </View>
-    </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -76,6 +200,83 @@ const styles = StyleSheet.create({
   ownText: { color: '#fff' },
   otherText: { color: '#1f2937' },
   time: { fontSize: 10, color: '#9ca3af', marginTop: 2 },
+  
+  // Reply styles
+  replyBubble: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 6,
+    minWidth: 150,
+    alignSelf: 'stretch',
+  },
+  ownReplyBubble: {
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+  },
+  otherReplyBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  replyLine: {
+    width: 3,
+    backgroundColor: '#667eea',
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  replyContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  replySender: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#667eea',
+    marginBottom: 2,
+  },
+  replyText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  ownText: { color: '#fff' }, // Ensure own text is white
+  otherText: { color: '#1f2937' },
+
+  // Reactions
+  reactionsContainer: {
+    flexDirection: 'row',
+    marginTop: -8,
+    flexWrap: 'wrap',
+  },
+  ownReactions: {
+    alignSelf: 'flex-end',
+    marginRight: 8,
+  },
+  otherReactions: {
+    alignSelf: 'flex-start',
+    marginLeft: 8,
+  },
+  reactionBadge: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  reactionEmoji: {
+    fontSize: 12,
+  },
+  reactionCount: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginLeft: 2,
+    color: '#6b7280',
+  },
 });
 
 export default ChatBubble;

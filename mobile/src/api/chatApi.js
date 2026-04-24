@@ -17,7 +17,7 @@ export const chatApi = {
     // Expected params: { fromMessageId, limit }
     // fromMessageId: messageId to fetch from (for pagination)
     // limit: number of messages to fetch (default 20)
-    return axiosClient.get(`/messages/${conversationId}`, { params });
+    return axiosClient.get(`/messages/${encodeURIComponent(conversationId)}`, { params });
   },
 
   // Send new message to conversation
@@ -87,19 +87,19 @@ export const conversationApi = {
 
   // Get conversation details by ID
   getConversation: (conversationId) => {
-    return axiosClient.get(`/conversations/${conversationId}`);
+    return axiosClient.get(`/conversations/${encodeURIComponent(conversationId)}`);
   },
 
   // Update conversation (name, avatar)
   updateConversation: (conversationId, data) => {
     // Expected: { name, avatar }
-    return axiosClient.put(`/conversations/${conversationId}`, data);
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}`, data);
   },
 
   // Mute/unmute conversation
   muteConversation: (conversationId, data) => {
     // Expected: { mutedUntil } - null to unmute, timestamp to mute until
-    return axiosClient.put(`/conversations/${conversationId}/mute`, data);
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/mute`, data);
   },
 };
 

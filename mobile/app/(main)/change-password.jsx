@@ -63,7 +63,7 @@ const ChangePasswordScreen = () => {
         { text: 'OK', onPress: () => dispatch(logoutUser()) }
       ]);
     } catch (error) {
-      console.error('Change password error:', error);
+      console.log('Change password error:', error.message);
 
       if (error.response?.status === 400 || error.response?.status === 401) {
         const newCount = wrongCount + 1;

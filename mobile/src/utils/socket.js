@@ -9,6 +9,7 @@ let editHandlers = new Set();
 let deleteHandlers = new Set();
 let recallHandlers = new Set();
 let reactionHandlers = new Set();
+let statusHandlers = new Set();
 
 export const initializeSocket = (token) => {
   if (stompClient && stompClient.connected) {
@@ -60,6 +61,9 @@ export const initializeSocket = (token) => {
             recallHandlers.forEach(handler => handler(event.payload));
           } else if (event.eventType === 'MESSAGE_REACTION') {
             reactionHandlers.forEach(handler => handler(event.payload));
+          } else if (event.eventType === 'USER_STATUS_CHANGED') {
+            console.log('👤 User status changed:', event.payload.userId, event.payload.status);
+            statusHandlers.forEach(handler => handler(event.payload));
           }
         } catch (e) {
           console.error('❌ Error parsing STOMP message:', e);
@@ -92,6 +96,8 @@ export const onMessageEdit = (handler) => editHandlers.add(handler);
 export const onMessageDelete = (handler) => deleteHandlers.add(handler);
 export const onMessageRecall = (handler) => recallHandlers.add(handler);
 export const onReaction = (handler) => reactionHandlers.add(handler);
+export const onUserStatusChange = (handler) => statusHandlers.add(handler);
+export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
 
 export const sendMessageViaSocket = (messageData) => {
   if (stompClient?.connected) {
@@ -152,6 +158,8 @@ export default {
   offMessageReceive,
   onUserTyping,
   offUserTyping,
+  onUserStatusChange,
+  offUserStatusChange,
   onMessageEdit,
   onMessageDelete,
   onMessageRecall,

@@ -149,7 +149,11 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
               ${onBack ? 'text-base' : 'text-xl'} 
               font-black text-foreground tracking-tighter leading-none mb-1 flex items-center space-x-1.5 truncate
             `}>
-              <span className="truncate">{currentConv?.name || 'Signal Hub'}</span>
+              <span className="truncate">
+                {currentConv?.type === 'SINGLE' 
+                  ? (currentMember?.fullName || currentMember?.name || currentConv?.name || 'Signal Hub')
+                  : (currentConv?.name || 'Signal Hub')}
+              </span>
               {currentConv?.isAI ? (
                 <SparklesIcon size={onBack ? 14 : 16} className="text-indigo-500 animate-pulse" />
               ) : (
@@ -328,7 +332,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
                 >
                   <div className="flex-1 min-w-0 pr-4">
                     <p className="text-[9px] font-black uppercase text-indigo-500/60 mb-1 tracking-widest">
-                      {pin.senderName || "Member"}
+                      {currentConv?.members?.find(m => String(m.userId || m.id) === String(pin.senderId))?.fullName || pin.senderName || "Member"}
                     </p>
                     <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate">
                       {pin.content || "Media Attachment"}
