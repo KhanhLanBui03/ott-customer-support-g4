@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert } from 'lucide-react';
+import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
 import { useChat } from '../../hooks/useChat';
 import { addOptimisticMessage, fetchConversations } from '../../store/chatSlice';
@@ -11,6 +11,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const [text, setText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [localAttachments, setLocalAttachments] = useState([]); // Store { file, blobUrl }
   const [showEmojis, setShowEmojis] = useState(false);
   const { sendMessage, sendTyping } = useWebSocket();
   const dispatch = useDispatch();
@@ -84,8 +85,9 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     const optimisticMsg = {
       content: type === 'TEXT' ? finalContent : '',
       senderId: user?.userId || user?.id,
-      mediaUrls: finalAttachments,
+      mediaUrls: localAttachments.length > 0 ? localAttachments.map(a => a.blobUrl) : finalAttachments,
       type: type,
+      status: 'SENDING',
       createdAt: Date.now(),
       replyTo: replyingTo ? { messageId: replyingTo.messageId, content: replyingTo.content, senderName: replyingTo.senderName } : null
     };
@@ -98,7 +100,10 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     sendTyping(conversationId, false);
 
     if (customContent === null) setText('');
-    if (customType === null) setAttachments([]);
+    if (customType === null) {
+      setAttachments([]);
+      setLocalAttachments([]);
+    }
     setShowEmojis(false);
   };
 
@@ -119,27 +124,58 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
+    
+    // Create local previews immediately
+    const newLocals = files.map(file => ({
+      file,
+      blobUrl: URL.createObjectURL(file)
+    }));
+    setLocalAttachments(prev => [...prev, ...newLocals]);
+    
     setIsUploading(true);
     try {
-      for (const file of files) {
-        const response = await chatApi.uploadMedia(file);
+      for (const local of newLocals) {
+        const response = await chatApi.uploadMedia(local.file);
         const url = response.data?.url || response.url;
         if (url) setAttachments(prev => [...prev, url]);
       }
-    } catch (err) { console.error("Upload failed", err); } finally { setIsUploading(false); }
+    } catch (err) { 
+      console.error("Upload failed", err); 
+    } finally { 
+      setIsUploading(false); 
+    }
   };
 
-  const removeAttachment = (url) => setAttachments(prev => prev.filter(a => a !== url));
+  const removeAttachment = (index) => {
+    setLocalAttachments(prev => {
+      const item = prev[index];
+      if (item) URL.revokeObjectURL(item.blobUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
 
   return (
     <div className="relative animate-msg z-50">
       {/* Attachments Preview */}
-      {attachments.length > 0 && (
+      {localAttachments.length > 0 && (
         <div className="absolute bottom-full mb-4 left-0 right-0 flex space-x-3 p-4 glass-premium rounded-[26px] shadow-2xl z-[100] overflow-x-auto no-scrollbar border-indigo-500/10 dark:border-indigo-500/20">
-          {attachments.map((url, i) => (
+          {localAttachments.map((item, i) => (
             <div key={i} className="relative group flex-shrink-0">
-              <img src={url} className="h-20 w-20 rounded-2xl object-cover border-2 border-white dark:border-slate-800 shadow-lg" alt="" />
-              <button onClick={() => removeAttachment(url)} className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95">
+              {item.file.type.startsWith('image/') ? (
+                <img src={item.blobUrl} className="h-20 w-20 rounded-2xl object-cover border-2 border-white dark:border-slate-800 shadow-lg" alt="" />
+              ) : (
+                <div className="h-20 w-20 rounded-2xl bg-indigo-500/10 border-2 border-white dark:border-slate-800 shadow-lg flex flex-col items-center justify-center text-indigo-500 relative px-2">
+                  <FileText size={20} />
+                  <span className="text-[9px] font-black uppercase mt-0.5">{item.file.name.split('.').pop()}</span>
+                  <div className="absolute bottom-1 left-1 right-1">
+                    <p className="text-[8px] font-bold text-center truncate text-indigo-400/80 px-1 leading-tight">
+                      {item.file.name}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <button onClick={() => removeAttachment(i)} className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95">
                 <X size={12} />
               </button>
             </div>

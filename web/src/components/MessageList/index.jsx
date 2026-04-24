@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2 } from 'lucide-react';
+import { PhoneOff, Shield, CheckCheck, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2 } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
 import VoteDetailsModal from '../VoteDetailsModal';
@@ -51,6 +51,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const scrollRef = useRef();
   const bottomRef = useRef();
   const menuRef = useRef();
+  const menuNodeRef = useRef(null);
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const [activeMenu, setActiveMenu] = useState(null);
@@ -59,6 +60,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [wallpaper, setWallpaper] = useState(localStorage.getItem(`chat_wallpaper_${conversationId}`));
   const [isVoteDetailsOpen, setIsVoteDetailsOpen] = useState(false);
   const [selectedVote, setSelectedVote] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   useEffect(() => {
     // Sync wallpaper when switching conversations
@@ -87,6 +90,113 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     }
   };
 
+  const FilePreview = ({ url }) => {
+    const [content, setContent] = useState('');
+    const [loading, setLoading] = useState(false);
+    
+    // Improved extension detection for blob URLs
+    const getExt = (u) => {
+      if (u.startsWith('blob:')) return 'file';
+      return u.split('.').pop().split('?')[0].toLowerCase();
+    };
+    
+    const ext = getExt(url);
+    const isText = ['txt', 'js', 'json', 'py', 'java', 'html', 'css', 'md'].includes(ext);
+    const isDoc = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
+
+    useEffect(() => {
+      if (isText) {
+        setLoading(true);
+        fetch(url)
+          .then(res => res.text())
+          .then(text => {
+            setContent(text.split('\n').slice(0, 8).join('\n'));
+            setLoading(false);
+          })
+          .catch(() => setLoading(false));
+      }
+    }, [url, isText]);
+
+    if (!isText && !isDoc) return null;
+
+    return (
+      <div className="mb-2 rounded-2xl overflow-hidden border border-border bg-[#1e2330] text-slate-300 font-mono text-[12px] relative group/preview">
+        {isText ? (
+          <div className="flex">
+            <div className="bg-white/5 px-2 py-3 text-slate-500 text-right select-none border-r border-white/5 min-w-[32px]">
+              {content.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}
+            </div>
+            <div className="p-3 overflow-x-auto whitespace-pre">
+              {loading ? 'Đang tải nội dung...' : (content || 'Không có nội dung')}
+            </div>
+          </div>
+        ) : (
+          <div 
+            className="w-full h-[150px] bg-slate-900/50 relative cursor-pointer hover:bg-slate-900/80 transition-all border-b border-border/50 overflow-hidden"
+            onClick={() => setSelectedFile({ url, ext })}
+          >
+             <iframe 
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
+                className="w-full h-[400px] border-0 scale-[0.5] origin-top translate-y-[-20px]"
+                title="In-chat Preview"
+                scrolling="no"
+             />
+             {/* Overlay to prevent scrolling/interaction in the bubble */}
+             <div className="absolute inset-0 z-10" />
+             
+             <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent z-20 flex items-end justify-center pb-2">
+                <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm">
+                  {ext} Preview
+                </p>
+             </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const getFileIcon = (url) => {
+    const getExt = (u) => {
+      if (u.startsWith('blob:')) return 'file';
+      return u.split('.').pop().split('?')[0].toLowerCase();
+    };
+    const ext = getExt(url);
+    const colorClass = 
+      ext === 'pdf' ? 'bg-red-500' :
+      ['doc', 'docx'].includes(ext) ? 'bg-blue-500' :
+      ['xls', 'xlsx'].includes(ext) ? 'bg-emerald-500' :
+      ['zip', 'rar', '7z'].includes(ext) ? 'bg-amber-500' :
+      'bg-indigo-500';
+
+    return (
+      <div className={cn("w-12 h-12 rounded-xl flex flex-col items-center justify-center text-white relative overflow-hidden flex-shrink-0 shadow-sm", colorClass)}>
+        <FileText size={18} className="mb-[-2px] opacity-40" />
+        <span className="text-[9px] font-black uppercase tracking-tighter leading-none">{ext}</span>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+      </div>
+    );
+  };
+
+  const getFileName = (url) => {
+    try {
+      const decoded = decodeURIComponent(url);
+      let name = decoded.split('/').pop().split('?')[0];
+      
+      // Strip common UUID prefixes (e.g., c8930007-cb2d-4f93-a888-64d41dba9bfe_...)
+      // Match 8-4-4-4-12 hex pattern at start
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i;
+      name = name.replace(uuidPattern, '');
+      
+      // Also strip double UUID or timestamp prefixes if they exist
+      const longPrefixPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i;
+      name = name.replace(longPrefixPattern, '');
+      
+      return name || 'Attachment';
+    } catch (e) {
+      return 'Attachment';
+    }
+  };
+
   useEffect(() => {
     // Instant scroll on new messages
     scrollToBottom(true);
@@ -101,37 +211,26 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     };
   }, [messages]);
 
-  // Close menu on click outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (activeMenu && menuRef.current && !menuRef.current.contains(event.target)) {
-        setActiveMenu(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [activeMenu]);
-
   const handleAction = async (action, messageId) => {
+    console.log(`[DEBUG] handleAction: action=${action}, messageId=`, messageId);
     try {
       if (action === 'RECALL') {
-        console.log('[ACTION] Recalling message:', messageId);
+        setActiveMenu(null);
         try {
           await chatApi.recallMessage(conversationId, messageId);
           dispatch(recallMessage({ conversationId, messageId }));
-          console.log('[ACTION] Recall successful');
         } catch (err) {
           console.error('[ACTION] Recall failed:', err);
           alert('Không thể thu hồi tin nhắn: ' + (err.response?.data?.message || err.message));
         }
       } else if (action === 'DELETE_ME') {
-        console.log('[ACTION] Deleting message for me:', messageId);
+        setActiveMenu(null);
         try {
           await chatApi.deleteMessage(conversationId, messageId);
           dispatch(removeMessage({ conversationId, messageId }));
         } catch (err) {
           console.error('[ACTION] Delete failed:', err);
+          alert('Không thể xóa tin nhắn: ' + (err.response?.data?.message || err.message));
         }
       } else if (action === 'PIN') {
         dispatch(pinMessageOptimistic({ conversationId, messageId }));
@@ -153,32 +252,31 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         }
       } else if (action === 'REACTION') {
         const { id, emoji } = messageId;
-        const userId = user?.userId || user?.id;
+        const currentUserId = user?.userId || user?.id;
         
-        // Optimistic Update: Toggle or replace
+        // Find if user already reacted with this exact emoji
+        const msg = messages.find(m => m.messageId === id);
+        const serverReactions = msg?.reactions?.[emoji] || [];
+        const isAlreadyReacted = serverReactions.includes(currentUserId);
+
+        // Optimistic Update: Toggle locally
         setOptimisticReactions(prev => {
-          const currentReactions = prev[id] || [];
-          const existing = currentReactions.find(r => r.userId === userId && r.emoji === emoji);
-          const filtered = currentReactions.filter(r => r.userId !== userId);
+          const currentReactions = prev[id] || (msg?.reactions ? Object.entries(msg.reactions).flatMap(([e, users]) => users.map(u => ({ emoji: e, userId: u }))) : []);
+          const existing = currentReactions.find(r => r.userId === currentUserId && r.emoji === emoji);
+          const filtered = currentReactions.filter(r => r.userId !== currentUserId);
           
           if (existing) {
-            // Un-react case: if clicking same emoji, remove it
-            return {
-              ...prev,
-              [id]: filtered
-            };
+            return { ...prev, [id]: filtered };
           }
-          
-          // Replace/Add case
-          return {
-            ...prev,
-            [id]: [...filtered, { emoji, userId }]
-          };
+          return { ...prev, [id]: [...filtered, { emoji, userId: currentUserId }] };
         });
 
         try {
-          await chatApi.addReaction(conversationId, id, emoji);
-          if (onRefresh) onRefresh();
+          if (isAlreadyReacted) {
+            await chatApi.removeReaction(conversationId, id, emoji);
+          } else {
+            await chatApi.addReaction(conversationId, id, emoji);
+          }
         } catch (err) {
           // Rollback on error
           setOptimisticReactions(prev => {
@@ -193,7 +291,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       }
       setActiveMenu(null);
     } catch (err) {
-      console.error("Action failed", err);
+      console.error(`[ERROR] handleAction ${action} failed:`, err);
+      alert(`Lỗi khi thực hiện ${action}: ${err.response?.data?.message || err.message}`);
     }
   };
 
@@ -241,10 +340,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     // Create a Map to store unique reaction per userId
     const uniqueReactionsMap = new Map();
     
-    // Add server reactions first
-    if (Array.isArray(serverReactions)) {
-      serverReactions.forEach(r => {
-        if (r.userId) uniqueReactionsMap.set(r.userId, r.emoji);
+    // Add server reactions first (it's a map of emoji -> [userIds])
+    if (serverReactions && typeof serverReactions === 'object') {
+      Object.entries(serverReactions).forEach(([emoji, userIds]) => {
+        if (Array.isArray(userIds)) {
+          userIds.forEach(userId => {
+            uniqueReactionsMap.set(userId, emoji);
+          });
+        }
       });
     }
     
@@ -311,7 +414,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     );
   }
 
-
   return (
     <div className="flex-1 h-full relative overflow-hidden">
       {/* Fixed Blurred Wallpaper Layer */}
@@ -333,8 +435,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           !wallpaper ? "bg-background" : "bg-transparent"
         )}
       >
-        <div className="relative">
-      {messages.length === 0 ? (
+        <div className="flex flex-col p-4 space-y-6 min-h-full">
+        {messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[40px] opacity-60">
           <Shield size={32} className="text-slate-200 dark:text-slate-700 mb-4" />
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 text-center leading-loose">
@@ -680,13 +782,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           "absolute top-0 flex items-center space-x-1 opacity-0 group-hover/bubble:opacity-100 transition-all z-10",
                           isMe ? "-left-28" : "-right-28"
                         )}>
-                           <button 
-                             onClick={() => onReply(msg)}
-                             className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all flex flex-col items-center"
-                             title="Trả lời"
-                           >
-                             <Reply size={18} />
-                           </button>
+                            <button 
+                              onClick={() => onReply(msg)}
+                              className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all flex flex-col items-center"
+                              title="Trả lời"
+                            >
+                              <Reply size={18} />
+                            </button>
                            <button 
                              onClick={() => onForward(msg)}
                              className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-blue-500 transition-all flex flex-col items-center"
@@ -707,19 +809,29 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         </div>
 
                         {activeMenu === msg.messageId && (
-                          <div 
-                            ref={menuRef}
-                            className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[100] animate-msg`}
-                          >
+                          <>
+                            {/* Transparent Backdrop to close menu */}
+                            <div 
+                              className="fixed inset-0 z-[90] cursor-default" 
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(null);
+                              }}
+                            />
+                            <div 
+                              ref={(el) => { menuRef.current = el; menuNodeRef.current = el; }}
+                              className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999] pointer-events-auto`}
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
                             <button 
-                              onClick={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }}
+                              onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }}
                               className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"
                             >
                               <Reply size={18} className="text-indigo-400" /> <span>Trả lời</span>
                             </button>
                             <button
                               type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }}
+                              onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }}
                               className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"
                             >
                               <Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /> 
@@ -729,7 +841,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                             
                             {/* Xóa phía tôi - Luôn hiển thị cho mọi người */}
                             <button
-                              onClick={() => handleAction('DELETE_ME', msg.messageId)}
+                              onMouseDown={(e) => { e.stopPropagation(); if(window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }}
                               className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"
                             >
                               <Trash2 size={18} /> <span>Xóa phía tôi</span>
@@ -738,14 +850,15 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                             {/* Thu hồi - Chỉ hiển thị cho người gửi */}
                             {isMe && (
                               <button
-                                onClick={() => handleAction('RECALL', msg.messageId)}
+                                onMouseDown={(e) => { e.stopPropagation(); if(window.confirm('Thu hồi tin nhắn này với tất cả mọi người?')) handleAction('RECALL', msg.messageId); }}
                                 className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"
                               >
                                 <Trash2 size={18} className="rotate-0" /> <span>Thu hồi</span>
                               </button>
                             )}
                           </div>
-                        )}
+                        </>
+                      )}
 
                         <div className={`
                           relative overflow-hidden transition-all duration-300
@@ -769,15 +882,27 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               {msg.content && <p className="text-[15px] leading-relaxed font-semibold">{msg.content}</p>}
                               
                               {msg.mediaUrls && msg.mediaUrls.length > 0 && (
-                                <div className={`grid gap-2.5 ${msg.content ? 'mt-3' : ''} ${msg.mediaUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                  {msg.mediaUrls.map((url, idx) => {
-                                    const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i);
-                                    const isVideo = url.match(/\.(mp4|webm|ogg)/i);
+                                <div className={`grid gap-2.5 ${msg.content ? 'mt-3' : ''} ${msg.mediaUrls.length > 1 && msg.mediaUrls.every(url => url.match(/\.(jpeg|jpg|gif|png|webp|svg|mp4|webm|ogg)/i) || url.startsWith('blob:')) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                    {msg.mediaUrls.map((url, idx) => {
+                                    const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
+                                    const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
                                     
                                     if (isImage) {
                                       return (
-                                        <div key={idx} className="rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 shadow-2xl">
-                                          <img src={url} alt="" className="max-w-full h-auto cursor-pointer hover:scale-[1.03] transition-transform duration-500" onClick={() => window.open(url, '_blank')} />
+                                        <div key={idx} className="rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 shadow-2xl relative group/img">
+                                          <img 
+                                            src={url} 
+                                            alt="" 
+                                            className={`max-w-full h-auto cursor-pointer hover:scale-[1.03] transition-all duration-500 ${msg.status === 'SENDING' ? 'opacity-50 blur-[2px]' : ''}`} 
+                                            onClick={() => setSelectedImage(url)} 
+                                          />
+                                          {msg.status === 'SENDING' && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
+                                              <div className="bg-white/20 p-3 rounded-full backdrop-blur-md">
+                                                 <Loader2 size={24} className="text-white animate-spin" />
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     } else if (isVideo) {
@@ -790,16 +915,46 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       );
                                     } else {
                                       return (
-                                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className={`flex items-center space-x-4 p-4 rounded-2xl border transition-all ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/20' : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                                           <div className={`p-2.5 rounded-xl ${isMe ? 'bg-white text-indigo-600' : 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-500'}`}>
-                                              <FileText size={20} />
-                                           </div>
-                                           <div className="flex-1 min-w-0">
-                                              <p className="text-[13px] font-black truncate">{url.split('/').pop()}</p>
-                                              <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Attachment Download</p>
-                                           </div>
-                                           <Download size={18} className="opacity-40" />
-                                        </a>
+                                        <div key={idx} className="flex flex-col max-w-full">
+                                          <FilePreview url={url} />
+                                          <div className="relative group/file">
+                                            <div 
+                                              onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
+                                              className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[320px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
+                                            >
+                                              {getFileIcon(url)}
+                                              
+                                              <div className="flex-1 min-w-0 pt-0.5">
+                                                <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
+                                                  {getFileName(url)}
+                                                </p>
+                                                <div className={`flex items-center space-x-2 text-[11px] font-medium ${isMe ? 'text-white/60' : 'text-foreground/40'}`}>
+                                                  <span>688 B</span>
+                                                  <span className="opacity-30">•</span>
+                                                  <div className="flex items-center space-x-1 text-indigo-400">
+                                                    <Clock size={10} />
+                                                    <span className="font-bold">Tải về để xem lâu dài</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              {/* Action icons like in the reference image */}
+                                              <div className="absolute bottom-3 right-4 flex items-center space-x-2 opacity-60 group-hover/file:opacity-100 transition-opacity">
+                                                <div className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                                                  <Info size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
+                                                </div>
+                                                <a 
+                                                  href={url}
+                                                  download
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                                                >
+                                                  <Download size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
+                                                </a>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
                                       );
                                     }
                                   })}
@@ -857,20 +1012,123 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       </div>
       </div>
 
-      {activeMenu && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => setActiveMenu(null)}
-        />
-      )}
-
-      {/* Vote Details Modal */}
       <VoteDetailsModal 
         isOpen={isVoteDetailsOpen}
         onClose={() => setIsVoteDetailsOpen(false)}
         vote={selectedVote}
         members={currentConv?.members}
       />
+
+      {/* Image Lightbox Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 sm:p-10 animate-fade-in"
+          onClick={() => setSelectedImage(null)}
+        >
+          <button 
+            className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+            onClick={() => setSelectedImage(null)}
+          >
+            <X size={24} />
+          </button>
+          
+          <img 
+            src={selectedImage} 
+            alt="Full view" 
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-msg"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center space-x-4">
+             <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(selectedImage, '_blank');
+              }}
+              className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold backdrop-blur-md transition-all flex items-center space-x-2"
+             >
+                <Download size={18} />
+                <span>Tải ảnh gốc</span>
+             </button>
+          </div>
+        </div>
+      )}
+
+      {/* File Viewer Modal (Zalo style - Image 3) */}
+      {selectedFile && (
+        <div className="fixed inset-0 z-[9999] bg-[#1a1a1a] flex flex-col animate-fade-in text-white">
+          {/* Header Actions */}
+          <div className="absolute top-6 right-6 z-50 flex items-center space-x-4">
+             <button 
+              onClick={() => window.open(selectedFile.url, '_blank')}
+              className="p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
+              title="Mở trong tab mới"
+             >
+                <MoreHorizontal size={20} />
+             </button>
+             <button 
+              onClick={() => setSelectedFile(null)}
+              className="p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
+             >
+                <X size={20} />
+             </button>
+          </div>
+
+          {/* Main Content Canvas (Image 3) */}
+          <div className="flex-1 flex flex-col items-center justify-center p-10 overflow-hidden">
+            <div className="w-full max-w-5xl h-full bg-white rounded-sm shadow-2xl overflow-auto relative">
+               {['txt', 'js', 'json', 'py', 'java', 'html', 'css', 'md'].includes(selectedFile.ext) ? (
+                 <iframe 
+                    src={selectedFile.url}
+                    className="w-full h-full border-0 font-mono text-black"
+                 />
+               ) : (
+                 <iframe 
+                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedFile.url)}&embedded=true`}
+                    className="w-full h-full border-0"
+                 />
+               )}
+            </div>
+
+            {/* Floating Zoom Controls */}
+            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-[#333333] rounded-full px-6 py-3 flex items-center space-x-6 shadow-2xl border border-white/5">
+                <button className="text-white/40 hover:text-white transition-colors"><MoreHorizontal size={20} className="rotate-90" /></button>
+                <div className="w-px h-4 bg-white/10" />
+                <button className="text-white/60 hover:text-white transition-all font-black text-xl leading-none">−</button>
+                <span className="text-[14px] font-bold">100%</span>
+                <button className="text-white/60 hover:text-white transition-all font-black text-xl leading-none">+</button>
+            </div>
+          </div>
+
+          {/* Bottom Info Bar (Image 3) */}
+          <div className="h-20 bg-[#121212] border-t border-white/5 px-8 flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-500">
+                <FileText size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm truncate max-w-md">{selectedFile.name}</h3>
+                <p className="text-[11px] text-white/40 font-medium">
+                  {selectedFile.sender} • Hôm qua lúc {selectedFile.time} • 688 B
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-6">
+               <button className="p-2 text-white/40 hover:text-white transition-colors">
+                  <MoreHorizontal size={20} />
+               </button>
+               <a 
+                href={selectedFile.url} 
+                download 
+                className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+               >
+                  <Download size={20} />
+               </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
