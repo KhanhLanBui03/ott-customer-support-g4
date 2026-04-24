@@ -163,7 +163,7 @@ public class MessageService {
      * Recall message
      */
     public void recallMessage(String conversationId, String messageId, String userId) {
-        log.info("Attempting to recall message: {} by user: {}", messageId, userId);
+        log.info("[DEBUG] recallMessage called: conversationId={}, messageId={}, userId={}", conversationId, messageId, userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
@@ -189,6 +189,14 @@ public class MessageService {
                  saved.getMessageId(), saved.getIsRecalled(), saved.getContent());
 
         publishMessageRecalledEvent(conversationId, messageId);
+        
+        // Sync lastMessage in conversation
+        try {
+            log.info("[DEBUG] Syncing last message for recall in conversation {}", conversationId);
+            conversationService.updateLastMessage(conversationId, "[Tin nhắn đã bị thu hồi]", System.currentTimeMillis(), userId);
+        } catch (Exception e) {
+            log.error("[DEBUG] Failed to update last message after recall: {}", e.getMessage(), e);
+        }
     }
 
     /**
@@ -225,66 +233,136 @@ public class MessageService {
      * Delete message
      */
     public void deleteMessage(String conversationId, String messageId, String userId) {
-        log.info("Deleting message: {} for user: {} (Soft delete)", messageId, userId);
+        log.info("[DEBUG] deleteMessage (Delete for me) called: conversationId={}, messageId={}, userId={}", conversationId, messageId, userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
 
-        if (message.getHiddenForUsers() == null) {
-            message.setHiddenForUsers(new java.util.ArrayList<>());
+        List<String> hidden = message.getHiddenForUsers();
+        if (hidden == null) {
+            hidden = new java.util.ArrayList<>();
+        } else {
+            hidden = new java.util.ArrayList<>(hidden);
         }
 
-        if (!message.getHiddenForUsers().contains(userId)) {
-            message.getHiddenForUsers().add(userId);
+        if (!hidden.contains(userId)) {
+            hidden.add(userId);
+            message.setHiddenForUsers(hidden);
+            log.info("[DEBUG] Saving message with updated hiddenForUsers: {}", hidden);
             messageRepository.save(message);
+        } else {
+            log.info("[DEBUG] User already in hiddenForUsers for message {}", messageId);
         }
 
-        publishMessageDeletedEvent(conversationId, messageId);
+        publishMessageDeletedEvent(conversationId, messageId, userId);
     }
 
     /**
      * Add reaction to message
      */
     public void addReaction(String conversationId, String messageId, String emoji, String userId) {
-        log.info("Adding reaction {} to message: {} by user: {}", emoji, messageId, userId);
+        log.info("[REACTION] Adding reaction {} to message: {} by user: {}", emoji, messageId, userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
 
-        if (message.getReactions() == null) {
-            message.setReactions(new java.util.HashMap<>());
+        Map<String, List<String>> reactions = message.getReactions();
+        if (reactions == null) {
+            reactions = new java.util.HashMap<>();
+        } else {
+            reactions = new java.util.HashMap<>(reactions);
         }
 
-        message.getReactions()
-                .computeIfAbsent(emoji, k -> new java.util.ArrayList<>())
-                .stream()
-                .filter(id -> id.equals(userId))
-                .findFirst()
-                .ifPresentOrElse(
-                        __ -> {}, // Already reacted
-                        () -> message.getReactions().get(emoji).add(userId)
-                );
+        // Standard Chat Behavior: A user can only have ONE reaction per message.
+        // Remove this user's ID from any other emojis first.
+        boolean changed = false;
+        for (String e : new java.util.HashSet<>(reactions.keySet())) {
+            List<String> userIds = new java.util.ArrayList<>(reactions.get(e));
+            if (userIds.remove(userId)) {
+                changed = true;
+                if (userIds.isEmpty()) {
+                    reactions.remove(e);
+                } else {
+                    reactions.put(e, userIds);
+                }
+            }
+        }
 
-        messageRepository.save(message);
+        // Add the new reaction
+        List<String> newUserIds = reactions.get(emoji);
+        if (newUserIds == null) {
+            newUserIds = new java.util.ArrayList<>();
+        } else {
+            newUserIds = new java.util.ArrayList<>(newUserIds);
+        }
+
+        if (!newUserIds.contains(userId)) {
+            newUserIds.add(userId);
+            reactions.put(emoji, newUserIds);
+            changed = true;
+        }
+
+        if (changed) {
+            message.setReactions(reactions);
+            message.setUpdatedAt(System.currentTimeMillis());
+            messageRepository.save(message);
+            
+            // Real-time notification: Use a Map that matches MessageResponse structure
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("messageId", message.getMessageId());
+            payload.put("conversationId", message.getConversationId());
+            payload.put("reactions", message.getReactions());
+            payload.put("updatedAt", message.getUpdatedAt());
+            payload.put("type", message.getType());
+            payload.put("content", message.getContent());
+            payload.put("senderId", message.getSenderId());
+            payload.put("isRecalled", message.getIsRecalled());
+            
+            eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, payload));
+            log.info("[REACTION] Updated and published reactions for message {}: {}", messageId, reactions);
+        }
     }
 
     /**
      * Remove reaction from message
      */
     public void removeReaction(String conversationId, String messageId, String emoji, String userId) {
-        log.info("Removing reaction {} from message: {} by user: {}", emoji, messageId, userId);
+        log.info("[REACTION] Removing reaction {} from message: {} by user: {}", emoji, messageId, userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
 
-        if (message.getReactions() != null && message.getReactions().containsKey(emoji)) {
-            message.getReactions().get(emoji).remove(userId);
+        Map<String, List<String>> reactions = message.getReactions();
+        if (reactions != null && reactions.containsKey(emoji)) {
+            reactions = new java.util.HashMap<>(reactions);
+            List<String> userIds = new java.util.ArrayList<>(reactions.get(emoji));
             
-            if (message.getReactions().get(emoji).isEmpty()) {
-                message.getReactions().remove(emoji);
+            if (userIds.remove(userId)) {
+                if (userIds.isEmpty()) {
+                    reactions.remove(emoji);
+                } else {
+                    reactions.put(emoji, userIds);
+                }
+                
+                message.setReactions(reactions);
+                message.setUpdatedAt(System.currentTimeMillis());
+                
+                log.info("[REACTION] Saving updated reactions after removal: {}", reactions);
+                messageRepository.save(message);
+                
+                // Real-time notification: Use a Map that matches MessageResponse structure
+                java.util.Map<String, Object> payload = new java.util.HashMap<>();
+                payload.put("messageId", message.getMessageId());
+                payload.put("conversationId", message.getConversationId());
+                payload.put("reactions", message.getReactions());
+                payload.put("updatedAt", message.getUpdatedAt());
+                payload.put("type", message.getType());
+                payload.put("content", message.getContent());
+                payload.put("senderId", message.getSenderId());
+                payload.put("isRecalled", message.getIsRecalled());
+                
+                eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, payload));
             }
-
-            messageRepository.save(message);
         }
     }
 
@@ -341,8 +419,11 @@ public class MessageService {
         eventPublisher.publishEvent(MessageEvent.of("MESSAGE_EDIT", conversationId, Map.of("messageId", messageId)));
     }
 
-    private void publishMessageDeletedEvent(String conversationId, String messageId) {
-        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_DELETE", conversationId, Map.of("messageId", messageId)));
+    private void publishMessageDeletedEvent(String conversationId, String messageId, String userId) {
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_DELETE", conversationId, Map.of(
+            "messageId", messageId,
+            "userId", userId
+        )));
     }
 
     @org.springframework.scheduling.annotation.Async

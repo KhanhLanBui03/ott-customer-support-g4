@@ -41,6 +41,19 @@ public class MessageEventListener {
                 return;
             }
 
+            // NEW: Special handling for MESSAGE_DELETE (Delete for me)
+            if ("MESSAGE_DELETE".equals(event.getEventType())) {
+                Object payload = event.getPayload();
+                if (payload instanceof java.util.Map) {
+                    String targetUserId = (String) ((java.util.Map<?, ?>) payload).get("userId");
+                    if (targetUserId != null) {
+                        log.info("[STOMP] Pushing private MESSAGE_DELETE to user {} in conversation {}", targetUserId, event.getConversationId());
+                        messagingTemplate.convertAndSendToUser(targetUserId, "/queue/messages", event);
+                        return;
+                    }
+                }
+            }
+
             Set<String> targetUserIds = new HashSet<>();
 
             // 1. Attempt to get members from Database

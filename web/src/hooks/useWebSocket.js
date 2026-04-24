@@ -68,7 +68,7 @@ export const useWebSocket = () => {
                     isTyping: event.payload.isTyping,
                     name: 'Ai đó'
                 }));
-            } else if (event.eventType === 'CONVERSATION_UPDATE') {
+            } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
                 dispatch(fetchConversations());
             }
         } catch (err) {

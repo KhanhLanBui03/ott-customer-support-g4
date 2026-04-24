@@ -113,7 +113,11 @@ const chatSlice = createSlice({
       if (state.messages[conversationId]) {
         const idx = state.messages[conversationId].findIndex(m => m.messageId === message.messageId);
         if (idx !== -1) {
-          state.messages[conversationId][idx] = message;
+          // Merge fields instead of replacing to avoid losing data like senderName/mediaUrls
+          state.messages[conversationId][idx] = {
+            ...state.messages[conversationId][idx],
+            ...message
+          };
         }
       }
     },
@@ -124,6 +128,20 @@ const chatSlice = createSlice({
         if (msg) {
           msg.isRecalled = true;
           msg.content = "[Tin nhắn đã bị thu hồi]";
+          msg.type = "TEXT";
+          msg.mediaUrls = [];
+        }
+      }
+      
+      // Update last message in conversation list
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv) {
+        const messages = state.messages[conversationId];
+        if (messages && messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          if (lastMsg.messageId === messageId) {
+             conv.lastMessage = "[Tin nhắn đã bị thu hồi]";
+          }
         }
       }
     },
@@ -131,6 +149,20 @@ const chatSlice = createSlice({
       const { conversationId, messageId } = action.payload;
       if (state.messages[conversationId]) {
         state.messages[conversationId] = state.messages[conversationId].filter(m => m.messageId !== messageId);
+      }
+      
+      // Update last message in conversation list if needed
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv) {
+        const messages = state.messages[conversationId];
+        if (messages && messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          conv.lastMessage = lastMsg.isRecalled ? "[Tin nhắn đã bị thu hồi]" : lastMsg.content;
+          conv.lastMessageTime = lastMsg.createdAt;
+        } else {
+          conv.lastMessage = "";
+          conv.lastMessageTime = null;
+        }
       }
     },
     setTyping: (state, action) => {
