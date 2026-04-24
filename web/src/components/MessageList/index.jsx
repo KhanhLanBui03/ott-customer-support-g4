@@ -51,6 +51,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const scrollRef = useRef();
   const bottomRef = useRef();
   const menuRef = useRef();
+  const menuNodeRef = useRef(null);
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const [activeMenu, setActiveMenu] = useState(null);
@@ -101,37 +102,26 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     };
   }, [messages]);
 
-  // Close menu on click outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (activeMenu && menuRef.current && !menuRef.current.contains(event.target)) {
-        setActiveMenu(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [activeMenu]);
-
   const handleAction = async (action, messageId) => {
+    console.log(`[DEBUG] handleAction: action=${action}, messageId=`, messageId);
     try {
       if (action === 'RECALL') {
-        console.log('[ACTION] Recalling message:', messageId);
+        setActiveMenu(null);
         try {
           await chatApi.recallMessage(conversationId, messageId);
           dispatch(recallMessage({ conversationId, messageId }));
-          console.log('[ACTION] Recall successful');
         } catch (err) {
           console.error('[ACTION] Recall failed:', err);
           alert('Không thể thu hồi tin nhắn: ' + (err.response?.data?.message || err.message));
         }
       } else if (action === 'DELETE_ME') {
-        console.log('[ACTION] Deleting message for me:', messageId);
+        setActiveMenu(null);
         try {
           await chatApi.deleteMessage(conversationId, messageId);
           dispatch(removeMessage({ conversationId, messageId }));
         } catch (err) {
           console.error('[ACTION] Delete failed:', err);
+          alert('Không thể xóa tin nhắn: ' + (err.response?.data?.message || err.message));
         }
       } else if (action === 'PIN') {
         dispatch(pinMessageOptimistic({ conversationId, messageId }));
@@ -153,32 +143,31 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         }
       } else if (action === 'REACTION') {
         const { id, emoji } = messageId;
-        const userId = user?.userId || user?.id;
+        const currentUserId = user?.userId || user?.id;
         
-        // Optimistic Update: Toggle or replace
+        // Find if user already reacted with this exact emoji
+        const msg = messages.find(m => m.messageId === id);
+        const serverReactions = msg?.reactions?.[emoji] || [];
+        const isAlreadyReacted = serverReactions.includes(currentUserId);
+
+        // Optimistic Update: Toggle locally
         setOptimisticReactions(prev => {
-          const currentReactions = prev[id] || [];
-          const existing = currentReactions.find(r => r.userId === userId && r.emoji === emoji);
-          const filtered = currentReactions.filter(r => r.userId !== userId);
+          const currentReactions = prev[id] || (msg?.reactions ? Object.entries(msg.reactions).flatMap(([e, users]) => users.map(u => ({ emoji: e, userId: u }))) : []);
+          const existing = currentReactions.find(r => r.userId === currentUserId && r.emoji === emoji);
+          const filtered = currentReactions.filter(r => r.userId !== currentUserId);
           
           if (existing) {
-            // Un-react case: if clicking same emoji, remove it
-            return {
-              ...prev,
-              [id]: filtered
-            };
+            return { ...prev, [id]: filtered };
           }
-          
-          // Replace/Add case
-          return {
-            ...prev,
-            [id]: [...filtered, { emoji, userId }]
-          };
+          return { ...prev, [id]: [...filtered, { emoji, userId: currentUserId }] };
         });
 
         try {
-          await chatApi.addReaction(conversationId, id, emoji);
-          if (onRefresh) onRefresh();
+          if (isAlreadyReacted) {
+            await chatApi.removeReaction(conversationId, id, emoji);
+          } else {
+            await chatApi.addReaction(conversationId, id, emoji);
+          }
         } catch (err) {
           // Rollback on error
           setOptimisticReactions(prev => {
@@ -193,7 +182,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       }
       setActiveMenu(null);
     } catch (err) {
-      console.error("Action failed", err);
+      console.error(`[ERROR] handleAction ${action} failed:`, err);
+      alert(`Lỗi khi thực hiện ${action}: ${err.response?.data?.message || err.message}`);
     }
   };
 
@@ -241,10 +231,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     // Create a Map to store unique reaction per userId
     const uniqueReactionsMap = new Map();
     
-    // Add server reactions first
-    if (Array.isArray(serverReactions)) {
-      serverReactions.forEach(r => {
-        if (r.userId) uniqueReactionsMap.set(r.userId, r.emoji);
+    // Add server reactions first (it's a map of emoji -> [userIds])
+    if (serverReactions && typeof serverReactions === 'object') {
+      Object.entries(serverReactions).forEach(([emoji, userIds]) => {
+        if (Array.isArray(userIds)) {
+          userIds.forEach(userId => {
+            uniqueReactionsMap.set(userId, emoji);
+          });
+        }
       });
     }
     
@@ -311,7 +305,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     );
   }
 
-
   return (
     <div className="flex-1 h-full relative overflow-hidden">
       {/* Fixed Blurred Wallpaper Layer */}
@@ -333,8 +326,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           !wallpaper ? "bg-background" : "bg-transparent"
         )}
       >
-        <div className="relative">
-      {messages.length === 0 ? (
+        <div className="flex flex-col p-4 space-y-6 min-h-full">
+        {messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[40px] opacity-60">
           <Shield size={32} className="text-slate-200 dark:text-slate-700 mb-4" />
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 text-center leading-loose">
@@ -636,13 +629,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           "absolute top-0 flex items-center space-x-1 opacity-0 group-hover/bubble:opacity-100 transition-all z-10",
                           isMe ? "-left-28" : "-right-28"
                         )}>
-                           <button 
-                             onClick={() => onReply(msg)}
-                             className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all flex flex-col items-center"
-                             title="Trả lời"
-                           >
-                             <Reply size={18} />
-                           </button>
+                            <button 
+                              onClick={() => onReply(msg)}
+                              className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all flex flex-col items-center"
+                              title="Trả lời"
+                            >
+                              <Reply size={18} />
+                            </button>
                            <button 
                              onClick={() => onForward(msg)}
                              className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-blue-500 transition-all flex flex-col items-center"
@@ -663,19 +656,29 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         </div>
 
                         {activeMenu === msg.messageId && (
-                          <div 
-                            ref={menuRef}
-                            className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[100] animate-msg`}
-                          >
+                          <>
+                            {/* Transparent Backdrop to close menu */}
+                            <div 
+                              className="fixed inset-0 z-[90] cursor-default" 
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(null);
+                              }}
+                            />
+                            <div 
+                              ref={(el) => { menuRef.current = el; menuNodeRef.current = el; }}
+                              className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999] pointer-events-auto`}
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
                             <button 
-                              onClick={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }}
+                              onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }}
                               className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"
                             >
                               <Reply size={18} className="text-indigo-400" /> <span>Trả lời</span>
                             </button>
                             <button
                               type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }}
+                              onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }}
                               className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"
                             >
                               <Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /> 
@@ -685,7 +688,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                             
                             {/* Xóa phía tôi - Luôn hiển thị cho mọi người */}
                             <button
-                              onClick={() => handleAction('DELETE_ME', msg.messageId)}
+                              onMouseDown={(e) => { e.stopPropagation(); if(window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }}
                               className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"
                             >
                               <Trash2 size={18} /> <span>Xóa phía tôi</span>
@@ -694,14 +697,15 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                             {/* Thu hồi - Chỉ hiển thị cho người gửi */}
                             {isMe && (
                               <button
-                                onClick={() => handleAction('RECALL', msg.messageId)}
+                                onMouseDown={(e) => { e.stopPropagation(); if(window.confirm('Thu hồi tin nhắn này với tất cả mọi người?')) handleAction('RECALL', msg.messageId); }}
                                 className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"
                               >
                                 <Trash2 size={18} className="rotate-0" /> <span>Thu hồi</span>
                               </button>
                             )}
                           </div>
-                        )}
+                        </>
+                      )}
 
                         <div className={`
                           relative overflow-hidden transition-all duration-300
@@ -813,14 +817,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       </div>
       </div>
 
-      {activeMenu && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => setActiveMenu(null)}
-        />
-      )}
-
-      {/* Vote Details Modal */}
       <VoteDetailsModal 
         isOpen={isVoteDetailsOpen}
         onClose={() => setIsVoteDetailsOpen(false)}

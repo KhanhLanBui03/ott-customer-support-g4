@@ -28,6 +28,7 @@ export const chatApi = {
     });
   },
   addReaction: (conversationId, messageId, emoji) => axiosClient.post(`/messages/${messageId}/reactions?conversationId=${encodeURIComponent(conversationId)}`, { emoji }),
+  removeReaction: (conversationId, messageId, emoji) => axiosClient.delete(`/messages/${messageId}/reactions?conversationId=${encodeURIComponent(conversationId)}`, { data: { emoji } }),
   recallMessage: (conversationId, messageId) => axiosClient.post(`/messages/${messageId}/recall?conversationId=${encodeURIComponent(conversationId)}`),
   deleteMessage: (conversationId, messageId) => axiosClient.delete(`/messages/${messageId}?conversationId=${encodeURIComponent(conversationId)}`),
   pinMessage: (conversationId, messageId) => axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`),
