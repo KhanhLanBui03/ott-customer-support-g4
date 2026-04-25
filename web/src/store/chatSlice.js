@@ -55,9 +55,11 @@ const chatSlice = createSlice({
         state.messages[conversationId] = [];
       }
       
+      const messages = state.messages[conversationId];
+      
       // If we find an optimistic message from the same sender (sent within last 10s), replace it
       const now = Date.now();
-      const optimisticIdx = state.messages[conversationId].findIndex(m => 
+      const optimisticIdx = messages.findIndex(m => 
         m.status === 'SENDING' && 
         String(m.senderId) === String(message.senderId) &&
         (m.type === message.type) &&
@@ -66,13 +68,28 @@ const chatSlice = createSlice({
       );
 
       if (optimisticIdx !== -1) {
-        state.messages[conversationId][optimisticIdx] = {
+        messages[optimisticIdx] = {
           ...message,
-          // Keep local mediaUrls if the server ones haven't arrived or to avoid flicker
-          mediaUrls: message.mediaUrls && message.mediaUrls.length > 0 ? message.mediaUrls : state.messages[conversationId][optimisticIdx].mediaUrls
+          status: 'SENT',
+          mediaUrls: message.mediaUrls && message.mediaUrls.length > 0 ? message.mediaUrls : messages[optimisticIdx].mediaUrls
         };
-      } else if (!state.messages[conversationId].find(m => m.messageId === message.messageId)) {
-        state.messages[conversationId].push(message);
+      } else if (!messages.find(m => m.messageId === message.messageId)) {
+        messages.push(message);
+      }
+
+      // IMPROVEMENT: If we receive a message FROM the other person, 
+      // it implicitly means they have read ALL our previous messages.
+      if (message.senderId && String(message.senderId) !== String(currentUserId)) {
+        messages.forEach(m => {
+          if (String(m.senderId) === String(currentUserId)) {
+            if (!m.readBy) m.readBy = [];
+            const senderIdStr = String(message.senderId);
+            const alreadyRead = m.readBy.some(id => String(id) === senderIdStr);
+            if (!alreadyRead) {
+              m.readBy.push(senderIdStr);
+            }
+          }
+        });
       }
       
       // Update last message in conversation list
@@ -81,12 +98,10 @@ const chatSlice = createSlice({
         conv.lastMessage = message.content;
         conv.lastMessageTime = message.createdAt;
 
-        // Increment unread count if it's not the active conversation and NOT from current user
         if (state.activeConversationId !== conversationId && message.senderId !== currentUserId) {
           conv.unreadCount = (conv.unreadCount || 0) + 1;
         }
 
-        // Move the conversation to the top
         const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
         if (idx !== -1) {
            const [item] = state.conversations.splice(idx, 1);
@@ -184,6 +199,21 @@ const chatSlice = createSlice({
         state.typingUsers[conversationId] = state.typingUsers[conversationId].filter(u => u.userId !== userId);
       }
     },
+    setUserStatus: (state, action) => {
+      const { userId, status, lastSeenAt } = action.payload;
+      
+      // Update in all conversations where this user is a member
+      state.conversations.forEach(conv => {
+        if (conv.members) {
+          const member = conv.members.find(m => String(m.userId || m.id) === String(userId));
+          if (member) {
+            member.status = status;
+            member.presence = status; // Some parts use presence, some use status
+            if (lastSeenAt) member.lastSeenAt = lastSeenAt;
+          }
+        }
+      });
+    },
     pinMessageOptimistic: (state, action) => {
       const { conversationId, messageId } = action.payload;
       const conv = state.conversations.find(c => c.conversationId === conversationId);
@@ -241,6 +271,23 @@ const chatSlice = createSlice({
         }
       });
     },
+    setMessageRead: (state, action) => {
+      const { conversationId, messageId, userId } = action.payload;
+      const messages = state.messages[conversationId];
+      if (messages) {
+        // Find the index of the message that was read
+        const targetIdx = messages.findIndex(m => String(m.messageId) === String(messageId));
+        if (targetIdx !== -1) {
+          // Mark this message and ALL previous messages as read by this user
+          for (let i = 0; i <= targetIdx; i++) {
+            if (!messages[i].readBy) messages[i].readBy = [];
+            if (!messages[i].readBy.includes(userId)) {
+              messages[i].readBy.push(userId);
+            }
+          }
+        }
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -275,6 +322,7 @@ export const {
     updateUserPresence,
     updateMessage,
     optimisticVote,
-    resetUnreadCount
+    resetUnreadCount,
+    setMessageRead
 } = chatSlice.actions;
 export default chatSlice.reducer;

@@ -118,11 +118,17 @@ public class ChatWebSocketController {
 
         log.debug("User {} read message {} in conversation {}", userId, messageId, conversationId);
 
-        Map<String, Object> eventData = Map.of(
-                "userId", userId,
-                "messageId", messageId);
-
-        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_READ", conversationId, eventData));
+        // PERSISTENCE FIX: Actually call the service to save to DB
+        try {
+            messageService.markMessageAsRead(conversationId, messageId, userId);
+        } catch (Exception e) {
+            log.error("Failed to persist read receipt for message {}: {}", messageId, e.getMessage());
+            // Fallback: still publish event so UI updates even if DB fails
+            Map<String, Object> eventData = Map.of(
+                    "userId", userId,
+                    "messageId", messageId);
+            eventPublisher.publishEvent(MessageEvent.of("MESSAGE_READ", conversationId, eventData));
+        }
     }
 
 }

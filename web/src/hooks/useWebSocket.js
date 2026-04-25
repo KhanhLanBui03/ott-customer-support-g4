@@ -1,11 +1,12 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { addMessage, recallMessage, removeMessage, fetchConversations, fetchFriends, setTyping, updateMessage, updateMessageStatus } from '../store/chatSlice';
+import { addMessage, recallMessage, removeMessage, fetchConversations, fetchFriends, setTyping, updateMessage, updateMessageStatus, setMessageRead } from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup } from '../store/notificationSlice';
 import { initSocket, getStompClient } from '../utils/socket';
 
-// Flag dùng chung giữa các instance của hook
+// Flags dùng chung giữa các instance của hook
 let _globalSubscription = null;
+let _presenceSubscription = null;
 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
@@ -68,11 +69,32 @@ export const useWebSocket = () => {
                     isTyping: event.payload.isTyping,
                     name: 'Ai đó'
                 }));
+            } else if (event.eventType === 'MESSAGE_READ') {
+                const payload = event.payload || {};
+                dispatch(setMessageRead({
+                    conversationId: event.conversationId,
+                    messageId: payload.messageId || payload,
+                    userId: payload.userId || event.userId
+                }));
             } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
                 dispatch(fetchConversations());
             }
         } catch (err) {
             console.error('[STOMP] Error in message handler:', err);
+        }
+    }, [dispatch]);
+
+    const handlePresenceUpdate = useCallback((message) => {
+        try {
+            const payload = JSON.parse(message.body);
+            console.log('[STOMP] 🟢 Presence update:', payload);
+            dispatch(setUserStatus({
+                userId: payload.userId,
+                status: payload.status,
+                lastSeenAt: payload.lastSeenAt
+            }));
+        } catch (err) {
+            console.error('[STOMP] Error in presence handler:', err);
         }
     }, [dispatch]);
 
@@ -86,8 +108,13 @@ export const useWebSocket = () => {
                 console.log('[STOMP] Cleaning up old subscription...');
                 _globalSubscription.unsubscribe();
             }
-            console.log('[STOMP] 📡 Subscribing to /user/queue/messages');
+            if (_presenceSubscription) {
+                _presenceSubscription.unsubscribe();
+            }
+
+            console.log('[STOMP] 📡 Subscribing to /user/queue/messages and /topic/presence');
             _globalSubscription = client.subscribe('/user/queue/messages', handleIncomingMessage);
+            _presenceSubscription = client.subscribe('/topic/presence', handlePresenceUpdate);
         };
 
         if (client.connected) {
@@ -106,9 +133,10 @@ export const useWebSocket = () => {
         client.onWebSocketClose = (evt) => {
             if (originalOnClose) originalOnClose(evt);
             _globalSubscription = null;
+            _presenceSubscription = null;
         };
 
-    }, [token, handleIncomingMessage]);
+    }, [token, handleIncomingMessage, handlePresenceUpdate]);
 
     useEffect(() => {
         connect();
@@ -135,7 +163,17 @@ export const useWebSocket = () => {
         }
     }, []);
 
-    return { sendMessage, sendTyping };
+    const sendRead = useCallback((conversationId, messageId) => {
+        const client = getStompClient();
+        if (client?.connected) {
+            client.publish({
+                destination: '/app/message.read',
+                body: JSON.stringify({ conversationId, messageId })
+            });
+        }
+    }, []);
+
+    return { sendMessage, sendTyping, sendRead };
 };
 
 export default useWebSocket;
