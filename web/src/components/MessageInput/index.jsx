@@ -124,9 +124,20 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
+
+    const maxFiles = 10;
+    const currentCount = localAttachments.length;
+    let filesToProcess = files;
+
+    if (currentCount + files.length > maxFiles) {
+      alert(`Bạn chỉ có thể gửi tối đa ${maxFiles} tập tin một lần.`);
+      filesToProcess = files.slice(0, maxFiles - currentCount);
+    }
+
+    if (filesToProcess.length === 0) return;
     
     // Create local previews immediately
-    const newLocals = files.map(file => ({
+    const newLocals = filesToProcess.map(file => ({
       file,
       blobUrl: URL.createObjectURL(file)
     }));

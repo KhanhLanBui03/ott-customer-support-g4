@@ -55,17 +55,22 @@ const chatSlice = createSlice({
         state.messages[conversationId] = [];
       }
       
-      // If we find an optimistic message with the same content and sender (sent within last 5s), replace it
+      // If we find an optimistic message from the same sender (sent within last 10s), replace it
       const now = Date.now();
       const optimisticIdx = state.messages[conversationId].findIndex(m => 
         m.status === 'SENDING' && 
-        m.content === message.content && 
-        m.senderId === message.senderId &&
-        (now - (m.createdAt || 0)) < 5000
+        String(m.senderId) === String(message.senderId) &&
+        (m.type === message.type) &&
+        (message.type === 'TEXT' ? m.content === message.content : true) &&
+        (now - (m.createdAt || 0)) < 10000
       );
 
       if (optimisticIdx !== -1) {
-        state.messages[conversationId][optimisticIdx] = message;
+        state.messages[conversationId][optimisticIdx] = {
+          ...message,
+          // Keep local mediaUrls if the server ones haven't arrived or to avoid flicker
+          mediaUrls: message.mediaUrls && message.mediaUrls.length > 0 ? message.mediaUrls : state.messages[conversationId][optimisticIdx].mediaUrls
+        };
       } else if (!state.messages[conversationId].find(m => m.messageId === message.messageId)) {
         state.messages[conversationId].push(message);
       }
