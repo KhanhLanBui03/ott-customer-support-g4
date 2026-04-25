@@ -1,16 +1,29 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { addMessage, recallMessage, removeMessage, fetchConversations, fetchFriends, setTyping, updateMessage, updateMessageStatus, setMessageRead } from '../store/chatSlice';
+import { 
+    addMessage, 
+    recallMessage, 
+    removeMessage, 
+    fetchConversations, 
+    fetchFriends, 
+    setTyping, 
+    updateConversationWallpaper, 
+    updateMessage, 
+    updateMessageStatus,
+    setMessageRead,
+    setUserStatus
+} from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup } from '../store/notificationSlice';
 import { initSocket, getStompClient } from '../utils/socket';
 
-// Flags dùng chung giữa các instance của hook
-let _globalSubscription = null;
+// Shared state between hook instances
+let _globalSubscriptions = [];
 let _presenceSubscription = null;
 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
     const { token, user } = useSelector(state => state.auth);
+
     const userRef = useRef(user);
 
     // Cập nhật ref mỗi khi user thay đổi để callback luôn có user mới nhất
@@ -69,6 +82,7 @@ export const useWebSocket = () => {
                     isTyping: event.payload.isTyping,
                     name: 'Ai đó'
                 }));
+
             } else if (event.eventType === 'MESSAGE_READ') {
                 const payload = event.payload || {};
                 dispatch(setMessageRead({
@@ -77,6 +91,32 @@ export const useWebSocket = () => {
                     userId: payload.userId || event.userId
                 }));
             } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
+
+            } else if (event.eventType === 'WALLPAPER_UPDATED') {
+                const payload = event.payload || {};
+                const conversationId = event.conversationId || payload.conversationId;
+                if (conversationId) {
+                    dispatch(updateConversationWallpaper({
+                        conversationId,
+                        wallpaperUrl: payload.wallpaperUrl ?? null
+                    }));
+                } else {
+                    dispatch(fetchConversations());
+                }
+            } else if (event.eventType === 'CONVERSATION_UPDATE') {
+                const payload = event.payload || {};
+                const conversationId = event.conversationId || payload.conversationId || payload.id;
+
+                if (conversationId && Object.prototype.hasOwnProperty.call(payload, 'wallpaperUrl')) {
+                    dispatch(updateConversationWallpaper({
+                        conversationId,
+                        wallpaperUrl: payload.wallpaperUrl ?? null
+                    }));
+                } else {
+                    dispatch(fetchConversations());
+                }
+            } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
+
                 dispatch(fetchConversations());
             }
         } catch (err) {
@@ -104,17 +144,24 @@ export const useWebSocket = () => {
         const client = initSocket(token);
 
         const setupSubscription = () => {
-            if (_globalSubscription) {
-                console.log('[STOMP] Cleaning up old subscription...');
-                _globalSubscription.unsubscribe();
+            if (_globalSubscriptions.length > 0) {
+                console.log('[STOMP] Cleaning up old subscriptions...');
+                _globalSubscriptions.forEach(sub => sub.unsubscribe());
+                _globalSubscriptions = [];
             }
+
             if (_presenceSubscription) {
                 _presenceSubscription.unsubscribe();
             }
 
-            console.log('[STOMP] 📡 Subscribing to /user/queue/messages and /topic/presence');
-            _globalSubscription = client.subscribe('/user/queue/messages', handleIncomingMessage);
+            console.log('[STOMP] 📡 Subscribing to message, conversation, and presence queues');
+            
             _presenceSubscription = client.subscribe('/topic/presence', handlePresenceUpdate);
+
+            const messagesSub = client.subscribe('/user/queue/messages', handleIncomingMessage);
+            const conversationsSub = client.subscribe('/user/queue/conversations', handleIncomingMessage);
+            
+            _globalSubscriptions = [messagesSub, conversationsSub];
         };
 
         if (client.connected) {
@@ -132,8 +179,8 @@ export const useWebSocket = () => {
         const originalOnClose = client.onWebSocketClose;
         client.onWebSocketClose = (evt) => {
             if (originalOnClose) originalOnClose(evt);
-            _globalSubscription = null;
             _presenceSubscription = null;
+            _globalSubscriptions = [];
         };
 
     }, [token, handleIncomingMessage, handlePresenceUpdate]);

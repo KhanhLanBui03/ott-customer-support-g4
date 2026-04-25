@@ -54,13 +54,13 @@ const chatSlice = createSlice({
       if (!state.messages[conversationId]) {
         state.messages[conversationId] = [];
       }
-      
+
       const messages = state.messages[conversationId];
-      
+
       // If we find an optimistic message from the same sender (sent within last 10s), replace it
       const now = Date.now();
-      const optimisticIdx = messages.findIndex(m => 
-        m.status === 'SENDING' && 
+      const optimisticIdx = messages.findIndex(m =>
+        m.status === 'SENDING' &&
         String(m.senderId) === String(message.senderId) &&
         (m.type === message.type) &&
         (message.type === 'TEXT' ? m.content === message.content : true) &&
@@ -91,7 +91,7 @@ const chatSlice = createSlice({
           }
         });
       }
-      
+
       // Update last message in conversation list
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
@@ -104,8 +104,8 @@ const chatSlice = createSlice({
 
         const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
         if (idx !== -1) {
-           const [item] = state.conversations.splice(idx, 1);
-           state.conversations.unshift(item);
+          const [item] = state.conversations.splice(idx, 1);
+          state.conversations.unshift(item);
         }
       }
     },
@@ -152,7 +152,7 @@ const chatSlice = createSlice({
           msg.mediaUrls = [];
         }
       }
-      
+
       // Update last message in conversation list
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
@@ -160,7 +160,7 @@ const chatSlice = createSlice({
         if (messages && messages.length > 0) {
           const lastMsg = messages[messages.length - 1];
           if (lastMsg.messageId === messageId) {
-             conv.lastMessage = "[Tin nhắn đã bị thu hồi]";
+            conv.lastMessage = "[Tin nhắn đã bị thu hồi]";
           }
         }
       }
@@ -170,7 +170,7 @@ const chatSlice = createSlice({
       if (state.messages[conversationId]) {
         state.messages[conversationId] = state.messages[conversationId].filter(m => m.messageId !== messageId);
       }
-      
+
       // Update last message in conversation list if needed
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
@@ -190,7 +190,7 @@ const chatSlice = createSlice({
       if (!state.typingUsers[conversationId]) {
         state.typingUsers[conversationId] = [];
       }
-      
+
       if (isTyping) {
         if (!state.typingUsers[conversationId].find(u => u.userId === userId)) {
           state.typingUsers[conversationId].push({ userId, name });
@@ -201,7 +201,7 @@ const chatSlice = createSlice({
     },
     setUserStatus: (state, action) => {
       const { userId, status, lastSeenAt } = action.payload;
-      
+
       // Update in all conversations where this user is a member
       state.conversations.forEach(conv => {
         if (conv.members) {
@@ -240,7 +240,7 @@ const chatSlice = createSlice({
       if (msg && msg.type === 'VOTE' && msg.vote) {
         msg.vote.options.forEach(opt => {
           if (!opt.voterIds) opt.voterIds = [];
-          
+
           if (optionIds.includes(opt.optionId)) {
             if (!opt.voterIds.includes(userId)) {
               opt.voterIds.push(userId);
@@ -271,6 +271,7 @@ const chatSlice = createSlice({
         }
       });
     },
+
     setMessageRead: (state, action) => {
       const { conversationId, messageId, userId } = action.payload;
       const messages = state.messages[conversationId];
@@ -286,6 +287,16 @@ const chatSlice = createSlice({
             }
           }
         }
+      }
+    },
+
+    updateConversationWallpaper: (state, action) => {
+      const { conversationId, wallpaperUrl } = action.payload || {};
+      if (!conversationId) return;
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv) {
+        conv.wallpaperUrl = wallpaperUrl || null;
+
       }
     },
   },
@@ -307,22 +318,24 @@ const chatSlice = createSlice({
   },
 });
 
-export const { 
-    setConversations, 
-    setActiveConversation, 
-    setMessages, 
-    addMessage, 
-    addOptimisticMessage,
-    updateMessageStatus,
-    recallMessage,
-    removeMessage,
-    setTyping,
-    pinMessageOptimistic,
-    unpinMessageOptimistic,
-    updateUserPresence,
-    updateMessage,
-    optimisticVote,
-    resetUnreadCount,
-    setMessageRead
+export const {
+  setConversations,
+  setActiveConversation,
+  setMessages,
+  addMessage,
+  addOptimisticMessage,
+  updateMessageStatus,
+  recallMessage,
+  removeMessage,
+  setTyping,
+  setUserStatus,
+  pinMessageOptimistic,
+  unpinMessageOptimistic,
+  updateUserPresence,
+  updateMessage,
+  optimisticVote,
+  resetUnreadCount,
+  setMessageRead,
+  updateConversationWallpaper
 } = chatSlice.actions;
 export default chatSlice.reducer;

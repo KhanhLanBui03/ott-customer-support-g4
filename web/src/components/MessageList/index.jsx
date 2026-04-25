@@ -66,7 +66,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [activeMenu, setActiveMenu] = useState(null);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [optimisticReactions, setOptimisticReactions] = useState({}); // { messageId: [reactions] }
-  const [wallpaper, setWallpaper] = useState(localStorage.getItem(`chat_wallpaper_${conversationId}`));
   const [isVoteDetailsOpen, setIsVoteDetailsOpen] = useState(false);
   const [selectedVote, setSelectedVote] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -76,10 +75,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const { sendRead } = useWebSocket();
   const meId = user?.userId || user?.id;
 
-  useEffect(() => {
-    // Sync wallpaper when switching conversations
-    setWallpaper(localStorage.getItem(`chat_wallpaper_${conversationId}`));
-  }, [conversationId]);
+  // Removed setWallpaper useEffect as wallpaper is now derived from conversations
+
 
   useEffect(() => {
     if (!conversationId || !messages || messages.length === 0) return;
@@ -116,16 +113,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     return () => observer.disconnect();
   }, [messages, conversationId, meId, sendRead]);
 
-  useEffect(() => {
-    const handleUpdate = (e) => {
-      // Only update if the event matches current conversation
-      if (e.detail?.conversationId === conversationId) {
-        setWallpaper(e.detail.wallpaper);
-      }
-    };
-    window.addEventListener('chat-wallpaper-updated', handleUpdate);
-    return () => window.removeEventListener('chat-wallpaper-updated', handleUpdate);
-  }, [conversationId]);
+  // Removed wallpaper handleUpdate as wallpaper is now derived from conversations
+
 
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
@@ -369,7 +358,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
     return (
       <div className={cn(
-        "absolute bottom-[-10px] flex items-center z-20",
+        "absolute bottom-0 flex items-center z-20",
         isMe ? 'right-2' : 'left-2'
       )}>
         <div className="flex items-center space-x-1">
@@ -394,6 +383,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   const { typingUsers } = useSelector(state => state.chat);
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
+  const wallpaper = currentConv?.wallpaperUrl || null;
   const pinnedMessages = currentConv?.pinnedMessages || [];
   const pinnedIds = pinnedMessages.map(p => p.messageId);
 
@@ -491,6 +481,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                   );
                 }
 
+                const hasReactions = (msg.reactions && Object.keys(msg.reactions).length > 0) || (optimisticReactions[msg.messageId] && optimisticReactions[msg.messageId].length > 0);
+
                 return (
                   <React.Fragment key={msg.messageId || index}>
                     {dateHeader}
@@ -502,7 +494,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         "flex flex-col relative group animate-msg w-full",
                         msg.type === 'VOTE' ? 'items-center mb-8' : (isMe ? 'items-end' : 'items-start'),
                         isFirstInGroup ? "mt-6" : "mt-0.5",
-                        isLastInGroup ? "mb-6" : "mb-0"
+                        isLastInGroup ? "mb-6" : (hasReactions ? "mb-1" : "mb-0")
                       )}
                     >
                       <div className={cn(
@@ -622,17 +614,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
                                 <div className={cn(
                                   "relative overflow-hidden transition-all duration-300 shadow-sm",
-                                  msg.type === 'STICKER' ? 'bg-transparent shadow-none ring-0' : (msg.content ? 'px-6 py-4' : 'p-0'),
+                                  msg.type === 'STICKER' ? 'bg-transparent shadow-none ring-0' : (msg.content ? 'px-4 py-2.5' : 'p-0'),
                                   isMe ? (msg.content && msg.type !== 'STICKER' ? 'bg-indigo-600 text-white' : '') : (msg.content && msg.type !== 'STICKER' ? 'bg-surface-200 text-foreground border border-border' : ''),
-                                  isMe 
-                                    ? (isFirstInGroup && isLastInGroup ? "rounded-[24px] rounded-br-[4px]" : 
-                                       isFirstInGroup ? "rounded-t-[24px] rounded-bl-[24px] rounded-br-[8px]" :
-                                       isLastInGroup ? "rounded-b-[24px] rounded-tl-[24px] rounded-br-[4px]" :
-                                       "rounded-l-[24px] rounded-r-[8px]")
+                                  isMe
+                                    ? (isFirstInGroup && isLastInGroup ? "rounded-[24px] rounded-br-[4px]" :
+                                      isFirstInGroup ? "rounded-t-[24px] rounded-bl-[24px] rounded-br-[8px]" :
+                                        isLastInGroup ? "rounded-b-[24px] rounded-tl-[24px] rounded-br-[4px]" :
+                                          "rounded-l-[24px] rounded-r-[8px]")
                                     : (isFirstInGroup && isLastInGroup ? "rounded-[24px] rounded-bl-[4px]" :
-                                       isFirstInGroup ? "rounded-t-[24px] rounded-br-[24px] rounded-bl-[8px]" :
-                                       isLastInGroup ? "rounded-b-[24px] rounded-tr-[24px] rounded-bl-[4px]" :
-                                       "rounded-r-[24px] rounded-l-[8px]"),
+                                      isFirstInGroup ? "rounded-t-[24px] rounded-br-[24px] rounded-bl-[8px]" :
+                                        isLastInGroup ? "rounded-b-[24px] rounded-tr-[24px] rounded-bl-[4px]" :
+                                          "rounded-r-[24px] rounded-l-[8px]"),
                                   isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : ''
                                 )}>
                                   {msg.type === 'STICKER' ? (
@@ -766,16 +758,16 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                 {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
                                 {/* Seen Avatars - Enhanced & Fixed */}
                                 <div className={cn(
-                                  "flex items-center mt-1.5 px-1 min-h-[20px]",
+                                  "flex items-center mt-0.5 px-1 min-h-[20px]",
                                   msg.type === 'VOTE' ? 'justify-center w-full' : (isMe ? 'justify-end' : 'justify-start ml-1')
                                 )}>
                                   {isMe && msg.readBy && msg.readBy.length > 0 && (
                                     <div className="flex items-center space-x-[-6px] transition-all duration-500 animate-in fade-in slide-in-from-right-2">
                                       {msg.readBy.filter(vId => {
                                         const readerId = String(vId);
-                                        if (readerId === String(meId)) return false; 
-                                        
-                                        const isLatestRead = !messages.slice(index + 1).some(m => 
+                                        if (readerId === String(meId)) return false;
+
+                                        const isLatestRead = !messages.slice(index + 1).some(m =>
                                           m.readBy && m.readBy.some(id => String(id) === readerId)
                                         );
                                         return isLatestRead;
@@ -801,7 +793,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
                                     const hasBeenReadByOther = msg.readBy?.some(id => String(id) !== String(meId));
                                     // IMPROVEMENT: If any NEWER message has been read, this one is implicitly read too
-                                    const isOlderThanAnyReadMessage = messages.slice(index + 1).some(m => 
+                                    const isOlderThanAnyReadMessage = messages.slice(index + 1).some(m =>
                                       m.readBy?.some(id => String(id) !== String(meId))
                                     );
 
@@ -821,8 +813,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           }
 
                                           // 2. Logic to determine Sent vs Received
-                                          const isOtherOnline = currentConv?.members?.some(m => 
-                                            String(m.userId || m.id) !== String(meId) && 
+                                          const isOtherOnline = currentConv?.members?.some(m =>
+                                            String(m.userId || m.id) !== String(meId) &&
                                             String(m.status || m.presence || '').toUpperCase() === 'ONLINE'
                                           );
 
