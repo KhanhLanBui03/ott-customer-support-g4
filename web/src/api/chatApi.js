@@ -19,6 +19,8 @@ export const chatApi = {
   disbandGroup: (id) => axiosClient.delete(`/conversations/${encodeURIComponent(id)}`),
   leaveConversation: (id) => axiosClient.delete(`/conversations/${encodeURIComponent(id)}/me`),
   deleteConversation: (id) => axiosClient.delete(`/conversations/${encodeURIComponent(id)}/me`), // Alias for backward compatibility
+  updateWallpaper: (conversationId, wallpaperUrl) =>
+    axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/wallpaper`, { wallpaperUrl }),
   
   uploadMedia: (file, folder = 'chat') => {
     const formData = new FormData();

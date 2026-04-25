@@ -5,14 +5,17 @@ import {
   UserPlus, Shield, ShieldCheck, MoreVertical, LogOut, Palette, Search, Zap, Trash2 as TrashIcon,
   Edit3, Check
 } from 'lucide-react';
+import { useDispatch } from 'react-redux';
 import { useChat } from '../../hooks/useChat';
 import { useAuth } from '../../hooks/useAuth';
 import { friendApi } from '../../api/friendApi';
 import { chatApi } from '../../api/chatApi';
 import { userApi } from '../../api/userApi';
+import { updateConversationWallpaper } from '../../store/chatSlice';
 import GroupAvatar from '../GroupAvatar';
 
 const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
+  const dispatch = useDispatch();
   const { messages, fetchConversations, inviteMember, removeMember } = useChat();
   const fileInputRef = React.useRef(null);
   const { user } = useAuth();
@@ -33,6 +36,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
   const [memberMenuId, setMemberMenuId] = useState(null);
+  const [isWallpaperLoading, setIsWallpaperLoading] = useState(false);
 
   const conversationId = conversation?.conversationId;
   const currentMessages = useMemo(() => messages[conversationId] || [], [messages, conversationId]);
@@ -179,25 +183,45 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
     return items.reverse();
   }, [currentMessages]);
 
-  const handleWallpaperChange = (e) => {
+  const handleWallpaperChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       alert('Ảnh quá lớn. Vui lòng chọn ảnh dưới 2MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target.result;
-      localStorage.setItem(`chat_wallpaper_${conversationId}`, dataUrl);
-      window.dispatchEvent(new CustomEvent('chat-wallpaper-updated', { detail: { conversationId, wallpaper: dataUrl } }));
-    };
-    reader.readAsDataURL(file);
+
+    setIsWallpaperLoading(true);
+    try {
+      const uploadRes = await chatApi.uploadMedia(file, 'chat-wallpaper');
+      const wallpaperUrl = uploadRes?.mediaUrl || uploadRes?.data?.mediaUrl || uploadRes?.url || uploadRes?.data?.url;
+
+      if (!wallpaperUrl) {
+        throw new Error('Không lấy được URL ảnh nền từ server');
+      }
+
+      await chatApi.updateWallpaper(conversationId, wallpaperUrl);
+      dispatch(updateConversationWallpaper({ conversationId, wallpaperUrl }));
+    } catch (err) {
+      console.error('Update wallpaper failed:', err);
+      alert('Không thể cập nhật ảnh nền. Vui lòng thử lại.');
+    } finally {
+      setIsWallpaperLoading(false);
+      e.target.value = '';
+    }
   };
 
-  const handleClearWallpaper = () => {
-    localStorage.removeItem(`chat_wallpaper_${conversationId}`);
-    window.dispatchEvent(new CustomEvent('chat-wallpaper-updated', { detail: { conversationId, wallpaper: null } }));
+  const handleClearWallpaper = async () => {
+    setIsWallpaperLoading(true);
+    try {
+      await chatApi.updateWallpaper(conversationId, null);
+      dispatch(updateConversationWallpaper({ conversationId, wallpaperUrl: null }));
+    } catch (err) {
+      console.error('Clear wallpaper failed:', err);
+      alert('Không thể xóa ảnh nền. Vui lòng thử lại.');
+    } finally {
+      setIsWallpaperLoading(false);
+    }
   };
 
   if (!conversation) return null;
@@ -485,19 +509,21 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                    
                    <button 
                      onClick={() => fileInputRef.current?.click()}
+                     disabled={isWallpaperLoading}
                      className="w-full flex items-center space-x-4 p-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-[24px] hover:scale-[1.02] active:scale-[0.98] transition-all group"
                    >
                       <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
                          <ImageIcon size={20} />
                       </div>
                       <div className="text-left flex-1">
-                         <p className="text-[14px] font-black">Thay đổi ảnh nền</p>
+                         <p className="text-[14px] font-black">{isWallpaperLoading ? 'Đang cập nhật...' : 'Thay đổi ảnh nền'}</p>
                          <p className="text-[10px] font-bold opacity-60">Tùy chỉnh hình nền cho cuộc trò chuyện</p>
                       </div>
                    </button>
 
                    <button 
                      onClick={handleClearWallpaper}
+                      disabled={isWallpaperLoading}
                      className="w-full flex items-center space-x-4 p-4 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 rounded-[24px] transition-all group"
                    >
                       <div className="w-10 h-10 rounded-xl bg-background border border-red-500/20 flex items-center justify-center group-hover:bg-red-500 group-hover:text-white transition-all shadow-sm">

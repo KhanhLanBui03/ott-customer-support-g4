@@ -57,28 +57,11 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [activeMenu, setActiveMenu] = useState(null);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [optimisticReactions, setOptimisticReactions] = useState({}); // { messageId: [reactions] }
-  const [wallpaper, setWallpaper] = useState(localStorage.getItem(`chat_wallpaper_${conversationId}`));
   const [isVoteDetailsOpen, setIsVoteDetailsOpen] = useState(false);
   const [selectedVote, setSelectedVote] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isFileModalLoading, setIsFileModalLoading] = useState(true);
-
-  useEffect(() => {
-    // Sync wallpaper when switching conversations
-    setWallpaper(localStorage.getItem(`chat_wallpaper_${conversationId}`));
-  }, [conversationId]);
-
-  useEffect(() => {
-    const handleUpdate = (e) => {
-      // Only update if the event matches current conversation
-      if (e.detail?.conversationId === conversationId) {
-        setWallpaper(e.detail.wallpaper);
-      }
-    };
-    window.addEventListener('chat-wallpaper-updated', handleUpdate);
-    return () => window.removeEventListener('chat-wallpaper-updated', handleUpdate);
-  }, [conversationId]);
 
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
@@ -406,6 +389,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   const { typingUsers } = useSelector(state => state.chat);
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
+  const wallpaper = currentConv?.wallpaperUrl || null;
   const pinnedMessages = currentConv?.pinnedMessages || [];
   const pinnedIds = pinnedMessages.map(p => p.messageId);
   const meId = user?.userId || user?.id;

@@ -28,6 +28,9 @@ public class Conversation {
     @DynamoDBAttribute(attributeName = "avatarUrl")
     private String avatarUrl;
 
+    @DynamoDBAttribute(attributeName = "wallpaperUrl")
+    private String wallpaperUrl;
+
     @DynamoDBAttribute(attributeName = "creatorId")
     private String creatorId;
 

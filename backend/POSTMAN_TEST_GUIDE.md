@@ -280,6 +280,72 @@ Content-Type: application/json
 
 ---
 
+## 10. Update Conversation Wallpaper API
+**Endpoint:** `PUT http://localhost:8080/api/v1/conversations/{conversationId}/wallpaper`
+
+**Request Headers:**
+```
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+**Request Body (JSON):**
+```json
+{
+  "wallpaperUrl": "https://example.com/wallpaper.jpg"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "success": true,
+  "message": "Wallpaper updated successfully",
+  "data": null
+}
+```
+
+**WebSocket Events (automatically broadcasted to all members):**
+- `WALLPAPER_UPDATED` - Contains wallpaperUrl
+- `CONVERSATION_UPDATE` - Full conversation details with new wallpaperUrl
+
+**Flow:**
+1. Upload image using media API (or external URL)
+2. Call this endpoint with wallpaperUrl
+3. All members instantly receive `WALLPAPER_UPDATED` event via WebSocket
+4. Frontend updates background for all members in that conversation
+
+---
+
+## API Workflow: Full Wallpaper Update Flow
+
+### Step 1: (Optional) Upload background image
+```
+POST http://localhost:8080/api/v1/media/upload
+[multipart form-data with image file]
+Response: { "mediaUrl": "https://s3.example.com/image.jpg" }
+```
+
+### Step 2: Update conversation wallpaper
+```
+PUT http://localhost:8080/api/v1/conversations/{conversationId}/wallpaper
+{
+  "wallpaperUrl": "https://s3.example.com/image.jpg"
+}
+```
+
+### Step 3: WebSocket automatically broadcasts
+All members in conversation receive:
+```
+Event: WALLPAPER_UPDATED
+Data: { "wallpaperUrl": "https://s3.example.com/image.jpg" }
+```
+
+### Step 4: Frontend updates UI
+Update background image in chat UI for all members instantly!
+
+---
+
 ## Test Flow Example
 
 ⚠️ **Important:** You must complete the registration and OTP verification flow FIRST before you can login!
@@ -355,4 +421,3 @@ X-Session-Id: YOUR_SESSION_ID
 ✅ **Email sending:** Uses Gmail SMTP (configured in application.yml)  
 ✅ **No Redis required:** Uses in-memory storage  
 ✅ **JWT tokens expire:** Access token valid for 24 hours
-
