@@ -30,6 +30,12 @@ public class MessageRepository {
         return dynamoDBMapper.query(Message.class, query);
     }
 
+    public void saveAll(List<Message> messages) {
+        if (messages != null && !messages.isEmpty()) {
+            dynamoDBMapper.batchSave(messages);
+        }
+    }
+
     public Optional<Message> findByConversationIdAndMessageId(String conversationId, String messageId) {
         Message message = dynamoDBMapper.load(Message.class, conversationId, messageId);
         return Optional.ofNullable(message);
