@@ -4,7 +4,8 @@ import { Provider, useDispatch, useSelector } from 'react-redux';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import store from '../src/store/store';
-import { restoreState } from '../src/store/authSlice';
+import { restoreState, sessionExpired } from '../src/store/authSlice';
+import { Alert } from 'react-native';
 
 // Keep splash screen visible while we fetch auth state
 SplashScreen.preventAutoHideAsync();

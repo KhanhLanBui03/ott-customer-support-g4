@@ -10,8 +10,11 @@ let deleteHandlers = new Set();
 let recallHandlers = new Set();
 let reactionHandlers = new Set();
 let statusHandlers = new Set();
+let globalHandlers = new Set();
 
-export const initializeSocket = (token) => {
+export const initializeSocket = (token, userId, globalHandler) => {
+  globalHandlers.clear();
+  if (globalHandler) globalHandlers.add(globalHandler);
   if (stompClient && stompClient.connected) {
     console.log('📡 Mobile socket already connected');
     return stompClient;
@@ -46,6 +49,9 @@ export const initializeSocket = (token) => {
         try {
           const event = JSON.parse(message.body);
           console.log('📥 Mobile received event:', event.eventType, 'for conversation:', event.conversationId);
+
+          // Phát sự kiện toàn cục cho Layout xử lý thông báo
+          globalHandlers.forEach(handler => handler(event));
 
           if (event.eventType === 'MESSAGE_SEND') {
             const msg = event.payload;

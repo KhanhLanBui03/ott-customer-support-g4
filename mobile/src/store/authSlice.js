@@ -160,6 +160,13 @@ const authSlice = createSlice({
       state.refreshToken = refreshToken;
       state.isAuthenticated = !!accessToken;
     },
+    sessionExpired: (state) => {
+      state.user = null;
+      state.accessToken = null;
+      state.refreshToken = null;
+      state.isAuthenticated = false;
+      state.error = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+    },
   },
   extraReducers: (builder) => {
     // Login user
@@ -258,5 +265,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setOtpPhoneNumber, restoreState } = authSlice.actions;
+export const { clearError, setOtpPhoneNumber, restoreState, sessionExpired } = authSlice.actions;
 export default authSlice.reducer;

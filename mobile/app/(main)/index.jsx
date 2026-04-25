@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchConversations, setCurrentUserId } from '../../src/store/chatSlice';
 import { MaterialIcons } from '@expo/vector-icons';
 import CONFIG from '../../src/config';
+import SearchModal from '../../src/components/SearchModal';
 
 const HomeScreen = () => {
   const router = useRouter();
@@ -12,6 +13,7 @@ const HomeScreen = () => {
   const { conversations, loading } = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
 
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
 
@@ -85,7 +87,7 @@ const HomeScreen = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity style={styles.searchButton}>
+        <TouchableOpacity style={styles.searchButton} onPress={() => setSearchVisible(true)}>
           <MaterialIcons name="search" size={24} color="#1f2937" />
         </TouchableOpacity>
       </View>
@@ -108,6 +110,11 @@ const HomeScreen = () => {
           }
         />
       )}
+
+      <SearchModal 
+        visible={searchVisible} 
+        onClose={() => setSearchVisible(false)} 
+      />
     </View>
   );
 };

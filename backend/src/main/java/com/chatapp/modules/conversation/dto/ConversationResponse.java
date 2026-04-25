@@ -31,6 +31,7 @@ public class ConversationResponse {
         private Long lastSeenAt;
         private String role;
         private Long joinedAt;
+        private String friendshipStatus;
     }
 
     @Data

@@ -44,10 +44,9 @@ const ProfileScreen = () => {
         await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
       }
     } catch (error) {
-      console.error('Fetch profile error:', error);
-      // Nếu lỗi 401 (Unauthorized) ở đây, có thể do token hết hạn hoàn toàn
-      if (error.response?.status === 401) {
-        // Có thể thông báo hoặc tự động logout nếu cần
+      // Bỏ qua log error nếu là 401 vì đã được xử lý toàn cục ở axiosClient
+      if (error.response?.status !== 401) {
+        console.error('Fetch profile error:', error);
       }
     }
   };

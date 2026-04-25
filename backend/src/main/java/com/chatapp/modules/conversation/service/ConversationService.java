@@ -271,6 +271,18 @@ public class ConversationService {
             for (String mId : fullConv.getMemberIds()) {
                 userRepository.findById(mId).ifPresent(u -> {
                     UserConversation memberUc = userConversationRepository.findById(mId, convId).orElse(null);
+                    
+                    // Fetch friendship status
+                    String fStatus = "NONE";
+                    if (!mId.equals(userId)) {
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
+                        if (f1.isPresent()) fStatus = f1.get().getStatus();
+                        else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                    } else {
+                        fStatus = "SELF";
+                    }
+
                     members.add(ConversationResponse.MemberInfo.builder()
                             .userId(u.getUserId())
                             .status(u.getStatus())
@@ -280,6 +292,7 @@ public class ConversationService {
                             .nickname(memberUc != null ? memberUc.getNickname() : null)
                             .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                             .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
+                            .friendshipStatus(fStatus)
                             .build());
                 });
             }
@@ -317,6 +330,18 @@ public class ConversationService {
         for (String mId : conv.getMemberIds()) {
             userRepository.findById(mId).ifPresent(u -> {
                 UserConversation memberUc = userConversationRepository.findById(mId, conversationId).orElse(null);
+                
+                // Fetch friendship status
+                String fStatus = "NONE";
+                if (!mId.equals(userId)) {
+                    Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
+                    Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
+                    if (f1.isPresent()) fStatus = f1.get().getStatus();
+                    else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                } else {
+                    fStatus = "SELF";
+                }
+
                 members.add(ConversationResponse.MemberInfo.builder()
                         .userId(u.getUserId())
                         .status(u.getStatus())
@@ -326,6 +351,7 @@ public class ConversationService {
                         .nickname(memberUc != null ? memberUc.getNickname() : null)
                         .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                         .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
+                        .friendshipStatus(fStatus)
                         .build());
             });
         }

@@ -10,22 +10,20 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [foundUser, setFoundUser] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [requestSent, setRequestSent] = useState(false);
   const [error, setError] = useState('');
-  const { create, selectConversation, friends } = useChat();
+  const { create, selectConversation } = useChat();
 
   if (!isOpen) return null;
 
-  const isFriend = foundUser && friends?.some(f => f.userId === foundUser.userId);
+  const friendshipStatus = foundUser?.friendshipStatus || 'NONE';
 
   const handleSearch = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!phoneNumber.trim()) return;
 
     setLoading(true);
     setError('');
     setFoundUser(null);
-    setRequestSent(false);
 
     try {
       const response = await userApi.searchUser(phoneNumber);
@@ -43,7 +41,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
     setLoading(true);
     try {
       await friendApi.sendRequest(foundUser.userId);
-      setRequestSent(true);
+      setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING' }));
     } catch (err) {
       setError('Gửi lời mời kết bạn thất bại');
     } finally {
@@ -142,12 +140,17 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
                 <span>Nhắn tin</span>
               </button>
 
-              {isFriend ? (
-                <div className="w-full py-4 bg-indigo-50 border border-indigo-100/50 text-indigo-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 cursor-default">
-                  <User size={16} />
+              {friendshipStatus === 'ACCEPTED' ? (
+                <div className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 cursor-default shadow-sm">
+                  <Check size={16} />
                   <span>Bạn bè</span>
                 </div>
-              ) : !requestSent ? (
+              ) : friendshipStatus === 'PENDING' ? (
+                <div className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 shadow-sm">
+                  <Check size={16} />
+                  <span>Đã gửi lời mời</span>
+                </div>
+              ) : (
                 <button
                   onClick={handleAddFriend}
                   className="w-full py-4 bg-surface-300 text-cursor-dark rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] hover:bg-surface-400 transition-all flex items-center justify-center space-x-3"
@@ -155,11 +158,6 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
                   <UserPlus size={16} />
                   <span>Kết bạn</span>
                 </button>
-              ) : (
-                <div className="w-full py-4 bg-cursor-success/5 border border-cursor-success/10 text-cursor-success rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
-                  <Check size={16} />
-                  <span>Đã gửi lời mời</span>
-                </div>
               )}
             </div>
           </div>

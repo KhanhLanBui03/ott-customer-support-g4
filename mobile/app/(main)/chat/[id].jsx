@@ -86,7 +86,9 @@ const ChatDetailScreen = () => {
       const { chatApi } = require('../../../src/api/chatApi');
       await chatApi.addReaction(messageId, realId, { emoji });
     } catch (error) {
-      console.error('Reaction error:', error);
+      if (error.response?.status !== 401) {
+        console.error('Reaction error:', error);
+      }
     }
   };
 
@@ -105,20 +107,26 @@ const ChatDetailScreen = () => {
     return conversation?.name || 'Chat';
   }, [conversation, currentUser]);
 
+  const otherMember = useMemo(() => {
+    if (conversation?.type !== 'SINGLE') return null;
+    const currentUserId = String(currentUser?.userId || currentUser?.id || '');
+    return (conversation.members || []).find(p => {
+      const pId = String(p.userId || p.id || '');
+      return pId !== '' && pId !== currentUserId;
+    });
+  }, [conversation, currentUser]);
+
+  const friendshipStatus = otherMember?.friendshipStatus || 'NONE';
+
   const otherAvatar = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.avatarUrl || conversation.avatar;
-    
-    const currentUserId = String(currentUser?.userId || currentUser?.id || '');
-    const otherParticipant = (conversation?.members || []).find(p => String(p.userId || p.id) !== currentUserId);
-    return otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic;
-  }, [conversation, currentUser]);
+    return otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic;
+  }, [conversation, otherMember]);
 
   const isOnline = useMemo(() => {
     if (conversation?.type === 'GROUP') return false;
-    const currentUserId = String(currentUser?.userId || currentUser?.id || '');
-    const otherParticipant = (conversation?.members || []).find(p => String(p.userId || p.id) !== currentUserId);
-    return otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true;
-  }, [conversation, currentUser]);
+    return otherMember?.status === 'ONLINE' || otherMember?.isOnline === true;
+  }, [conversation, otherMember]);
 
   const headerAvatarUrl = otherAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=128&bold=true`;
 
@@ -185,10 +193,28 @@ const ChatDetailScreen = () => {
               {isOnline && <View style={styles.headerOnlineBadge} />}
             </View>
             <View style={styles.headerInfo}>
-              <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
-              <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : styles.statusOffline]}>
-                {isOnline ? 'Online' : 'Offline'}
-              </Text>
+              <View style={styles.nameContainer}>
+                <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
+                <MaterialIcons name="verified-user" size={16} color="#6366f1" style={styles.shieldIcon} />
+              </View>
+              <View style={styles.statusRow}>
+                <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : styles.statusOffline]}>
+                  {isOnline ? 'Online' : 'Offline'}
+                </Text>
+                {conversation?.type === 'SINGLE' && (
+                  <View style={[
+                    styles.statusTag, 
+                    friendshipStatus === 'ACCEPTED' ? styles.friendTag : styles.strangerTag
+                  ]}>
+                    <Text style={[
+                      styles.statusTagText,
+                      friendshipStatus === 'ACCEPTED' ? styles.friendTagText : styles.strangerTagText
+                    ]}>
+                      {friendshipStatus === 'ACCEPTED' ? 'BẠN BÈ' : 'NGƯỜI LẠ'}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </TouchableOpacity>
         </View>
@@ -232,13 +258,41 @@ const styles = StyleSheet.create({
   backButton: { padding: 8 },
   headerContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerInfo: { flex: 1 },
-  headerTitle: { fontSize: 16, fontWeight: '600', color: '#111827' },
+  nameContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  shieldIcon: { marginLeft: 2 },
   headerAvatarContainer: { position: 'relative', width: 40, height: 40 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6' },
   headerOnlineBadge: { position: 'absolute', right: 0, bottom: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#4ade80', borderWidth: 2, borderColor: '#fff' },
-  statusOnline: { color: '#4ade80' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  headerStatus: { fontSize: 12, fontWeight: '500' },
+  statusOnline: { color: '#10b981' },
   statusOffline: { color: '#9ca3af' },
-  headerStatus: { fontSize: 12, marginTop: 2, fontWeight: '500' },
+  statusTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  friendTag: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
+  },
+  strangerTag: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#f97316',
+  },
+  statusTagText: {
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  friendTagText: {
+    color: '#10b981',
+  },
+  strangerTagText: {
+    color: '#f97316',
+  },
 });
 
 export default ChatDetailScreen;

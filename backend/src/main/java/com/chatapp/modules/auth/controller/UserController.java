@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -86,18 +87,63 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(data, "Profile updated successfully"));
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatapp.modules.contact.repository.FriendshipRepository friendshipRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatapp.common.util.JwtUtil jwtUtil;
+
+    private String getUserId(jakarta.servlet.http.HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return jwtUtil.extractUserId(authHeader.substring(7));
+        }
+        return null;
+    }
+
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<Map<String, Object>>> searchUser(
-            Authentication authentication,
+            jakarta.servlet.http.HttpServletRequest request,
             @org.springframework.web.bind.annotation.RequestParam String phoneNumber
     ) {
         if (phoneNumber == null || phoneNumber.isBlank()) {
             throw new ValidationException("Phone number is required for search");
         }
 
+        String myId = getUserId(request);
+        if (myId == null) {
+            throw new com.chatapp.common.exception.UnauthorizedException("User not authenticated");
+        }
+
         String cleanPhone = validationUtil.cleanPhoneNumber(phoneNumber);
-        User user = userRepository.findByPhoneNumber(cleanPhone)
-                .orElseThrow(() -> new ValidationException("User not found with this phone number"));
+        
+        // 1. Tìm người dùng mục tiêu
+        Optional<User> userOpt = userRepository.findByPhoneNumber(cleanPhone);
+        
+        User user;
+        if (userOpt.isPresent()) {
+            user = userOpt.get();
+        } else {
+            java.util.List<User> suggestions = userRepository.findByPhoneNumberStartingWith(cleanPhone);
+            if (suggestions.isEmpty()) {
+                throw new ValidationException("User not found with this phone number");
+            }
+            user = suggestions.get(0);
+        }
+
+        // 2. Kiểm tra quan hệ bạn bè trong DB
+        String status = "NONE";
+        if (!myId.equals(user.getUserId())) {
+            Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(myId, user.getUserId());
+            Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(user.getUserId(), myId);
+            
+            if (f1.isPresent()) status = f1.get().getStatus();
+            else if (f2.isPresent()) {
+                status = f2.get().getStatus();
+            }
+        } else {
+            status = "SELF"; // Tự tìm chính mình
+        }
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("userId", user.getUserId());
@@ -106,6 +152,7 @@ public class UserController {
         data.put("lastName", user.getLastName() == null ? "" : user.getLastName());
         data.put("fullName", user.getFullName() == null ? "" : user.getFullName());
         data.put("avatarUrl", user.getAvatarUrl() == null ? "" : user.getAvatarUrl());
+        data.put("friendshipStatus", status);
 
         return ResponseEntity.ok(ApiResponse.success(data, "User found"));
     }

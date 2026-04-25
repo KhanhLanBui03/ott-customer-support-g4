@@ -29,16 +29,15 @@ const LoginScreen = () => {
   const [localError, setLocalError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Xóa lỗi cũ khi vào trang
-  useEffect(() => {
-    clearError();
-  }, []);
-
   // Hiển thị thông báo lỗi từ hệ thống
   useEffect(() => {
     if (authError) {
+      // Nếu là lỗi hết hạn phiên, hiển thị trực tiếp
+      if (authError === 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.') {
+        setLocalError(authError);
+      } 
       // Việt hóa lỗi đăng nhập thất bại phổ biến
-      if (authError.includes('Invalid credentials') || authError.includes('401')) {
+      else if (authError.includes('Invalid credentials') || authError.includes('401')) {
         setLocalError('Email hoặc mật khẩu không chính xác');
       } else {
         setLocalError(authError);

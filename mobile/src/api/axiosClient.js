@@ -28,6 +28,16 @@ axiosClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+import { Alert } from 'react-native';
+
+let store;
+
+export const injectStore = (_store) => {
+  store = _store;
+};
+
+let isUnauthorizedAlertShowing = false;
+
 // Interceptor cho Response: Xử lý bóc tách dữ liệu và lỗi 401
 axiosClient.interceptors.response.use(
   (response) => {
@@ -37,6 +47,7 @@ axiosClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Nếu lỗi 401 và chưa thử retry
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -63,8 +74,42 @@ axiosClient.interceptors.response.use(
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
         await SecureStore.deleteItemAsync('user');
+        
+        if (store && !isUnauthorizedAlertShowing) {
+          isUnauthorizedAlertShowing = true;
+          store.dispatch({ type: 'auth/sessionExpired' });
+          Alert.alert(
+            'Phiên đăng nhập hết hạn',
+            'Vui lòng đăng nhập lại để tiếp tục.',
+            [{ 
+              text: 'OK', 
+              onPress: () => { isUnauthorizedAlertShowing = false; } 
+            }]
+          );
+        }
+        
         return Promise.reject(refreshError);
       }
+    }
+
+    // Nếu lỗi 401 ngay cả khi đã retry hoặc không thể retry
+    if (error.response?.status === 401) {
+       await SecureStore.deleteItemAsync('accessToken');
+       await SecureStore.deleteItemAsync('refreshToken');
+       await SecureStore.deleteItemAsync('user');
+       
+       if (store && !isUnauthorizedAlertShowing) {
+         isUnauthorizedAlertShowing = true;
+         store.dispatch({ type: 'auth/sessionExpired' });
+         Alert.alert(
+           'Phiên đăng nhập hết hạn',
+           'Vui lòng đăng nhập lại để tiếp tục.',
+           [{ 
+             text: 'OK', 
+             onPress: () => { isUnauthorizedAlertShowing = false; } 
+           }]
+         );
+       }
     }
 
     return Promise.reject(error);
