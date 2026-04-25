@@ -185,4 +185,20 @@ public class ConversationController {
         conversationService.togglePin(userId, conversationId);
         return ResponseEntity.ok(ApiResponse.success(null, "Pin status toggled successfully"));
     }
+
+    /**
+     * Update conversation wallpaper (background image)
+     * PUT /api/v1/conversations/{conversationId}/wallpaper
+     */
+    @PutMapping("/{conversationId}/wallpaper")
+    public ResponseEntity<ApiResponse<Void>> updateWallpaper(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String wallpaperUrl = body.get("wallpaperUrl");
+        log.info("Updating wallpaper for conversation: {} by user: {}", conversationId, userId);
+        conversationService.updateWallpaper(userId, conversationId, wallpaperUrl);
+        return ResponseEntity.ok(ApiResponse.success(null, "Wallpaper updated successfully"));
+    }
 }

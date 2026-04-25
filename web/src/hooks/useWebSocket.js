@@ -1,11 +1,11 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { addMessage, recallMessage, removeMessage, fetchConversations, fetchFriends, setTyping, updateMessage, updateMessageStatus } from '../store/chatSlice';
+import { addMessage, recallMessage, removeMessage, fetchConversations, fetchFriends, setTyping, updateConversationWallpaper, updateMessage, updateMessageStatus } from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup } from '../store/notificationSlice';
 import { initSocket, getStompClient } from '../utils/socket';
 
 // Flag dùng chung giữa các instance của hook
-let _globalSubscription = null;
+let _globalSubscriptions = [];
 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
@@ -68,7 +68,30 @@ export const useWebSocket = () => {
                     isTyping: event.payload.isTyping,
                     name: 'Ai đó'
                 }));
-            } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
+            } else if (event.eventType === 'WALLPAPER_UPDATED') {
+                const payload = event.payload || {};
+                const conversationId = event.conversationId || payload.conversationId;
+                if (conversationId) {
+                    dispatch(updateConversationWallpaper({
+                        conversationId,
+                        wallpaperUrl: payload.wallpaperUrl ?? null
+                    }));
+                } else {
+                    dispatch(fetchConversations());
+                }
+            } else if (event.eventType === 'CONVERSATION_UPDATE') {
+                const payload = event.payload || {};
+                const conversationId = event.conversationId || payload.conversationId || payload.id;
+
+                if (conversationId && Object.prototype.hasOwnProperty.call(payload, 'wallpaperUrl')) {
+                    dispatch(updateConversationWallpaper({
+                        conversationId,
+                        wallpaperUrl: payload.wallpaperUrl ?? null
+                    }));
+                } else {
+                    dispatch(fetchConversations());
+                }
+            } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
                 dispatch(fetchConversations());
             }
         } catch (err) {
@@ -82,12 +105,15 @@ export const useWebSocket = () => {
         const client = initSocket(token);
 
         const setupSubscription = () => {
-            if (_globalSubscription) {
-                console.log('[STOMP] Cleaning up old subscription...');
-                _globalSubscription.unsubscribe();
+            if (_globalSubscriptions.length > 0) {
+                console.log('[STOMP] Cleaning up old subscriptions...');
+                _globalSubscriptions.forEach(sub => sub.unsubscribe());
+                _globalSubscriptions = [];
             }
-            console.log('[STOMP] 📡 Subscribing to /user/queue/messages');
-            _globalSubscription = client.subscribe('/user/queue/messages', handleIncomingMessage);
+            console.log('[STOMP] 📡 Subscribing to /user/queue/messages and /user/queue/conversations');
+            const messagesSub = client.subscribe('/user/queue/messages', handleIncomingMessage);
+            const conversationsSub = client.subscribe('/user/queue/conversations', handleIncomingMessage);
+            _globalSubscriptions = [messagesSub, conversationsSub];
         };
 
         if (client.connected) {
@@ -105,7 +131,7 @@ export const useWebSocket = () => {
         const originalOnClose = client.onWebSocketClose;
         client.onWebSocketClose = (evt) => {
             if (originalOnClose) originalOnClose(evt);
-            _globalSubscription = null;
+            _globalSubscriptions = [];
         };
 
     }, [token, handleIncomingMessage]);

@@ -11,6 +11,7 @@ public class ConversationResponse {
     private String type;
     private String name;
     private String avatarUrl;
+    private String wallpaperUrl;
     private String lastMessage;
     private String lastMessageSenderId;
     private Long lastMessageTime;

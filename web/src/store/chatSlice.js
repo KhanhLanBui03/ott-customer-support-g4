@@ -241,6 +241,14 @@ const chatSlice = createSlice({
         }
       });
     },
+    updateConversationWallpaper: (state, action) => {
+      const { conversationId, wallpaperUrl } = action.payload || {};
+      if (!conversationId) return;
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv) {
+        conv.wallpaperUrl = wallpaperUrl || null;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -275,6 +283,7 @@ export const {
     updateUserPresence,
     updateMessage,
     optimisticVote,
-    resetUnreadCount
+    resetUnreadCount,
+    updateConversationWallpaper
 } = chatSlice.actions;
 export default chatSlice.reducer;
