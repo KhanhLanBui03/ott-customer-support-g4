@@ -731,4 +731,43 @@ public class ConversationService {
             log.warn("UserConversation not found for pinning: user {}, conv {}", userId, conversationId);
         });
     }
+
+    /**
+     * Update conversation wallpaper (background image)
+     * Broadcasts CONVERSATION_UPDATE event to all members
+     */
+    public void updateWallpaper(String userId, String conversationId, String wallpaperUrl) {
+        log.info("Updating wallpaper for conversation: {}", conversationId);
+
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        // Verify user is member of this conversation
+        userConversationRepository.findById(userId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+        // Update wallpaper
+        conv.setWallpaperUrl(wallpaperUrl);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        conversationRepository.save(conv);
+
+        log.info("Wallpaper updated for conversation: {}", conversationId);
+
+        // Broadcast update event to all members
+        ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+
+        // Notify via WebSocket to all members
+        for (String memberId : conv.getMemberIds()) {
+            try {
+                messagingTemplate.convertAndSendToUser(
+                        memberId,
+                        "/queue/conversations",
+                        MessageEvent.of("WALLPAPER_UPDATED", conversationId, Map.of("wallpaperUrl", wallpaperUrl))
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send wallpaper update to user {}: {}", memberId, e.getMessage());
+            }
+        }
+    }
 }
