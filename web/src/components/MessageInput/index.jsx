@@ -83,7 +83,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     }
 
     const optimisticMsg = {
-      content: type === 'TEXT' ? finalContent : '',
+      content: type === 'STICKER' ? finalContent : (customContent === null ? finalContent : ''),
       senderId: user?.userId || user?.id,
       mediaUrls: localAttachments.length > 0 ? localAttachments.map(a => a.blobUrl) : finalAttachments,
       type: type,
@@ -93,7 +93,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     };
 
     dispatch(addOptimisticMessage({ conversationId, message: optimisticMsg }));
-    sendMessage(conversationId, type === 'TEXT' ? finalContent : '', type, finalAttachments, replyingTo?.messageId);
+    sendMessage(conversationId, type === 'STICKER' ? finalContent : (customContent === null ? finalContent : ''), type, finalAttachments, replyingTo?.messageId);
 
     if (replyingTo) onCancelReply();
     if (typingTimeoutRef.current) { clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = null; }
@@ -135,14 +135,14 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     }
 
     if (filesToProcess.length === 0) return;
-    
+
     // Create local previews immediately
     const newLocals = filesToProcess.map(file => ({
       file,
       blobUrl: URL.createObjectURL(file)
     }));
     setLocalAttachments(prev => [...prev, ...newLocals]);
-    
+
     setIsUploading(true);
     try {
       for (const local of newLocals) {
@@ -150,10 +150,10 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
         const url = response.data?.url || response.url;
         if (url) setAttachments(prev => [...prev, url]);
       }
-    } catch (err) { 
-      console.error("Upload failed", err); 
-    } finally { 
-      setIsUploading(false); 
+    } catch (err) {
+      console.error("Upload failed", err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -278,7 +278,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                   const repliedId = String(replyingTo.senderId || '');
                   const myId = String(user?.userId || user?.id || '');
                   if (repliedId === myId) return 'Bạn';
-                  
+
                   const currentConv = conversations.find(c => c.conversationId === conversationId);
                   const freshMember = currentConv?.members?.find(m => String(m.userId || m.id) === repliedId);
                   return freshMember?.fullName || freshMember?.name || replyingTo.senderName;
