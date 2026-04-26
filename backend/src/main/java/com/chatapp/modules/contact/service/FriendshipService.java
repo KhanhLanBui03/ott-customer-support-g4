@@ -9,7 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -34,7 +36,7 @@ public class FriendshipService {
             // Even if exists, we re-publish the notification if it's still pending 
             // to help the user if they missed it or refreshed.
             if ("PENDING".equals(existing.get().getStatus())) {
-                publishNotification(addresseeId, "FRIEND_REQUEST", mapToResponse(requesterId, "PENDING", false));
+                publishNotification(addresseeId, "FRIEND_REQUEST", mapToResponse(requesterId, "PENDING", false, existing.get().getCreatedAt()));
             }
             return;
         }
@@ -59,7 +61,7 @@ public class FriendshipService {
         friendshipRepository.save(friendship);
         
         // Notify addressee
-        publishNotification(addresseeId, "FRIEND_REQUEST", mapToResponse(requesterId, "PENDING", false));
+        publishNotification(addresseeId, "FRIEND_REQUEST", mapToResponse(requesterId, "PENDING", false, friendship.getCreatedAt()));
     }
 
     public void acceptFriendRequest(String requesterId, String addresseeId) {
@@ -70,9 +72,8 @@ public class FriendshipService {
             friendship.setUpdatedAt(System.currentTimeMillis());
             friendshipRepository.save(friendship);
             
-            // Notify both about acceptance
-            publishNotification(requesterId, "FRIEND_ACCEPT", mapToResponse(addresseeId, "ACCEPTED", true));
-            publishNotification(addresseeId, "FRIEND_ACCEPT", mapToResponse(requesterId, "ACCEPTED", false));
+            // Notify the requester that their request was accepted
+            publishNotification(requesterId, "FRIEND_ACCEPT", mapToResponse(addresseeId, "ACCEPTED", true, friendship.getCreatedAt()));
 
             // Automatically create a single conversation between them
             try {
@@ -101,6 +102,25 @@ public class FriendshipService {
         }
     }
 
+    public void deleteFriend(String userId, String friendId) {
+        log.info("Deleting friendship between {} and {}", userId, friendId);
+        
+        // Find user info before deleting if possible, to notify the other party
+        com.chatapp.modules.auth.domain.User performer = userRepository.findById(userId).orElse(null);
+        
+        friendshipRepository.find(userId, friendId).ifPresent(friendshipRepository::delete);
+        friendshipRepository.find(friendId, userId).ifPresent(friendshipRepository::delete);
+        
+        // Notify the other person that they have been unfriended
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("userId", userId);
+        if (performer != null) {
+            payload.put("fullName", performer.getFullName());
+            payload.put("avatarUrl", performer.getAvatarUrl());
+        }
+        publishNotification(friendId, "FRIEND_DELETE", payload);
+    }
+
     public void rejectFriendRequest(String requesterId, String addresseeId) {
         Optional<Friendship> friendshipOpt = friendshipRepository.find(requesterId, addresseeId);
         if (friendshipOpt.isPresent()) {
@@ -109,31 +129,30 @@ public class FriendshipService {
     }
 
     public List<FriendshipResponse> getFriends(String userId) {
-        List<FriendshipResponse> friends = new ArrayList<>();
+        java.util.Map<String, FriendshipResponse> friendsMap = new java.util.LinkedHashMap<>();
 
-        // Friends where current user is requester (Base table lookup - full attributes)
+        // Friends where current user is requester
         List<Friendship> initiated = friendshipRepository.findByRequesterId(userId);
-        
-        // Friends where current user is addressee (GSI lookup - keys only)
-        List<Friendship> receivedKeysOnly = friendshipRepository.findByAddresseeId(userId);
-        List<Friendship> received = new ArrayList<>();
-        for (Friendship keyItem : receivedKeysOnly) {
-            friendshipRepository.find(keyItem.getRequesterId(), keyItem.getAddresseeId())
-                .ifPresent(received::add);
-        }
-
         for (Friendship f : initiated) {
             if (Friendship.Status.ACCEPTED.name().equals(f.getStatus()) || Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
-                friends.add(mapToResponse(f.getAddresseeId(), f.getStatus(), true));
+                FriendshipResponse resp = mapToResponse(f.getAddresseeId(), f.getStatus(), true, f.getCreatedAt());
+                if (resp != null) friendsMap.put(resp.getUserId(), resp);
             }
         }
-        for (Friendship f : received) {
-            if (Friendship.Status.ACCEPTED.name().equals(f.getStatus()) || Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
-                friends.add(mapToResponse(f.getRequesterId(), f.getStatus(), false));
-            }
+        
+        // Friends where current user is addressee
+        List<Friendship> receivedKeysOnly = friendshipRepository.findByAddresseeId(userId);
+        for (Friendship keyItem : receivedKeysOnly) {
+            friendshipRepository.find(keyItem.getRequesterId(), keyItem.getAddresseeId())
+                .ifPresent(f -> {
+                    if (Friendship.Status.ACCEPTED.name().equals(f.getStatus()) || Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
+                        FriendshipResponse resp = mapToResponse(f.getRequesterId(), f.getStatus(), false, f.getCreatedAt());
+                        if (resp != null) friendsMap.put(resp.getUserId(), resp);
+                    }
+                });
         }
 
-        return friends;
+        return new java.util.ArrayList<>(friendsMap.values());
     }
 
     public List<FriendshipResponse> getPendingRequests(String userId) {
@@ -146,7 +165,7 @@ public class FriendshipService {
         
         return received.stream()
                 .filter(f -> Friendship.Status.PENDING.name().equals(f.getStatus()))
-                .map(f -> mapToResponse(f.getRequesterId(), f.getStatus(), false))
+                .map(f -> mapToResponse(f.getRequesterId(), f.getStatus(), false, f.getCreatedAt()))
                 .collect(Collectors.toList());
     }
 
@@ -190,7 +209,7 @@ public class FriendshipService {
         return f2.isPresent() && Friendship.Status.BLOCKED.name().equals(f2.get().getStatus());
     }
 
-    private FriendshipResponse mapToResponse(String friendId, String status, boolean isRequester) {
+    private FriendshipResponse mapToResponse(String friendId, String status, boolean isRequester, Long createdAt) {
         User user = userRepository.findById(friendId).orElse(null);
         if (user == null) return null;
 
@@ -201,6 +220,7 @@ public class FriendshipService {
                 .avatarUrl(user.getAvatarUrl())
                 .status(status)
                 .isRequester(isRequester)
+                .createdAt(createdAt)
                 .build();
     }
 }

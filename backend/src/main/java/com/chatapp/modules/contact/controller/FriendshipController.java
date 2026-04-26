@@ -38,6 +38,13 @@ public class FriendshipController {
         return ResponseEntity.ok().build();
     }
 
+    @DeleteMapping("/{friendId}")
+    public ResponseEntity<Void> deleteFriend(@PathVariable String friendId) {
+        String userId = getCurrentUserId();
+        friendshipService.deleteFriend(userId, friendId);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/block/{friendId}")
     public ResponseEntity<Void> blockUser(@PathVariable String friendId) {
         String userId = getCurrentUserId();

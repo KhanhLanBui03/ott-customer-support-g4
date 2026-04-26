@@ -32,6 +32,7 @@ export const useChat = () => {
   }, [dispatch]);
 
   const selectConversation = useCallback((id) => {
+    if (id === activeConversationId) return;
     dispatch(setActiveConversation(id));
     if (id) {
        // Optimistic Reset
@@ -40,7 +41,7 @@ export const useChat = () => {
        chatApi.markConversationAsRead(id).catch(err => console.error("Failed to mark as read", err));
        fetchMessages(id);
     }
-  }, [dispatch, fetchMessages]);
+  }, [dispatch, fetchMessages, activeConversationId]);
 
   const create = useCallback(async (type, memberIds, name = null) => {
     try {

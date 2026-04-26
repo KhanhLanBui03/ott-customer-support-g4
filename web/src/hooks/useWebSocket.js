@@ -13,7 +13,7 @@ import {
     setMessageRead,
     setUserStatus
 } from '../store/chatSlice';
-import { addPendingFriend, addPendingGroup } from '../store/notificationSlice';
+import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
 import { initSocket, getStompClient } from '../utils/socket';
 
 // Shared state between hook instances
@@ -55,13 +55,26 @@ export const useWebSocket = () => {
                     conversationId: event.conversationId,
                     messageId: event.payload.messageId || event.payload
                 }));
-            } else if (event.eventType === 'FRIEND_REQUEST' || event.eventType === 'FRIEND_ACCEPT') {
+            } else if (event.eventType === 'FRIEND_REQUEST' || event.eventType === 'FRIEND_ACCEPT' || event.eventType === 'FRIEND_DELETE') {
                 const data = event.payload?.data || event.payload;
                 if (event.eventType === 'FRIEND_REQUEST') {
                     dispatch(addPendingFriend(data));
-                } else {
+                } else if (event.eventType === 'FRIEND_ACCEPT') {
+                    dispatch(addActivity({
+                        type: 'FRIEND_ACCEPT',
+                        user: data,
+                        message: `${data.fullName || 'Ai đó'} đã chấp nhận lời mời kết bạn.`
+                    }));
                     dispatch(fetchConversations());
                     dispatch(fetchFriends());
+                } else if (event.eventType === 'FRIEND_DELETE') {
+                    dispatch(addActivity({
+                        type: 'FRIEND_DELETE',
+                        user: data,
+                        message: `${data.fullName || 'Ai đó'} đã hủy kết bạn.`
+                    }));
+                    dispatch(fetchFriends());
+                    dispatch(fetchConversations());
                 }
             } else if (event.eventType === 'MESSAGE_STATUS_UPDATE' || event.eventType === 'MESSAGE_UPDATE') {
                 const conversationId = event.conversationId;
