@@ -149,13 +149,31 @@ public class MessageService {
     public void markMessageAsRead(String conversationId, String messageId, String userId) {
         log.info("Marking message {} as read by user {}", messageId, userId);
 
-        Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
+        Message targetMessage = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
 
-        message.markAsRead(userId);
-        messageRepository.save(message);
+        // IMPROVEMENT: Mark this and ALL PREVIOUS messages as read
+        List<Message> allMessages = messageRepository.findByConversationId(conversationId);
+        List<Message> toUpdate = new ArrayList<>();
+        
+        Long targetTime = targetMessage.getCreatedAt();
+        if (targetTime == null) targetTime = System.currentTimeMillis();
+        
+        for (Message msg : allMessages) {
+            Long msgTime = msg.getCreatedAt();
+            if (msgTime != null && msgTime <= targetTime) {
+                if (msg.markAsRead(userId)) {
+                    toUpdate.add(msg);
+                }
+            }
+        }
+        
+        if (!toUpdate.isEmpty()) {
+            log.info("Bulk updating {} messages as read by {} in {}", toUpdate.size(), userId, conversationId);
+            messageRepository.saveAll(toUpdate);
+        }
 
-        // Publish read receipt event
+        // Publish read receipt event (we can still use the single messageId for the event to notify UI)
         publishReadReceiptEvent(conversationId, messageId, userId);
     }
 
@@ -414,7 +432,7 @@ public class MessageService {
     }
 
     private void publishReadReceiptEvent(String conversationId, String messageId, String userId) {
-        eventPublisher.publishEvent(MessageEvent.of("READ_RECEIPT", conversationId, Map.of(
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_READ", conversationId, Map.of(
                 "messageId", messageId,
                 "userId", userId,
                 "readAt", System.currentTimeMillis()

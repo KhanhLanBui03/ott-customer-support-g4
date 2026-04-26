@@ -336,7 +336,25 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
             </button>
             <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
             <div className="w-[1px] h-8 bg-border hidden sm:block" />
-            <input ref={textInputRef} type="text" className="flex-1 bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-1 sm:px-2 font-bold tracking-tight min-w-0" placeholder={isUploading ? "Đang đồng bộ tập tin..." : "Soạn tin nhắn..."} value={text} onChange={handleInputChange} disabled={isUploading} />
+            <textarea
+              ref={textInputRef}
+              className="flex-1 bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-1 sm:px-2 font-bold tracking-tight min-w-0 resize-none py-2 max-h-32 no-scrollbar overflow-y-auto"
+              placeholder={isUploading ? "Đang đồng bộ tập tin..." : "Soạn tin nhắn..."}
+              value={text}
+              onChange={(e) => {
+                handleInputChange(e);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
+                }
+              }}
+              rows={1}
+              disabled={isUploading}
+            />
             <div className="flex items-center space-x-1 sm:space-x-2">
               <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`w-10 h-10 flex items-center justify-center transition-all rounded-full active:scale-90 focus:outline-none ${showEmojis ? 'text-white bg-indigo-500 shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}><Smile size={20} /></button>
               <button type="submit" disabled={(!text.trim() && attachments.length === 0) || isUploading} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all flex-shrink-0 focus:outline-none ${(text.trim() || attachments.length > 0) && !isUploading ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-xl shadow-indigo-500/40 scale-100 hover:scale-110 active:scale-90' : 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-700 scale-95 cursor-not-allowed opacity-50'}`}><Send size={20} fill="currentColor" /></button>

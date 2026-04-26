@@ -164,7 +164,7 @@ public class Message {
                 .build();
     }
 
-    public void markAsRead(String userId) {
+    public boolean markAsRead(String userId) {
         if (readBy == null) {
             readBy = new java.util.ArrayList<>();
         }
@@ -178,7 +178,9 @@ public class Message {
                     .userId(userId)
                     .readAt(System.currentTimeMillis())
                     .build());
+            return true;
         }
+        return false;
     }
 
     @DynamoDBAttribute(attributeName = "hiddenForUsers")
