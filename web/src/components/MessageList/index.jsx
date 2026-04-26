@@ -62,17 +62,38 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [selectedVote, setSelectedVote] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [reactionDetail, setReactionDetail] = useState(null);
+  const { typingUsers } = useSelector(state => state.chat);
+  const currentConv = conversations?.find(c => c.conversationId === conversationId);
 
   useEffect(() => {
-    // Sync wallpaper when switching conversations
-    setWallpaper(localStorage.getItem(`chat_wallpaper_${conversationId}`));
-  }, [conversationId]);
+    const localWallpaper = localStorage.getItem(`chat_wallpaper_${conversationId}`);
+    let wallpaperUrl = localWallpaper || null;
+
+    if (currentConv && Object.prototype.hasOwnProperty.call(currentConv, 'wallpaperUrl')) {
+      wallpaperUrl = currentConv.wallpaperUrl;
+    }
+
+    setWallpaper(wallpaperUrl);
+  }, [conversationId, currentConv?.wallpaperUrl, currentConv]);
+
+  useEffect(() => {
+    if (wallpaper) {
+      localStorage.setItem(`chat_wallpaper_${conversationId}`, wallpaper);
+    } else {
+      localStorage.removeItem(`chat_wallpaper_${conversationId}`);
+    }
+  }, [conversationId, wallpaper]);
 
   useEffect(() => {
     const handleUpdate = (e) => {
-      // Only update if the event matches current conversation
       if (e.detail?.conversationId === conversationId) {
         setWallpaper(e.detail.wallpaper);
+        if (e.detail.wallpaper) {
+          localStorage.setItem(`chat_wallpaper_${conversationId}`, e.detail.wallpaper);
+        } else {
+          localStorage.removeItem(`chat_wallpaper_${conversationId}`);
+        }
       }
     };
     window.addEventListener('chat-wallpaper-updated', handleUpdate);
@@ -80,6 +101,63 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   }, [conversationId]);
 
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+
+  const getReactionUserName = (userId) => {
+    if (!userId) return 'Người dùng';
+    const currentUserId = user?.userId || user?.id;
+    if (String(userId) === String(currentUserId)) return 'Bạn';
+
+    const members = currentConv?.members || currentConv?.participants || [];
+    const found = members.find(member => String(member.userId || member.id || '') === String(userId));
+    return found?.fullName || found?.name || found?.username || 'Người dùng';
+  };
+
+  const openReactionDetail = (messageId, emoji) => {
+    setReactionDetail({ messageId, emoji });
+  };
+
+  const closeReactionDetail = () => setReactionDetail(null);
+
+  const getReactionUsers = (message, emoji) => {
+    const serverUserIds = Array.isArray(message?.reactions?.[emoji]) ? message.reactions[emoji].map(id => String(id)) : [];
+    const localUserIds = (optimisticReactions[message.messageId] || [])
+      .filter(r => r.emoji === emoji)
+      .map(r => String(r.userId));
+
+    return Array.from(new Set([...serverUserIds, ...localUserIds]));
+  };
+
+  const getReactionGroups = (message) => {
+    const emojiUsers = {};
+
+    const addReaction = (emoji, userId) => {
+      if (!emoji || userId === undefined || userId === null) return;
+      const normalizedId = String(userId);
+      if (!emojiUsers[emoji]) emojiUsers[emoji] = new Set();
+      emojiUsers[emoji].add(normalizedId);
+    };
+
+    if (message?.reactions && typeof message.reactions === 'object') {
+      Object.entries(message.reactions).forEach(([emoji, users]) => {
+        if (Array.isArray(users)) {
+          users.forEach((userId) => addReaction(emoji, userId));
+        }
+      });
+    }
+
+    const localReactions = optimisticReactions[message?.messageId] || [];
+    localReactions.forEach((reaction) => addReaction(reaction.emoji, reaction.userId));
+
+    return Object.fromEntries(
+      Object.entries(emojiUsers).map(([emoji, set]) => [emoji, set.size])
+    );
+  };
+
+  const selectedDetailMessage = reactionDetail ? messages.find(msg => String(msg.messageId) === String(reactionDetail.messageId)) : null;
+  const selectedDetailGroups = selectedDetailMessage ? getReactionGroups(selectedDetailMessage) : {};
+  const detailEmoji = reactionDetail?.emoji || Object.keys(selectedDetailGroups)[0] || '';
+  const selectedDetailUserIds = selectedDetailMessage && detailEmoji ? getReactionUsers(selectedDetailMessage, detailEmoji) : [];
+  const selectedDetailNames = selectedDetailUserIds.map(getReactionUserName);
 
   const scrollToBottom = (instant = false) => {
     if (scrollRef.current) {
@@ -334,45 +412,48 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   };
 
   const renderReactions = (messageId, serverReactions, isMe) => {
-    const currentUserId = user?.userId || user?.id;
     const localReactions = optimisticReactions[messageId] || [];
-    
-    // Create a Map to store unique reaction per userId
-    const uniqueReactionsMap = new Map();
-    
-    // Add server reactions first (it's a map of emoji -> [userIds])
+
+    const emojiUserMap = {};
+
+    const addReaction = (emoji, userId) => {
+      if (!emoji || userId === undefined || userId === null) return;
+      const normalizedId = String(userId);
+      if (!emojiUserMap[emoji]) {
+        emojiUserMap[emoji] = new Set();
+      }
+      emojiUserMap[emoji].add(normalizedId);
+    };
+
     if (serverReactions && typeof serverReactions === 'object') {
       Object.entries(serverReactions).forEach(([emoji, userIds]) => {
         if (Array.isArray(userIds)) {
-          userIds.forEach(userId => {
-            uniqueReactionsMap.set(userId, emoji);
-          });
+          userIds.forEach(userId => addReaction(emoji, userId));
         }
       });
     }
-    
-    // Overwrite with local reactions (this user's latest action)
-    localReactions.forEach(r => {
-      if (r.userId) uniqueReactionsMap.set(r.userId, r.emoji);
-    });
 
-    const finalReactions = Array.from(uniqueReactionsMap.values());
-    
-    if (finalReactions.length === 0) return null;
-    
-    const groups = finalReactions.reduce((acc, emoji) => {
-      acc[emoji] = (acc[emoji] || 0) + 1;
-      return acc;
-    }, {});
+    localReactions.forEach(r => addReaction(r.emoji, r.userId));
+
+    const groups = Object.fromEntries(
+      Object.entries(emojiUserMap).map(([emoji, userIds]) => [emoji, userIds.size])
+    );
+
+    if (Object.keys(groups).length === 0) return null;
 
     return (
-      <div className={`absolute bottom-[-14px] ${isMe ? 'right-4' : 'left-4'} flex items-center space-y-1 z-20`}>
+      <div className={`absolute bottom-[-14px] ${isMe ? 'right-4' : 'left-4'} flex items-center flex-col space-y-1 z-20`}>
         <div className="flex items-center space-x-1">
           {Object.entries(groups).map(([emoji, count]) => (
-            <div key={emoji} className="flex items-center space-x-1 px-2 py-0.5 bg-sidebar/90 backdrop-blur-md border border-border shadow-sm rounded-full animate-fade-in hover:scale-110 transition-transform cursor-default">
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => openReactionDetail(messageId, emoji)}
+              className="flex items-center space-x-1 px-2 py-0.5 bg-sidebar/90 backdrop-blur-md border border-border shadow-sm rounded-full animate-fade-in hover:scale-110 transition-transform"
+            >
               <span className="text-[12px]">{emoji}</span>
               {count > 1 && <span className="text-[10px] font-black text-foreground/60">{count}</span>}
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -387,8 +468,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     );
   }
 
-  const { typingUsers } = useSelector(state => state.chat);
-  const currentConv = conversations?.find(c => c.conversationId === conversationId);
   const pinnedMessages = currentConv?.pinnedMessages || [];
   const pinnedIds = pinnedMessages.map(p => p.messageId);
   const meId = user?.userId || user?.id;
@@ -1125,6 +1204,53 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                >
                   <Download size={20} />
                </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reactionDetail && selectedDetailMessage && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl rounded-3xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 bg-slate-900/95">
+              <div>
+                <div className="text-xs uppercase text-slate-400 tracking-[0.18em]">Biểu cảm</div>
+                <div className="text-lg font-semibold text-white mt-1">{detailEmoji} · {selectedDetailGroups[detailEmoji] || 0} lượt</div>
+              </div>
+              <button
+                type="button"
+                onClick={closeReactionDetail}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition"
+              >Đóng</button>
+            </div>
+            <div className="grid grid-cols-4 gap-4 p-4">
+              <div className="col-span-4 md:col-span-1 bg-slate-900/90 rounded-3xl p-4 space-y-3">
+                {Object.entries(selectedDetailGroups).map(([emoji, count]) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setReactionDetail({ messageId: reactionDetail.messageId, emoji })}
+                    className={`w-full rounded-3xl px-3 py-3 text-left transition ${detailEmoji === emoji ? 'bg-indigo-500/20 text-white' : 'bg-white/5 text-slate-200 hover:bg-white/10'}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xl">{emoji}</span>
+                      <span className="text-sm text-slate-400">{count}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="col-span-4 md:col-span-3 bg-slate-900/90 rounded-3xl p-4">
+                <div className="mb-4 text-sm text-slate-400">Danh sách người đã chọn biểu cảm này</div>
+                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2">
+                  {selectedDetailNames.length > 0 ? selectedDetailNames.map((name, index) => (
+                    <div key={`${name}-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                      {name}
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">Chưa có ai phản ứng.</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

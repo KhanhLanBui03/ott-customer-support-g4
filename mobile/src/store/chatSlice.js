@@ -89,12 +89,37 @@ const chatSlice = createSlice({
     setCurrentUserId: (state, action) => { state.currentUserId = action.payload; },
     setReplyingTo: (state, action) => { state.replyingTo = action.payload; },
     clearReplyingTo: (state) => { state.replyingTo = null; },
+    updateMessage: (state, action) => {
+      const { conversationId, message } = action.payload;
+      const realId = getRealId(state, conversationId, state.currentUserId);
+      if (!message || !message.messageId) return;
+
+      if (!state.messages[realId]) {
+        state.messages[realId] = [message];
+        return;
+      }
+
+      const msgIdx = state.messages[realId].findIndex(m => m.messageId === message.messageId);
+      if (msgIdx === -1) {
+        state.messages[realId] = [...state.messages[realId], message];
+      } else {
+        state.messages[realId][msgIdx] = {
+          ...state.messages[realId][msgIdx],
+          ...message,
+        };
+      }
+    },
     updateMessageReactions: (state, action) => {
       const { conversationId, messageId, reactions } = action.payload;
       const realId = getRealId(state, conversationId, state.currentUserId);
       if (state.messages[realId]) {
         const msgIdx = state.messages[realId].findIndex(m => m.messageId === messageId);
-        if (msgIdx !== -1) state.messages[realId][msgIdx].reactions = reactions;
+        if (msgIdx !== -1) {
+          state.messages[realId][msgIdx] = {
+            ...state.messages[realId][msgIdx],
+            reactions,
+          };
+        }
       }
     },
     addMessage: (state, action) => {
@@ -133,5 +158,5 @@ const chatSlice = createSlice({
   },
 });
 
-export const { addMessage, setCurrentConversation, setCurrentUserId, setReplyingTo, clearReplyingTo, updateMessageReactions } = chatSlice.actions;
+export const { addMessage, setCurrentConversation, setCurrentUserId, setReplyingTo, clearReplyingTo, updateMessage, updateMessageReactions } = chatSlice.actions;
 export default chatSlice.reducer;

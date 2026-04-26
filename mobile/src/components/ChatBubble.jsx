@@ -6,6 +6,8 @@ import {
   Image, 
   TouchableOpacity, 
   Animated, 
+  Modal, 
+  ScrollView,
   PanResponder, 
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
@@ -23,6 +25,27 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
 
   const currentUserIdStr = String(user?.userId || user?.id || '');
   const isOwn = initialIsOwn || (currentUserIdStr !== '' && String(message.senderId || '') === currentUserIdStr);
+  const [reactionModalVisible, setReactionModalVisible] = useState(false);
+  const [selectedReactionEmoji, setSelectedReactionEmoji] = useState('');
+
+  const openReactionDetail = (emoji) => {
+    setSelectedReactionEmoji(emoji);
+    setReactionModalVisible(true);
+  };
+
+  const closeReactionDetail = () => setReactionModalVisible(false);
+
+  const getReactionUserName = (userId) => {
+    const id = String(userId || '');
+    if (!id) return 'Người dùng';
+    if (id === currentUserIdStr) return 'Bạn';
+
+    const found = conversations
+      .flatMap(conv => conv.members || conv.participants || [])
+      .find(member => String(member.userId || member.id || '') === id);
+
+    return found?.fullName || found?.name || found?.username || 'Người dùng';
+  };
 
   // Animation for swipe to reply
   const translateX = useRef(new Animated.Value(0)).current;
@@ -94,19 +117,30 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
     } catch (e) { return ''; }
   };
 
+  const reactionUserNamesFor = (emoji) => {
+    if (!message.reactions || !message.reactions[emoji]) return [];
+    return message.reactions[emoji].map(getReactionUserName);
+  };
+
   const renderReactions = () => {
     if (!message.reactions || Object.keys(message.reactions).length === 0) return null;
 
     return (
       <View style={[styles.reactionsContainer, isOwn ? styles.ownReactions : styles.otherReactions]}>
-        {Object.entries(message.reactions).map(([emoji, users]) => (
-          Array.isArray(users) && users.length > 0 && (
-            <View key={emoji} style={styles.reactionBadge}>
+        {Object.entries(message.reactions).map(([emoji, users]) => {
+          if (!Array.isArray(users) || users.length === 0) return null;
+          return (
+            <TouchableOpacity
+              key={emoji}
+              style={styles.reactionBadge}
+              activeOpacity={0.75}
+              onPress={() => openReactionDetail(emoji)}
+            >
               <Text style={styles.reactionEmoji}>{emoji}</Text>
               <Text style={styles.reactionCount}>{users.length > 1 ? users.length : ''}</Text>
-            </View>
-          )
-        ))}
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -179,6 +213,49 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
         
         <Text style={styles.time}>{formatTime(message.createdAt || Date.now())}</Text>
       </TouchableOpacity>
+
+      <Modal visible={reactionModalVisible} transparent animationType="fade" onRequestClose={closeReactionDetail}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chi tiết cảm xúc</Text>
+              <TouchableOpacity onPress={closeReactionDetail} style={styles.closeButton}>
+                <Ionicons name="close" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <View style={styles.modalEmojiColumn}>
+                {Object.entries(message.reactions || {}).map(([emoji, users]) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={[styles.modalEmojiButton, selectedReactionEmoji === emoji && styles.modalEmojiButtonActive]}
+                    onPress={() => setSelectedReactionEmoji(emoji)}
+                  >
+                    <Text style={styles.modalEmoji}>{emoji}</Text>
+                    <Text style={styles.modalEmojiCount}>{Array.isArray(users) ? users.length : 0}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.modalUserColumn}>
+                <Text style={styles.modalSectionLabel}>Người đã chọn</Text>
+                <ScrollView contentContainerStyle={styles.modalUserList}>
+                  {(reactionUserNamesFor(selectedReactionEmoji) || []).length > 0 ? (
+                    reactionUserNamesFor(selectedReactionEmoji).map((name, index) => (
+                      <View key={`${selectedReactionEmoji}-${index}`} style={styles.modalUserItem}>
+                        <Text style={styles.modalUserText}>{name}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.modalUserItem}>
+                      <Text style={styles.modalUserText}>Chưa có ai phản ứng</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 };
@@ -236,8 +313,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
   },
-  ownText: { color: '#fff' }, // Ensure own text is white
-  otherText: { color: '#1f2937' },
 
   // Reactions
   reactionsContainer: {
@@ -252,6 +327,11 @@ const styles = StyleSheet.create({
   otherReactions: {
     alignSelf: 'flex-start',
     marginLeft: 8,
+  },
+  reactionBadgeWrapper: {
+    marginRight: 6,
+    marginBottom: 4,
+    alignItems: 'flex-start',
   },
   reactionBadge: {
     backgroundColor: '#fff',
@@ -268,6 +348,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 1,
   },
+  reactionDetails: {
+    marginTop: 2,
+    backgroundColor: '#f9fafb',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxWidth: 200,
+  },
+  reactionDetailsText: {
+    fontSize: 10,
+    color: '#374151',
+  },
   reactionEmoji: {
     fontSize: 12,
   },
@@ -276,6 +368,92 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 2,
     color: '#6b7280',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#0f172a',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalBody: {
+    flexDirection: 'row',
+    minHeight: 220,
+  },
+  modalEmojiColumn: {
+    width: 90,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    backgroundColor: '#111827',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.08)',
+  },
+  modalEmojiButton: {
+    marginBottom: 10,
+    backgroundColor: '#0f172a',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  modalEmojiButtonActive: {
+    backgroundColor: '#2563eb',
+  },
+  modalEmoji: {
+    fontSize: 20,
+  },
+  modalEmojiCount: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  modalUserColumn: {
+    flex: 1,
+    padding: 16,
+  },
+  modalSectionLabel: {
+    color: '#94a3b8',
+    marginBottom: 12,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalUserList: {
+    paddingBottom: 18,
+  },
+  modalUserItem: {
+    marginBottom: 10,
+    backgroundColor: '#1e293b',
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  modalUserText: {
+    color: '#fff',
+    fontSize: 14,
   },
 });
 

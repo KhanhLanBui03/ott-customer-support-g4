@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   addMessage,
   fetchConversations,
+  updateMessage,
 } from '../store/chatSlice';
 import {
   initializeSocket,
@@ -12,6 +13,8 @@ import {
   offUserTyping,
   onUserStatusChange,
   offUserStatusChange,
+  onMessageUpdate,
+  offMessageUpdate,
   emitSendMessage,
   emitTypingStart,
   emitTypingStop,
@@ -56,6 +59,18 @@ export const useWebSocket = () => {
 
     onUserStatusChange(handleStatusChange);
     return () => offUserStatusChange(handleStatusChange);
+  }, [dispatch]);
+
+  // Nhận cập nhật tin nhắn (cập nhật reaction / edit / recalls / message status updates)
+  useEffect(() => {
+    const handleMessageUpdate = (message) => {
+      if (!message || !message.messageId) return;
+      console.log('[WS] Mobile received message update:', message.messageId);
+      dispatch(updateMessage({ conversationId: message.conversationId, message }));
+    };
+
+    onMessageUpdate(handleMessageUpdate);
+    return () => offMessageUpdate(handleMessageUpdate);
   }, [dispatch]);
 
   const sendMessageRealtime = useCallback((conversationId, messageData) => {
