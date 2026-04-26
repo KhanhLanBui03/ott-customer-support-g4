@@ -42,20 +42,20 @@ const NotificationModal = ({ isOpen, onClose }) => {
 
   const handleAcceptGroup = async (invitationId) => {
     try {
-        await chatApi.acceptGroupInvitation(invitationId);
-        dispatch(removePendingGroup(invitationId));
-        dispatch(fetchConversations());
+      await chatApi.acceptGroupInvitation(invitationId);
+      dispatch(removePendingGroup(invitationId));
+      dispatch(fetchConversations());
     } catch (err) {
-        console.error("Failed to accept group invite", err);
+      console.error("Failed to accept group invite", err);
     }
   };
 
   const handleRejectGroup = async (invitationId) => {
     try {
-        await chatApi.rejectGroupInvitation(invitationId);
-        dispatch(removePendingGroup(invitationId));
+      await chatApi.rejectGroupInvitation(invitationId);
+      dispatch(removePendingGroup(invitationId));
     } catch (err) {
-        console.error("Failed to reject group invite", err);
+      console.error("Failed to reject group invite", err);
     }
   };
 
@@ -67,15 +67,15 @@ const NotificationModal = ({ isOpen, onClose }) => {
       <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden border border-slate-100">
         <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white/80 backdrop-blur-xl">
           <div className="flex items-center space-x-3">
-             <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center">
-                <Bell size={20} />
-             </div>
-             <div>
-                <h2 className="text-lg font-black text-slate-800 tracking-tight">Thông báo</h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                  {totalPending} yêu cầu chờ • {activities.length} hoạt động
-                </p>
-             </div>
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center">
+              <Bell size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-slate-800 tracking-tight">Thông báo</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                {totalPending} yêu cầu chờ • {activities.length} hoạt động
+              </p>
+            </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 transition-colors">
             <X size={24} />
@@ -85,10 +85,10 @@ const NotificationModal = ({ isOpen, onClose }) => {
         <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4 no-scrollbar">
           {totalNotifications === 0 ? (
             <div className="py-12 flex flex-col items-center text-center space-y-4">
-               <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center">
-                  <Bell size={32} className="text-slate-200" />
-               </div>
-               <p className="text-sm font-bold text-slate-300 italic">Không có thông báo mới nào</p>
+              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center">
+                <Bell size={32} className="text-slate-200" />
+              </div>
+              <p className="text-sm font-bold text-slate-300 italic">Không có thông báo mới nào</p>
             </div>
           ) : (
             <>
@@ -122,15 +122,15 @@ const NotificationModal = ({ isOpen, onClose }) => {
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{req.phoneNumber}</p>
                         </div>
                       </div>
-                      
+
                       <div className="mt-5 flex space-x-3">
-                        <button 
+                        <button
                           onClick={() => handleAcceptFriend(req.userId)}
                           className="flex-1 py-3 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
                         >
                           Chấp nhận
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleRejectFriend(req.userId)}
                           className="flex-1 py-3 bg-white text-slate-400 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-50 border border-slate-100 transition-all active:scale-95"
                         >
@@ -157,15 +157,15 @@ const NotificationModal = ({ isOpen, onClose }) => {
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Từ: Người dùng #{invite.inviterId.substring(0, 8)}</p>
                         </div>
                       </div>
-                      
+
                       <div className="mt-4 flex space-x-2">
-                        <button 
+                        <button
                           onClick={() => handleAcceptGroup(invite.invitationId)}
                           className="flex-1 py-2.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
                         >
                           Tham gia ngay
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleRejectGroup(invite.invitationId)}
                           className="px-4 py-2.5 bg-white text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-50 hover:text-red-500 border border-slate-100 transition-all"
                         >
@@ -182,9 +182,8 @@ const NotificationModal = ({ isOpen, onClose }) => {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Hoạt động gần đây</p>
                   {activities.map((activity) => (
                     <div key={activity.id} className={`p-4 rounded-2xl border transition-all flex items-center space-x-4 ${activity.isRead ? 'bg-white border-slate-50' : 'bg-indigo-50/20 border-indigo-100 shadow-sm'}`}>
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        activity.type === 'FRIEND_ACCEPT' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500'
-                      }`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${activity.type === 'FRIEND_ACCEPT' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500'
+                        }`}>
                         {activity.type === 'FRIEND_ACCEPT' ? <UserCheck size={20} /> : <UserX size={20} />}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -202,9 +201,9 @@ const NotificationModal = ({ isOpen, onClose }) => {
             </>
           )}
         </div>
-        
+
         <div className="p-4 bg-slate-50/50 border-t border-slate-50 flex justify-center">
-           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Signal Hub Security Protocol</p>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Signal Hub Security Protocol</p>
         </div>
       </div>
     </div>

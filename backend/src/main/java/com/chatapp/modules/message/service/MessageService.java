@@ -40,30 +40,33 @@ public class MessageService {
      * Send message (Command)
      */
     public Message sendMessage(SendMessageCommand command) {
-        log.info("Sending message in conversation: {} from user: {}", command.getConversationId(), command.getSenderId());
+        log.info("Sending message in conversation: {} from user: {}", command.getConversationId(),
+                command.getSenderId());
 
         try {
             // Validate command
             command.validate();
             log.info("Processing message from {} to {}", command.getSenderId(), command.getConversationId());
-        
-        // Check for block (1-1 chats only)
-        if (command.getConversationId().startsWith("SINGLE#")) {
-            String[] parts = command.getConversationId().split("#");
-            if (parts.length >= 3) {
-                String userA = parts[1];
-                String userB = parts[2];
-                if (friendshipService.isBlocked(userA, userB)) {
-                    log.warn("Blocked message attempt: {} and {} have a block relationship", userA, userB);
-                    throw new com.chatapp.common.exception.ValidationException("Không thể gửi tin nhắn. Người dùng đã bị chặn.");
+
+            // Check for block (1-1 chats only)
+            if (command.getConversationId().startsWith("SINGLE#")) {
+                String[] parts = command.getConversationId().split("#");
+                if (parts.length >= 3) {
+                    String userA = parts[1];
+                    String userB = parts[2];
+                    if (friendshipService.isBlocked(userA, userB)) {
+                        log.warn("Blocked message attempt: {} and {} have a block relationship", userA, userB);
+                        throw new com.chatapp.common.exception.ValidationException(
+                                "Không thể gửi tin nhắn. Người dùng đã bị chặn.");
+                    }
                 }
             }
-        }
 
-        String messageId = UUID.randomUUID().toString();
+            String messageId = UUID.randomUUID().toString();
             String type = command.getType() != null ? command.getType() : "TEXT";
             String senderName = command.getSenderName();
-            if (senderName == null || senderName.trim().isEmpty() || "null null".equals(senderName) || "null".equals(senderName)) {
+            if (senderName == null || senderName.trim().isEmpty() || "null null".equals(senderName)
+                    || "null".equals(senderName)) {
                 senderName = "Unknown User";
             }
 
@@ -73,8 +76,7 @@ public class MessageService {
                     command.getSenderId(),
                     senderName,
                     command.getContent(),
-                    type
-            );
+                    type);
 
             if (command.getMediaUrls() != null && !command.getMediaUrls().isEmpty()) {
                 message.setMediaUrls(command.getMediaUrls());
@@ -109,7 +111,7 @@ public class MessageService {
             // Publish event for WebSocket and notifications
             try {
                 publishMessageEvent(savedMessage);
-                
+
                 // Update denormalized last message in conversations
                 String lastMessageText = savedMessage.getContent();
                 if (lastMessageText == null || lastMessageText.isBlank()) {
@@ -120,13 +122,12 @@ public class MessageService {
                         default -> "[Đính kèm]";
                     };
                 }
-                
+
                 conversationService.updateLastMessage(
-                    savedMessage.getConversationId(), 
-                    lastMessageText, 
-                    savedMessage.getCreatedAt(), 
-                    savedMessage.getSenderId()
-                );
+                        savedMessage.getConversationId(),
+                        lastMessageText,
+                        savedMessage.getCreatedAt(),
+                        savedMessage.getSenderId());
 
                 // Trigger AI response if applicable
                 if (!command.getSenderId().equals(AI_BOT_ID)) {
@@ -155,10 +156,11 @@ public class MessageService {
         // IMPROVEMENT: Mark this and ALL PREVIOUS messages as read
         List<Message> allMessages = messageRepository.findByConversationId(conversationId);
         List<Message> toUpdate = new ArrayList<>();
-        
+
         Long targetTime = targetMessage.getCreatedAt();
-        if (targetTime == null) targetTime = System.currentTimeMillis();
-        
+        if (targetTime == null)
+            targetTime = System.currentTimeMillis();
+
         for (Message msg : allMessages) {
             Long msgTime = msg.getCreatedAt();
             if (msgTime != null && msgTime <= targetTime) {
@@ -167,13 +169,14 @@ public class MessageService {
                 }
             }
         }
-        
+
         if (!toUpdate.isEmpty()) {
             log.info("Bulk updating {} messages as read by {} in {}", toUpdate.size(), userId, conversationId);
             messageRepository.saveAll(toUpdate);
         }
 
-        // Publish read receipt event (we can still use the single messageId for the event to notify UI)
+        // Publish read receipt event (we can still use the single messageId for the
+        // event to notify UI)
         publishReadReceiptEvent(conversationId, messageId, userId);
     }
 
@@ -181,7 +184,8 @@ public class MessageService {
      * Recall message
      */
     public void recallMessage(String conversationId, String messageId, String userId) {
-        log.info("[DEBUG] recallMessage called: conversationId={}, messageId={}, userId={}", conversationId, messageId, userId);
+        log.info("[DEBUG] recallMessage called: conversationId={}, messageId={}, userId={}", conversationId, messageId,
+                userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
@@ -194,24 +198,26 @@ public class MessageService {
 
         // Can only recall within 5 minutes (REMOVE LIMIT TEMPORARILY FOR TESTING)
         /*
-        long ageMs = System.currentTimeMillis() - message.getCreatedAt();
-        if (ageMs > 5 * 60 * 1000) {
-            log.warn("Recall failed: Message {} is too old ({}ms)", messageId, ageMs);
-            throw new IllegalArgumentException("Can only recall messages within 5 minutes");
-        }
-        */
+         * long ageMs = System.currentTimeMillis() - message.getCreatedAt();
+         * if (ageMs > 5 * 60 * 1000) {
+         * log.warn("Recall failed: Message {} is too old ({}ms)", messageId, ageMs);
+         * throw new
+         * IllegalArgumentException("Can only recall messages within 5 minutes");
+         * }
+         */
 
         message.recall();
         Message saved = messageRepository.save(message);
-        log.info("Message recall successful and saved: id={}, isRecalled={}, content={}", 
-                 saved.getMessageId(), saved.getIsRecalled(), saved.getContent());
+        log.info("Message recall successful and saved: id={}, isRecalled={}, content={}",
+                saved.getMessageId(), saved.getIsRecalled(), saved.getContent());
 
         publishMessageRecalledEvent(conversationId, messageId);
-        
+
         // Sync lastMessage in conversation
         try {
             log.info("[DEBUG] Syncing last message for recall in conversation {}", conversationId);
-            conversationService.updateLastMessage(conversationId, "[Tin nhắn đã bị thu hồi]", System.currentTimeMillis(), userId);
+            conversationService.updateLastMessage(conversationId, "[Tin nhắn đã bị thu hồi]",
+                    System.currentTimeMillis(), userId);
         } catch (Exception e) {
             log.error("[DEBUG] Failed to update last message after recall: {}", e.getMessage(), e);
         }
@@ -251,7 +257,8 @@ public class MessageService {
      * Delete message
      */
     public void deleteMessage(String conversationId, String messageId, String userId) {
-        log.info("[DEBUG] deleteMessage (Delete for me) called: conversationId={}, messageId={}, userId={}", conversationId, messageId, userId);
+        log.info("[DEBUG] deleteMessage (Delete for me) called: conversationId={}, messageId={}, userId={}",
+                conversationId, messageId, userId);
 
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message"));
@@ -324,7 +331,7 @@ public class MessageService {
             message.setReactions(reactions);
             message.setUpdatedAt(System.currentTimeMillis());
             messageRepository.save(message);
-            
+
             // Real-time notification: Use a Map that matches MessageResponse structure
             java.util.Map<String, Object> payload = new java.util.HashMap<>();
             payload.put("messageId", message.getMessageId());
@@ -335,7 +342,7 @@ public class MessageService {
             payload.put("content", message.getContent());
             payload.put("senderId", message.getSenderId());
             payload.put("isRecalled", message.getIsRecalled());
-            
+
             eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, payload));
             log.info("[REACTION] Updated and published reactions for message {}: {}", messageId, reactions);
         }
@@ -354,20 +361,20 @@ public class MessageService {
         if (reactions != null && reactions.containsKey(emoji)) {
             reactions = new java.util.HashMap<>(reactions);
             List<String> userIds = new java.util.ArrayList<>(reactions.get(emoji));
-            
+
             if (userIds.remove(userId)) {
                 if (userIds.isEmpty()) {
                     reactions.remove(emoji);
                 } else {
                     reactions.put(emoji, userIds);
                 }
-                
+
                 message.setReactions(reactions);
                 message.setUpdatedAt(System.currentTimeMillis());
-                
+
                 log.info("[REACTION] Saving updated reactions after removal: {}", reactions);
                 messageRepository.save(message);
-                
+
                 // Real-time notification: Use a Map that matches MessageResponse structure
                 java.util.Map<String, Object> payload = new java.util.HashMap<>();
                 payload.put("messageId", message.getMessageId());
@@ -378,7 +385,7 @@ public class MessageService {
                 payload.put("content", message.getContent());
                 payload.put("senderId", message.getSenderId());
                 payload.put("isRecalled", message.getIsRecalled());
-                
+
                 eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, payload));
             }
         }
@@ -395,7 +402,8 @@ public class MessageService {
     /**
      * Get conversation messages (paginated)
      */
-    public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId, String fromMessageId) {
+    public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId,
+            String fromMessageId) {
         Long joinedAt = userConversationRepository.findById(currentUserId, conversationId)
                 .map(uc -> uc.getJoinedAt())
                 .orElse(0L);
@@ -413,16 +421,16 @@ public class MessageService {
         return messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, limit).stream()
                 .filter(m -> m.getCreatedAt() != null) // Skip messages with null timestamps
                 .filter(m -> m.getCreatedAt() >= joinedAt) // NEW: Filter messages before user joined/re-joined
-                .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter hidden messages
+                .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter
+                                                                                                              // hidden
+                                                                                                              // messages
                 .sorted((m1, m2) -> Long.compare(
                         m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L,
-                        m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L
-                )) // newest first
+                        m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L)) // newest first
                 .limit(limit)
                 .sorted((m1, m2) -> Long.compare(
                         m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L,
-                        m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L
-                )) // flip to chronological order
+                        m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L)) // flip to chronological order
                 .collect(Collectors.toList());
     }
 
@@ -435,8 +443,7 @@ public class MessageService {
         eventPublisher.publishEvent(MessageEvent.of("MESSAGE_READ", conversationId, Map.of(
                 "messageId", messageId,
                 "userId", userId,
-                "readAt", System.currentTimeMillis()
-        )));
+                "readAt", System.currentTimeMillis())));
     }
 
     private void publishMessageRecalledEvent(String conversationId, String messageId) {
@@ -449,22 +456,22 @@ public class MessageService {
 
     private void publishMessageDeletedEvent(String conversationId, String messageId, String userId) {
         eventPublisher.publishEvent(MessageEvent.of("MESSAGE_DELETE", conversationId, Map.of(
-            "messageId", messageId,
-            "userId", userId
-        )));
+                "messageId", messageId,
+                "userId", userId)));
     }
 
     @org.springframework.scheduling.annotation.Async
     public void checkAndTriggerAI(Message userMessage) {
         String conversationId = userMessage.getConversationId();
-        
+
         // In a real app, we'd check if AI_BOT_ID is a member of this conversation
-        // For this demo, we'll check if the conversation ID indicates an AI chat or if it's a specific pattern
+        // For this demo, we'll check if the conversation ID indicates an AI chat or if
+        // it's a specific pattern
         if (conversationId.contains(AI_BOT_ID)) {
             log.info("AI Bot triggered for conversation: {}", conversationId);
-            
+
             String responseContent = aiService.generateResponse(userMessage.getContent());
-            
+
             // Create bot message
             String botMessageId = UUID.randomUUID().toString();
             Message botMessage = Message.create(
@@ -473,9 +480,8 @@ public class MessageService {
                     AI_BOT_ID,
                     AI_BOT_NAME,
                     responseContent,
-                    "TEXT"
-            );
-            
+                    "TEXT");
+
             Message savedBotMessage = messageRepository.save(botMessage);
             // Ensure timestamp is set for real-time delivery
             if (savedBotMessage.getCreatedAt() == null) {
@@ -489,13 +495,14 @@ public class MessageService {
         return "ADMIN".equalsIgnoreCase(userId) || "admin".equalsIgnoreCase(userId);
     }
 
-    public Message createVoteMessage(String conversationId, String userId, com.chatapp.modules.message.dto.CreateVoteRequest request) {
+    public Message createVoteMessage(String conversationId, String userId,
+            com.chatapp.modules.message.dto.CreateVoteRequest request) {
         log.info("Creating vote in {} by {}", conversationId, userId);
-        
+
         // Fetch sender name from User table first
         com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
         String senderName = user != null ? user.getFullName() : "Unknown";
-        
+
         // Fallback to UserConversation nickname if available
         userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
             if (uc.getNickname() != null && !uc.getNickname().isBlank()) {
@@ -504,7 +511,7 @@ public class MessageService {
         });
 
         String messageId = UUID.randomUUID().toString();
-        
+
         List<Message.VoteOption> options = new ArrayList<>();
         if (request.getOptions() != null) {
             for (String optText : request.getOptions()) {
@@ -530,28 +537,28 @@ public class MessageService {
                 userId,
                 senderName,
                 "{" + request.getQuestion() + "}",
-                "VOTE"
-        );
+                "VOTE");
         message.setVote(voteInfo);
-        
+
         Message saved = messageRepository.save(message);
         publishMessageEvent(saved);
-        
-        conversationService.updateLastMessage(conversationId, "[Bình chọn] " + request.getQuestion(), saved.getCreatedAt(), "SYSTEM");
-        
+
+        conversationService.updateLastMessage(conversationId, "[Bình chọn] " + request.getQuestion(),
+                saved.getCreatedAt(), "SYSTEM");
+
         // NEW: Auto-pin the poll message
         try {
             conversationService.pinMessage(userId, conversationId, saved.getMessageId());
         } catch (Exception e) {
             log.warn("Failed to auto-pin vote message: {}", e.getMessage());
         }
-        
+
         return saved;
     }
 
     public Message closeVote(String conversationId, String messageId, String userId) {
         log.info("Closing vote {} by user {}", messageId, userId);
-        
+
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found"));
 
@@ -566,12 +573,12 @@ public class MessageService {
 
         message.getVote().setIsClosed(true);
         message.setUpdatedAt(System.currentTimeMillis());
-        
+
         Message saved = messageRepository.save(message);
-        
+
         // Broadcast the update
         eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, saved));
-        
+
         // Push a SYSTEM message about closing
         try {
             String content = message.getSenderName() + " đã khóa cuộc bình chọn: " + message.getVote().getQuestion();
@@ -587,7 +594,7 @@ public class MessageService {
                     .isRecalled(false)
                     .isEncrypted(false)
                     .build();
-            
+
             messageRepository.save(sysMsg);
             eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
         } catch (Exception e) {
@@ -597,7 +604,8 @@ public class MessageService {
         return saved;
     }
 
-    public Message submitVote(String conversationId, String messageId, String userId, com.chatapp.modules.message.dto.SubmitVoteRequest request) {
+    public Message submitVote(String conversationId, String messageId, String userId,
+            com.chatapp.modules.message.dto.SubmitVoteRequest request) {
         Message message = messageRepository.findByConversationIdAndMessageId(conversationId, messageId)
                 .orElseThrow(() -> new NotFoundException("Message not found"));
 
@@ -637,7 +645,7 @@ public class MessageService {
         if (changed) {
             message.setUpdatedAt(System.currentTimeMillis());
             messageRepository.save(message);
-            
+
             // Broadcast MESSAGE_UPDATE instead of MESSAGE_NEW
             eventPublisher.publishEvent(MessageEvent.of("MESSAGE_STATUS_UPDATE", conversationId, message));
         }

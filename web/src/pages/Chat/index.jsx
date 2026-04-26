@@ -27,13 +27,13 @@ const Chat = () => {
   const { isDark, toggleTheme } = useTheme();
   const dispatch = useDispatch();
   const { unreadCount } = useSelector(state => state.notification);
-  const { 
-    conversations, 
-    activeConversationId, 
-    fetchConversations, 
+  const {
+    conversations,
+    activeConversationId,
+    fetchConversations,
     fetchMessages,
     selectConversation,
-    loading 
+    loading
   } = useChat();
 
   useWebSocket(); // Initialize global real-time listener
@@ -52,15 +52,15 @@ const Chat = () => {
   // Call management
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
-  const { 
-    callStatus, 
-    incomingSignal, 
-    duration, 
-    formatDuration, 
-    startCall, 
-    acceptCall, 
-    endCall, 
-    connect 
+  const {
+    callStatus,
+    incomingSignal,
+    duration,
+    formatDuration,
+    startCall,
+    acceptCall,
+    endCall,
+    connect
   } = useVideoCall(activeConversationId);
 
   useEffect(() => {
@@ -69,13 +69,13 @@ const Chat = () => {
     const fetchNotifications = () => {
       friendApi.getPendingRequests().then(res => {
         dispatch(setPendingRequests(res.data || []));
-      }).catch(() => {});
+      }).catch(() => { });
       chatApi.getPendingInvitations().then(res => {
         dispatch(setPendingGroups(res.data || []));
-      }).catch(() => {});
+      }).catch(() => { });
     };
     fetchNotifications();
-    
+
     // Auto-refresh notifications every 30 seconds as fallback
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
@@ -136,23 +136,23 @@ const Chat = () => {
 
   const handleDeleteConversation = async (conversationId) => {
     if (window.confirm('Xóa cuộc trò chuyện này?')) {
-       try {
-          await chatApi.deleteConversation(conversationId);
-          fetchConversations();
-          selectConversation(null);
-       } catch (err) {
-          console.error("Delete failed", err);
-       }
+      try {
+        await chatApi.deleteConversation(conversationId);
+        fetchConversations();
+        selectConversation(null);
+      } catch (err) {
+        console.error("Delete failed", err);
+      }
     }
   };
 
   const handleTogglePin = async (conversationId) => {
     // Optimistic Update: Instantly reorder and update UI
     const oldConversations = [...conversations];
-    const newConversations = conversations.map(c => 
+    const newConversations = conversations.map(c =>
       c.conversationId === conversationId ? { ...c, isPinned: !c.isPinned } : c
     );
-    
+
     dispatch(setConversations(newConversations));
 
     try {
@@ -170,10 +170,10 @@ const Chat = () => {
     const aiBotId = 'shop-expert-ai-bot';
     const currentUserId = user?.userId || user?.id;
     if (!currentUserId) return;
-    
+
     const participants = [currentUserId, aiBotId].sort();
     const aiConvId = `SINGLE#${participants[0]}#${participants[1]}`;
-    
+
     selectConversation(aiConvId);
     setSearchTerm(''); // Clear search if any
     if (isMobile) setIsInfoOpen(false);
@@ -184,17 +184,17 @@ const Chat = () => {
 
   const filteredConversations = conversations.filter(conv => {
     const searchLower = searchTerm.toLowerCase();
-    
+
     // 1. Check conversation name
     if ((conv.name || '').toLowerCase().includes(searchLower)) return true;
-    
+
     // 2. Check all members' names inside the conversation
     if (conv.members && Array.isArray(conv.members)) {
-      return conv.members.some(m => 
+      return conv.members.some(m =>
         (m.fullName || '').toLowerCase().includes(searchLower)
       );
     }
-    
+
     return false;
   });
 
@@ -203,13 +203,13 @@ const Chat = () => {
       {/* 1. Global Icon Sidebar (Desktop: Leftmost, Mobile: Bottom Nav) */}
       {(!isMobile || !activeConversationId) && (
         <div className={`
-          ${isMobile 
-            ? 'fixed bottom-0 left-0 right-0 h-20 w-full flex-row px-6 items-center justify-around border-t border-white/5 bg-[#0b0e14]/95 backdrop-blur-xl' 
+          ${isMobile
+            ? 'fixed bottom-0 left-0 right-0 h-20 w-full flex-row px-6 items-center justify-around border-t border-white/5 bg-[#0b0e14]/95 backdrop-blur-xl'
             : 'w-[88px] flex-col py-9 space-y-8 items-center border-r border-white/5 bg-[#0b0e14]'}
           flex flex-shrink-0 z-50
         `}>
           <div className="relative group">
-            <div 
+            <div
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className={`
                 ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
@@ -220,11 +220,11 @@ const Chat = () => {
                 <img src={user.avatar} alt="" className="w-full h-full object-cover rounded-2xl" />
               ) : (
                 <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-2xl">
-                   <User className="text-white/20" size={isMobile ? 20 : 24} />
+                  <User className="text-white/20" size={isMobile ? 20 : 24} />
                 </div>
               )}
             </div>
-            
+
             {/* Active Indicator for User */}
             {!isMobile && (
               <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-500 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -247,22 +247,22 @@ const Chat = () => {
               </>
             )}
           </div>
-        
-        <nav className={`flex ${isMobile ? 'flex-row items-center flex-1 justify-around h-full' : 'flex-col space-y-6 items-center'} w-full`}>
-          <div className="relative group">
-            <button className={`
+
+          <nav className={`flex ${isMobile ? 'flex-row items-center flex-1 justify-around h-full' : 'flex-col space-y-6 items-center'} w-full`}>
+            <div className="relative group">
+              <button className={`
               ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
               flex items-center justify-center bg-indigo-600 text-white rounded-[22px] shadow-lg shadow-indigo-600/30 group relative transition-all active:scale-95
             `}>
-              <MessageSquare size={isMobile ? 22 : 24} fill="currentColor" className="opacity-90" />
-            </button>
-            {!isMobile && (
-              <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full" />
-            )}
-          </div>
-          
+                <MessageSquare size={isMobile ? 22 : 24} fill="currentColor" className="opacity-90" />
+              </button>
+              {!isMobile && (
+                <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full" />
+              )}
+            </div>
+
             <div className="relative group">
-              <button 
+              <button
                 onClick={() => setIsNotificationOpen(true)}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
@@ -282,7 +282,7 @@ const Chat = () => {
             </div>
 
             <div className="relative group">
-              <button 
+              <button
                 onClick={handleSelectAI}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
@@ -296,80 +296,80 @@ const Chat = () => {
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
             </div>
-          
-          <div className="relative group">
-            <button 
-              onClick={() => {
-                setFriendsInitialView('list');
-                setIsFriendsOpen(true);
-              }}
-              className={`
+
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setFriendsInitialView('list');
+                  setIsFriendsOpen(true);
+                }}
+                className={`
                 ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
                 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all active:scale-95
               `}
-            >
-              <Contact size={isMobile ? 22 : 24} />
-            </button>
-            {!isMobile && (
-              <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </div>
-        </nav>
-        
-        {!isMobile && (
-          <div className="flex flex-col space-y-4 items-center">
-             <button className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 rounded-2xl transition-all active:scale-95">
+              >
+                <Contact size={isMobile ? 22 : 24} />
+              </button>
+              {!isMobile && (
+                <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+            </div>
+          </nav>
+
+          {!isMobile && (
+            <div className="flex flex-col space-y-4 items-center">
+              <button className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 rounded-2xl transition-all active:scale-95">
                 <Settings size={24} />
-             </button>
-             <button 
-              onClick={logout}
-              className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all active:scale-95"
-            >
-              <LogOut size={24} />
-            </button>
-          </div>
-        )}
-      </div>
-    )}
+              </button>
+              <button
+                onClick={logout}
+                className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all active:scale-95"
+              >
+                <LogOut size={24} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 2. Conversation Sidebar (Middle) */}
       {(!isMobile || !activeConversationId) && (
-        <div className={isMobile 
-          ? "flex-1 flex-shrink-0 bg-sidebar border-r border-border flex flex-col transition-all duration-300" 
+        <div className={isMobile
+          ? "flex-1 flex-shrink-0 bg-sidebar border-r border-border flex flex-col transition-all duration-300"
           : "w-[360px] flex-shrink-0 bg-sidebar border-r border-border flex flex-col transition-all duration-300"
         }>
           <div className={`${isMobile ? 'p-4 space-y-4' : 'p-6 space-y-6'}`}>
             <div className="flex items-center justify-between">
-                <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-black text-foreground tracking-tighter`}>Messages</h1>
-                <div className="flex items-center space-x-1">
-                  <button 
-                    onClick={toggleTheme}
-                    className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-all active:scale-90"
-                    title={isDark ? "Sang chế độ sáng" : "Sang chế độ tối"}
-                  >
-                      {isDark ? <Sun size={18} /> : <Moon size={18} />}
-                  </button>
-                  <button 
-                    onClick={() => setIsGroupModalOpen(true)}
-                    className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors relative group/addgroup"
-                  >
-                      <div className="relative">
-                        <Users size={isMobile ? 18 : 20} />
-                        <Plus size={10} strokeWidth={3} className="absolute -top-1 -right-1.5 text-foreground/60" />
-                      </div>
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setFriendsInitialView('search');
-                      setIsFriendsOpen(true);
-                    }}
-                    className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors"
-                  >
-                      <Plus size={isMobile ? 18 : 20} />
-                  </button>
-                </div>
+              <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-black text-foreground tracking-tighter`}>Messages</h1>
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-all active:scale-90"
+                  title={isDark ? "Sang chế độ sáng" : "Sang chế độ tối"}
+                >
+                  {isDark ? <Sun size={18} /> : <Moon size={18} />}
+                </button>
+                <button
+                  onClick={() => setIsGroupModalOpen(true)}
+                  className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors relative group/addgroup"
+                >
+                  <div className="relative">
+                    <Users size={isMobile ? 18 : 20} />
+                    <Plus size={10} strokeWidth={3} className="absolute -top-1 -right-1.5 text-foreground/60" />
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setFriendsInitialView('search');
+                    setIsFriendsOpen(true);
+                  }}
+                  className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors"
+                >
+                  <UserPlus size={isMobile ? 18 : 20} />
+                </button>
+              </div>
             </div>
-            
+
             <div className="relative group flex items-center space-x-2">
               <div className="relative flex-1 group">
                 <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -383,7 +383,7 @@ const Chat = () => {
                   className="w-full pl-12 pr-4 py-2.5 bg-surface-200 text-foreground text-sm rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-foreground/30 font-bold"
                 />
                 {searchTerm && (
-                  <button 
+                  <button
                     onClick={() => setSearchTerm('')}
                     className="absolute inset-y-0 right-3 flex items-center text-foreground/20 hover:text-foreground/40 transition-colors"
                   >
@@ -394,7 +394,7 @@ const Chat = () => {
                 )}
               </div>
               {searchTerm && (
-                <button 
+                <button
                   onClick={() => setSearchTerm('')}
                   className="text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors whitespace-nowrap pr-2"
                 >
@@ -403,15 +403,15 @@ const Chat = () => {
               )}
             </div>
           </div>
-          
+
           <div className={`flex-1 overflow-y-auto no-scrollbar ${isMobile ? 'pb-20' : ''}`}>
             {loading && conversations.length === 0 ? (
               <div className="p-8 text-center text-[10px] font-mono font-black uppercase tracking-[0.3em] text-foreground/40 animate-pulse">
                 Syncing...
               </div>
             ) : (
-              <Sidebar 
-                conversations={filteredConversations} 
+              <Sidebar
+                conversations={filteredConversations}
                 onSelect={(id) => {
                   selectConversation(id);
                   setIsInfoOpen(false);
@@ -431,8 +431,8 @@ const Chat = () => {
         <div className={`flex-1 flex min-w-0 bg-background ${isMobile ? 'z-40' : ''}`}>
           <div className="flex-1 flex flex-col min-w-0">
             {activeConversation ? (
-              <ChatWindow 
-                conversation={activeConversation} 
+              <ChatWindow
+                conversation={activeConversation}
                 onStartCall={handleStartCall}
                 onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                 isInfoOpen={isInfoOpen}
@@ -456,7 +456,7 @@ const Chat = () => {
           </div>
 
           {!isMobile && activeConversationId && isInfoOpen && (
-            <ConversationInfo 
+            <ConversationInfo
               conversation={activeConversation}
               onClose={() => setIsInfoOpen(false)}
               onClearHistory={() => handleDeleteConversation(activeConversationId)}
@@ -466,7 +466,7 @@ const Chat = () => {
           {/* Mobile Info Overlay */}
           {isMobile && activeConversationId && isInfoOpen && (
             <div className="fixed inset-0 bg-white z-[60] animate-slide-up">
-               <ConversationInfo 
+              <ConversationInfo
                 conversation={activeConversation}
                 onClose={() => setIsInfoOpen(false)}
                 onClearHistory={() => handleDeleteConversation(activeConversationId)}
@@ -478,19 +478,19 @@ const Chat = () => {
 
       {/* Context Menu Hub */}
       {contextMenu && (
-        <div 
+        <div
           className="fixed bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)] rounded-2xl py-2 w-64 z-[9999] animate-slide-up"
-          style={{ 
-            top: contextMenu.y, 
+          style={{
+            top: contextMenu.y,
             left: contextMenu.x,
             transform: (contextMenu.y + 450 > window.innerHeight) ? 'translateY(-100%)' : 'none'
           }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-4 py-2 border-b border-slate-50 mb-1">
-             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tùy chọn hội thoại</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tùy chọn hội thoại</p>
           </div>
-          <button 
+          <button
             onClick={() => {
               handleTogglePin(contextMenu.conversationId);
               setContextMenu(null);
@@ -498,60 +498,60 @@ const Chat = () => {
             className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group"
           >
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-               <Pin size={16} className={`text-slate-400 group-hover:text-indigo-500 ${conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'fill-indigo-500 text-indigo-500' : ''}`} />
-               <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
+              <Pin size={16} className={`text-slate-400 group-hover:text-indigo-500 ${conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'fill-indigo-500 text-indigo-500' : ''}`} />
+              <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
             </div>
           </button>
-          
+
           <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-               <FolderDown size={16} className="text-slate-400 group-hover:text-indigo-500" />
-               <span>Chuyển sang mục Khác</span>
+              <FolderDown size={16} className="text-slate-400 group-hover:text-indigo-500" />
+              <span>Chuyển sang mục Khác</span>
             </div>
           </button>
 
           <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-               <Mail size={16} className="text-slate-400 group-hover:text-indigo-500" />
-               <span>Đánh dấu chưa đọc</span>
+              <Mail size={16} className="text-slate-400 group-hover:text-indigo-500" />
+              <span>Đánh dấu chưa đọc</span>
             </div>
           </button>
 
           <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-               <BellOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
-               <span>Tắt thông báo</span>
+              <BellOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
+              <span>Tắt thông báo</span>
             </div>
           </button>
 
           <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-               <EyeOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
-               <span>Ẩn trò chuyện</span>
+              <EyeOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
+              <span>Ẩn trò chuyện</span>
             </div>
           </button>
 
           <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-               <Clock size={16} className="text-slate-400 group-hover:text-indigo-500" />
-               <span>Tin nhắn tự xóa</span>
+              <Clock size={16} className="text-slate-400 group-hover:text-indigo-500" />
+              <span>Tin nhắn tự xóa</span>
             </div>
           </button>
 
-          <button 
+          <button
             onClick={() => handleDeleteConversation(contextMenu.conversationId)}
             className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-red-50 text-red-500 transition-colors group"
           >
             <div className="flex items-center space-x-3 text-[13px] font-bold">
-               <Trash2 size={16} />
-               <span>Xóa hội thoại</span>
+              <Trash2 size={16} />
+              <span>Xóa hội thoại</span>
             </div>
           </button>
 
           <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-               <AlertTriangle size={16} className="text-slate-400 group-hover:text-red-500" />
-               <span>Báo xấu</span>
+              <AlertTriangle size={16} className="text-slate-400 group-hover:text-red-500" />
+              <span>Báo xấu</span>
             </div>
           </button>
         </div>
@@ -560,16 +560,16 @@ const Chat = () => {
       {/* Modals & Overlays */}
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
-      <FriendManagementModal 
-        isOpen={isFriendsOpen} 
-        onClose={() => setIsFriendsOpen(false)} 
+      <FriendManagementModal
+        isOpen={isFriendsOpen}
+        onClose={() => setIsFriendsOpen(false)}
         initialView={friendsInitialView}
       />
       <CreateGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} />
       <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
       <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />
-      
-      <VideoCall 
+
+      <VideoCall
         status={callStatus}
         duration={formatDuration()}
         localStream={localStream}

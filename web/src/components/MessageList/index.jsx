@@ -681,12 +681,15 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   {/* Main Bubble Content */}
                                   <div className={cn(
                                     "relative transition-all duration-300 shadow-sm w-fit",
-                                    msg.type === 'STICKER' ? 'bg-transparent shadow-none ring-0' : (msg.content ? 'px-5 py-3' : 'p-0'),
-                                    isMe ? (msg.content && msg.type !== 'STICKER' ? 'bg-indigo-600 text-white' : '') : (msg.content && msg.type !== 'STICKER' ? 'bg-surface-200 text-foreground border border-border' : ''),
+                                    msg.type === 'STICKER' ? 'bg-transparent shadow-none ring-0' : (msg.content && (!msg.mediaUrls || msg.mediaUrls.length === 0) ? 'px-5 py-3' : 'p-0'),
+                                    isMe 
+                                      ? (msg.type !== 'STICKER' ? 'bg-indigo-600 text-white shadow-sm' : '') 
+                                      : (msg.type !== 'STICKER' ? 'bg-surface-200 text-foreground border border-border' : ''),
                                     isMe
-                                      ? "rounded-[20px] rounded-br-[4px]"
-                                      : "rounded-[20px] rounded-bl-[4px]",
-                                    isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : ''
+                                      ? "rounded-[22px] rounded-br-[4px]"
+                                      : "rounded-[22px] rounded-bl-[4px]",
+                                    isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : '',
+                                    "overflow-hidden transition-all duration-300"
                                   )}>
                                     {msg.type === 'STICKER' ? (
                                       <div className="relative group/sticker">
@@ -697,122 +700,108 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                         />
                                       </div>
                                     ) : (
-                                      <>
-                                        {msg.content && <p className="text-[15px] leading-relaxed font-semibold break-all whitespace-pre-wrap">{msg.content}</p>}
-
+                                      <div className={cn("flex flex-col max-w-full", msg.mediaUrls?.length > 0 ? "min-w-[140px]" : "min-w-0")}>
                                         {msg.mediaUrls && msg.mediaUrls.length > 0 && (
-                                          <div className={cn(
-                                            "grid gap-1.5",
-                                            msg.content ? 'mt-3' : '',
-                                            msg.mediaUrls.length === 1 ? "grid-cols-1" :
-                                              (msg.mediaUrls.length === 2 || msg.mediaUrls.length === 4) ? "grid-cols-2" :
-                                                "grid-cols-3"
-                                          )}>
-                                            {msg.mediaUrls.slice(0, 9).map((url, idx) => {
-                                              const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
-                                              const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
-                                              const isSending = msg.status === 'SENDING' && (Date.now() - (msg.createdAt || 0) < 20000);
-                                              const isLastVisible = idx === 8 && msg.mediaUrls.length > 9;
-
-                                              if (isImage) {
+                                          <div className="bg-black/5 dark:bg-black/40 backdrop-blur-sm">
+                                            {(() => {
+                                              const urls = msg.mediaUrls;
+                                              const count = urls.length;
+                                              
+                                              const renderMediaItem = (url, idx, isSmall = true) => {
+                                                const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
+                                                const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
+                                                
+                                                if (isImage) {
+                                                  return (
+                                                    <div key={idx} className={cn("overflow-hidden cursor-pointer group/img relative bg-surface-100 dark:bg-surface-200", isSmall ? "aspect-square" : "aspect-video")} onClick={() => setSelectedImage(url)}>
+                                                      <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" alt="" />
+                                                      <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/5 transition-colors" />
+                                                    </div>
+                                                  );
+                                                }
+                                                if (isVideo) {
+                                                  return (
+                                                    <div key={idx} className={cn("overflow-hidden bg-black", isSmall ? "aspect-square" : "aspect-video")}>
+                                                      <video controls className="w-full h-full object-cover">
+                                                        <source src={url} />
+                                                      </video>
+                                                    </div>
+                                                  );
+                                                }
                                                 return (
-                                                  <div
-                                                    key={idx}
-                                                    className={cn(
-                                                      "rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 shadow-2xl relative group/img cursor-pointer",
-                                                      msg.mediaUrls.length > 1 ? "aspect-square" : ""
-                                                    )}
-                                                    onClick={() => setSelectedImage(url)}
-                                                  >
-                                                    <img
-                                                      src={url}
-                                                      alt=""
-                                                      className={cn(
-                                                        "max-w-full h-auto hover:scale-[1.03] transition-all duration-500",
-                                                        msg.mediaUrls.length > 1 ? "w-full h-full object-cover" : "",
-                                                        isSending ? 'opacity-50 blur-[2px]' : ''
-                                                      )}
-                                                    />
-
-                                                    {isLastVisible && (
-                                                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-20">
-                                                        <span className="text-white text-2xl font-black italic tracking-tighter">
-                                                          +{msg.mediaUrls.length - 8}
-                                                        </span>
-                                                      </div>
-                                                    )}
-
-                                                    {isSending && (
-                                                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
-                                                        <div className="bg-white/20 p-3 rounded-full backdrop-blur-md">
-                                                          <Loader2 size={24} className="text-white animate-spin" />
-                                                        </div>
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                );
-                                              } else if (isVideo) {
-                                                return (
-                                                  <div key={idx} className="rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 bg-black">
-                                                    <video controls className="w-full h-auto max-h-[400px]">
-                                                      <source src={url} />
-                                                    </video>
-                                                  </div>
-                                                );
-                                              } else {
-                                                return (
-                                                  <div key={idx} className="flex flex-col max-w-full">
+                                                  <div key={idx} className="flex flex-col max-w-full p-2">
                                                     <FilePreview url={url} />
                                                     <div className="relative group/file">
                                                       <div
                                                         onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
-                                                        className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[320px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
+                                                        className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[260px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
                                                       >
                                                         {getFileIcon(url)}
-
                                                         <div className="flex-1 min-w-0 pt-0.5">
                                                           <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
                                                             {getFileName(url)}
                                                           </p>
-                                                          <div className={`flex items-center space-x-2 text-[11px] font-medium ${isMe ? 'text-white/60' : 'text-foreground/40'}`}>
-                                                            <span>688 B</span>
-                                                            <span className="opacity-30">•</span>
-                                                            <div className="flex items-center space-x-1 text-indigo-400">
-                                                              <Clock size={10} />
-                                                              <span className="font-bold">Tải về để xem lâu dài</span>
-                                                            </div>
-                                                          </div>
-                                                        </div>
-
-                                                        <div className="absolute bottom-3 right-4 flex items-center space-x-2 opacity-60 group-hover/file:opacity-100 transition-opacity">
-                                                          <div className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                                                            <Info size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
-                                                          </div>
-                                                          <a
-                                                            href={url}
-                                                            download
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                                                          >
-                                                            <Download size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
-                                                          </a>
                                                         </div>
                                                       </div>
                                                     </div>
                                                   </div>
                                                 );
+                                              };
+
+                                              if (count === 1) {
+                                                const url = urls[0];
+                                                const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
+                                                if (isImage) {
+                                                  return (
+                                                    <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => setSelectedImage(url)}>
+                                                      <img src={url} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
+                                                    </div>
+                                                  );
+                                                }
+                                                return renderMediaItem(url, 0, false);
                                               }
-                                            })}
+
+                                              const getRows = (c) => {
+                                                if (c <= 4) return [c];
+                                                if (c === 5) return [3, 2];
+                                                if (c === 6) return [3, 3];
+                                                if (c === 7) return [4, 3];
+                                                if (c === 8) return [4, 4];
+                                                const rows = [];
+                                                let rem = c;
+                                                while (rem > 0) {
+                                                  if (rem >= 4) { rows.push(4); rem -= 4; }
+                                                  else { rows.push(rem); rem = 0; }
+                                                }
+                                                return rows;
+                                              };
+
+                                              const rows = getRows(count);
+                                              let currentIndex = 0;
+
+                                              return (
+                                                <div className="flex flex-col gap-[2px]">
+                                                  {rows.map((rowSize, rowIndex) => {
+                                                    const rowUrls = urls.slice(currentIndex, currentIndex + rowSize);
+                                                    currentIndex += rowSize;
+                                                    return (
+                                                      <div key={rowIndex} className={cn("grid gap-[2px]", `grid-cols-${rowSize}`)}>
+                                                        {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              );
+                                            })()}
                                           </div>
                                         )}
-                                        {msg.type !== 'STICKER' && (
-                                          <div className="mt-2 flex justify-end">
-                                            <span className={`text-[10px] font-medium opacity-60 tabular-nums ${isMe ? 'text-white' : 'text-foreground/50'}`}>
-                                              {formatMessageTime(msg.createdAt)}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </>
+                                        {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+                                        <div className={cn("flex justify-end px-3 pb-2", (msg.content || msg.mediaUrls?.length > 0) ? "mt-1" : "mt-1")}>
+                                          <span className={`text-[9px] font-black opacity-70 tabular-nums uppercase tracking-widest ${isMe ? 'text-white' : 'text-foreground'}`}>
+                                            {formatMessageTime(msg.createdAt)}
+                                          </span>
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
                                   {/* Reactions Badge - Positioned absolute relative to the w-fit bubble wrapper */}
@@ -829,9 +818,9 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     <div className="flex items-center space-x-[-6px] transition-all duration-500 animate-in fade-in slide-in-from-right-2">
                                       {msg.readBy.filter(vId => {
                                         const readerId = String(vId);
-                                        if (readerId === String(meId)) return false; 
-                                        
-                                        const isLatestRead = !messages.slice(index + 1).some(m => 
+                                        if (readerId === String(meId)) return false;
+
+                                        const isLatestRead = !messages.slice(index + 1).some(m =>
                                           m.readBy && m.readBy.some(id => String(id) === readerId)
                                         );
                                         return isLatestRead;
@@ -875,7 +864,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           }
 
                                           const isOtherOnline = currentConv?.members?.some(m =>
-                                            String(m.userId || m.id) !== String(meId) && 
+                                            String(m.userId || m.id) !== String(meId) &&
                                             String(m.status || m.presence || '').toUpperCase() === 'ONLINE'
                                           );
 
