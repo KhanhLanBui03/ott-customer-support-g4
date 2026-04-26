@@ -89,6 +89,13 @@ public class ConversationService {
         long now = System.currentTimeMillis();
         String convId = isGroup ? UUID.randomUUID().toString() : generateSingleId(allMemberIds);
 
+        // Check if single conversation already exists to avoid overwriting and losing data (like lastMessage)
+        Optional<Conversation> existing = conversationRepository.findById(convId);
+        if (existing.isPresent()) {
+            log.info("Conversation {} already exists, skipping creation", convId);
+            return getConversationDetail(convId, currentUserId);
+        }
+
         Conversation conv = Conversation.builder()
                 .conversationId(convId)
                 .type(isGroup ? "GROUP" : "SINGLE")

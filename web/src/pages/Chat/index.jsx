@@ -9,12 +9,12 @@ import ConversationInfo from '../../components/ConversationInfo';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import ProfileModal from '../../components/ProfileModal';
 import ChangePasswordModal from '../../components/ChangePasswordModal';
-import SearchUserModal from '../../components/SearchUserModal';
 import CreateGroupModal from '../../components/CreateGroupModal';
+import FriendManagementModal from '../../components/FriendManagementModal';
 import NotificationModal from '../../components/NotificationModal';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
 import VideoCall from '../../components/VideoCall';
-import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Stars as SparklesIcon } from 'lucide-react';
+import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon } from 'lucide-react';
 import { setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
 import { setConversations } from '../../store/chatSlice';
 import { useTheme } from '../../hooks/useTheme';
@@ -41,6 +41,8 @@ const Chat = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isFriendsOpen, setIsFriendsOpen] = useState(false);
+  const [friendsInitialView, setFriendsInitialView] = useState('list');
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -297,13 +299,16 @@ const Chat = () => {
           
           <div className="relative group">
             <button 
-              onClick={() => setIsSearchOpen(true)}
+              onClick={() => {
+                setFriendsInitialView('list');
+                setIsFriendsOpen(true);
+              }}
               className={`
                 ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
                 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all active:scale-95
               `}
             >
-              <Users size={isMobile ? 22 : 24} />
+              <Contact size={isMobile ? 22 : 24} />
             </button>
             {!isMobile && (
               <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -346,12 +351,18 @@ const Chat = () => {
                   </button>
                   <button 
                     onClick={() => setIsGroupModalOpen(true)}
-                    className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors"
+                    className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors relative group/addgroup"
                   >
-                      <UserPlus size={isMobile ? 18 : 20} />
+                      <div className="relative">
+                        <Users size={isMobile ? 18 : 20} />
+                        <Plus size={10} strokeWidth={3} className="absolute -top-1 -right-1.5 text-foreground/60" />
+                      </div>
                   </button>
                   <button 
-                    onClick={() => setIsSearchOpen(true)}
+                    onClick={() => {
+                      setFriendsInitialView('search');
+                      setIsFriendsOpen(true);
+                    }}
                     className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors"
                   >
                       <Plus size={isMobile ? 18 : 20} />
@@ -549,7 +560,11 @@ const Chat = () => {
       {/* Modals & Overlays */}
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
-      <SearchUserModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <FriendManagementModal 
+        isOpen={isFriendsOpen} 
+        onClose={() => setIsFriendsOpen(false)} 
+        initialView={friendsInitialView}
+      />
       <CreateGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} />
       <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
       <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />

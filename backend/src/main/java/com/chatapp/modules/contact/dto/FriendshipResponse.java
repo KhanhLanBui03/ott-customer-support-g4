@@ -16,4 +16,5 @@ public class FriendshipResponse {
     private String avatarUrl;
     private String status; // PENDING, ACCEPTED, etc.
     private Boolean isRequester; // True if current user sent the request
+    private Long createdAt;
 }

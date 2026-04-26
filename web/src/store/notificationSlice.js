@@ -23,6 +23,7 @@ const saveState = (key, state) => {
 
 const initialPendingFriends = loadState('chat_pendingFriends', []);
 const initialPendingGroups = loadState('chat_pendingGroups', []);
+const initialActivities = loadState('chat_activities', []);
 
 // Helper to merge arrays of objects by key (keeps local if API fails to fetch)
 const mergeUnique = (arr1, arr2, key) => {
@@ -39,7 +40,8 @@ const notificationSlice = createSlice({
   initialState: {
     pendingFriends: initialPendingFriends,
     pendingGroups: initialPendingGroups,
-    unreadCount: initialPendingFriends.length + initialPendingGroups.length
+    activities: initialActivities,
+    unreadCount: initialPendingFriends.length + initialPendingGroups.length + initialActivities.filter(a => !a.isRead).length
   },
   reducers: {
     setPendingRequests: (state, action) => {
@@ -78,8 +80,29 @@ const notificationSlice = createSlice({
       state.unreadCount = Math.max(0, state.pendingFriends.length + state.pendingGroups.length);
       saveState('chat_pendingGroups', state.pendingGroups);
     },
+    addActivity: (state, action) => {
+      const activity = {
+        id: Date.now(),
+        isRead: false,
+        timestamp: Date.now(),
+        ...action.payload
+      };
+      state.activities.unshift(activity);
+      // Keep only last 20 activities
+      if (state.activities.length > 20) state.activities.pop();
+      state.unreadCount = state.pendingFriends.length + state.pendingGroups.length + state.activities.filter(a => !a.isRead).length;
+      saveState('chat_activities', state.activities);
+    },
+    markActivitiesAsRead: (state) => {
+      state.activities.forEach(a => a.isRead = true);
+      state.unreadCount = state.pendingFriends.length + state.pendingGroups.length;
+      saveState('chat_activities', state.activities);
+    },
     clearNotifications: (state) => {
       state.unreadCount = 0;
+      // Also mark activities as read
+      state.activities.forEach(a => a.isRead = true);
+      saveState('chat_activities', state.activities);
     }
   }
 });
@@ -91,6 +114,8 @@ export const {
     addPendingGroup, 
     removePendingFriend, 
     removePendingGroup, 
+    addActivity,
+    markActivitiesAsRead,
     clearNotifications 
 } = notificationSlice.actions;
 export default notificationSlice.reducer;
