@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchConversations } from '../../src/store/chatSlice';
+import { fetchConversations, setCurrentUserId } from '../../src/store/chatSlice';
 import { MaterialIcons } from '@expo/vector-icons';
 import CONFIG from '../../src/config';
+import SearchModal from '../../src/components/SearchModal';
 
 const HomeScreen = () => {
   const router = useRouter();
@@ -12,12 +13,16 @@ const HomeScreen = () => {
   const { conversations, loading } = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
 
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
 
   useEffect(() => {
     dispatch(fetchConversations());
-  }, []);
+    if (currentUser?.userId || currentUser?.id) {
+      dispatch(setCurrentUserId(String(currentUser.userId || currentUser.id)));
+    }
+  }, [currentUser, dispatch]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -32,16 +37,18 @@ const HomeScreen = () => {
   };
 
   const renderConversationItem = ({ item }) => {
-    // Logic lấy member giống Web: Tìm người không phải mình
+    const currentUserId = String(currentUser?.userId || currentUser?.id || '');
     const members = item.members || item.participants || [];
-const otherMember = item.type === 'SINGLE'
-  ? members.find(m => (m.userId || m.id) !== (currentUser?.userId || currentUser?.id))
-  : null;
+    const otherMember = item.type === 'SINGLE'
+      ? members.find(m => {
+          const mId = String(m.userId || m.id || '');
+          return mId !== '' && mId !== currentUserId;
+        })
+      : null;
 
-// SỬA TẠI ĐÂY: Thêm fallback item.name nếu không tìm thấy otherMember
-const displayName = item.type === 'SINGLE'
-  ? (otherMember?.name || otherMember?.firstName || item.name || 'Người dùng')
-  : (item.name || 'Nhóm chat');
+    const displayName = item.type === 'SINGLE'
+      ? (otherMember?.fullName || otherMember?.name || otherMember?.firstName || item.name || 'Người dùng')
+      : (item.name || 'Nhóm chat');
 
     const avatarUrl = getAvatarUrl(
       item.type === 'SINGLE'
@@ -55,7 +62,7 @@ const displayName = item.type === 'SINGLE'
     return (
       <TouchableOpacity
         style={styles.conversationItem}
-        onPress={() => router.push(`/chat/${item.conversationId}`)}
+        onPress={() => router.push(`/chat/${encodeURIComponent(item.conversationId)}`)}
       >
         <View style={styles.avatarContainer}>
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
@@ -80,7 +87,7 @@ const displayName = item.type === 'SINGLE'
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity style={styles.searchButton}>
+        <TouchableOpacity style={styles.searchButton} onPress={() => setSearchVisible(true)}>
           <MaterialIcons name="search" size={24} color="#1f2937" />
         </TouchableOpacity>
       </View>
@@ -103,6 +110,11 @@ const displayName = item.type === 'SINGLE'
           }
         />
       )}
+
+      <SearchModal 
+        visible={searchVisible} 
+        onClose={() => setSearchVisible(false)} 
+      />
     </View>
   );
 };

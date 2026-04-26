@@ -126,11 +126,9 @@ const EditProfileScreen = () => {
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (error) {
-      console.error('Update Profile Error:', error);
-      // Nếu vẫn lỗi 401, thông báo người dùng đăng nhập lại
-      if (error.response?.status === 401) {
-        Alert.alert('Hết phiên làm việc', 'Vui lòng đăng xuất và đăng nhập lại để thực hiện tính năng này.');
-      } else {
+      // Bỏ qua log error nếu là 401 vì đã được xử lý toàn cục ở axiosClient
+      if (error.response?.status !== 401) {
+        console.error('Update Profile Error:', error);
         Alert.alert('Lỗi', 'Không thể cập nhật hồ sơ. Vui lòng thử lại sau.');
       }
     } finally {

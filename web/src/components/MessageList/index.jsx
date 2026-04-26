@@ -66,16 +66,20 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [activeMenu, setActiveMenu] = useState(null);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [optimisticReactions, setOptimisticReactions] = useState({}); // { messageId: [reactions] }
+
   const [isVoteDetailsOpen, setIsVoteDetailsOpen] = useState(false);
   const [selectedVote, setSelectedVote] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isFileModalLoading, setIsFileModalLoading] = useState(true);
+  const [reactionDetail, setReactionDetail] = useState(null);
+
+
 
   const { sendRead } = useWebSocket();
   const meId = user?.userId || user?.id;
+  const currentConv = conversations?.find(c => c.conversationId === conversationId);
 
-  // Removed setWallpaper useEffect as wallpaper is now derived from conversations
 
 
   useEffect(() => {
@@ -113,10 +117,66 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     return () => observer.disconnect();
   }, [messages, conversationId, meId, sendRead]);
 
-  // Removed wallpaper handleUpdate as wallpaper is now derived from conversations
 
 
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+
+  const getReactionUserName = (userId) => {
+    if (!userId) return 'Người dùng';
+    const currentUserId = user?.userId || user?.id;
+    if (String(userId) === String(currentUserId)) return 'Bạn';
+
+    const members = currentConv?.members || currentConv?.participants || [];
+    const found = members.find(member => String(member.userId || member.id || '') === String(userId));
+    return found?.fullName || found?.name || found?.username || 'Người dùng';
+  };
+
+  const openReactionDetail = (messageId, emoji) => {
+    setReactionDetail({ messageId, emoji });
+  };
+
+  const closeReactionDetail = () => setReactionDetail(null);
+
+  const getReactionUsers = (message, emoji) => {
+    const serverUserIds = Array.isArray(message?.reactions?.[emoji]) ? message.reactions[emoji].map(id => String(id)) : [];
+    const localUserIds = (optimisticReactions[message.messageId] || [])
+      .filter(r => r.emoji === emoji)
+      .map(r => String(r.userId));
+
+    return Array.from(new Set([...serverUserIds, ...localUserIds]));
+  };
+
+  const getReactionGroups = (message) => {
+    const emojiUsers = {};
+
+    const addReaction = (emoji, userId) => {
+      if (!emoji || userId === undefined || userId === null) return;
+      const normalizedId = String(userId);
+      if (!emojiUsers[emoji]) emojiUsers[emoji] = new Set();
+      emojiUsers[emoji].add(normalizedId);
+    };
+
+    if (message?.reactions && typeof message.reactions === 'object') {
+      Object.entries(message.reactions).forEach(([emoji, users]) => {
+        if (Array.isArray(users)) {
+          users.forEach((userId) => addReaction(emoji, userId));
+        }
+      });
+    }
+
+    const localReactions = optimisticReactions[message?.messageId] || [];
+    localReactions.forEach((reaction) => addReaction(reaction.emoji, reaction.userId));
+
+    return Object.fromEntries(
+      Object.entries(emojiUsers).map(([emoji, set]) => [emoji, set.size])
+    );
+  };
+
+  const selectedDetailMessage = reactionDetail ? messages.find(msg => String(msg.messageId) === String(reactionDetail.messageId)) : null;
+  const selectedDetailGroups = selectedDetailMessage ? getReactionGroups(selectedDetailMessage) : {};
+  const detailEmoji = reactionDetail?.emoji || Object.keys(selectedDetailGroups)[0] || '';
+  const selectedDetailUserIds = selectedDetailMessage && detailEmoji ? getReactionUsers(selectedDetailMessage, detailEmoji) : [];
+  const selectedDetailNames = selectedDetailUserIds.map(getReactionUserName);
 
   const scrollToBottom = (instant = false) => {
     if (scrollRef.current) {
@@ -358,15 +418,20 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
     return (
       <div className={cn(
-        "absolute bottom-0 flex items-center z-20",
-        isMe ? 'right-2' : 'left-2'
+        "absolute -bottom-3 flex items-center z-30",
+        isMe ? 'right-0' : 'left-0'
       )}>
         <div className="flex items-center space-x-1">
           {Object.entries(groups).map(([emoji, count]) => (
-            <div key={emoji} className="flex items-center space-x-1 px-2 py-0.5 bg-sidebar/90 backdrop-blur-md border border-border shadow-sm rounded-full animate-fade-in hover:scale-110 transition-transform cursor-default">
+            <button
+              key={emoji}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); openReactionDetail(messageId, emoji); }}
+              className="flex items-center space-x-1 px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-border shadow-md rounded-full hover:scale-110 transition-transform"
+            >
               <span className="text-[12px]">{emoji}</span>
-              {count > 1 && <span className="text-[10px] font-black text-foreground/60">{count}</span>}
-            </div>
+              {count > 1 && <span className="text-[10px] font-bold text-foreground/60">{count}</span>}
+            </button>
           ))}
         </div>
       </div>
@@ -382,7 +447,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   }
 
   const { typingUsers } = useSelector(state => state.chat);
-  const currentConv = conversations?.find(c => c.conversationId === conversationId);
   const wallpaper = currentConv?.wallpaperUrl || null;
   const pinnedMessages = currentConv?.pinnedMessages || [];
   const pinnedIds = pinnedMessages.map(p => p.messageId);
@@ -481,8 +545,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                   );
                 }
 
-                const hasReactions = (msg.reactions && Object.keys(msg.reactions).length > 0) || (optimisticReactions[msg.messageId] && optimisticReactions[msg.messageId].length > 0);
-
                 return (
                   <React.Fragment key={msg.messageId || index}>
                     {dateHeader}
@@ -494,7 +556,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         "flex flex-col relative group animate-msg w-full",
                         msg.type === 'VOTE' ? 'items-center mb-8' : (isMe ? 'items-end' : 'items-start'),
                         isFirstInGroup ? "mt-6" : "mt-0.5",
-                        isLastInGroup ? "mb-6" : (hasReactions ? "mb-1" : "mb-0")
+                        isLastInGroup ? "mb-6" : "mb-0"
                       )}
                     >
                       <div className={cn(
@@ -586,188 +648,190 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                 </div>
                               </div>
                             ) : (
-                              <div className="relative">
-                                <div className={cn(`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} hidden group-hover/bubble:flex items-center space-x-1 p-1 bg-[#1e2330]/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-full z-[100] animate-in fade-in zoom-in slide-in-from-bottom-2 duration-200`)}>
-                                  {EMOJIS.map(emoji => (
-                                    <button key={emoji} onClick={(e) => { e.stopPropagation(); handleAction('REACTION', { id: msg.messageId, emoji }); }} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all text-[20px]">{emoji}</button>
-                                  ))}
-                                </div>
+                              <div className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
+                                <div className="relative group/bubble-main w-fit">
+                                  {/* Emoji Quick Picker */}
+                                  <div className={cn(`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} hidden group-hover/bubble-main:flex items-center space-x-1 p-1 bg-[#1e2330]/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-full z-[100] animate-in fade-in zoom-in slide-in-from-bottom-2 duration-200`)}>
+                                    {EMOJIS.map(emoji => (
+                                      <button key={emoji} onClick={(e) => { e.stopPropagation(); handleAction('REACTION', { id: msg.messageId, emoji }); }} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 hover:scale-125 transition-all text-[20px]">{emoji}</button>
+                                    ))}
+                                  </div>
 
-                                <div className={cn("absolute top-0 flex items-center space-x-1 opacity-0 group-hover/bubble:opacity-100 transition-all z-10", isMe ? "-left-28" : "-right-28")}>
-                                  <button onClick={() => onReply(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all" title="Trả lời"><Reply size={18} /></button>
-                                  <button onClick={() => onForward(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-blue-500 transition-all" title="Chuyển tiếp"><Forward size={18} className="text-blue-500" /></button>
-                                  <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === msg.messageId ? null : msg.messageId); }} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-foreground transition-all" title="Thêm"><MoreHorizontal size={18} /></button>
-                                </div>
+                                  {/* Action Buttons (Reply, Forward, More) */}
+                                  <div className={cn("absolute top-0 flex items-center space-x-1 opacity-0 group-hover/bubble-main:opacity-100 transition-all z-10", isMe ? "-left-28" : "-right-28")}>
+                                    <button onClick={() => onReply(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all" title="Trả lời"><Reply size={18} /></button>
+                                    <button onClick={() => onForward(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-blue-500 transition-all" title="Chuyển tiếp"><Forward size={18} className="text-blue-500" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === msg.messageId ? null : msg.messageId); }} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-foreground transition-all" title="Thêm"><MoreHorizontal size={18} /></button>
+                                  </div>
 
-                                {activeMenu === msg.messageId && (
-                                  <>
-                                    <div className="fixed inset-0 z-[90]" onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
-                                    <div className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999]`}>
-                                      <button onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Reply size={18} className="text-indigo-400" /> <span>Trả lời</span></button>
-                                      <button onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /><span>{isPinned ? 'Gỡ ghim' : 'Ghim tin nhắn'}</span></button>
-                                      <div className="h-px bg-border my-1.5 mx-2" />
-                                      <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Xóa phía tôi</span></button>
-                                      {isMe && <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Thu hồi tin nhắn này với tất cả mọi người?')) handleAction('RECALL', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Thu hồi</span></button>}
-                                    </div>
-                                  </>
-                                )}
-
-                                <div className={cn(
-                                  "relative overflow-hidden transition-all duration-300 shadow-sm",
-                                  msg.type === 'STICKER' ? 'bg-transparent shadow-none ring-0' : (msg.content ? 'px-4 py-2.5' : 'p-0'),
-                                  isMe ? (msg.content && msg.type !== 'STICKER' ? 'bg-indigo-600 text-white' : '') : (msg.content && msg.type !== 'STICKER' ? 'bg-surface-200 text-foreground border border-border' : ''),
-                                  isMe
-                                    ? (isFirstInGroup && isLastInGroup ? "rounded-[24px] rounded-br-[4px]" :
-                                      isFirstInGroup ? "rounded-t-[24px] rounded-bl-[24px] rounded-br-[8px]" :
-                                        isLastInGroup ? "rounded-b-[24px] rounded-tl-[24px] rounded-br-[4px]" :
-                                          "rounded-l-[24px] rounded-r-[8px]")
-                                    : (isFirstInGroup && isLastInGroup ? "rounded-[24px] rounded-bl-[4px]" :
-                                      isFirstInGroup ? "rounded-t-[24px] rounded-br-[24px] rounded-bl-[8px]" :
-                                        isLastInGroup ? "rounded-b-[24px] rounded-tr-[24px] rounded-bl-[4px]" :
-                                          "rounded-r-[24px] rounded-l-[8px]"),
-                                  isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : ''
-                                )}>
-                                  {msg.type === 'STICKER' ? (
-                                    <div className="relative group/sticker">
-                                      <img
-                                        src={msg.content}
-                                        alt="sticker"
-                                        className="max-w-[160px] sm:max-w-[220px] h-auto transition-transform duration-500 group-hover/sticker:scale-110 pointer-events-auto"
-                                      />
-                                    </div>
-                                  ) : (
+                                  {/* Context Menu */}
+                                  {activeMenu === msg.messageId && (
                                     <>
-                                      {msg.content && <p className="text-[15px] leading-relaxed font-semibold break-all whitespace-pre-wrap">{msg.content}</p>}
+                                      <div className="fixed inset-0 z-[90]" onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
+                                      <div className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999]`}>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Reply size={18} className="text-indigo-400" /> <span>Trả lời</span></button>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /><span>{isPinned ? 'Gỡ ghim' : 'Ghim tin nhắn'}</span></button>
+                                        <div className="h-px bg-border my-1.5 mx-2" />
+                                        <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Xóa phía tôi</span></button>
+                                        {isMe && <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Thu hồi tin nhắn này với tất cả mọi người?')) handleAction('RECALL', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Thu hồi</span></button>}
+                                      </div>
+                                    </>
+                                  )}
 
-                                      {msg.mediaUrls && msg.mediaUrls.length > 0 && (
-                                        <div className={cn(
-                                          "grid gap-1.5",
-                                          msg.content ? 'mt-3' : '',
-                                          msg.mediaUrls.length === 1 ? "grid-cols-1" :
-                                            (msg.mediaUrls.length === 2 || msg.mediaUrls.length === 4) ? "grid-cols-2" :
-                                              "grid-cols-3"
-                                        )}>
-                                          {msg.mediaUrls.slice(0, 9).map((url, idx) => {
-                                            const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
-                                            const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
-                                            const isSending = msg.status === 'SENDING' && (Date.now() - (msg.createdAt || 0) < 20000);
-                                            const isLastVisible = idx === 8 && msg.mediaUrls.length > 9;
+                                  {/* Main Bubble Content */}
+                                  <div className={cn(
+                                    "relative transition-all duration-300 shadow-sm w-fit",
+                                    msg.type === 'STICKER' ? 'bg-transparent shadow-none ring-0' : (msg.content ? 'px-5 py-3' : 'p-0'),
+                                    isMe ? (msg.content && msg.type !== 'STICKER' ? 'bg-indigo-600 text-white' : '') : (msg.content && msg.type !== 'STICKER' ? 'bg-surface-200 text-foreground border border-border' : ''),
+                                    isMe
+                                      ? "rounded-[20px] rounded-br-[4px]"
+                                      : "rounded-[20px] rounded-bl-[4px]",
+                                    isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : ''
+                                  )}>
+                                    {msg.type === 'STICKER' ? (
+                                      <div className="relative group/sticker">
+                                        <img
+                                          src={msg.content}
+                                          alt="sticker"
+                                          className="max-w-[160px] sm:max-w-[220px] h-auto transition-transform duration-500 group-hover/sticker:scale-110 pointer-events-auto"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {msg.content && <p className="text-[15px] leading-relaxed font-semibold break-all whitespace-pre-wrap">{msg.content}</p>}
 
-                                            if (isImage) {
-                                              return (
-                                                <div
-                                                  key={idx}
-                                                  className={cn(
-                                                    "rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 shadow-2xl relative group/img cursor-pointer",
-                                                    msg.mediaUrls.length > 1 ? "aspect-square" : ""
-                                                  )}
-                                                  onClick={() => setSelectedImage(url)}
-                                                >
-                                                  <img
-                                                    src={url}
-                                                    alt=""
+                                        {msg.mediaUrls && msg.mediaUrls.length > 0 && (
+                                          <div className={cn(
+                                            "grid gap-1.5",
+                                            msg.content ? 'mt-3' : '',
+                                            msg.mediaUrls.length === 1 ? "grid-cols-1" :
+                                              (msg.mediaUrls.length === 2 || msg.mediaUrls.length === 4) ? "grid-cols-2" :
+                                                "grid-cols-3"
+                                          )}>
+                                            {msg.mediaUrls.slice(0, 9).map((url, idx) => {
+                                              const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
+                                              const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
+                                              const isSending = msg.status === 'SENDING' && (Date.now() - (msg.createdAt || 0) < 20000);
+                                              const isLastVisible = idx === 8 && msg.mediaUrls.length > 9;
+
+                                              if (isImage) {
+                                                return (
+                                                  <div
+                                                    key={idx}
                                                     className={cn(
-                                                      "max-w-full h-auto hover:scale-[1.03] transition-all duration-500",
-                                                      msg.mediaUrls.length > 1 ? "w-full h-full object-cover" : "",
-                                                      isSending ? 'opacity-50 blur-[2px]' : ''
+                                                      "rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 shadow-2xl relative group/img cursor-pointer",
+                                                      msg.mediaUrls.length > 1 ? "aspect-square" : ""
                                                     )}
-                                                  />
+                                                    onClick={() => setSelectedImage(url)}
+                                                  >
+                                                    <img
+                                                      src={url}
+                                                      alt=""
+                                                      className={cn(
+                                                        "max-w-full h-auto hover:scale-[1.03] transition-all duration-500",
+                                                        msg.mediaUrls.length > 1 ? "w-full h-full object-cover" : "",
+                                                        isSending ? 'opacity-50 blur-[2px]' : ''
+                                                      )}
+                                                    />
 
-                                                  {isLastVisible && (
-                                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-20">
-                                                      <span className="text-white text-2xl font-black italic tracking-tighter">
-                                                        +{msg.mediaUrls.length - 8}
-                                                      </span>
-                                                    </div>
-                                                  )}
-
-                                                  {isSending && (
-                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
-                                                      <div className="bg-white/20 p-3 rounded-full backdrop-blur-md">
-                                                        <Loader2 size={24} className="text-white animate-spin" />
+                                                    {isLastVisible && (
+                                                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-20">
+                                                        <span className="text-white text-2xl font-black italic tracking-tighter">
+                                                          +{msg.mediaUrls.length - 8}
+                                                        </span>
                                                       </div>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              );
-                                            } else if (isVideo) {
-                                              return (
-                                                <div key={idx} className="rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 bg-black">
-                                                  <video controls className="w-full h-auto max-h-[400px]">
-                                                    <source src={url} />
-                                                  </video>
-                                                </div>
-                                              );
-                                            } else {
-                                              return (
-                                                <div key={idx} className="flex flex-col max-w-full">
-                                                  <FilePreview url={url} />
-                                                  <div className="relative group/file">
-                                                    <div
-                                                      onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
-                                                      className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[320px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
-                                                    >
-                                                      {getFileIcon(url)}
+                                                    )}
 
-                                                      <div className="flex-1 min-w-0 pt-0.5">
-                                                        <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
-                                                          {getFileName(url)}
-                                                        </p>
-                                                        <div className={`flex items-center space-x-2 text-[11px] font-medium ${isMe ? 'text-white/60' : 'text-foreground/40'}`}>
-                                                          <span>688 B</span>
-                                                          <span className="opacity-30">•</span>
-                                                          <div className="flex items-center space-x-1 text-indigo-400">
-                                                            <Clock size={10} />
-                                                            <span className="font-bold">Tải về để xem lâu dài</span>
+                                                    {isSending && (
+                                                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
+                                                        <div className="bg-white/20 p-3 rounded-full backdrop-blur-md">
+                                                          <Loader2 size={24} className="text-white animate-spin" />
+                                                        </div>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              } else if (isVideo) {
+                                                return (
+                                                  <div key={idx} className="rounded-2xl overflow-hidden border-2 border-white/10 dark:border-white/5 bg-black">
+                                                    <video controls className="w-full h-auto max-h-[400px]">
+                                                      <source src={url} />
+                                                    </video>
+                                                  </div>
+                                                );
+                                              } else {
+                                                return (
+                                                  <div key={idx} className="flex flex-col max-w-full">
+                                                    <FilePreview url={url} />
+                                                    <div className="relative group/file">
+                                                      <div
+                                                        onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
+                                                        className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[320px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
+                                                      >
+                                                        {getFileIcon(url)}
+
+                                                        <div className="flex-1 min-w-0 pt-0.5">
+                                                          <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
+                                                            {getFileName(url)}
+                                                          </p>
+                                                          <div className={`flex items-center space-x-2 text-[11px] font-medium ${isMe ? 'text-white/60' : 'text-foreground/40'}`}>
+                                                            <span>688 B</span>
+                                                            <span className="opacity-30">•</span>
+                                                            <div className="flex items-center space-x-1 text-indigo-400">
+                                                              <Clock size={10} />
+                                                              <span className="font-bold">Tải về để xem lâu dài</span>
+                                                            </div>
                                                           </div>
                                                         </div>
-                                                      </div>
 
-                                                      <div className="absolute bottom-3 right-4 flex items-center space-x-2 opacity-60 group-hover/file:opacity-100 transition-opacity">
-                                                        <div className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                                                          <Info size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
+                                                        <div className="absolute bottom-3 right-4 flex items-center space-x-2 opacity-60 group-hover/file:opacity-100 transition-opacity">
+                                                          <div className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                                                            <Info size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
+                                                          </div>
+                                                          <a
+                                                            href={url}
+                                                            download
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                                                          >
+                                                            <Download size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
+                                                          </a>
                                                         </div>
-                                                        <a
-                                                          href={url}
-                                                          download
-                                                          onClick={(e) => e.stopPropagation()}
-                                                          className={`p-1.5 rounded-lg border transition-colors ${isMe ? 'border-white/10 hover:bg-white/10' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                                                        >
-                                                          <Download size={14} className={isMe ? 'text-white' : 'text-slate-600'} />
-                                                        </a>
                                                       </div>
                                                     </div>
                                                   </div>
-                                                </div>
-                                              );
-                                            }
-                                          })}
-                                        </div>
-                                      )}
-                                      {msg.type !== 'STICKER' && (
-                                        <div className="mt-2 flex justify-end">
-                                          <span className={`text-[10px] font-medium opacity-60 tabular-nums ${isMe ? 'text-white' : 'text-foreground/50'}`}>
-                                            {formatMessageTime(msg.createdAt)}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
+                                                );
+                                              }
+                                            })}
+                                          </div>
+                                        )}
+                                        {msg.type !== 'STICKER' && (
+                                          <div className="mt-2 flex justify-end">
+                                            <span className={`text-[10px] font-medium opacity-60 tabular-nums ${isMe ? 'text-white' : 'text-foreground/50'}`}>
+                                              {formatMessageTime(msg.createdAt)}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                  {/* Reactions Badge - Positioned absolute relative to the w-fit bubble wrapper */}
+                                  {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
                                 </div>
-                                {/* Render Reactions Badge */}
-                                {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
-                                {/* Seen Avatars - Enhanced & Fixed */}
+
+                                {/* Seen Avatars - Moved outside the w-fit bubble-main to avoid vertical displacement */}
                                 <div className={cn(
-                                  "flex items-center mt-0.5 px-1 min-h-[20px]",
-                                  msg.type === 'VOTE' ? 'justify-center w-full' : (isMe ? 'justify-end' : 'justify-start ml-1')
+                                  "flex items-center px-1 min-h-[20px]",
+                                  ((msg.reactions && Object.keys(msg.reactions).length > 0) || (optimisticReactions[msg.messageId] && optimisticReactions[msg.messageId].length > 0)) ? "mt-4" : "mt-2",
+                                  isMe ? 'justify-end' : 'justify-start ml-1'
                                 )}>
                                   {isMe && msg.readBy && msg.readBy.length > 0 && (
                                     <div className="flex items-center space-x-[-6px] transition-all duration-500 animate-in fade-in slide-in-from-right-2">
                                       {msg.readBy.filter(vId => {
                                         const readerId = String(vId);
-                                        if (readerId === String(meId)) return false;
-
-                                        const isLatestRead = !messages.slice(index + 1).some(m =>
+                                        if (readerId === String(meId)) return false; 
+                                        
+                                        const isLatestRead = !messages.slice(index + 1).some(m => 
                                           m.readBy && m.readBy.some(id => String(id) === readerId)
                                         );
                                         return isLatestRead;
@@ -792,7 +856,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     if (!isMe) return null;
 
                                     const hasBeenReadByOther = msg.readBy?.some(id => String(id) !== String(meId));
-                                    // IMPROVEMENT: If any NEWER message has been read, this one is implicitly read too
                                     const isOlderThanAnyReadMessage = messages.slice(index + 1).some(m =>
                                       m.readBy?.some(id => String(id) !== String(meId))
                                     );
@@ -800,9 +863,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     if (hasBeenReadByOther || isOlderThanAnyReadMessage) return null;
 
                                     return (
-                                      <div className="flex items-center mt-1 group-hover/bubble:opacity-100 transition-opacity">
+                                      <div className="flex items-center mt-1">
                                         {(() => {
-                                          // 1. Sending State
                                           if (msg.status === 'SENDING' && String(msg.messageId).startsWith('temp-')) {
                                             return (
                                               <div className="flex items-center space-x-1 ml-1 opacity-50">
@@ -812,9 +874,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             );
                                           }
 
-                                          // 2. Logic to determine Sent vs Received
                                           const isOtherOnline = currentConv?.members?.some(m =>
-                                            String(m.userId || m.id) !== String(meId) &&
+                                            String(m.userId || m.id) !== String(meId) && 
                                             String(m.status || m.presence || '').toUpperCase() === 'ONLINE'
                                           );
 
@@ -985,7 +1046,55 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
             </div>
           </div>
         )}
+
+        {reactionDetail && selectedDetailMessage && (
+          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-3xl rounded-3xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 bg-slate-900/95">
+                <div>
+                  <div className="text-xs uppercase text-slate-400 tracking-[0.18em]">Biểu cảm</div>
+                  <div className="text-lg font-semibold text-white mt-1">{detailEmoji} · {selectedDetailGroups[detailEmoji] || 0} lượt</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeReactionDetail}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition"
+                >Đóng</button>
+              </div>
+              <div className="grid grid-cols-4 gap-4 p-4">
+                <div className="col-span-4 md:col-span-1 bg-slate-900/90 rounded-3xl p-4 space-y-3">
+                  {Object.entries(selectedDetailGroups).map(([emoji, count]) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setReactionDetail({ messageId: reactionDetail.messageId, emoji })}
+                      className={`w-full rounded-3xl px-3 py-3 text-left transition ${detailEmoji === emoji ? 'bg-indigo-500/20 text-white' : 'bg-white/5 text-slate-200 hover:bg-white/10'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">{emoji}</span>
+                        <span className="text-sm text-slate-400">{count}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="col-span-4 md:col-span-3 bg-slate-900/90 rounded-3xl p-4">
+                  <div className="mb-4 text-sm text-slate-400">Danh sách người đã chọn biểu cảm này</div>
+                  <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2">
+                    {selectedDetailNames.length > 0 ? selectedDetailNames.map((name, index) => (
+                      <div key={`${name}-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                        {name}
+                      </div>
+                    )) : (
+                      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">Chưa có ai phản ứng.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
     </>
   );
 };

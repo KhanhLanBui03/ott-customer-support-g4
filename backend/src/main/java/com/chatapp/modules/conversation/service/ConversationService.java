@@ -271,6 +271,18 @@ public class ConversationService {
             for (String mId : fullConv.getMemberIds()) {
                 userRepository.findById(mId).ifPresent(u -> {
                     UserConversation memberUc = userConversationRepository.findById(mId, convId).orElse(null);
+                    
+                    // Fetch friendship status
+                    String fStatus = "NONE";
+                    if (!mId.equals(userId)) {
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
+                        if (f1.isPresent()) fStatus = f1.get().getStatus();
+                        else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                    } else {
+                        fStatus = "SELF";
+                    }
+
                     members.add(ConversationResponse.MemberInfo.builder()
                             .userId(u.getUserId())
                             .status(u.getStatus())
@@ -280,6 +292,7 @@ public class ConversationService {
                             .nickname(memberUc != null ? memberUc.getNickname() : null)
                             .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                             .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
+                            .friendshipStatus(fStatus)
                             .build());
                 });
             }
@@ -290,6 +303,7 @@ public class ConversationService {
                     .type(type)
                     .name(finalName != null ? finalName : "Direct Message")
                     .avatarUrl(finalAvatar)
+                    .wallpaperUrl(fullConv != null ? fullConv.getWallpaperUrl() : null)
                     .lastMessage(uc.getLastMessage())
                     .lastMessageSenderId(uc.getLastMessageSenderId())
                     .lastMessageTime(uc.getUpdatedAt())
@@ -317,6 +331,18 @@ public class ConversationService {
         for (String mId : conv.getMemberIds()) {
             userRepository.findById(mId).ifPresent(u -> {
                 UserConversation memberUc = userConversationRepository.findById(mId, conversationId).orElse(null);
+                
+                // Fetch friendship status
+                String fStatus = "NONE";
+                if (!mId.equals(userId)) {
+                    Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
+                    Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
+                    if (f1.isPresent()) fStatus = f1.get().getStatus();
+                    else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                } else {
+                    fStatus = "SELF";
+                }
+
                 members.add(ConversationResponse.MemberInfo.builder()
                         .userId(u.getUserId())
                         .status(u.getStatus())
@@ -326,6 +352,7 @@ public class ConversationService {
                         .nickname(memberUc != null ? memberUc.getNickname() : null)
                         .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                         .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
+                        .friendshipStatus(fStatus)
                         .build());
             });
         }
@@ -335,6 +362,7 @@ public class ConversationService {
                 .type(conv.getType())
                 .name(conv.getName())
                 .avatarUrl(conv.getAvatarUrl())
+                .wallpaperUrl(conv.getWallpaperUrl())
                 .lastMessage(conv.getLastMessage())
                 .lastMessageTime(conv.getLastMessageTime())
                 .updatedAt(conv.getUpdatedAt())
@@ -734,10 +762,13 @@ public class ConversationService {
         // Notify via WebSocket to all members
         for (String memberId : conv.getMemberIds()) {
             try {
+                Map<String, Object> payload = new java.util.HashMap<>();
+                payload.put("wallpaperUrl", wallpaperUrl);
+                
                 messagingTemplate.convertAndSendToUser(
                         memberId,
                         "/queue/conversations",
-                        MessageEvent.of("WALLPAPER_UPDATED", conversationId, Map.of("wallpaperUrl", wallpaperUrl))
+                        MessageEvent.of("WALLPAPER_UPDATED", conversationId, payload)
                 );
             } catch (Exception e) {
                 log.warn("Failed to send wallpaper update to user {}: {}", memberId, e.getMessage());

@@ -9,8 +9,13 @@ let editHandlers = new Set();
 let deleteHandlers = new Set();
 let recallHandlers = new Set();
 let reactionHandlers = new Set();
+let messageUpdateHandlers = new Set();
+let statusHandlers = new Set();
+let globalHandlers = new Set();
 
-export const initializeSocket = (token) => {
+export const initializeSocket = (token, userId, globalHandler) => {
+  globalHandlers.clear();
+  if (globalHandler) globalHandlers.add(globalHandler);
   if (stompClient && stompClient.connected) {
     console.log('📡 Mobile socket already connected');
     return stompClient;
@@ -46,6 +51,9 @@ export const initializeSocket = (token) => {
           const event = JSON.parse(message.body);
           console.log('📥 Mobile received event:', event.eventType, 'for conversation:', event.conversationId);
 
+          // Phát sự kiện toàn cục cho Layout xử lý thông báo
+          globalHandlers.forEach(handler => handler(event));
+
           if (event.eventType === 'MESSAGE_SEND') {
             const msg = event.payload;
             console.log('💬 Processing MESSAGE_SEND:', msg.messageId);
@@ -60,6 +68,11 @@ export const initializeSocket = (token) => {
             recallHandlers.forEach(handler => handler(event.payload));
           } else if (event.eventType === 'MESSAGE_REACTION') {
             reactionHandlers.forEach(handler => handler(event.payload));
+          } else if (event.eventType === 'MESSAGE_STATUS_UPDATE' || event.eventType === 'MESSAGE_UPDATE') {
+            messageUpdateHandlers.forEach(handler => handler(event.payload));
+          } else if (event.eventType === 'USER_STATUS_CHANGED') {
+            console.log('👤 User status changed:', event.payload.userId, event.payload.status);
+            statusHandlers.forEach(handler => handler(event.payload));
           }
         } catch (e) {
           console.error('❌ Error parsing STOMP message:', e);
@@ -92,6 +105,11 @@ export const onMessageEdit = (handler) => editHandlers.add(handler);
 export const onMessageDelete = (handler) => deleteHandlers.add(handler);
 export const onMessageRecall = (handler) => recallHandlers.add(handler);
 export const onReaction = (handler) => reactionHandlers.add(handler);
+export const offReaction = (handler) => reactionHandlers.delete(handler);
+export const onMessageUpdate = (handler) => messageUpdateHandlers.add(handler);
+export const offMessageUpdate = (handler) => messageUpdateHandlers.delete(handler);
+export const onUserStatusChange = (handler) => statusHandlers.add(handler);
+export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
 
 export const sendMessageViaSocket = (messageData) => {
   if (stompClient?.connected) {
@@ -152,6 +170,8 @@ export default {
   offMessageReceive,
   onUserTyping,
   offUserTyping,
+  onUserStatusChange,
+  offUserStatusChange,
   onMessageEdit,
   onMessageDelete,
   onMessageRecall,

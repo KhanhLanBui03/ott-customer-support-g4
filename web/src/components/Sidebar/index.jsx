@@ -86,7 +86,9 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline mb-0.5">
                   <h3 className={`text-[15px] tracking-tight truncate ${isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-foreground'} ${conv.unreadCount > 0 ? 'font-black' : 'font-bold'}`}>
-                    {conv.name || 'Untitled'}
+                    {conv.type === 'SINGLE' 
+                      ? (otherMember?.fullName || otherMember?.name || conv.name || 'Người dùng')
+                      : (conv.name || 'Nhóm chat')}
                   </h3>
                   <div className="flex items-center space-x-1.5 ml-2">
                     {conv.lastMessageTime && (

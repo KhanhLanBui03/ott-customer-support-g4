@@ -395,12 +395,22 @@ public class MessageService {
     /**
      * Get conversation messages (paginated)
      */
-    public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId) {
+    public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId, String fromMessageId) {
         Long joinedAt = userConversationRepository.findById(currentUserId, conversationId)
                 .map(uc -> uc.getJoinedAt())
                 .orElse(0L);
 
-        return messageRepository.findByConversationId(conversationId).stream()
+        Long fromCreatedAt = null;
+        if (fromMessageId != null && !fromMessageId.isBlank()) {
+            fromCreatedAt = messageRepository.findByConversationIdAndMessageId(conversationId, fromMessageId)
+                    .map(Message::getCreatedAt)
+                    .orElse(null);
+            log.debug("Fetching messages before messageId: {}, createdAt: {}", fromMessageId, fromCreatedAt);
+        }
+
+        final Long finalFromCreatedAt = fromCreatedAt;
+
+        return messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, limit).stream()
                 .filter(m -> m.getCreatedAt() != null) // Skip messages with null timestamps
                 .filter(m -> m.getCreatedAt() >= joinedAt) // NEW: Filter messages before user joined/re-joined
                 .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter hidden messages

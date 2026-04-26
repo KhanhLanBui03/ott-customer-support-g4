@@ -33,10 +33,11 @@ public class MessageController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMessages(
             @PathVariable String conversationId,
             @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String fromMessageId,
             Authentication authentication
     ) {
         String currentUserId = getAuthUserId(authentication);
-        List<MessageResponse> messages = messageService.getConversationMessages(conversationId, limit, currentUserId)
+        List<MessageResponse> messages = messageService.getConversationMessages(conversationId, limit, currentUserId, fromMessageId)
                 .stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());

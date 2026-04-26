@@ -14,22 +14,36 @@ const MessageList = ({
   typingUsers = [],
   onlineUsers = [],
   isLoading = false,
+  onLoadMore,
+  onReact,
+  onLongPress,
 }) => {
   const flatListRef = useRef(null);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && !isRefreshing) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [messages, typingUsers]);
+  }, [messages.length, typingUsers, isRefreshing]);
+
+  const onRefresh = async () => {
+    if (onLoadMore && !isRefreshing) {
+      setIsRefreshing(true);
+      await onLoadMore();
+      setIsRefreshing(false);
+    }
+  };
 
   const renderMessage = ({ item }) => (
     <ChatBubble
       message={item}
-      isOwn={item.senderId === currentUserId}
+      isOwn={String(item.senderId || '') === String(currentUserId || '')}
       isOnline={onlineUsers.includes(item.senderId)}
+      onReact={onReact}
+      onLongPress={() => onLongPress(item)}
     />
   );
 
@@ -47,7 +61,7 @@ const MessageList = ({
     );
   };
 
-  if (isLoading) {
+  if (isLoading && messages.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#667eea" />
@@ -65,7 +79,14 @@ const MessageList = ({
         keyExtractor={(item) => item.messageId || item.id || Math.random().toString()}
         ListFooterComponent={renderTypingIndicator}
         contentContainerStyle={styles.listContent}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={(w, h) => {
+          // Chỉ scroll xuống nếu không phải đang refresh (tải tin nhắn cũ)
+          if (!isRefreshing) {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }
+        }}
+        refreshing={isRefreshing}
+        onRefresh={onRefresh}
       />
     </View>
   );
