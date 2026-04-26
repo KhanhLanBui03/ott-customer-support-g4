@@ -145,6 +145,44 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
     );
   };
 
+  const renderReadReceipts = () => {
+    // Chỉ hiển thị bóng seen cho tin nhắn của mình và có người đã đọc
+    if (!isOwn || !message.readBy || message.readBy.length === 0) return null;
+
+    // Lọc bỏ chính mình khỏi danh sách seen (nếu có)
+    const readers = message.readBy.filter(id => String(id) !== currentUserIdStr);
+    if (readers.length === 0) return null;
+
+    return (
+      <View style={styles.readReceiptsContainer}>
+        {readers.slice(0, 3).map((readerId, index) => {
+          // Tìm thông tin người đọc để lấy avatar
+          let readerAvatar = null;
+          for (const conv of conversations) {
+            const found = (conv.members || []).find(m => String(m.userId || m.id || '') === String(readerId));
+            if (found) {
+              readerAvatar = getAvatarUrl(found.avatarUrl || found.avatar, found.fullName || found.name);
+              break;
+            }
+          }
+
+          return (
+            <Image
+              key={readerId}
+              source={{ uri: readerAvatar || `https://ui-avatars.com/api/?name=U&background=ccc` }}
+              style={[styles.readAvatar, { marginLeft: index > 0 ? -6 : 0, zIndex: 10 - index }]}
+            />
+          );
+        })}
+        {readers.length > 3 && (
+          <View style={styles.moreReadersBadge}>
+            <Text style={styles.moreReadersText}>+{readers.length - 3}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <Animated.View 
       {...panResponder.panHandlers}
@@ -174,44 +212,47 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
           </Text>
         )}
         
-        <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble]}>
-          {/* Reply Section - SỬA LẠI LAYOUT NGANG */}
-          {message.replyTo && (
-            <View style={[styles.replyBubble, isOwn ? styles.ownReplyBubble : styles.otherReplyBubble]}>
-              <View style={styles.replyLine} />
-              <View style={styles.replyContent}>
-                <Text style={styles.replySender} numberOfLines={1}>
-                  {(() => {
-                    const repliedUserId = String(message.replyTo.senderId || '');
-                    const currentMeId = String(user?.userId || user?.id || '');
-                    const isMeReplied = repliedUserId !== '' && repliedUserId === currentMeId;
-                    if (isMeReplied) return 'Bạn';
-                    
-                    // Tìm tên mới nhất trong danh sách hội thoại với so sánh String an toàn
-                    let freshRepliedName = message.replyTo.senderName;
-                    for (const conv of conversations) {
-                      const found = (conv.members || []).find(m => String(m.userId || m.id || '') === repliedUserId);
-                      if (found) {
-                        freshRepliedName = found.fullName || found.name || found.username;
-                        break;
-                      }
-                    }
-                    return freshRepliedName;
-                  })()}
-                </Text>
-                <Text style={styles.replyText} numberOfLines={1}>{message.replyTo.content}</Text>
-              </View>
-            </View>
-          )}
+        <View style={[styles.bubbleContainer, isOwn ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
+          <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble]}>
+            {/* Reply Section */}
+            {message.replyTo && (
+              <View style={[styles.replyBubble, isOwn ? styles.ownReplyBubble : styles.otherReplyBubble]}>
+                <View style={styles.replyLine} />
+                <View style={styles.replyContent}>
+                  <Text style={styles.replySender} numberOfLines={1}>
+                    {(() => {
+                      const repliedUserId = String(message.replyTo.senderId || '');
+                      const currentMeId = String(user?.userId || user?.id || '');
+                      if (repliedUserId === currentMeId) return 'Bạn';
 
-          <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>
-            {message.isRecalled ? '[Tin nhắn đã thu hồi]' : message.content}
-          </Text>
+                      let name = message.replyTo.senderName;
+                      for (const conv of conversations) {
+                        const found = (conv.members || []).find(m => String(m.userId || m.id || '') === repliedUserId);
+                        if (found) { name = found.fullName || found.name; break; }
+                      }
+                      return name;
+                    })()}
+                  </Text>
+                  <Text style={styles.replyText} numberOfLines={1}>{message.replyTo.content}</Text>
+                </View>
+              </View>
+            )}
+
+            <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>
+              {message.isRecalled ? '[Tin nhắn đã thu hồi]' : message.content}
+            </Text>
+
+            <Text style={[styles.timeInside, isOwn ? styles.ownTime : styles.otherTime]}>
+              {formatTime(message.createdAt || Date.now())}
+            </Text>
+          </View>
+
+          {renderReactions()}
         </View>
-        
-        {renderReactions()}
-        
-        <Text style={styles.time}>{formatTime(message.createdAt || Date.now())}</Text>
+
+        <View style={[styles.statusContainer, isOwn ? styles.ownStatus : styles.otherStatus]}>
+          {renderReadReceipts()}
+        </View>
       </TouchableOpacity>
 
       <Modal visible={reactionModalVisible} transparent animationType="fade" onRequestClose={closeReactionDetail}>
@@ -264,20 +305,44 @@ const styles = StyleSheet.create({
   container: { marginVertical: 4, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'flex-end' },
   ownContainer: { justifyContent: 'flex-end' },
   otherContainer: { justifyContent: 'flex-start' },
-  avatarContainer: { marginRight: 8, marginBottom: 16 },
+  avatarContainer: { marginRight: 8, marginBottom: 20 },
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#eee' },
-  messageWrapper: { maxWidth: '75%' },
+  messageWrapper: { maxWidth: '75%', marginBottom: 4 },
   ownWrapper: { alignItems: 'flex-end' },
   otherWrapper: { alignItems: 'flex-start' },
   senderName: { fontSize: 11, color: '#6b7280', marginBottom: 2, marginLeft: 4 },
+  bubbleContainer: { position: 'relative', zIndex: 1, paddingBottom: 10},
   bubble: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20 },
   ownBubble: { backgroundColor: '#667eea', borderBottomRightRadius: 4 },
   otherBubble: { backgroundColor: '#f3f4f6', borderBottomLeftRadius: 4 },
   text: { fontSize: 15, lineHeight: 20 },
   ownText: { color: '#fff' },
   otherText: { color: '#1f2937' },
-  time: { fontSize: 10, color: '#9ca3af', marginTop: 2 },
-  
+  timeInside: {
+    fontSize: 10,
+    marginTop: 2,
+    alignSelf: 'flex-end',
+    minWidth: 45,
+    textAlign: 'right'
+  },
+  ownTime: { color: 'rgba(255, 255, 255, 0.7)' },
+  otherTime: { color: '#9ca3af' },
+
+  // Status (Seen)
+  statusContainer: {
+     marginTop: 22, // 👈 Tăng thêm để tạo khoảng trống cho Emoji đã đẩy xuống
+       minHeight: 14,
+       zIndex: 1,
+  },
+  ownStatus: {
+    alignItems: 'flex-end',
+    paddingRight: 4,
+  },
+  otherStatus: {
+    alignItems: 'flex-start',
+    paddingLeft: 4,
+  },
+
   // Reply styles
   replyBubble: {
     flexDirection: 'row',
@@ -316,17 +381,46 @@ const styles = StyleSheet.create({
 
   // Reactions
   reactionsContainer: {
-    flexDirection: 'row',
-    marginTop: -8,
-    flexWrap: 'wrap',
+    position: 'absolute',
+      bottom: -20, // 👈 Đẩy xuống sâu hơn (-15 -> -20) để tránh đè thời gian gửi
+      flexDirection: 'row',
+      zIndex: 99,
+      elevation: 99,
   },
   ownReactions: {
-    alignSelf: 'flex-end',
-    marginRight: 8,
+    right: 8,
   },
   otherReactions: {
-    alignSelf: 'flex-start',
-    marginLeft: 8,
+    left: 8,
+  },
+  // Seen Indicators
+  readReceiptsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  readAvatar: {
+    width: 12, // Thu nhỏ lại một chút (14 -> 12)
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  moreReadersBadge: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -4,
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  moreReadersText: {
+    fontSize: 6,
+    fontWeight: 'bold',
+    color: '#6b7280',
   },
   reactionBadgeWrapper: {
     marginRight: 6,

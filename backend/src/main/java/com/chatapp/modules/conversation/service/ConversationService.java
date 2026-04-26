@@ -303,6 +303,7 @@ public class ConversationService {
                     .type(type)
                     .name(finalName != null ? finalName : "Direct Message")
                     .avatarUrl(finalAvatar)
+                    .wallpaperUrl(fullConv != null ? fullConv.getWallpaperUrl() : null)
                     .lastMessage(uc.getLastMessage())
                     .lastMessageSenderId(uc.getLastMessageSenderId())
                     .lastMessageTime(uc.getUpdatedAt())
@@ -361,6 +362,7 @@ public class ConversationService {
                 .type(conv.getType())
                 .name(conv.getName())
                 .avatarUrl(conv.getAvatarUrl())
+                .wallpaperUrl(conv.getWallpaperUrl())
                 .lastMessage(conv.getLastMessage())
                 .lastMessageTime(conv.getLastMessageTime())
                 .updatedAt(conv.getUpdatedAt())
@@ -760,10 +762,13 @@ public class ConversationService {
         // Notify via WebSocket to all members
         for (String memberId : conv.getMemberIds()) {
             try {
+                Map<String, Object> payload = new java.util.HashMap<>();
+                payload.put("wallpaperUrl", wallpaperUrl);
+                
                 messagingTemplate.convertAndSendToUser(
                         memberId,
                         "/queue/conversations",
-                        MessageEvent.of("WALLPAPER_UPDATED", conversationId, Map.of("wallpaperUrl", wallpaperUrl))
+                        MessageEvent.of("WALLPAPER_UPDATED", conversationId, payload)
                 );
             } catch (Exception e) {
                 log.warn("Failed to send wallpaper update to user {}: {}", memberId, e.getMessage());
