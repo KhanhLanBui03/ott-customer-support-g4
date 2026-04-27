@@ -14,7 +14,7 @@ import FriendManagementModal from '../../components/FriendManagementModal';
 import NotificationModal from '../../components/NotificationModal';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
 import VideoCall from '../../components/VideoCall';
-import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon } from 'lucide-react';
+import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
 import { setConversations } from '../../store/chatSlice';
 import { useTheme } from '../../hooks/useTheme';
@@ -48,6 +48,8 @@ const Chat = () => {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [filterType, setFilterType] = useState('all'); // 'all', 'unread'
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
 
   // Call management
   const [localStream, setLocalStream] = useState(null);
@@ -129,7 +131,10 @@ const Chat = () => {
   };
 
   useEffect(() => {
-    const handleGlobalClick = () => setContextMenu(null);
+    const handleGlobalClick = () => {
+      setContextMenu(null);
+      setIsFilterMenuOpen(false);
+    };
     window.addEventListener('click', handleGlobalClick);
     return () => window.removeEventListener('click', handleGlobalClick);
   }, []);
@@ -183,12 +188,18 @@ const Chat = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredConversations = conversations.filter(conv => {
+    // 1. Filter by unread status if active
+    if (filterType === 'unread' && (conv.unreadCount || 0) === 0) return false;
+
+    // 2. If no search term, return all matching the type filter
+    if (!searchTerm) return true;
+
     const searchLower = searchTerm.toLowerCase();
 
-    // 1. Check conversation name
+    // 3. Check conversation name
     if ((conv.name || '').toLowerCase().includes(searchLower)) return true;
 
-    // 2. Check all members' names inside the conversation
+    // 4. Check all members' names inside the conversation
     if (conv.members && Array.isArray(conv.members)) {
       return conv.members.some(m =>
         (m.fullName || '').toLowerCase().includes(searchLower)
@@ -335,12 +346,12 @@ const Chat = () => {
       {/* 2. Conversation Sidebar (Middle) */}
       {(!isMobile || !activeConversationId) && (
         <div className={isMobile
-          ? "flex-1 flex-shrink-0 bg-sidebar border-r border-border flex flex-col transition-all duration-300"
+          ? "flex-1 flex flex-col bg-sidebar"
           : "w-[360px] flex-shrink-0 bg-sidebar border-r border-border flex flex-col transition-all duration-300"
         }>
           <div className={`${isMobile ? 'p-4 space-y-4' : 'p-6 space-y-6'}`}>
             <div className="flex items-center justify-between">
-              <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-black text-foreground tracking-tighter`}>Messages</h1>
+              <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-black text-foreground tracking-tighter`}>Tin nhắn</h1>
               <div className="flex items-center space-x-1">
                 <button
                   onClick={toggleTheme}
@@ -352,6 +363,7 @@ const Chat = () => {
                 <button
                   onClick={() => setIsGroupModalOpen(true)}
                   className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors relative group/addgroup"
+                  title="Tạo nhóm mới"
                 >
                   <div className="relative">
                     <Users size={isMobile ? 18 : 20} />
@@ -364,6 +376,7 @@ const Chat = () => {
                     setIsFriendsOpen(true);
                   }}
                   className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors"
+                  title="Thêm bạn bè"
                 >
                   <UserPlus size={isMobile ? 18 : 20} />
                 </button>
@@ -380,7 +393,7 @@ const Chat = () => {
                   placeholder="Tìm kiếm..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-2.5 bg-surface-200 text-foreground text-sm rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-foreground/30 font-bold"
+                  className="w-full pl-12 pr-4 py-2 bg-surface-200 text-foreground text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-foreground/30 font-medium"
                 />
                 {searchTerm && (
                   <button
@@ -402,12 +415,79 @@ const Chat = () => {
                 </button>
               )}
             </div>
+
+            <div className="flex items-center justify-between border-b border-black/10 dark:border-white/5 pb-1">
+              <div className="flex items-center space-x-6">
+                <div className="text-[14px] font-bold pb-2 relative text-blue-500 cursor-pointer">
+                  <span>Ưu tiên</span>
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                </div>
+              </div>
+
+              <div className="relative pb-2">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsFilterMenuOpen(!isFilterMenuOpen);
+                  }}
+                  className={`flex items-center space-x-1 px-1 py-1 text-[13px] transition-all active:scale-95 ${
+                    isFilterMenuOpen || filterType !== 'all'
+                      ? 'bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-blue-600/20 font-bold'
+                      : 'hover:text-blue-600 dark:hover:text-white font-bold'
+                  }`}
+                  style={!(isFilterMenuOpen || filterType !== 'all') ? { color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'black' } : {}}
+                >
+                  <span>{filterType === 'unread' ? 'Chưa đọc' : 'Phân loại'}</span>
+                  <ChevronDown size={14} strokeWidth={2.5} className={`transition-transform duration-300 ${isFilterMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isFilterMenuOpen && (
+                  <div
+                    className="absolute top-full right-0 mt-2 w-60 bg-surface-100 dark:bg-[#1e2330] border border-border dark:border-white/10 shadow-2xl rounded-xl py-2 z-[60] animate-in fade-in zoom-in-95 duration-200"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-4 py-1.5 mb-1">
+                      <p className="text-[10px] font-bold text-foreground/30 dark:text-white/30 uppercase tracking-widest">Theo trạng thái</p>
+                    </div>
+
+                    <button
+                      onClick={() => { setFilterType('all'); setIsFilterMenuOpen(false); }}
+                      className="w-full flex items-center justify-between px-4 py-2 hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors group"
+                    >
+                      <span className={`text-[13px] font-medium ${filterType === 'all' ? 'text-blue-500 dark:text-blue-400' : 'text-foreground/70 dark:text-white/70'}`}>Tất cả</span>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterType === 'all' ? 'border-blue-500 bg-blue-500/20' : 'border-border dark:border-white/10 group-hover:border-foreground/30 dark:group-hover:border-white/30'
+                        }`}>
+                        {filterType === 'all' && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => { setFilterType('unread'); setIsFilterMenuOpen(false); }}
+                      className="w-full flex items-center justify-between px-4 py-2 hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors group"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className={`text-[13px] font-medium ${filterType === 'unread' ? 'text-blue-500 dark:text-blue-400' : 'text-foreground/70 dark:text-white/70'}`}>Chưa đọc</span>
+                        {conversations.filter(c => (c.unreadCount || 0) > 0).length > 0 && (
+                          <span className="flex items-center justify-center min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-black rounded-full shadow-lg shadow-red-500/20">
+                            {conversations.filter(c => (c.unreadCount || 0) > 0).length}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterType === 'unread' ? 'border-blue-500 bg-blue-500/20' : 'border-border dark:border-white/10 group-hover:border-foreground/30 dark:group-hover:border-white/30'
+                        }`}>
+                        {filterType === 'unread' && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className={`flex-1 overflow-y-auto no-scrollbar ${isMobile ? 'pb-20' : ''}`}>
             {loading && conversations.length === 0 ? (
               <div className="p-8 text-center text-[10px] font-mono font-black uppercase tracking-[0.3em] text-foreground/40 animate-pulse">
-                Syncing...
+                Đang đồng bộ...
               </div>
             ) : (
               <Sidebar
@@ -440,17 +520,64 @@ const Chat = () => {
                 onRefreshMessages={() => fetchMessages(activeConversationId)}
               />
             ) : !isMobile ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-cursor-dark/10 p-12">
-                <div className="relative mb-8">
-                  <div className="absolute inset-0 bg-cursor-accent/5 blur-3xl rounded-full scale-150" />
-                  <div className="relative w-32 h-32 bg-white border border-cursor-dark/[0.03] rounded-[40px] shadow-2xl flex items-center justify-center">
-                    <MessageSquare className="text-cursor-dark/5" size={64} />
+              <div className="flex-1 flex flex-col items-center justify-center p-12 relative overflow-hidden bg-background transition-colors duration-500">
+                {/* Ambient background glows */}
+                <div className="absolute top-1/4 -left-20 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-600/10 blur-[120px] rounded-full animate-pulse" />
+                <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-blue-500/10 dark:bg-blue-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+
+                <div className="relative z-10 flex flex-col items-center text-center space-y-10 max-w-lg">
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full scale-150 group-hover:scale-[2] transition-transform duration-1000 opacity-50 dark:opacity-100" />
+                    <div className="relative w-44 h-44 bg-black/5 dark:bg-white/10 border border-black/5 dark:border-white/10 backdrop-blur-2xl rounded-[56px] shadow-2xl flex items-center justify-center transform group-hover:rotate-6 transition-all duration-500">
+                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 dark:from-indigo-500/20 to-transparent rounded-[56px]" />
+                      <MessageSquare className="text-indigo-600 dark:text-white opacity-90 drop-shadow-[0_0_20px_rgba(99,102,241,0.3)]" size={88} strokeWidth={1.2} />
+
+                      {/* Decorative small bubbles */}
+                      <div className="absolute -top-4 -right-4 w-12 h-12 bg-white dark:bg-white/10 backdrop-blur-xl border border-black/5 dark:border-white/10 rounded-2xl flex items-center justify-center animate-bounce shadow-lg" style={{ animationDuration: '3s' }}>
+                        <Plus className="text-indigo-500 dark:text-indigo-400" size={20} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-5xl font-black text-foreground tracking-tighter leading-tight">
+                      Chào mừng trở lại,<br />
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-400 dark:to-blue-400">
+                        {user?.fullName?.split(' ')[0] || 'bạn'}!
+                      </span>
+                    </h3>
+                    <p className="text-foreground/40 text-lg font-medium leading-relaxed max-w-sm mx-auto">
+                      Chọn một hội thoại từ danh sách bên trái để bắt đầu, hoặc khám phá các hành động nhanh bên dưới.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-4 pt-10">
+                    <button
+                      onClick={() => setIsGroupModalOpen(true)}
+                      className="flex items-center space-x-2.5 px-5 py-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/20 hover:scale-105 transition-all active:scale-95"
+                    >
+                      <Users size={18} />
+                      <span className="text-[15px] font-bold whitespace-nowrap">Tạo nhóm mới</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFriendsInitialView('search');
+                        setIsFriendsOpen(true);
+                      }}
+                      className="flex items-center space-x-2.5 px-5 py-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/20 hover:scale-105 transition-all active:scale-95"
+                    >
+                      <UserPlus size={18} />
+                      <span className="text-[15px] font-bold whitespace-nowrap">Thêm bạn bè</span>
+                    </button>
+                    <button
+                      onClick={handleSelectAI}
+                      className="flex items-center space-x-2.5 px-5 py-2.5 bg-indigo-600 rounded-xl text-white shadow-lg shadow-indigo-600/20 hover:scale-105 transition-all active:scale-95"
+                    >
+                      <SparklesIcon size={18} />
+                      <span className="text-[15px] font-bold whitespace-nowrap">Chat với AI</span>
+                    </button>
                   </div>
                 </div>
-                <h3 className="text-2xl font-black text-cursor-dark tracking-tighter mb-2">Establish Connection</h3>
-                <p className="max-w-xs text-center text-sm text-cursor-dark/30 font-medium leading-relaxed">
-                  Select a communication channel to begin broadcasting.
-                </p>
               </div>
             ) : null}
           </div>
@@ -500,13 +627,6 @@ const Chat = () => {
             <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
               <Pin size={16} className={`text-slate-400 group-hover:text-indigo-500 ${conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'fill-indigo-500 text-indigo-500' : ''}`} />
               <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
-            </div>
-          </button>
-
-          <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
-            <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-              <FolderDown size={16} className="text-slate-400 group-hover:text-indigo-500" />
-              <span>Chuyển sang mục Khác</span>
             </div>
           </button>
 
