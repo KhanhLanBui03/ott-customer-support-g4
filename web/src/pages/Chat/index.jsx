@@ -9,10 +9,11 @@ import ConversationInfo from '../../components/ConversationInfo';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import ProfileModal from '../../components/ProfileModal';
 import ChangePasswordModal from '../../components/ChangePasswordModal';
-import CreateGroupModal from '../../components/CreateGroupModal';
 import FriendManagementModal from '../../components/FriendManagementModal';
+import CreateGroupModal from '../../components/CreateGroupModal';
 import NotificationModal from '../../components/NotificationModal';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
+import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
 import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
@@ -41,8 +42,6 @@ const Chat = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isFriendsOpen, setIsFriendsOpen] = useState(false);
-  const [friendsInitialView, setFriendsInitialView] = useState('list');
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -50,6 +49,8 @@ const Chat = () => {
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
   const [filterType, setFilterType] = useState('all'); // 'all', 'unread'
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [isFriendsOpen, setIsFriendsOpen] = useState(false);
+  const [friendsInitialView, setFriendsInitialView] = useState('list');
 
   // Call management
   const [localStream, setLocalStream] = useState(null);
@@ -196,10 +197,10 @@ const Chat = () => {
 
     const searchLower = searchTerm.toLowerCase();
 
-    // 3. Check conversation name
+    // 1. Check conversation name
     if ((conv.name || '').toLowerCase().includes(searchLower)) return true;
 
-    // 4. Check all members' names inside the conversation
+    // 2. Check all members' names inside the conversation
     if (conv.members && Array.isArray(conv.members)) {
       return conv.members.some(m =>
         (m.fullName || '').toLowerCase().includes(searchLower)
@@ -260,11 +261,12 @@ const Chat = () => {
           </div>
 
           <nav className={`flex ${isMobile ? 'flex-row items-center flex-1 justify-around h-full' : 'flex-col space-y-6 items-center'} w-full`}>
+            {/* Chat Icon */}
             <div className="relative group">
               <button className={`
-              ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-              flex items-center justify-center bg-indigo-600 text-white rounded-[22px] shadow-lg shadow-indigo-600/30 group relative transition-all active:scale-95
-            `}>
+                ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                flex items-center justify-center bg-indigo-600 text-white rounded-[22px] shadow-lg shadow-indigo-600/30 group relative transition-all active:scale-95
+              `}>
                 <MessageSquare size={isMobile ? 22 : 24} fill="currentColor" className="opacity-90" />
               </button>
               {!isMobile && (
@@ -272,6 +274,7 @@ const Chat = () => {
               )}
             </div>
 
+            {/* Notifications Icon */}
             <div className="relative group">
               <button
                 onClick={() => setIsNotificationOpen(true)}
@@ -279,6 +282,7 @@ const Chat = () => {
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
                   flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
                 `}
+                title="Thông báo"
               >
                 <Bell size={isMobile ? 22 : 24} />
                 {unreadCount > 0 && (
@@ -292,22 +296,24 @@ const Chat = () => {
               )}
             </div>
 
+            {/* AI Expert Icon */}
             <div className="relative group">
               <button
                 onClick={handleSelectAI}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center text-indigo-400 group relative transition-all bg-indigo-500/10 hover:bg-indigo-500/20 rounded-[22px] active:scale-95
+                  flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
                 `}
+                title="ShopExpert AI"
               >
-                <SparklesIcon size={isMobile ? 22 : 24} fill="currentColor" className="opacity-90" />
-                <div className="absolute inset-0 bg-indigo-500/10 blur-xl rounded-full scale-110 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <SparklesIcon size={isMobile ? 22 : 24} />
               </button>
               {!isMobile && (
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
             </div>
 
+            {/* Friends Management Icon */}
             <div className="relative group">
               <button
                 onClick={() => {
@@ -315,9 +321,10 @@ const Chat = () => {
                   setIsFriendsOpen(true);
                 }}
                 className={`
-                ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all active:scale-95
-              `}
+                  ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                  flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
+                `}
+                title="Danh bạ bạn bè"
               >
                 <Contact size={isMobile ? 22 : 24} />
               </button>
@@ -345,6 +352,7 @@ const Chat = () => {
 
       {/* 2. Conversation Sidebar (Middle) */}
       {(!isMobile || !activeConversationId) && (
+
         <div className={isMobile
           ? "flex-1 flex flex-col bg-sidebar"
           : "w-[360px] flex-shrink-0 bg-sidebar border-r border-border flex flex-col transition-all duration-300"
@@ -376,7 +384,7 @@ const Chat = () => {
                     setIsFriendsOpen(true);
                   }}
                   className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors"
-                  title="Thêm bạn bè"
+                  title="Tìm kiếm người dùng"
                 >
                   <UserPlus size={isMobile ? 18 : 20} />
                 </button>
@@ -425,16 +433,15 @@ const Chat = () => {
               </div>
 
               <div className="relative pb-2">
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsFilterMenuOpen(!isFilterMenuOpen);
                   }}
-                  className={`flex items-center space-x-1 px-1 py-1 text-[13px] transition-all active:scale-95 ${
-                    isFilterMenuOpen || filterType !== 'all'
-                      ? 'bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-blue-600/20 font-bold'
-                      : 'hover:text-blue-600 dark:hover:text-white font-bold'
-                  }`}
+                  className={`flex items-center space-x-1 px-1 py-1 text-[13px] transition-all active:scale-95 ${isFilterMenuOpen || filterType !== 'all'
+                    ? 'bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-blue-600/20 font-bold'
+                    : 'hover:text-blue-600 dark:hover:text-white font-bold'
+                    }`}
                   style={!(isFilterMenuOpen || filterType !== 'all') ? { color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'black' } : {}}
                 >
                   <span>{filterType === 'unread' ? 'Chưa đọc' : 'Phân loại'}</span>
@@ -482,7 +489,7 @@ const Chat = () => {
                 )}
               </div>
             </div>
-          </div>
+          </div >
 
           <div className={`flex-1 overflow-y-auto no-scrollbar ${isMobile ? 'pb-20' : ''}`}>
             {loading && conversations.length === 0 ? (
@@ -503,191 +510,152 @@ const Chat = () => {
               />
             )}
           </div>
-        </div>
+        </div >
       )}
 
       {/* 3. Main Chat Area & Info Sidebar */}
-      {(!isMobile || activeConversationId) && (
-        <div className={`flex-1 flex min-w-0 bg-background ${isMobile ? 'z-40' : ''}`}>
-          <div className="flex-1 flex flex-col min-w-0">
-            {activeConversation ? (
-              <ChatWindow
-                conversation={activeConversation}
-                onStartCall={handleStartCall}
-                onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
-                isInfoOpen={isInfoOpen}
-                onBack={isMobile ? () => selectConversation(null) : undefined}
-                onRefreshMessages={() => fetchMessages(activeConversationId)}
-              />
-            ) : !isMobile ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 relative overflow-hidden bg-background transition-colors duration-500">
-                {/* Ambient background glows */}
-                <div className="absolute top-1/4 -left-20 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-600/10 blur-[120px] rounded-full animate-pulse" />
-                <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-blue-500/10 dark:bg-blue-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+      {
+        (!isMobile || activeConversationId) && (
+          <div className={`flex-1 flex min-w-0 bg-background ${isMobile ? 'z-40' : ''}`}>
+            <div className="flex-1 flex flex-col min-w-0">
+              {activeConversation ? (
+                <ChatWindow
+                  conversation={activeConversation}
+                  onStartCall={handleStartCall}
+                  onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
+                  isInfoOpen={isInfoOpen}
+                  onBack={isMobile ? () => selectConversation(null) : undefined}
+                  onRefreshMessages={() => fetchMessages(activeConversationId)}
+                />
+              ) : !isMobile ? (
+                <WelcomeCarousel 
+                  user={user} 
+                  onAction={(type) => {
+                    if (type === 'createGroup') setIsGroupModalOpen(true);
+                    if (type === 'addFriend') setIsSearchOpen(true);
+                  }}
+                />
+              ) : null}
+            </div>
 
-                <div className="relative z-10 flex flex-col items-center text-center space-y-10 max-w-lg">
-                  <div className="relative group">
-                    <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full scale-150 group-hover:scale-[2] transition-transform duration-1000 opacity-50 dark:opacity-100" />
-                    <div className="relative w-44 h-44 bg-black/5 dark:bg-white/10 border border-black/5 dark:border-white/10 backdrop-blur-2xl rounded-[56px] shadow-2xl flex items-center justify-center transform group-hover:rotate-6 transition-all duration-500">
-                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 dark:from-indigo-500/20 to-transparent rounded-[56px]" />
-                      <MessageSquare className="text-indigo-600 dark:text-white opacity-90 drop-shadow-[0_0_20px_rgba(99,102,241,0.3)]" size={88} strokeWidth={1.2} />
-
-                      {/* Decorative small bubbles */}
-                      <div className="absolute -top-4 -right-4 w-12 h-12 bg-white dark:bg-white/10 backdrop-blur-xl border border-black/5 dark:border-white/10 rounded-2xl flex items-center justify-center animate-bounce shadow-lg" style={{ animationDuration: '3s' }}>
-                        <Plus className="text-indigo-500 dark:text-indigo-400" size={20} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-5xl font-black text-foreground tracking-tighter leading-tight">
-                      Chào mừng trở lại,<br />
-                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-400 dark:to-blue-400">
-                        {user?.fullName?.split(' ')[0] || 'bạn'}!
-                      </span>
-                    </h3>
-                    <p className="text-foreground/40 text-lg font-medium leading-relaxed max-w-sm mx-auto">
-                      Chọn một hội thoại từ danh sách bên trái để bắt đầu, hoặc khám phá các hành động nhanh bên dưới.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-4 pt-10">
-                    <button
-                      onClick={() => setIsGroupModalOpen(true)}
-                      className="flex items-center space-x-2.5 px-5 py-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/20 hover:scale-105 transition-all active:scale-95"
-                    >
-                      <Users size={18} />
-                      <span className="text-[15px] font-bold whitespace-nowrap">Tạo nhóm mới</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setFriendsInitialView('search');
-                        setIsFriendsOpen(true);
-                      }}
-                      className="flex items-center space-x-2.5 px-5 py-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/20 hover:scale-105 transition-all active:scale-95"
-                    >
-                      <UserPlus size={18} />
-                      <span className="text-[15px] font-bold whitespace-nowrap">Thêm bạn bè</span>
-                    </button>
-                    <button
-                      onClick={handleSelectAI}
-                      className="flex items-center space-x-2.5 px-5 py-2.5 bg-indigo-600 rounded-xl text-white shadow-lg shadow-indigo-600/20 hover:scale-105 transition-all active:scale-95"
-                    >
-                      <SparklesIcon size={18} />
-                      <span className="text-[15px] font-bold whitespace-nowrap">Chat với AI</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {!isMobile && activeConversationId && isInfoOpen && (
-            <ConversationInfo
-              conversation={activeConversation}
-              onClose={() => setIsInfoOpen(false)}
-              onClearHistory={() => handleDeleteConversation(activeConversationId)}
-            />
-          )}
-
-          {/* Mobile Info Overlay */}
-          {isMobile && activeConversationId && isInfoOpen && (
-            <div className="fixed inset-0 bg-white z-[60] animate-slide-up">
+            {!isMobile && activeConversationId && isInfoOpen && (
               <ConversationInfo
                 conversation={activeConversation}
                 onClose={() => setIsInfoOpen(false)}
                 onClearHistory={() => handleDeleteConversation(activeConversationId)}
               />
-            </div>
-          )}
-        </div>
-      )}
+            )}
+
+            {/* Mobile Info Overlay */}
+            {isMobile && activeConversationId && isInfoOpen && (
+              <div className="fixed inset-0 bg-white z-[60] animate-slide-up">
+                <ConversationInfo
+                  conversation={activeConversation}
+                  onClose={() => setIsInfoOpen(false)}
+                  onClearHistory={() => handleDeleteConversation(activeConversationId)}
+                />
+              </div>
+            )}
+          </div>
+        )
+      }
 
       {/* Context Menu Hub */}
-      {contextMenu && (
-        <div
-          className="fixed bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)] rounded-2xl py-2 w-64 z-[9999] animate-slide-up"
-          style={{
-            top: contextMenu.y,
-            left: contextMenu.x,
-            transform: (contextMenu.y + 450 > window.innerHeight) ? 'translateY(-100%)' : 'none'
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-4 py-2 border-b border-slate-50 mb-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tùy chọn hội thoại</p>
-          </div>
-          <button
-            onClick={() => {
-              handleTogglePin(contextMenu.conversationId);
-              setContextMenu(null);
+      {
+        contextMenu && (
+          <div
+            className="fixed bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)] rounded-2xl py-2 w-64 z-[9999] animate-slide-up"
+            style={{
+              top: contextMenu.y,
+              left: contextMenu.x,
+              transform: (contextMenu.y + 450 > window.innerHeight) ? 'translateY(-100%)' : 'none'
             }}
-            className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-              <Pin size={16} className={`text-slate-400 group-hover:text-indigo-500 ${conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'fill-indigo-500 text-indigo-500' : ''}`} />
-              <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
+            <div className="px-4 py-2 border-b border-slate-50 mb-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tùy chọn hội thoại</p>
             </div>
-          </button>
+            <button
+              onClick={() => {
+                handleTogglePin(contextMenu.conversationId);
+                setContextMenu(null);
+              }}
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group"
+            >
+              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
+                <Pin size={16} className={`text-slate-400 group-hover:text-indigo-500 ${conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'fill-indigo-500 text-indigo-500' : ''}`} />
+                <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
+              </div>
+            </button>
 
-          <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
-            <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-              <Mail size={16} className="text-slate-400 group-hover:text-indigo-500" />
-              <span>Đánh dấu chưa đọc</span>
-            </div>
-          </button>
 
-          <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
-            <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-              <BellOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
-              <span>Tắt thông báo</span>
-            </div>
-          </button>
+            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
+              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
+                <FolderDown size={16} className="text-slate-400 group-hover:text-indigo-500" />
+                <span>Chuyển sang mục Khác</span>
+              </div>
+            </button>
 
-          <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
-            <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-              <EyeOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
-              <span>Ẩn trò chuyện</span>
-            </div>
-          </button>
 
-          <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
-            <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-              <Clock size={16} className="text-slate-400 group-hover:text-indigo-500" />
-              <span>Tin nhắn tự xóa</span>
-            </div>
-          </button>
+            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
+              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
+                <Mail size={16} className="text-slate-400 group-hover:text-indigo-500" />
+                <span>Đánh dấu chưa đọc</span>
+              </div>
+            </button>
 
-          <button
-            onClick={() => handleDeleteConversation(contextMenu.conversationId)}
-            className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-red-50 text-red-500 transition-colors group"
-          >
-            <div className="flex items-center space-x-3 text-[13px] font-bold">
-              <Trash2 size={16} />
-              <span>Xóa hội thoại</span>
-            </div>
-          </button>
+            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
+              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
+                <BellOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
+                <span>Tắt thông báo</span>
+              </div>
+            </button>
 
-          <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
-            <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-              <AlertTriangle size={16} className="text-slate-400 group-hover:text-red-500" />
-              <span>Báo xấu</span>
-            </div>
-          </button>
-        </div>
-      )}
+            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
+              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
+                <EyeOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
+                <span>Ẩn trò chuyện</span>
+              </div>
+            </button>
+
+            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
+              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
+                <Clock size={16} className="text-slate-400 group-hover:text-indigo-500" />
+                <span>Tin nhắn tự xóa</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleDeleteConversation(contextMenu.conversationId)}
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-red-50 text-red-500 transition-colors group"
+            >
+              <div className="flex items-center space-x-3 text-[13px] font-bold">
+                <Trash2 size={16} />
+                <span>Xóa hội thoại</span>
+              </div>
+            </button>
+
+            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
+              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
+                <AlertTriangle size={16} className="text-slate-400 group-hover:text-red-500" />
+                <span>Báo xấu</span>
+              </div>
+            </button>
+          </div >
+        )
+      }
 
       {/* Modals & Overlays */}
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
+      <CreateGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} />
+      <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
+      <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />
       <FriendManagementModal
         isOpen={isFriendsOpen}
         onClose={() => setIsFriendsOpen(false)}
         initialView={friendsInitialView}
       />
-      <CreateGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} />
-      <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
-      <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />
 
       <VideoCall
         status={callStatus}
@@ -697,7 +665,7 @@ const Chat = () => {
         onHangup={handleHangup}
         onAccept={handleAcceptCall}
       />
-    </div>
+    </div >
   );
 };
 
