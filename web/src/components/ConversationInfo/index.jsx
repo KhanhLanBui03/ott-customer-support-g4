@@ -574,11 +574,6 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                       <span className="text-[15px] font-black tracking-tight text-foreground">Xóa lịch sử trò chuyện</span>
                    </button>
                    
-                   <div className="mt-8 p-6 bg-surface-200 dark:bg-surface-200/40 rounded-[32px] border border-border text-center">
-                      <Shield size={32} className="mx-auto mb-4 text-emerald-500 opacity-60" />
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/60">Mã hóa đầu cuối</p>
-                      <p className="text-[9px] font-bold text-foreground/40 mt-2 italic">Tin nhắn của bạn được bảo mật tuyệt đối.</p>
-                   </div>
                 </div>
               )}
            </div>
