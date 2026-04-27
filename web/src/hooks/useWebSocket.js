@@ -1,20 +1,20 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    addMessage, 
-    recallMessage, 
-    removeMessage, 
-    fetchConversations, 
-    fetchFriends, 
-    setTyping, 
-    updateConversationWallpaper, 
-    updateMessage, 
+import {
+    addMessage,
+    recallMessage,
+    removeMessage,
+    fetchConversations,
+    fetchFriends,
+    setTyping,
+    updateConversationWallpaper,
+    updateMessage,
     updateMessageStatus,
     setMessageRead,
     setUserStatus
 } from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
-import { initSocket, getStompClient } from '../utils/socket';
+import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
 
 // Shared state between hook instances
 let _globalSubscriptions = [];
@@ -26,7 +26,6 @@ export const useWebSocket = () => {
 
     const userRef = useRef(user);
 
-    // Cập nhật ref mỗi khi user thay đổi để callback luôn có user mới nhất
     useEffect(() => {
         userRef.current = user;
     }, [user]);
@@ -95,7 +94,6 @@ export const useWebSocket = () => {
                     isTyping: event.payload.isTyping,
                     name: 'Ai đó'
                 }));
-
             } else if (event.eventType === 'MESSAGE_READ') {
                 const payload = event.payload || {};
                 dispatch(setMessageRead({
@@ -103,8 +101,6 @@ export const useWebSocket = () => {
                     messageId: payload.messageId || payload,
                     userId: payload.userId || event.userId
                 }));
-            } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
-
             } else if (event.eventType === 'WALLPAPER_UPDATED') {
                 const payload = event.payload || {};
                 const conversationId = event.conversationId || payload.conversationId;
@@ -129,7 +125,6 @@ export const useWebSocket = () => {
                     dispatch(fetchConversations());
                 }
             } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
-
                 dispatch(fetchConversations());
             }
         } catch (err) {
@@ -167,13 +162,21 @@ export const useWebSocket = () => {
                 _presenceSubscription.unsubscribe();
             }
 
-            console.log('[STOMP] 📡 Subscribing to message, conversation, and presence queues');
-            
+            console.log('[STOMP] 📡 Subscribing to message, conversation, presence and call queues');
+
             _presenceSubscription = client.subscribe('/topic/presence', handlePresenceUpdate);
 
             const messagesSub = client.subscribe('/user/queue/messages', handleIncomingMessage);
             const conversationsSub = client.subscribe('/user/queue/conversations', handleIncomingMessage);
-            
+
+            // ✅ FIX: Subscribe call signals để callee nhận được cuộc gọi đến
+            const currentUser = userRef.current;
+            const userId = currentUser?.userId || currentUser?.id;
+            if (userId) {
+                subscribeToCalls(userId);
+                console.log('[STOMP] 📞 Subscribed to call signals for user:', userId);
+            }
+
             _globalSubscriptions = [messagesSub, conversationsSub];
         };
 
@@ -181,14 +184,12 @@ export const useWebSocket = () => {
             setupSubscription();
         }
 
-        // Đăng ký callback khi connect/reconnect
         const originalOnConnect = client.onConnect;
         client.onConnect = (frame) => {
             if (originalOnConnect) originalOnConnect(frame);
             setupSubscription();
         };
 
-        // Quan trọng: Nếu socket bị đóng, reset subscription
         const originalOnClose = client.onWebSocketClose;
         client.onWebSocketClose = (evt) => {
             if (originalOnClose) originalOnClose(evt);
@@ -200,7 +201,6 @@ export const useWebSocket = () => {
 
     useEffect(() => {
         connect();
-        // Không unsubscribe khi unmount hook vì app có nhiều component dùng chung 1 socket
     }, [connect]);
 
     const sendMessage = useCallback((conversationId, content, type = 'TEXT', mediaUrls = [], replyToMessageId = null, forwardedFrom = null) => {
