@@ -83,12 +83,26 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
 
 const chatSlice = createSlice({
   name: 'chat',
-  initialState: { conversations: [], messages: {}, currentConversationId: null, currentUserId: null, loading: false, replyingTo: null },
+  initialState: { conversations: [], messages: {}, typingUsers: {}, currentConversationId: null, currentUserId: null, loading: false, replyingTo: null },
   reducers: {
     setCurrentConversation: (state, action) => { state.currentConversationId = action.payload; },
     setCurrentUserId: (state, action) => { state.currentUserId = action.payload; },
     setReplyingTo: (state, action) => { state.replyingTo = action.payload; },
     clearReplyingTo: (state) => { state.replyingTo = null; },
+    setTyping: (state, action) => {
+      const { conversationId, userId, isTyping } = action.payload;
+      if (!state.typingUsers[conversationId]) {
+        state.typingUsers[conversationId] = [];
+      }
+
+      if (isTyping) {
+        if (!state.typingUsers[conversationId].includes(userId)) {
+          state.typingUsers[conversationId].push(userId);
+        }
+      } else {
+        state.typingUsers[conversationId] = state.typingUsers[conversationId].filter(id => id !== userId);
+      }
+    },
     updateMessage: (state, action) => {
       const { conversationId, message } = action.payload;
       const realId = getRealId(state, conversationId, state.currentUserId);
@@ -103,10 +117,12 @@ const chatSlice = createSlice({
       if (msgIdx === -1) {
         state.messages[realId] = [...state.messages[realId], message];
       } else {
-        state.messages[realId][msgIdx] = {
-          ...state.messages[realId][msgIdx],
-          ...message,
-        };
+        const existing = state.messages[realId][msgIdx];
+        const mergedMessage = { ...existing, ...message };
+        if (Array.isArray(existing.readBy) && Array.isArray(message.readBy)) {
+          mergedMessage.readBy = Array.from(new Set([...existing.readBy, ...message.readBy]));
+        }
+        state.messages[realId][msgIdx] = mergedMessage;
       }
     },
     updateMessageReactions: (state, action) => {
@@ -122,11 +138,45 @@ const chatSlice = createSlice({
         }
       }
     },
+    updateConversationWallpaper: (state, action) => {
+      const { conversationId, wallpaperUrl } = action.payload || {};
+      if (!conversationId) return;
+      const convIdx = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (convIdx !== -1) {
+        state.conversations[convIdx].wallpaperUrl = wallpaperUrl ?? null;
+      }
+    },
+    updateMemberInfo: (state, action) => {
+      const { userId, fullName, avatarUrl } = action.payload;
+      if (!userId) return;
+
+      state.conversations.forEach((conv, idx) => {
+        // 1. Update in members list
+        if (conv.members) {
+          const memberIdx = conv.members.findIndex(m => String(m.userId || m.id) === String(userId));
+          if (memberIdx !== -1) {
+            if (fullName) state.conversations[idx].members[memberIdx].fullName = fullName;
+            if (avatarUrl !== undefined) state.conversations[idx].members[memberIdx].avatarUrl = avatarUrl;
+          }
+        }
+
+        // 2. If it's a SINGLE conversation, update the conversation's own name/avatar
+        if (conv.type === 'SINGLE') {
+          const parts = conv.conversationId.split('#');
+          const otherMemberId = parts.find(id => id !== 'SINGLE' && id !== String(state.currentUserId));
+          if (String(otherMemberId) === String(userId)) {
+            if (fullName) state.conversations[idx].name = fullName;
+            if (avatarUrl !== undefined) state.conversations[idx].avatarUrl = avatarUrl;
+          }
+        }
+      });
+    },
     addMessage: (state, action) => {
-      const { conversationId, message } = action.payload;
+      const { conversationId, message, currentUserId } = action.payload;
       if (!message || (!message.content && !message.type)) return;
-      const realId = getRealId(state, message.conversationId || conversationId, state.currentUserId);
-      
+      const realId = getRealId(state, message.conversationId || conversationId, currentUserId || state.currentUserId);
+      const currentUserIdStr = String(currentUserId || state.currentUserId || '');
+
       if (!state.messages[realId]) state.messages[realId] = [];
       const isDuplicate = message.messageId
         ? state.messages[realId].some(m => m.messageId === message.messageId)
@@ -134,10 +184,42 @@ const chatSlice = createSlice({
 
       if (!isDuplicate) {
         state.messages[realId] = [...state.messages[realId], message];
+
+        // Implicit Read Receipt: Nếu nhận được tin nhắn từ người khác, họ đã đọc hết tin nhắn trước đó của mình
+        if (message.senderId) {
+          const senderIdStr = String(message.senderId);
+          state.messages[realId].forEach(m => {
+            if (String(m.senderId) !== senderIdStr) {
+              if (!m.readBy) m.readBy = [];
+              if (!m.readBy.some(id => String(id) === senderIdStr)) {
+                m.readBy.push(senderIdStr);
+              }
+            }
+          });
+        }
+
         const convIdx = state.conversations.findIndex(c => c.conversationId === realId);
         if (convIdx !== -1) {
             state.conversations[convIdx].lastMessage = message.content;
             state.conversations[convIdx].updatedAt = message.createdAt || new Date().toISOString();
+        }
+      }
+    },
+    setMessageRead: (state, action) => {
+      const { conversationId, messageId, userId } = action.payload;
+      const realId = getRealId(state, conversationId, state.currentUserId);
+      const messages = state.messages[realId];
+      if (messages) {
+        const targetIdx = messages.findIndex(m => String(m.messageId) === String(messageId));
+        if (targetIdx !== -1) {
+          const userIdStr = String(userId);
+          // Đánh dấu tin nhắn này và tất cả tin nhắn trước đó là đã đọc
+          for (let i = 0; i <= targetIdx; i++) {
+            if (!messages[i].readBy) messages[i].readBy = [];
+            if (!messages[i].readBy.some(id => String(id) === userIdStr)) {
+              messages[i].readBy.push(userIdStr);
+            }
+          }
         }
       }
     }
@@ -158,5 +240,5 @@ const chatSlice = createSlice({
   },
 });
 
-export const { addMessage, setCurrentConversation, setCurrentUserId, setReplyingTo, clearReplyingTo, updateMessage, updateMessageReactions } = chatSlice.actions;
+export const { addMessage, setCurrentConversation, setCurrentUserId, setReplyingTo, clearReplyingTo, updateMessage, updateMessageReactions, updateConversationWallpaper, updateMemberInfo, setTyping, setMessageRead } = chatSlice.actions;
 export default chatSlice.reducer;

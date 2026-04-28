@@ -11,9 +11,9 @@ const GroupAvatar = ({ conversation, size = "h-12 w-12", isLarge = false, isActi
   let displayAvatar = avatarUrl || avatar;
 
   // Fallback to the other member's avatar for SINGLE conversations
-  if (type === 'SINGLE' && !displayAvatar && members.length > 0) {
+  if (type === 'SINGLE' && members.length > 0) {
     const myId = user?.userId || user?.id;
-    const otherMember = members.find(m => m.userId !== myId);
+    const otherMember = members.find(m => String(m.userId || m.id) !== String(myId));
     if (otherMember && otherMember.avatarUrl) {
       displayAvatar = otherMember.avatarUrl;
     }

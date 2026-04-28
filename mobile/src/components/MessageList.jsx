@@ -10,6 +10,7 @@ import ChatBubble from './ChatBubble';
 
 const MessageList = ({
   messages = [],
+  conversationId,
   currentUserId,
   typingUsers = [],
   onlineUsers = [],
@@ -17,9 +18,55 @@ const MessageList = ({
   onLoadMore,
   onReact,
   onLongPress,
+  sendReadReceipt,
 }) => {
   const flatListRef = useRef(null);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const readReceiptSent = useRef(new Set());
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 10, minimumViewTime: 200 }).current;
+
+  const normalizeReaderId = (reader) => {
+    if (!reader) return '';
+    if (typeof reader === 'object') return String(reader.userId || reader.id || '');
+    return String(reader);
+  };
+
+  const isLatestReadBy = (message, readerId, index) => {
+    return !messages.slice(index + 1).some((nextMessage) => {
+      return Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) === readerId);
+    });
+  };
+
+  const getLatestReadBy = (message, index) => {
+    if (!Array.isArray(message.readBy) || message.readBy.length === 0) return [];
+    const selfId = String(currentUserId || '');
+    const uniqueIds = new Set();
+    return message.readBy.reduce((latest, reader) => {
+      const readerId = normalizeReaderId(reader);
+      if (!readerId || readerId === selfId || uniqueIds.has(readerId)) return latest;
+      if (isLatestReadBy(message, readerId, index)) {
+        uniqueIds.add(readerId);
+        latest.push(reader);
+      }
+      return latest;
+    }, []);
+  };
+
+  const onViewableItemsChanged = React.useCallback(({ viewableItems }) => {
+    if (!conversationId || !sendReadReceipt) return;
+
+    viewableItems.forEach(({ item }) => {
+      if (!item || String(item.senderId) === String(currentUserId)) return;
+      const messageId = String(item.messageId || '');
+      if (!messageId || messageId.startsWith('temp-') || readReceiptSent.current.has(messageId)) return;
+
+      const alreadyRead = Array.isArray(item.readBy) && item.readBy.some((id) => normalizeReaderId(id) === String(currentUserId));
+      if (alreadyRead) return;
+
+      sendReadReceipt(messageId, conversationId);
+      readReceiptSent.current.add(messageId);
+    });
+  }, [conversationId, currentUserId, sendReadReceipt]);
 
   useEffect(() => {
     if (messages.length > 0 && !isRefreshing) {
@@ -29,6 +76,10 @@ const MessageList = ({
     }
   }, [messages.length, typingUsers, isRefreshing]);
 
+  useEffect(() => {
+    readReceiptSent.current.clear();
+  }, [conversationId]);
+
   const onRefresh = async () => {
     if (onLoadMore && !isRefreshing) {
       setIsRefreshing(true);
@@ -37,15 +88,26 @@ const MessageList = ({
     }
   };
 
-  const renderMessage = ({ item }) => (
-    <ChatBubble
-      message={item}
-      isOwn={String(item.senderId || '') === String(currentUserId || '')}
-      isOnline={onlineUsers.includes(item.senderId)}
-      onReact={onReact}
-      onLongPress={() => onLongPress(item)}
-    />
-  );
+  const renderMessage = ({ item, index }) => {
+    const otherOnline = onlineUsers.some(id => String(id) !== String(currentUserId || ''));
+    const latestReadBy = getLatestReadBy(item, index);
+    const hasReadByOther = Array.isArray(latestReadBy) && latestReadBy.length > 0;
+    const shouldShowStatus = !hasReadByOther && !messages.slice(index + 1).some((nextMessage) => {
+      return Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) !== String(currentUserId || ''));
+    });
+
+    return (
+      <ChatBubble
+        message={item}
+        isOwn={String(item.senderId || '') === String(currentUserId || '')}
+        isOnline={otherOnline}
+        latestReadBy={latestReadBy}
+        showReadStatus={shouldShowStatus}
+        onReact={onReact}
+        onLongPress={() => onLongPress(item)}
+      />
+    );
+  };
 
   const renderTypingIndicator = () => {
     if (!typingUsers || typingUsers.length === 0) return null;
@@ -76,7 +138,9 @@ const MessageList = ({
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
-        keyExtractor={(item) => item.messageId || item.id || Math.random().toString()}
+        keyExtractor={(item, index) => item.messageId || item.id || String(item.createdAt) || index.toString()}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         ListFooterComponent={renderTypingIndicator}
         contentContainerStyle={styles.listContent}
         onContentSizeChange={(w, h) => {
@@ -95,7 +159,7 @@ const MessageList = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
   },
   listContent: {
     paddingVertical: 16,

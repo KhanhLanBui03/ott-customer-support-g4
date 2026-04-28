@@ -4,6 +4,10 @@ import {
   addMessage,
   fetchConversations,
   updateMessage,
+  updateConversationWallpaper,
+  updateMemberInfo,
+  setTyping,
+  setMessageRead,
 } from '../store/chatSlice';
 import {
   initializeSocket,
@@ -15,6 +19,12 @@ import {
   offUserStatusChange,
   onMessageUpdate,
   offMessageUpdate,
+  onMessageRead,
+  offMessageRead,
+  onWallpaperUpdated,
+  offWallpaperUpdated,
+  onUserUpdate,
+  offUserUpdate,
   emitSendMessage,
   emitTypingStart,
   emitTypingStop,
@@ -39,6 +49,7 @@ export const useWebSocket = () => {
         addMessage({
           conversationId: message.conversationId,
           message: message,
+          currentUserId: user?.userId || user?.id,
         })
       );
       // Khi có tin nhắn mới, cập nhật lại danh sách hội thoại để sắp xếp lại
@@ -47,7 +58,7 @@ export const useWebSocket = () => {
 
     onMessageReceive(handleMessageReceive);
     return () => offMessageReceive(handleMessageReceive);
-  }, [dispatch]);
+  }, [dispatch, user]);
 
   // Nhận cập nhật trạng thái online/offline
   useEffect(() => {
@@ -71,6 +82,63 @@ export const useWebSocket = () => {
 
     onMessageUpdate(handleMessageUpdate);
     return () => offMessageUpdate(handleMessageUpdate);
+  }, [dispatch]);
+
+  // Nhận sự kiện read receipt từ server
+  useEffect(() => {
+    const handleMessageRead = (payload) => {
+      if (!payload || !payload.messageId || !payload.conversationId) return;
+      console.log('[WS] Mobile received message read:', payload.messageId, payload.userId);
+      dispatch(setMessageRead({
+        conversationId: payload.conversationId,
+        messageId: payload.messageId,
+        userId: payload.userId,
+      }));
+    };
+
+    onMessageRead(handleMessageRead);
+    return () => offMessageRead(handleMessageRead);
+  }, [dispatch]);
+
+  useEffect(() => {
+    const handleWallpaperUpdate = (payload) => {
+      if (!payload || !payload.conversationId) return;
+      console.log('[WS] Mobile received wallpaper update:', payload.conversationId, payload.wallpaperUrl);
+      dispatch(updateConversationWallpaper({
+        conversationId: payload.conversationId,
+        wallpaperUrl: payload.wallpaperUrl ?? null,
+      }));
+    };
+
+    onWallpaperUpdated(handleWallpaperUpdate);
+    return () => offWallpaperUpdated(handleWallpaperUpdate);
+  }, [dispatch]);
+
+  useEffect(() => {
+    const handleUserUpdate = (payload) => {
+      if (!payload || !payload.userId) return;
+      console.log('[WS] Mobile received user update:', payload.userId);
+      dispatch(updateMemberInfo(payload));
+    };
+
+    onUserUpdate(handleUserUpdate);
+    return () => offUserUpdate(handleUserUpdate);
+  }, [dispatch]);
+
+  // Nhận sự kiện typing
+  useEffect(() => {
+    const handleUserTyping = (payload) => {
+      if (!payload || !payload.userId || !payload.conversationId) return;
+      console.log('[WS] Mobile received typing:', payload.userId, payload.isTyping);
+      dispatch(setTyping({
+        conversationId: payload.conversationId,
+        userId: payload.userId,
+        isTyping: payload.isTyping
+      }));
+    };
+
+    onUserTyping(handleUserTyping);
+    return () => offUserTyping(handleUserTyping);
   }, [dispatch]);
 
   const sendMessageRealtime = useCallback((conversationId, messageData) => {

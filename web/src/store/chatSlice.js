@@ -77,15 +77,13 @@ const chatSlice = createSlice({
         messages.push(message);
       }
 
-      // IMPROVEMENT: If we receive a message FROM the other person, 
-      // it implicitly means they have read ALL our previous messages.
-      if (message.senderId && String(message.senderId) !== String(currentUserId)) {
+      // Implicit Read Receipt: If someone sends a message, they've read everything before it.
+      if (message.senderId) {
+        const senderIdStr = String(message.senderId);
         messages.forEach(m => {
-          if (String(m.senderId) === String(currentUserId)) {
+          if (String(m.senderId) !== senderIdStr) {
             if (!m.readBy) m.readBy = [];
-            const senderIdStr = String(message.senderId);
-            const alreadyRead = m.readBy.some(id => String(id) === senderIdStr);
-            if (!alreadyRead) {
+            if (!m.readBy.some(id => String(id) === senderIdStr)) {
               m.readBy.push(senderIdStr);
             }
           }
@@ -272,6 +270,42 @@ const chatSlice = createSlice({
       });
     },
 
+    updateMemberInfo: (state, action) => {
+      const { userId, fullName, avatarUrl } = action.payload;
+      if (!userId) return;
+
+      state.conversations = state.conversations.map(conv => {
+        let hasChange = false;
+
+        // 1. Cập nhật danh sách thành viên
+        const newMembers = conv.members?.map(member => {
+          if (String(member.userId || member.id) === String(userId)) {
+            hasChange = true;
+            return {
+              ...member,
+              ...(fullName && { fullName }),
+              ...(avatarUrl !== undefined && { avatarUrl })
+            };
+          }
+          return member;
+        });
+
+        if (!hasChange) return conv;
+
+        // 2. Nếu là SINGLE, cập nhật luôn thông tin hiển thị chính của hội thoại
+        let newConv = { ...conv, members: newMembers };
+        if (conv.type === 'SINGLE') {
+          const otherMember = newMembers.find(m => String(m.userId || m.id) === String(userId));
+          if (otherMember) {
+            if (fullName) newConv.name = fullName;
+            if (avatarUrl !== undefined) newConv.avatarUrl = avatarUrl;
+          }
+        }
+
+        return newConv;
+      });
+    },
+
     setMessageRead: (state, action) => {
       const { conversationId, messageId, userId } = action.payload;
       const messages = state.messages[conversationId];
@@ -336,6 +370,7 @@ export const {
   optimisticVote,
   resetUnreadCount,
   setMessageRead,
-  updateConversationWallpaper
+  updateConversationWallpaper,
+  updateMemberInfo
 } = chatSlice.actions;
 export default chatSlice.reducer;

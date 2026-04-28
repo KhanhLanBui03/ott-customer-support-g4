@@ -16,7 +16,7 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import CONFIG from '../config';
 import { setReplyingTo } from '../store/chatSlice';
 
-const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
+const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestReadBy = [], showReadStatus = true, onReact, onLongPress }) => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
@@ -146,29 +146,47 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
   };
 
   const renderReadReceipts = () => {
-    // Chỉ hiển thị bóng seen cho tin nhắn của mình và có người đã đọc
-    if (!isOwn || !message.readBy || message.readBy.length === 0) return null;
+    if (!isOwn) return null;
+    const readSource = Array.isArray(latestReadBy) && latestReadBy.length > 0 ? latestReadBy : [];
+    if (readSource.length === 0) return null;
 
-    // Lọc bỏ chính mình khỏi danh sách seen (nếu có)
-    const readers = message.readBy.filter(id => String(id) !== currentUserIdStr);
+    const mapReader = (reader) => {
+      if (reader && typeof reader === 'object') {
+        return {
+          id: String(reader.userId || reader.id || ''),
+          avatarUrl: reader.avatarUrl || reader.avatar || null,
+          name: reader.fullName || reader.name || reader.username || null,
+        };
+      }
+      return { id: String(reader || ''), avatarUrl: null, name: null };
+    };
+
+    const readers = readSource
+      .map(mapReader)
+      .filter((reader) => reader.id && reader.id !== currentUserIdStr)
+      .reduce((unique, reader) => {
+        if (!unique.some((r) => r.id === reader.id)) unique.push(reader);
+        return unique;
+      }, []);
     if (readers.length === 0) return null;
 
     return (
       <View style={styles.readReceiptsContainer}>
-        {readers.slice(0, 3).map((readerId, index) => {
-          // Tìm thông tin người đọc để lấy avatar
-          let readerAvatar = null;
-          for (const conv of conversations) {
-            const found = (conv.members || []).find(m => String(m.userId || m.id || '') === String(readerId));
-            if (found) {
-              readerAvatar = getAvatarUrl(found.avatarUrl || found.avatar, found.fullName || found.name);
-              break;
+        {readers.slice(0, 3).map((reader, index) => {
+          let readerAvatar = reader.avatarUrl;
+          if (!readerAvatar) {
+            for (const conv of conversations) {
+              const found = (conv.members || []).find(m => String(m.userId || m.id || '') === reader.id);
+              if (found) {
+                readerAvatar = getAvatarUrl(found.avatarUrl || found.avatar, found.fullName || found.name);
+                break;
+              }
             }
           }
 
           return (
             <Image
-              key={readerId}
+              key={`read-${reader.id}-${index}`}
               source={{ uri: readerAvatar || `https://ui-avatars.com/api/?name=U&background=ccc` }}
               style={[styles.readAvatar, { marginLeft: index > 0 ? -6 : 0, zIndex: 10 - index }]}
             />
@@ -179,6 +197,31 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
             <Text style={styles.moreReadersText}>+{readers.length - 3}</Text>
           </View>
         )}
+      </View>
+    );
+  };
+
+  const renderDeliveryStatus = () => {
+    if (!isOwn || !showReadStatus) return null;
+
+    const users = Array.isArray(latestReadBy) ? latestReadBy : [];
+    const hasReadByOther = users.some((reader) => {
+      const id = reader && typeof reader === 'object' ? String(reader.userId || reader.id || '') : String(reader || '');
+      return id && id !== currentUserIdStr;
+    });
+
+    if (hasReadByOther) return null;
+
+    const statusText = !isOnline ? 'Đã gửi' : 'Đã nhận';
+    const iconName = !isOnline ? 'check' : 'check-circle';
+    const iconColor = !isOnline ? '#6b7280' : '#4338ca';
+
+    return (
+      <View style={styles.deliveryStatus}>
+        <MaterialIcons name={iconName} size={12} color={iconColor} />
+        <Text style={[styles.deliveryStatusText, !isOnline ? styles.deliveryStatusSent : styles.deliveryStatusOnline]}>
+          {statusText}
+        </Text>
       </View>
     );
   };
@@ -250,8 +293,9 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, onReact, onLongPress }) => {
           {renderReactions()}
         </View>
 
-        <View style={[styles.statusContainer, isOwn ? styles.ownStatus : styles.otherStatus]}>
+        <View style={[styles.statusContainer, isOwn ? styles.ownStatus : styles.otherStatus, (message.reactions && Object.keys(message.reactions).length > 0) && { marginTop: 22 }]}>
           {renderReadReceipts()}
+          {renderDeliveryStatus()}
         </View>
       </TouchableOpacity>
 
@@ -311,7 +355,7 @@ const styles = StyleSheet.create({
   ownWrapper: { alignItems: 'flex-end' },
   otherWrapper: { alignItems: 'flex-start' },
   senderName: { fontSize: 11, color: '#6b7280', marginBottom: 2, marginLeft: 4 },
-  bubbleContainer: { position: 'relative', zIndex: 1, paddingBottom: 10},
+  bubbleContainer: { position: 'relative', zIndex: 1, paddingBottom: 0 },
   bubble: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20 },
   ownBubble: { backgroundColor: '#667eea', borderBottomRightRadius: 4 },
   otherBubble: { backgroundColor: '#f3f4f6', borderBottomLeftRadius: 4 },
@@ -330,8 +374,8 @@ const styles = StyleSheet.create({
 
   // Status (Seen)
   statusContainer: {
-     marginTop: 22, // 👈 Tăng thêm để tạo khoảng trống cho Emoji đã đẩy xuống
-       minHeight: 14,
+     marginTop: 6,
+       minHeight: 22,
        zIndex: 1,
   },
   ownStatus: {
@@ -341,6 +385,26 @@ const styles = StyleSheet.create({
   otherStatus: {
     alignItems: 'flex-start',
     paddingLeft: 4,
+  },
+  deliveryStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+  },
+  deliveryStatusText: {
+    fontSize: 11,
+    marginLeft: 4,
+    letterSpacing: 0.2,
+  },
+  deliveryStatusOnline: {
+    color: '#4338ca',
+  },
+  deliveryStatusSent: {
+    color: '#6b7280',
+  },
+  deliveryStatusSending: {
+    color: '#667eea',
   },
 
   // Reply styles
@@ -382,43 +446,44 @@ const styles = StyleSheet.create({
   // Reactions
   reactionsContainer: {
     position: 'absolute',
-      bottom: -20, // 👈 Đẩy xuống sâu hơn (-15 -> -20) để tránh đè thời gian gửi
-      flexDirection: 'row',
-      zIndex: 99,
-      elevation: 99,
+    bottom: -18,
+    flexDirection: 'row',
+    zIndex: 10,
+    elevation: 4,
   },
   ownReactions: {
-    right: 8,
+    right: 0,
   },
   otherReactions: {
-    left: 8,
+    left: 0,
   },
   // Seen Indicators
   readReceiptsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
     marginBottom: 2,
   },
   readAvatar: {
-    width: 12, // Thu nhỏ lại một chút (14 -> 12)
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 1,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
     borderColor: '#fff',
   },
   moreReadersBadge: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -4,
-    borderWidth: 1,
+    marginLeft: -6,
+    borderWidth: 1.5,
     borderColor: '#fff',
   },
   moreReadersText: {
-    fontSize: 6,
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#6b7280',
   },

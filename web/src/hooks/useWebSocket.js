@@ -11,7 +11,8 @@ import {
     updateMessage,
     updateMessageStatus,
     setMessageRead,
-    setUserStatus
+    setUserStatus,
+    updateMemberInfo
 } from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
 import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
@@ -126,6 +127,8 @@ export const useWebSocket = () => {
                 }
             } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
                 dispatch(fetchConversations());
+            } else if (event.eventType === 'USER_UPDATE') {
+                dispatch(updateMemberInfo(event.payload));
             }
         } catch (err) {
             console.error('[STOMP] Error in message handler:', err);

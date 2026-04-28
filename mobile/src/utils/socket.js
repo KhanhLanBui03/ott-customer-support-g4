@@ -10,7 +10,10 @@ let deleteHandlers = new Set();
 let recallHandlers = new Set();
 let reactionHandlers = new Set();
 let messageUpdateHandlers = new Set();
+let readHandlers = new Set();
 let statusHandlers = new Set();
+let userUpdateHandlers = new Set();
+let wallpaperUpdateHandlers = new Set();
 let globalHandlers = new Set();
 
 export const initializeSocket = (token, userId, globalHandler) => {
@@ -70,6 +73,17 @@ export const initializeSocket = (token, userId, globalHandler) => {
             reactionHandlers.forEach(handler => handler(event.payload));
           } else if (event.eventType === 'MESSAGE_STATUS_UPDATE' || event.eventType === 'MESSAGE_UPDATE') {
             messageUpdateHandlers.forEach(handler => handler(event.payload));
+          } else if (event.eventType === 'MESSAGE_READ') {
+            readHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
+          } else if (event.eventType === 'WALLPAPER_UPDATED' || (event.eventType === 'CONVERSATION_UPDATE' && event.payload && Object.prototype.hasOwnProperty.call(event.payload, 'wallpaperUrl'))) {
+            const wallpaperPayload = {
+              conversationId: event.conversationId,
+              wallpaperUrl: event.payload?.wallpaperUrl ?? null,
+            };
+            wallpaperUpdateHandlers.forEach(handler => handler(wallpaperPayload));
+          } else if (event.eventType === 'USER_UPDATE') {
+            console.log('👤 User profile updated:', event.payload.userId);
+            userUpdateHandlers.forEach(handler => handler(event.payload));
           } else if (event.eventType === 'USER_STATUS_CHANGED') {
             console.log('👤 User status changed:', event.payload.userId, event.payload.status);
             statusHandlers.forEach(handler => handler(event.payload));
@@ -108,6 +122,12 @@ export const onReaction = (handler) => reactionHandlers.add(handler);
 export const offReaction = (handler) => reactionHandlers.delete(handler);
 export const onMessageUpdate = (handler) => messageUpdateHandlers.add(handler);
 export const offMessageUpdate = (handler) => messageUpdateHandlers.delete(handler);
+export const onMessageRead = (handler) => readHandlers.add(handler);
+export const offMessageRead = (handler) => readHandlers.delete(handler);
+export const onWallpaperUpdated = (handler) => wallpaperUpdateHandlers.add(handler);
+export const offWallpaperUpdated = (handler) => wallpaperUpdateHandlers.delete(handler);
+export const onUserUpdate = (handler) => userUpdateHandlers.add(handler);
+export const offUserUpdate = (handler) => userUpdateHandlers.delete(handler);
 export const onUserStatusChange = (handler) => statusHandlers.add(handler);
 export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
 
@@ -176,6 +196,11 @@ export default {
   onMessageDelete,
   onMessageRecall,
   onReaction,
+  onMessageUpdate,
+  onMessageRead,
+  onWallpaperUpdated,
+  onUserUpdate,
+  offUserUpdate,
   sendMessageViaSocket,
   emitSendMessage,
   emitTypingStart,

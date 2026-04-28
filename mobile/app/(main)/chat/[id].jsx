@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -20,7 +20,7 @@ const ChatDetailScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
 
   // KÍCH HOẠT WEBSOCKET TRỰC TIẾP TẠI ĐÂY
-  const { sendMessageRealtime } = useWebSocket();
+  const { sendMessageRealtime, sendReadReceipt } = useWebSocket();
 
   const chatState = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
@@ -30,6 +30,7 @@ const ChatDetailScreen = () => {
   const realId = useMemo(() => getRealId(chatState, conversationId, currentUser?.userId || currentUser?.id), [chatState, conversationId, currentUser]);
   const messages = chatState.messages[realId] || [];
   const conversation = conversations.find(c => c.conversationId === realId);
+  const wallpaperUrl = conversation?.wallpaperUrl || null;
   const isLoading = chatState.loading;
 
   // Effect 1: Khởi tạo chat - chạy khi conversationId hoặc currentUser thay đổi
@@ -128,6 +129,17 @@ const ChatDetailScreen = () => {
     return otherMember?.status === 'ONLINE' || otherMember?.isOnline === true;
   }, [conversation, otherMember]);
 
+  const onlineUsers = useMemo(() => {
+    const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
+    return (conversation?.members || [])
+      .filter(member => {
+        const memberId = String(member.userId || member.id || '');
+        return memberId && memberId !== currentUserIdStr &&
+          (String(member.status || member.presence || '').toUpperCase() === 'ONLINE' || member.isOnline === true);
+      })
+      .map(member => String(member.userId || member.id || ''));
+  }, [conversation, currentUser]);
+
   const headerAvatarUrl = otherAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=128&bold=true`;
 
   const handleLoadMore = async () => {
@@ -224,10 +236,35 @@ const ChatDetailScreen = () => {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#667eea" />
             </View>
+          ) : wallpaperUrl ? (
+            <View style={{ flex: 1, backgroundColor: '#000' }}>
+              <ImageBackground
+                source={{ uri: wallpaperUrl }}
+                style={styles.wallpaperBackground}
+                imageStyle={styles.wallpaperImage}
+                blurRadius={10}
+              >
+                <MessageList
+                  messages={messages}
+                  conversationId={realId}
+                  currentUserId={currentUser?.userId || currentUser?.id}
+                  onlineUsers={onlineUsers}
+                  typingUsers={chatState.typingUsers?.[realId] || []}
+                  sendReadReceipt={sendReadReceipt}
+                  onLoadMore={handleLoadMore}
+                  onReact={handleReaction}
+                  onLongPress={handleLongPressMessage}
+                />
+              </ImageBackground>
+            </View>
           ) : (
             <MessageList
               messages={messages}
+              conversationId={realId}
               currentUserId={currentUser?.userId || currentUser?.id}
+              onlineUsers={onlineUsers}
+              typingUsers={chatState.typingUsers?.[realId] || []}
+              sendReadReceipt={sendReadReceipt}
               onLoadMore={handleLoadMore}
               onReact={handleReaction}
               onLongPress={handleLongPressMessage}
@@ -253,6 +290,8 @@ const ChatDetailScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   chatArea: { flex: 1 },
+  wallpaperBackground: { flex: 1, overflow: 'hidden' },
+  wallpaperImage: { resizeMode: 'cover', opacity: 0.7 }, // Giảm opacity để màu background trộn vào
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   messagesHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', gap: 12 },
   backButton: { padding: 8 },

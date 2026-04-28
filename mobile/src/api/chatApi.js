@@ -96,6 +96,11 @@ export const conversationApi = {
     return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}`, data);
   },
 
+  // Update conversation wallpaper
+  updateConversationWallpaper: (conversationId, wallpaperUrl) => {
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/wallpaper`, { wallpaperUrl });
+  },
+
   // Mute/unmute conversation
   muteConversation: (conversationId, data) => {
     // Expected: { mutedUntil } - null to unmute, timestamp to mute until

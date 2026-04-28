@@ -80,6 +80,30 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const meId = user?.userId || user?.id;
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
 
+  // Synchronize optimistic reactions with server state
+  useEffect(() => {
+    if (!messages) return;
+    setOptimisticReactions(prev => {
+      const newState = { ...prev };
+      let changed = false;
+      messages.forEach(msg => {
+        if (newState[msg.messageId]) {
+          // If server has reactions, filter out the ones we have optimistically added that are now in server state
+          if (msg.reactions) {
+            const originalLength = newState[msg.messageId].length;
+            newState[msg.messageId] = newState[msg.messageId].filter(local => {
+              const serverUsers = msg.reactions[local.emoji] || [];
+              return !serverUsers.some(uid => String(uid) === String(local.userId));
+            });
+            if (newState[msg.messageId].length === 0) delete newState[msg.messageId];
+            if (originalLength !== (newState[msg.messageId]?.length || 0)) changed = true;
+          }
+        }
+      });
+      return changed ? newState : prev;
+    });
+  }, [messages]);
+
 
 
   useEffect(() => {
@@ -93,12 +117,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
             if (messageId && !messageId.startsWith('temp-')) {
               console.log(`[ReadReceipt] 👁️ Message visible: ${messageId}`);
               sendRead(conversationId, messageId);
+              // Stop observing once sent
               observer.unobserve(entry.target);
             }
           }
         });
       },
-      { threshold: 0.1, rootMargin: '0px 0px -10% 0px' }
+      { threshold: 0.1, rootMargin: '0px 0px 0px 0px' }
     );
 
     const messageElements = document.querySelectorAll(`[data-message-sender]`);
@@ -109,7 +134,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       const msgId = el.getAttribute('data-message-id');
       const msg = messages.find(m => String(m.messageId) === String(msgId));
 
-      if (msg && (!msg.readBy || !msg.readBy.includes(meId))) {
+      // ONLY observe if I HAVEN'T read it yet
+      if (msg && (!msg.readBy || !msg.readBy.some(id => String(id) === String(meId)))) {
         observer.observe(el);
       }
     });
@@ -418,7 +444,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
     return (
       <div className={cn(
-        "absolute -bottom-3 flex items-center z-30",
+        "absolute -bottom-5 flex items-center z-30",
         isMe ? 'right-0' : 'left-0'
       )}>
         <div className="flex items-center space-x-1">
