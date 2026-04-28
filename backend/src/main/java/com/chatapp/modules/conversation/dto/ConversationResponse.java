@@ -20,6 +20,8 @@ public class ConversationResponse {
     private List<MemberInfo> members;
     private List<PinnedMessage> pinnedMessages;
     private Boolean isPinned;
+    private String tag;
+    private Boolean onlyAdminsCanChat;
 
     @Data
     @Builder

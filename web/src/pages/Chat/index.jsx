@@ -51,6 +51,16 @@ const Chat = () => {
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const [friendsInitialView, setFriendsInitialView] = useState('list');
+  const [selectedTags, setSelectedTags] = useState([]); // List of tag keys
+
+  const TAGS = [
+    { key: 'customer', label: 'Khách hàng', color: 'bg-red-500' },
+    { key: 'family', label: 'Gia đình', color: 'bg-emerald-500' },
+    { key: 'work', label: 'Công việc', color: 'bg-orange-500' },
+    { key: 'friends', label: 'Bạn bè', color: 'bg-purple-500' },
+    { key: 'later', label: 'Trả lời sau', color: 'bg-yellow-500' },
+    { key: 'colleague', label: 'Đồng nghiệp', color: 'bg-blue-500' }
+  ];
 
   // Call management
   const [localStream, setLocalStream] = useState(null);
@@ -192,6 +202,11 @@ const Chat = () => {
     // 1. Filter by unread status if active
     if (filterType === 'unread' && (conv.unreadCount || 0) === 0) return false;
 
+    // 2. Filter by selected tags
+    if (selectedTags.length > 0) {
+      if (!conv.tag || !selectedTags.includes(conv.tag)) return false;
+    }
+
     // 2. If no search term, return all matching the type filter
     if (!searchTerm) return true;
 
@@ -246,15 +261,37 @@ const Chat = () => {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsUserMenuOpen(false)}></div>
                 <div className={`
-                  absolute bg-[#1e2330] rounded-2xl shadow-2xl border border-white/10 py-2 z-50 animate-fade-in flex flex-col
+                  absolute rounded-2xl shadow-2xl border py-2 z-50 animate-fade-in flex flex-col
                   ${isMobile ? 'bottom-full left-0 mb-4 w-56' : 'top-0 left-20 ml-2 w-64'}
+                  ${isDark ? 'bg-[#1e2330] border-white/10 shadow-black/40' : 'bg-white border-slate-100 shadow-slate-200'}
                 `}>
-                  <div className="px-5 py-3 border-b border-white/10 mb-2">
-                    <h3 className="font-bold text-white truncate text-base">{user?.fullName || 'Người dùng'}</h3>
+                  <div className={`px-5 py-3 border-b mb-2 ${isDark ? 'border-white/10' : 'border-slate-50'}`}>
+                    <h3 className={`font-bold truncate text-base ${isDark ? 'text-white' : 'text-slate-800'}`}>{user?.fullName || 'Người dùng'}</h3>
                   </div>
-                  <button onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }} className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors">Hồ sơ của bạn</button>
-                  <button onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }} className="w-full text-left px-5 py-3 text-[14px] text-white/80 hover:text-white hover:bg-white/5 transition-colors">Đổi mật khẩu</button>
-                  <button onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }} className="w-full text-left px-5 py-3 text-[14px] text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-colors border-t border-white/10">Xóa tài khoản</button>
+                  <button 
+                    onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }} 
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${
+                      isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+                    }`}
+                  >
+                    Hồ sơ của bạn
+                  </button>
+                  <button 
+                    onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }} 
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${
+                      isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+                    }`}
+                  >
+                    Đổi mật khẩu
+                  </button>
+                  <button 
+                    onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }} 
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors border-t font-medium ${
+                      isDark ? 'text-red-400 hover:bg-red-400/10 border-white/10' : 'text-red-500 hover:bg-red-50 border-slate-50'
+                    }`}
+                  >
+                    Xóa tài khoản
+                  </button>
                 </div>
               </>
             )}
@@ -444,47 +481,93 @@ const Chat = () => {
                     }`}
                   style={!(isFilterMenuOpen || filterType !== 'all') ? { color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'black' } : {}}
                 >
-                  <span>{filterType === 'unread' ? 'Chưa đọc' : 'Phân loại'}</span>
+                  <span>{(filterType === 'unread' || selectedTags.length > 0) ? (filterType === 'unread' ? 'Chưa đọc' : `Phân loại (${selectedTags.length})`) : 'Phân loại'}</span>
                   <ChevronDown size={14} strokeWidth={2.5} className={`transition-transform duration-300 ${isFilterMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isFilterMenuOpen && (
                   <div
-                    className="absolute top-full right-0 mt-2 w-60 bg-surface-100 dark:bg-[#1e2330] border border-border dark:border-white/10 shadow-2xl rounded-xl py-2 z-[60] animate-in fade-in zoom-in-95 duration-200"
+                    className="absolute top-full right-0 mt-2 w-60 border border-border dark:border-white/10 shadow-2xl rounded-xl py-2 z-[60] animate-in fade-in zoom-in-95 duration-200"
+                    style={{ backgroundColor: isDark ? '#0f172a' : '#ffffff' }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="px-4 py-1.5 mb-1">
-                      <p className="text-[10px] font-bold text-foreground/30 dark:text-white/30 uppercase tracking-widest">Theo trạng thái</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>Theo trạng thái</p>
                     </div>
 
                     <button
                       onClick={() => { setFilterType('all'); setIsFilterMenuOpen(false); }}
-                      className="w-full flex items-center justify-between px-4 py-2 hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors group"
+                      className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group"
                     >
-                      <span className={`text-[13px] font-medium ${filterType === 'all' ? 'text-blue-500 dark:text-blue-400' : 'text-foreground/70 dark:text-white/70'}`}>Tất cả</span>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterType === 'all' ? 'border-blue-500 bg-blue-500/20' : 'border-border dark:border-white/10 group-hover:border-foreground/30 dark:group-hover:border-white/30'
-                        }`}>
+                      <span className={`text-[13px] font-bold ${filterType === 'all' ? 'text-blue-500 dark:text-blue-400' : ''}`} style={filterType !== 'all' ? { color: isDark ? '#ffffff' : '#1e293b' } : {}}>Tất cả</span>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterType === 'all' ? 'border-blue-500 bg-blue-500/20' : ''}`}
+                        style={filterType !== 'all' ? { borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#cbd5e1' } : {}}>
                         {filterType === 'all' && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
                       </div>
                     </button>
 
                     <button
                       onClick={() => { setFilterType('unread'); setIsFilterMenuOpen(false); }}
-                      className="w-full flex items-center justify-between px-4 py-2 hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors group"
+                      className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group"
                     >
                       <div className="flex items-center space-x-2">
-                        <span className={`text-[13px] font-medium ${filterType === 'unread' ? 'text-blue-500 dark:text-blue-400' : 'text-foreground/70 dark:text-white/70'}`}>Chưa đọc</span>
+                        <span className={`text-[13px] font-bold ${filterType === 'unread' ? 'text-blue-500 dark:text-blue-400' : ''}`} style={filterType !== 'unread' ? { color: isDark ? '#ffffff' : '#1e293b' } : {}}>Chưa đọc</span>
                         {conversations.filter(c => (c.unreadCount || 0) > 0).length > 0 && (
                           <span className="flex items-center justify-center min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-black rounded-full shadow-lg shadow-red-500/20">
                             {conversations.filter(c => (c.unreadCount || 0) > 0).length}
                           </span>
                         )}
                       </div>
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterType === 'unread' ? 'border-blue-500 bg-blue-500/20' : 'border-border dark:border-white/10 group-hover:border-foreground/30 dark:group-hover:border-white/30'
-                        }`}>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterType === 'unread' ? 'border-blue-500 bg-blue-500/20' : ''}`}
+                        style={filterType !== 'unread' ? { borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#cbd5e1' } : {}}>
                         {filterType === 'unread' && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
                       </div>
                     </button>
+
+                    <div className="h-px bg-border dark:bg-white/5 my-2" />
+                    
+                    <div className="px-4 py-1.5 mb-1 flex items-center justify-between">
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>Theo thẻ phân loại</p>
+                      {selectedTags.length > 0 && (
+                        <button 
+                          onClick={() => setSelectedTags([])}
+                          className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase"
+                        >
+                          Xóa
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-48 overflow-y-auto no-scrollbar">
+                      {TAGS.map(tag => (
+                        <button
+                          key={tag.key}
+                          onClick={() => {
+                            setSelectedTags(prev => 
+                              prev.includes(tag.key) 
+                                ? prev.filter(k => k !== tag.key) 
+                                : [...prev, tag.key]
+                            );
+                          }}
+                          className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-3.5 h-3.5 ${tag.color} rounded-md rotate-45 flex-shrink-0`} style={{ clipPath: 'polygon(0% 0%, 75% 0%, 100% 50%, 75% 100%, 0% 100%)' }} />
+                            <span className="text-[13px] font-bold" style={{ color: selectedTags.includes(tag.key) ? (isDark ? '#818cf8' : '#4f46e5') : (isDark ? '#ffffff' : '#1e293b') }}>
+                              {tag.label}
+                            </span>
+                          </div>
+                          <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center transition-all ${selectedTags.includes(tag.key) ? 'border-indigo-500 bg-indigo-500' : ''}`}
+                            style={!selectedTags.includes(tag.key) ? { borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#cbd5e1' } : {}}>
+                            {selectedTags.includes(tag.key) && (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" className="w-2.5 h-2.5">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -507,6 +590,14 @@ const Chat = () => {
                 onTogglePin={handleTogglePin}
                 onDelete={handleDeleteConversation}
                 activeId={activeConversationId}
+                onUpdateTag={async (id, tag) => {
+                    try {
+                      await chatApi.updateConversationTag(id, tag);
+                      fetchConversations();
+                    } catch (err) {
+                      console.error("Failed to update tag", err);
+                    }
+                 }}
               />
             )}
           </div>

@@ -5,6 +5,7 @@ import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
 import VoteDetailsModal from '../VoteDetailsModal';
+import { useTheme } from '../../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -31,6 +32,7 @@ const getDocViewerUrl = (u, e) => {
 };
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward }) => {
+  const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
     return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -553,9 +555,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                     <React.Fragment key={msg.messageId || index}>
                       {dateHeader}
                       <div className="flex justify-center my-6 group relative">
-                        <div className="px-5 py-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-full border border-indigo-100 dark:border-indigo-500/10 flex items-center space-x-2 shadow-sm">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/50"></span>
-                          <span className="text-[11px] font-black text-indigo-700/80 dark:text-indigo-200/60 uppercase tracking-widest">{msg.content}</span>
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
+                          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${
+                            isDark ? 'text-white/30' : 'text-slate-500'
+                          }`}>
+                            {msg.content}
+                          </span>
+                          <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
                         </div>
                       </div>
                     </React.Fragment>
@@ -666,7 +673,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               </div>
                             ) : (
                               <div className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
-                                <div className="relative group/bubble-main w-fit">
+                                <div className="relative group/bubble-main w-fit max-w-[85vw] lg:max-w-[560px]">
                                   {/* Emoji Quick Picker */}
                                   <div className={cn(`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} hidden group-hover/bubble-main:flex items-center space-x-1 p-1 bg-[#1e2330]/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-full z-[100] animate-in fade-in zoom-in slide-in-from-bottom-2 duration-200`)}>
                                     {EMOJIS.map(emoji => (
@@ -780,15 +787,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               }
 
                                               const getRows = (c) => {
-                                                if (c <= 4) return [c];
-                                                if (c === 5) return [3, 2];
+                                                if (c <= 5) return [c];
                                                 if (c === 6) return [3, 3];
                                                 if (c === 7) return [4, 3];
                                                 if (c === 8) return [4, 4];
                                                 const rows = [];
                                                 let rem = c;
                                                 while (rem > 0) {
-                                                  if (rem >= 4) { rows.push(4); rem -= 4; }
+                                                  if (rem >= 5) { rows.push(5); rem -= 5; }
                                                   else { rows.push(rem); rem = 0; }
                                                 }
                                                 return rows;
@@ -800,10 +806,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               return (
                                                 <div className="flex flex-col gap-[2px]">
                                                   {rows.map((rowSize, rowIndex) => {
+                                                    const gridColsClass = {
+                                                      1: 'grid-cols-1',
+                                                      2: 'grid-cols-2',
+                                                      3: 'grid-cols-3',
+                                                      4: 'grid-cols-4',
+                                                      5: 'grid-cols-5'
+                                                    }[rowSize] || 'grid-cols-5';
                                                     const rowUrls = urls.slice(currentIndex, currentIndex + rowSize);
                                                     currentIndex += rowSize;
                                                     return (
-                                                      <div key={rowIndex} className={cn("grid gap-[2px]", `grid-cols-${rowSize}`)}>
+                                                      <div key={rowIndex} className={cn("grid gap-[2px]", gridColsClass)}>
                                                         {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
                                                       </div>
                                                     );

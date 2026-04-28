@@ -9,6 +9,7 @@ import { userApi } from '../api/userApi';
 import { useChat } from '../hooks/useChat';
 import { fetchFriends, fetchConversations } from '../store/chatSlice';
 import { removePendingFriend, setPendingRequests } from '../store/notificationSlice';
+import { useTheme } from '../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -16,6 +17,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
   const dispatch = useDispatch();
   const { friends, conversations } = useSelector(state => state.chat);
   const { pendingFriends } = useSelector(state => state.notification);
+  const { isDark } = useTheme();
   const { create, selectConversation } = useChat();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -143,12 +145,16 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-slate-950/40 animate-fade-in">
-      <div className="bg-[#1a1e26] w-full max-w-lg rounded-[40px] shadow-2xl border border-white/5 relative overflow-hidden flex flex-col h-[600px]">
+      <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col h-[600px] border ${
+        isDark ? 'bg-[#1a1e26] border-white/5' : 'bg-white border-slate-100'
+      }`}>
         
         {/* Header */}
-        <div className="h-24 flex items-center justify-between px-10 border-b border-white/5 bg-white/5 backdrop-blur-md shrink-0">
+        <div className={`h-24 flex items-center justify-between px-10 border-b backdrop-blur-md shrink-0 ${
+          isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50/50 border-slate-50'
+        }`}>
           <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-black text-white tracking-tighter">
+            <h2 className={`text-xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-800'}`}>
               {view === 'list' ? 'Danh sách bạn bè' : view === 'requests' ? 'Lời mời kết bạn' : 'Tìm kiếm bạn bè'}
             </h2>
             {view === 'list' && (
@@ -168,13 +174,17 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
             {view !== 'list' && (
               <button 
                 onClick={() => setView('list')}
-                className="text-[11px] font-black text-white/40 hover:text-white uppercase tracking-widest transition-colors"
+                className={`text-[11px] font-black uppercase tracking-widest transition-colors ${
+                  isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-600'
+                }`}
               >
                 Quay lại
               </button>
             )}
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl text-white/40 transition-colors">
+          <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${
+            isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'
+          }`}>
             <X size={24} />
           </button>
         </div>
@@ -185,13 +195,19 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
             <div className="space-y-6">
               {/* Search Bar */}
               <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
+                  isDark ? 'text-white/20 group-focus-within:text-indigo-500' : 'text-slate-300 group-focus-within:text-indigo-500'
+                }`} size={18} />
                 <input
                   type="text"
                   placeholder="Tìm kiếm bạn bè trong danh sách..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/5 rounded-2xl text-sm font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-indigo-500/50 transition-all"
+                  className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${
+                    isDark 
+                      ? 'bg-white/5 border-white/5 text-white placeholder:text-white/20' 
+                      : 'bg-slate-50 border-slate-100 text-slate-800 placeholder:text-slate-400'
+                  }`}
                 />
               </div>
 
@@ -204,18 +220,24 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                   </div>
                 ) : (
                   filteredFriends.map((friend) => (
-                    <div key={friend.userId} className="p-4 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 transition-all group flex items-center justify-between">
+                    <div key={friend.userId} className={`p-4 rounded-2xl transition-all group flex items-center justify-between border ${
+                      isDark 
+                        ? 'bg-white/5 border-white/5 hover:bg-white/10' 
+                        : 'bg-white border-slate-100 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-500/5'
+                    }`}>
                       <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 overflow-hidden">
+                        <div className={`w-12 h-12 rounded-2xl overflow-hidden border ${
+                          isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                        }`}>
                           {friend.avatarUrl ? (
                             <img src={friend.avatarUrl} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-white/10"><User size={24} /></div>
+                            <div className={`w-full h-full flex items-center justify-center ${isDark ? 'text-white/10' : 'text-slate-300'}`}><User size={24} /></div>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-[15px] font-black text-white tracking-tight">{friend.fullName}</h4>
-                          <p className="text-[11px] font-bold text-white/30">{friend.phoneNumber}</p>
+                          <h4 className={`text-[15px] font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>{friend.fullName}</h4>
+                          <p className={`text-[11px] font-bold ${isDark ? 'text-white/30' : 'text-slate-400'}`}>{friend.phoneNumber}</p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -227,7 +249,9 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                         </button>
                         <button 
                           onClick={() => handleUnfriend(friend.userId)}
-                          className="p-2.5 bg-white/5 text-white/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                          className={`p-2.5 rounded-xl transition-all ${
+                            isDark ? 'bg-white/5 text-white/40 hover:text-red-500 hover:bg-red-500/10' : 'bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50'
+                          }`}
                         >
                           <UserMinus size={18} />
                         </button>
@@ -241,7 +265,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
 
           {view === 'requests' && (
             <div className="space-y-6">
-              <p className="text-[11px] font-black text-white/30 uppercase tracking-widest px-1">Yêu cầu đang chờ</p>
+              <p className={`text-[11px] font-black uppercase tracking-widest px-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>Yêu cầu đang chờ</p>
               <div className="space-y-4">
                 {pendingFriends.length === 0 ? (
                   <div className="py-20 text-center opacity-20">
@@ -250,16 +274,16 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                   </div>
                 ) : (
                   pendingFriends.map((req) => (
-                    <div key={req.userId} className="p-6 bg-white/5 border border-white/5 rounded-3xl space-y-5">
+                    <div key={req.userId} className={`p-6 border rounded-3xl space-y-5 ${isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50/50 border-slate-100'}`}>
                       <div className="flex items-center space-x-4">
-                        <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 overflow-hidden">
-                          {req.avatarUrl ? <img src={req.avatarUrl} className="w-full h-full object-cover" /> : <User size={24} className="m-auto text-white/10" />}
+                        <div className={`w-14 h-14 rounded-2xl overflow-hidden border ${isDark ? 'bg-white/5 border-white/5' : 'bg-white border-slate-100'}`}>
+                          {req.avatarUrl ? <img src={req.avatarUrl} className="w-full h-full object-cover" /> : <User size={24} className={`m-auto ${isDark ? 'text-white/10' : 'text-slate-200'}`} />}
                         </div>
                         <div className="flex-1">
-                          <p className="text-[15px] text-white/70 leading-tight">
-                            <span className="font-black text-white">{req.fullName}</span> muốn kết bạn
+                          <p className={`text-[15px] leading-tight ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
+                            <span className={`font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{req.fullName}</span> muốn kết bạn
                           </p>
-                          <p className="text-[11px] font-bold text-white/30 mt-1">{req.phoneNumber}</p>
+                          <p className={`text-[11px] font-bold mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>{req.phoneNumber}</p>
                         </div>
                       </div>
                       <div className="flex space-x-3">
@@ -271,7 +295,9 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                         </button>
                         <button
                           onClick={() => handleRejectRequest(req.userId)}
-                          className="px-6 py-4 bg-white/5 text-white/40 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 transition-all active:scale-95"
+                          className={`px-6 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all active:scale-95 border ${
+                            isDark ? 'bg-white/5 text-white/40 hover:bg-white/10 border-white/5' : 'bg-white text-slate-400 hover:bg-slate-50 border-slate-100'
+                          }`}
                         >
                           Từ chối
                         </button>
@@ -286,19 +312,25 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
           {view === 'search' && (
             <div className="space-y-8 animate-fade-in">
               <div className="space-y-6">
-                <p className="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] italic text-center">
+                <p className={`text-[11px] font-black uppercase tracking-[0.2em] italic text-center ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
                   Tìm kiếm bạn bè qua số điện thoại
                 </p>
                 
                 <form onSubmit={handleSearchUser} className="flex space-x-3">
                   <div className="relative flex-1 group">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                    <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
+                      isDark ? 'text-white/20 group-focus-within:text-indigo-500' : 'text-slate-300 group-focus-within:text-indigo-500'
+                    }`} size={18} />
                     <input
                       type="text"
                       placeholder="Nhập số điện thoại..."
                       value={searchPhone}
                       onChange={(e) => setSearchPhone(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/5 rounded-2xl text-sm font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-indigo-500/50 transition-all"
+                      className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${
+                        isDark 
+                          ? 'bg-white/5 border-white/5 text-white placeholder:text-white/20' 
+                          : 'bg-slate-50 border-slate-100 text-slate-800 placeholder:text-slate-400'
+                      }`}
                     />
                   </div>
                   <button
@@ -318,18 +350,22 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                 )}
 
                 {foundUser && (
-                  <div className="p-8 bg-white/5 border border-white/5 rounded-[40px] space-y-8 animate-slide-up shadow-xl">
+                  <div className={`p-8 border rounded-[40px] space-y-8 animate-slide-up shadow-xl ${
+                    isDark ? 'bg-white/5 border-white/5' : 'bg-white border-slate-100'
+                  }`}>
                     <div className="flex flex-col items-center text-center space-y-6">
-                      <div className="w-24 h-24 rounded-[32px] bg-white/5 border border-white/5 flex items-center justify-center overflow-hidden">
+                      <div className={`w-24 h-24 rounded-[32px] border flex items-center justify-center overflow-hidden ${
+                        isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                      }`}>
                         {foundUser.avatarUrl ? (
                           <img src={foundUser.avatarUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <User size={48} className="text-white/10" />
+                          <User size={48} className={isDark ? 'text-white/10' : 'text-slate-200'} />
                         )}
                       </div>
                       <div className="space-y-1">
-                        <h3 className="text-2xl font-black text-white tracking-tighter">{foundUser.fullName}</h3>
-                        <p className="text-[11px] font-black text-white/30 uppercase tracking-[0.3em]">{foundUser.phoneNumber}</p>
+                        <h3 className={`text-2xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-800'}`}>{foundUser.fullName}</h3>
+                        <p className={`text-[11px] font-black uppercase tracking-[0.3em] ${isDark ? 'text-white/30' : 'text-slate-400'}`}>{foundUser.phoneNumber}</p>
                       </div>
                     </div>
 
@@ -355,7 +391,9 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                       ) : (
                         <button
                           onClick={handleAddFriendFromSearch}
-                          className="w-full py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-white/10 transition-all flex items-center justify-center space-x-3"
+                          className={`w-full py-4 border rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all flex items-center justify-center space-x-3 ${
+                            isDark ? 'bg-white/5 text-white border-white/10 hover:bg-white/10' : 'bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100'
+                          }`}
                         >
                           <UserPlus size={18} />
                           <span>Kết bạn</span>
@@ -371,7 +409,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
 
         {/* Footer Action for List View */}
         {view === 'list' && (
-          <div className="p-8 border-t border-white/5 flex justify-center shrink-0">
+          <div className={`p-8 border-t flex justify-center shrink-0 ${isDark ? 'border-white/5' : 'border-slate-50'}`}>
             <button
               onClick={() => setView('search')}
               className="w-full py-4 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center space-x-3"

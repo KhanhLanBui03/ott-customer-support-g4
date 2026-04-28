@@ -321,6 +321,8 @@ public class ConversationService {
                     .members(members)
                     .pinnedMessages(fullConv != null ? fetchPinnedMessages(fullConv) : new ArrayList<>())
                     .isPinned(uc.getIsPinned() != null && uc.getIsPinned())
+                    .tag(uc.getTag())
+                    .onlyAdminsCanChat(fullConv != null && Boolean.TRUE.equals(fullConv.getOnlyAdminsCanChat()))
                     .build();
         }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
     }
@@ -378,6 +380,8 @@ public class ConversationService {
                 .members(members)
                 .pinnedMessages(fetchPinnedMessages(conv))
                 .isPinned(userConv.getIsPinned() != null && userConv.getIsPinned())
+                .tag(userConv.getTag())
+                .onlyAdminsCanChat(conv.getOnlyAdminsCanChat() != null && Boolean.TRUE.equals(conv.getOnlyAdminsCanChat()))
                 .build();
     }
 
@@ -782,6 +786,122 @@ public class ConversationService {
             } catch (Exception e) {
                 log.warn("Failed to send wallpaper update to user {}: {}", memberId, e.getMessage());
             }
+        }
+    }
+
+    public void renameConversation(String userId, String conversationId, String newName) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        UserConversation userUc = userConversationRepository.findById(userId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+        if (!"OWNER".equals(userUc.getRole()) && !"ADMIN".equals(userUc.getRole())) {
+            throw new ValidationException("Only admins or owner can rename the group");
+        }
+
+        String oldName = conv.getName();
+        conv.setName(newName);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        conversationRepository.save(conv);
+
+        // Update denormalized names in UserConversation
+        for (String memberId : conv.getMemberIds()) {
+            userConversationRepository.findById(memberId, conversationId).ifPresent(uc -> {
+                uc.setName(newName);
+                uc.setUpdatedAt(System.currentTimeMillis());
+                userConversationRepository.save(uc);
+            });
+        }
+
+        // Create system message
+        com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+        String userName = user != null ? user.getFullName() : "Một người dùng";
+        
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(userName + " đã đổi tên nhóm thành \"" + newName + "\".")
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+        
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        
+        // Broadcast updates
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+    }
+
+    public void updateConversationTag(String userId, String conversationId, String tag) {
+        userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
+            uc.setTag(tag);
+            userConversationRepository.save(uc);
+            log.info("Tag updated for user {} and conversation {}: {}", userId, conversationId, tag);
+            
+            // Broadcast update
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+        });
+    }
+
+    public Conversation getConversationById(String conversationId) {
+        return conversationRepository.findById(conversationId).orElse(null);
+    }
+
+    public void toggleChatRestriction(String userId, String conversationId) {
+        try {
+            Conversation conv = conversationRepository.findById(conversationId)
+                    .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+            UserConversation userUc = userConversationRepository.findById(userId, conversationId)
+                    .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+            if (!"OWNER".equals(userUc.getRole()) && !"ADMIN".equals(userUc.getRole())) {
+                throw new ValidationException("Only admins or owner can change chat restrictions");
+            }
+
+            boolean current = conv.getOnlyAdminsCanChat() != null && conv.getOnlyAdminsCanChat();
+            boolean newVal = !current;
+            conv.setOnlyAdminsCanChat(newVal);
+            conv.setUpdatedAt(System.currentTimeMillis());
+            conversationRepository.save(conv);
+
+            // Create system message safely
+            try {
+                com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+                String userName = user != null ? user.getFullName() : "Quản trị viên";
+                String statusText = newVal ? "đã bật" : "đã tắt";
+                String content = userName + " " + statusText + " chế độ giới hạn người có thể chat.";
+                
+                Message sysMsg = Message.create(
+                        conversationId,
+                        java.util.UUID.randomUUID().toString(),
+                        "SYSTEM",
+                        "Hệ thống",
+                        content,
+                        "SYSTEM"
+                );
+                sysMsg.setStatus("SENT");
+                
+                messageRepository.save(sysMsg);
+                updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+                
+                // Broadcast updates
+                eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+            } catch (Exception e) {
+                log.error("Failed to send system message for chat restriction: {}", e.getMessage());
+            }
+            
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+        } catch (Exception e) {
+            log.error("Error in toggleChatRestriction: ", e);
+            throw new ValidationException("DEBUG ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
     }
 }

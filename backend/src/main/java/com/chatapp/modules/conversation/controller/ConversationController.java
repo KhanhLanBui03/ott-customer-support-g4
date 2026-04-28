@@ -201,4 +201,38 @@ public class ConversationController {
         conversationService.updateWallpaper(userId, conversationId, wallpaperUrl);
         return ResponseEntity.ok(ApiResponse.success(null, "Wallpaper updated successfully"));
     }
+
+    @PutMapping("/{conversationId}/name")
+    public ResponseEntity<ApiResponse<Void>> renameConversation(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String newName = body.get("name");
+        log.info("Renaming conversation: {} to: {} by user: {}", conversationId, newName, userId);
+        conversationService.renameConversation(userId, conversationId, newName);
+        return ResponseEntity.ok(ApiResponse.success(null, "Conversation renamed successfully"));
+    }
+
+    @PutMapping("/{conversationId}/tag")
+    public ResponseEntity<ApiResponse<Void>> updateTag(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String tag = body.get("tag");
+        log.info("Updating tag for conversation: {} to: {} by user: {}", conversationId, tag, userId);
+        conversationService.updateConversationTag(userId, conversationId, tag);
+        return ResponseEntity.ok(ApiResponse.success(null, "Tag updated successfully"));
+    }
+
+    @PostMapping("/{conversationId}/toggle-restriction")
+    public ResponseEntity<ApiResponse<Void>> toggleRestriction(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        log.info("Toggle restriction requested for conversation: {} by user: {}", conversationId, userId);
+        conversationService.toggleChatRestriction(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Chat restriction toggled successfully"));
+    }
 }
