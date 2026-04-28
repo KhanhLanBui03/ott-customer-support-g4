@@ -69,6 +69,8 @@ public class ConversationService {
     public void markAsRead(String userId, String conversationId) {
         userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
             if (uc.getUnreadCount() != null && uc.getUnreadCount() > 0) {
+                // Save the unread count before clearing it, so AI can know how many messages were missed
+                uc.setLastUnreadCount(uc.getUnreadCount());
                 uc.setUnreadCount(0);
                 userConversationRepository.save(uc);
             }

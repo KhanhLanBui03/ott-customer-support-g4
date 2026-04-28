@@ -13,6 +13,7 @@ import { chatApi } from '../../api/chatApi';
 import { userApi } from '../../api/userApi';
 import { updateConversationWallpaper } from '../../store/chatSlice';
 import GroupAvatar from '../GroupAvatar';
+import AIAssistantPanel from '../AIAssistantPanel';
 
 const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   const dispatch = useDispatch();
@@ -303,6 +304,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
         </div>
 
         <div className="h-2 bg-slate-50 dark:bg-slate-900/50" />
+
+        {/* Trợ lý AI (Chỉ cho Nhóm) */}
+        {conversation.type === 'GROUP' && (
+          <AIAssistantPanel conversationId={conversationId} />
+        )}
+
+        <div className="h-2 bg-slate-50 dark:bg-slate-900/50 mt-6" />
 
         {/* Thành viên nhóm */}
         {conversation.type === 'GROUP' && (

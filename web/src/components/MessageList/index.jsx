@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus } from 'lucide-react';
+import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Languages, Sparkles as SparklesIcon } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
@@ -73,6 +73,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [selectedFile, setSelectedFile] = useState(null);
   const [isFileModalLoading, setIsFileModalLoading] = useState(true);
   const [reactionDetail, setReactionDetail] = useState(null);
+  const [translatedMessages, setTranslatedMessages] = useState({}); // { messageId: text }
+  const [translationLoading, setTranslationLoading] = useState({}); // { messageId: boolean }
 
 
 
@@ -362,6 +364,21 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         }
       } else if (action === 'REPLY') {
         onReply(messageId);
+      } else if (action === 'TRANSLATE') {
+        const msg = messages.find(m => m.messageId === messageId);
+        if (!msg || !msg.content) return;
+        
+        setTranslationLoading(prev => ({ ...prev, [messageId]: true }));
+        setActiveMenu(null);
+        try {
+          const res = await chatApi.translateText(msg.content);
+          setTranslatedMessages(prev => ({ ...prev, [messageId]: res.data.translation }));
+        } catch (err) {
+          console.error("Translation failed:", err);
+          alert("Không thể dịch tin nhắn này.");
+        } finally {
+          setTranslationLoading(prev => ({ ...prev, [messageId]: false }));
+        }
       }
       setActiveMenu(null);
     } catch (err) {
@@ -670,6 +687,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       <div className="fixed inset-0 z-[90]" onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
                                       <div className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999]`}>
                                         <button onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Reply size={18} className="text-indigo-400" /> <span>Trả lời</span></button>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('TRANSLATE', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Languages size={18} className="text-indigo-400" /> <span>Dịch tin nhắn</span></button>
                                         <button onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /><span>{isPinned ? 'Gỡ ghim' : 'Ghim tin nhắn'}</span></button>
                                         <div className="h-px bg-border my-1.5 mx-2" />
                                         <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Xóa phía tôi</span></button>
@@ -796,6 +814,26 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           </div>
                                         )}
                                         {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+                                        
+                                        {/* Translation Display */}
+                                        {translationLoading[msg.messageId] && (
+                                          <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
+                                            <Loader2 size={12} className="animate-spin" />
+                                            <span>AI đang dịch...</span>
+                                          </div>
+                                        )}
+                                        {translatedMessages[msg.messageId] && (
+                                          <div className={cn(
+                                            "mt-1 mx-2 mb-2 p-3 rounded-xl border flex flex-col",
+                                            isMe ? "bg-white/10 border-white/10" : "bg-indigo-500/5 border-indigo-500/10"
+                                          )}>
+                                            <div className="flex items-center space-x-1.5 mb-1 opacity-60">
+                                              <SparklesIcon size={10} className="text-indigo-400" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Bản dịch AI</span>
+                                            </div>
+                                            <p className="text-[13px] leading-relaxed italic">{translatedMessages[msg.messageId]}</p>
+                                          </div>
+                                        )}
                                         <div className={cn("flex justify-end px-3 pb-2", (msg.content || msg.mediaUrls?.length > 0) ? "mt-1" : "mt-1")}>
                                           <span className={`text-[9px] font-black opacity-70 tabular-nums uppercase tracking-widest ${isMe ? 'text-white' : 'text-foreground'}`}>
                                             {formatMessageTime(msg.createdAt)}
