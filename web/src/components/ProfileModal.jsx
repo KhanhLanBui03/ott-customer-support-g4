@@ -6,10 +6,13 @@ import { updateUser } from '../store/authSlice';
 import { userApi } from '../api/userApi';
 import { chatApi } from '../api/chatApi';
 
+import { useTheme } from '../hooks/useTheme';
+
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
   const { user, fetchProfileData } = useAuth();
+  const { isDark } = useTheme();
   const dispatch = useDispatch();
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
@@ -89,7 +92,7 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
   };
 
   const content = (
-    <div className="flex flex-col space-y-8 p-10 bg-surface-200">
+    <div className={`flex flex-col space-y-8 p-10 ${isDark ? 'bg-surface-200' : 'bg-white'}`}>
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Avatar Section */}
         <div className="flex flex-col items-center space-y-6">
@@ -103,7 +106,9 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
                 )}
               </div>
             </div>
-            <label className="absolute -bottom-2 -right-2 p-3 bg-cursor-dark text-cursor-cream rounded-2xl cursor-pointer hover:scale-110 active:scale-95 transition-all shadow-xl border-4 border-surface-200">
+            <label className={`absolute -bottom-2 -right-2 p-3 rounded-2xl cursor-pointer hover:scale-110 active:scale-95 transition-all shadow-xl border-4 ${
+              isDark ? 'bg-indigo-600 text-white border-surface-200' : 'bg-slate-900 text-white border-white'
+            }`}>
               <Camera size={20} />
               <input type="file" onChange={handleAvatarUpload} accept="image/*" className="hidden" />
             </label>
@@ -124,7 +129,11 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Nhập họ..."
-                className="w-full px-5 py-3 bg-white border border-cursor-dark/10 rounded-2xl text-sm font-mono text-cursor-dark placeholder:text-cursor-dark/20 focus:outline-none focus:border-cursor-dark transition-all"
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                  isDark 
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                }`}
               />
             </div>
             <div className="space-y-2">
@@ -134,7 +143,11 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Nhập tên..."
-                className="w-full px-5 py-3 bg-white border border-cursor-dark/10 rounded-2xl text-sm font-mono text-cursor-dark placeholder:text-cursor-dark/20 focus:outline-none focus:border-cursor-dark transition-all"
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                  isDark 
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                }`}
               />
             </div>
           </div>
@@ -156,7 +169,11 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               placeholder="Giới thiệu về bản thân..."
-              className="w-full px-5 py-4 bg-white border border-cursor-dark/10 rounded-2xl text-sm font-serif italic text-cursor-dark placeholder:text-cursor-dark/20 focus:outline-none focus:border-cursor-dark transition-all resize-none"
+              className={`w-full px-5 py-4 border rounded-2xl text-sm font-serif italic transition-all resize-none focus:outline-none ${
+                isDark 
+                  ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
+                  : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+              }`}
             />
           </div>
 
@@ -185,7 +202,9 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-cursor-dark text-cursor-cream rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center space-x-3"
+          className={`w-full py-4 rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center space-x-3 ${
+            isDark ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'
+          }`}
         >
           <Save size={18} />
           <span>{loading ? 'Đang cập nhật...' : 'Lưu thay đổi'}</span>
@@ -197,11 +216,11 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
   if (isPanel) return content;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-cursor-cream/40 animate-fade-in">
-      <div className="bg-surface-200 w-full max-w-lg rounded-[40px] shadow-2xl border border-cursor-dark/5 relative overflow-hidden">
-        <div className="h-20 flex items-center justify-between px-10 border-b border-cursor-dark/5 sticky top-0 bg-surface-100/50 backdrop-blur-md">
-          <h2 className="font-serif italic font-black text-cursor-dark uppercase tracking-[0.2em] text-[12px]">Hồ sơ của bạn</h2>
-          <button onClick={onClose} className="p-2 hover:bg-black/5 rounded-xl text-cursor-dark/40 transition-colors">
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl animate-fade-in ${isDark ? 'bg-slate-950/40' : 'bg-slate-200/40'}`}>
+      <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden border ${isDark ? 'bg-surface-200 border-white/5' : 'bg-white border-slate-100'}`}>
+        <div className={`h-20 flex items-center justify-between px-10 border-b sticky top-0 backdrop-blur-md ${isDark ? 'bg-surface-100/50 border-white/5' : 'bg-white/50 border-slate-50'}`}>
+          <h2 className={`font-black uppercase tracking-[0.2em] text-[12px] ${isDark ? 'text-white' : 'text-slate-800'}`}>Hồ sơ của bạn</h2>
+          <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'}`}>
             <X size={24} />
           </button>
         </div>

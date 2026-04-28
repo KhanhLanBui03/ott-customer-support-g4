@@ -11,6 +11,7 @@ import {
     updateMessage,
     updateMessageStatus,
     setMessageRead,
+    updateConversation,
     setUserStatus
 } from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
@@ -115,11 +116,11 @@ export const useWebSocket = () => {
             } else if (event.eventType === 'CONVERSATION_UPDATE') {
                 const payload = event.payload || {};
                 const conversationId = event.conversationId || payload.conversationId || payload.id;
-
-                if (conversationId && Object.prototype.hasOwnProperty.call(payload, 'wallpaperUrl')) {
-                    dispatch(updateConversationWallpaper({
+                
+                if (conversationId) {
+                    dispatch(updateConversation({
                         conversationId,
-                        wallpaperUrl: payload.wallpaperUrl ?? null
+                        ...payload
                     }));
                 } else {
                     dispatch(fetchConversations());

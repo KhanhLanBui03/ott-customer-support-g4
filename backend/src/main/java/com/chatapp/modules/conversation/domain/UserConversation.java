@@ -58,6 +58,9 @@ public class UserConversation {
     @DynamoDBAttribute(attributeName = "isPinned")
     private Boolean isPinned;
 
+    @DynamoDBAttribute(attributeName = "tag")
+    private String tag; // customer, family, work, friends, later, colleague
+
     public Boolean getIsPinned() {
         return isPinned;
     }

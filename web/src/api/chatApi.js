@@ -21,6 +21,12 @@ export const chatApi = {
   deleteConversation: (id) => axiosClient.delete(`/conversations/${encodeURIComponent(id)}/me`), // Alias for backward compatibility
   updateWallpaper: (conversationId, wallpaperUrl) =>
     axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/wallpaper`, { wallpaperUrl }),
+  renameConversation: (conversationId, name) =>
+    axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/name`, { name }),
+  updateConversationTag: (conversationId, tag) =>
+    axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/tag`, { tag }),
+  toggleChatRestriction: (conversationId) =>
+    axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`),
   
   uploadMedia: (file, folder = 'chat') => {
     const formData = new FormData();
