@@ -1,11 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText } from 'lucide-react';
+import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
 import { useChat } from '../../hooks/useChat';
-import { addOptimisticMessage, fetchConversations } from '../../store/chatSlice';
-import CreateVoteModal from '../CreateVoteModal';
+import { addOptimisticMessage } from '../../store/chatSlice';
 
 const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteModal }) => {
   const [text, setText] = useState('');
@@ -13,6 +12,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const [attachments, setAttachments] = useState([]);
   const [localAttachments, setLocalAttachments] = useState([]); // Store { file, blobUrl }
   const [showEmojis, setShowEmojis] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const { sendMessage, sendTyping } = useWebSocket();
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
@@ -82,8 +83,10 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       else type = 'FILE';
     }
 
+    const messageContent = (type === 'IMAGE' && customContent !== null) ? '' : finalContent;
+
     const optimisticMsg = {
-      content: type === 'STICKER' ? finalContent : (customContent === null ? finalContent : ''),
+      content: messageContent,
       senderId: user?.userId || user?.id,
       mediaUrls: localAttachments.length > 0 ? localAttachments.map(a => a.blobUrl) : finalAttachments,
       type: type,
@@ -93,7 +96,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     };
 
     dispatch(addOptimisticMessage({ conversationId, message: optimisticMsg }));
-    sendMessage(conversationId, type === 'STICKER' ? finalContent : (customContent === null ? finalContent : ''), type, finalAttachments, replyingTo?.messageId);
+    sendMessage(conversationId, messageContent, type, finalAttachments, replyingTo?.messageId);
 
     if (replyingTo) onCancelReply();
     if (typingTimeoutRef.current) { clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = null; }
@@ -105,9 +108,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       setLocalAttachments([]);
     }
     setShowEmojis(false);
+    setSuggestions([]);
   };
-
-
 
   const handleInputChange = (e) => {
     const newValue = e.target.value;
@@ -120,6 +122,32 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       if (typingTimeoutRef.current) { clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = null; sendTyping(conversationId, false); }
     }
   };
+
+  const fetchSuggestions = async () => {
+    if (!conversationId) return;
+    setSuggestionsLoading(true);
+    try {
+      const res = await chatApi.getSmartReplies(conversationId);
+      const filtered = (res.data.suggestions || [])
+        .map(s => s.replace(/^\d+\.\s*/, '').replace(/^-\s*/, '').trim())
+        .filter(s => s.length > 0 && s.length < 50)
+        .slice(0, 3);
+      setSuggestions(filtered);
+    } catch (err) {
+      console.error("Failed to fetch suggestions:", err);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (conversationId) {
+      setSuggestions([]);
+      // Small delay to let messages load
+      const timer = setTimeout(fetchSuggestions, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [conversationId]);
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files);
@@ -288,6 +316,32 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
             </div>
           </div>
           <button onClick={onCancelReply} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"><X size={18} /></button>
+        </div>
+      )}
+
+      {/* AI Smart Replies */}
+      {suggestions.length > 0 && !text.trim() && attachments.length === 0 && (
+        <div className="absolute bottom-full mb-3 left-0 right-0 flex items-center space-x-2 px-4 overflow-x-auto no-scrollbar animate-fade-in-up pb-1">
+          <div className="flex-shrink-0 p-1.5 bg-indigo-500/10 text-indigo-400 rounded-lg mr-1">
+             <SparklesIcon size={12} className="animate-pulse" />
+          </div>
+          {suggestions.map((suggestion, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleSend(null, suggestion, 'TEXT')}
+              className="flex-shrink-0 px-4 py-1.5 bg-white dark:bg-slate-800 border border-border hover:border-indigo-500/40 hover:bg-indigo-500/5 text-[12px] font-black text-foreground/70 hover:text-indigo-500 rounded-full transition-all shadow-sm whitespace-nowrap active:scale-95"
+            >
+              {suggestion}
+            </button>
+          ))}
+          <button 
+            type="button"
+            onClick={() => setSuggestions([])}
+            className="p-1.5 text-foreground/20 hover:text-red-500 transition-colors"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 

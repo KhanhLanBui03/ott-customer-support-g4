@@ -30,6 +30,9 @@ public class UserConversation {
     @DynamoDBAttribute(attributeName = "unreadCount")
     private Integer unreadCount;
 
+    @DynamoDBAttribute(attributeName = "lastUnreadCount")
+    private Integer lastUnreadCount;
+
     // Adding an Index to sort by updatedAt (latest message)
     @DynamoDBIndexRangeKey(globalSecondaryIndexName = "user-conversations-updated-index", attributeName = "updatedAt")
     private Long updatedAt;

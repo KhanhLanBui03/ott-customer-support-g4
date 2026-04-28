@@ -62,12 +62,14 @@ public class ChatAppApplication {
                         continue;
                     }
 
-                    // Keep priority: existing env vars > system properties > .env file
-                    if (System.getenv(key) == null && System.getProperty(key) == null) {
-                        System.setProperty(key, value);
-                    }
+                    // Always prioritize .env values for AI configuration to avoid stale system env vars
+                    System.setProperty(key, value);
                 }
-                System.out.println("Loaded environment variables from: " + candidate.toAbsolutePath());
+                System.out.println("✅ Loaded environment variables from: " + candidate.toAbsolutePath());
+                String apiKey = System.getProperty("GEMINI_API_KEY");
+                if (apiKey != null && apiKey.length() > 8) {
+                    System.out.println("🔑 Gemini API Key loaded: " + apiKey.substring(0, 4) + "..." + apiKey.substring(apiKey.length() - 4));
+                }
                 return;
             } catch (IOException ex) {
                 System.err.println("Failed to load .env from " + candidate.toAbsolutePath() + ": " + ex.getMessage());
