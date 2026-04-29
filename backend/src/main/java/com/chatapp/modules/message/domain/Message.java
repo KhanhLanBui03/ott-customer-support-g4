@@ -82,6 +82,10 @@ public class Message {
     @DynamoDBAttribute(attributeName = "isEncrypted")
     private Boolean isEncrypted;
 
+    // Không bắt buộc lưu DB, chỉ dùng tạm cho trả về client
+    @DynamoDBIgnore
+    private String transcript;
+
     @Data
     @Builder
     @NoArgsConstructor

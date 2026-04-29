@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Languages, Sparkles as SparklesIcon } from 'lucide-react';
+import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
@@ -8,6 +8,157 @@ import VoteDetailsModal from '../VoteDetailsModal';
 import { useTheme } from '../../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
+
+// Voice Player Component
+const VoicePlayer = ({ url }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setLoading(false);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleProgressClick = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    if (audioRef.current) {
+      audioRef.current.currentTime = percent * duration;
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleTranscribe = async () => {
+    setIsTranscribing(true);
+    setTranscript('Đang biên dịch...');
+
+    try {
+      const response = await chatApi.transcribeVoiceUrl(url);
+      const payload = response;
+      const transcriptText = payload?.data?.transcript || payload?.transcript;
+
+      if (payload?.success && transcriptText) {
+        setTranscript(transcriptText);
+      } else {
+        setTranscript(`Lỗi: ${payload?.message || 'Không thể biên dịch'}`);
+      }
+    } catch (error) {
+      console.error('Transcription error:', error);
+      const message = error?.response?.data?.message || error?.message || 'Biên dịch thất bại';
+      setTranscript(`Lỗi: ${message}`);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  return (
+    <div className="py-2 px-4 bg-black/10 dark:bg-white/5 rounded-[20px] min-w-[260px] space-y-2">
+      <audio ref={audioRef} src={url} />
+
+      <div className="flex items-center space-x-3">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+          disabled={loading}
+          className="relative z-20 p-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 pointer-events-auto"
+        >
+          {loading ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : isPlaying ? (
+            <Pause size={16} fill="currentColor" />
+          ) : (
+            <Play size={16} fill="currentColor" />
+          )}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div
+            onClick={handleProgressClick}
+            className="relative h-1.5 bg-black/20 dark:bg-white/10 rounded-full cursor-pointer group"
+          >
+            <div
+              className="absolute h-full bg-indigo-500 rounded-full transition-all"
+              style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-indigo-500 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ left: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 flex-shrink-0">
+          <span className="text-xs font-mono font-bold text-foreground/60 whitespace-nowrap">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleTranscribe}
+          disabled={isTranscribing}
+          className="text-[11px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 transition-all disabled:opacity-60 disabled:cursor-not-allowed z-10"
+        >
+          {isTranscribing ? 'Đang biên dịch...' : 'Biên dịch'}
+        </button>
+      </div>
+
+      {transcript && (
+        <div className="text-xs font-semibold text-foreground/70 bg-white/30 dark:bg-black/20 rounded-xl px-3 py-2 border border-border/40">
+          {transcript}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Zalo-style colors for group chat member names
 const MEMBER_COLORS = [
@@ -716,7 +867,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : '',
                                     "overflow-hidden transition-all duration-300"
                                   )}>
-                                    {msg.type === 'STICKER' ? (
+                                    {msg.type === 'VOICE' ? (
+                                      <div className="p-2">
+                                        {msg.mediaUrls && msg.mediaUrls[0] && (
+                                          <VoicePlayer url={msg.mediaUrls[0]} />
+                                        )}
+                                      </div>
+                                    ) : msg.type === 'STICKER' ? (
                                       <div className="relative group/sticker">
                                         <img
                                           src={msg.content}

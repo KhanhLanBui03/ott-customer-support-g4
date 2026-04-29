@@ -31,10 +31,31 @@ export const chatApi = {
   uploadMedia: (file, folder = 'chat') => {
     const formData = new FormData();
     formData.append('file', file);
-    return axiosClient.post(`/media/upload?folder=${folder}`, formData, {
+    formData.append('folder', folder);
+    return axiosClient.post('/media/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  
+  uploadVoiceMessage: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', 'voice');
+    return axiosClient.post('/media/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  transcribeVoiceFile: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axiosClient.post('/messages/speech-to-text', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  transcribeVoiceUrl: (url) => axiosClient.post('/messages/speech-to-text-url', null, {
+    params: { url },
+  }),
+  sendMessage: (data) => axiosClient.post('/messages/send', data),
   addReaction: (conversationId, messageId, emoji) => axiosClient.post(`/messages/${messageId}/reactions?conversationId=${encodeURIComponent(conversationId)}`, { emoji }),
   removeReaction: (conversationId, messageId, emoji) => axiosClient.delete(`/messages/${messageId}/reactions?conversationId=${encodeURIComponent(conversationId)}`, { data: { emoji } }),
   recallMessage: (conversationId, messageId) => axiosClient.post(`/messages/${messageId}/recall?conversationId=${encodeURIComponent(conversationId)}`),

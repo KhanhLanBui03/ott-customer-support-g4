@@ -14,6 +14,7 @@ import {
     updateConversation,
     setUserStatus
 } from '../store/chatSlice';
+import { chatApi } from '../api/chatApi';
 import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
 import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
 
@@ -204,13 +205,29 @@ export const useWebSocket = () => {
         connect();
     }, [connect]);
 
-    const sendMessage = useCallback((conversationId, content, type = 'TEXT', mediaUrls = [], replyToMessageId = null, forwardedFrom = null) => {
-        const client = getStompClient();
-        if (client?.connected) {
-            client.publish({
-                destination: '/app/chat.send',
-                body: JSON.stringify({ conversationId, content, type, mediaUrls, replyToMessageId, forwardedFrom })
-            });
+    const sendMessage = useCallback(async (conversationId, content, type = 'TEXT', mediaUrls = [], replyToMessageId = null, forwardedFrom = null) => {
+        const payload = {
+            conversationId,
+            content: content ?? '',
+            type,
+            mediaUrls,
+            replyToMessageId,
+            isEncrypted: false,
+            forwardedFrom
+        };
+
+        try {
+            return await chatApi.sendMessage(payload);
+        } catch (err) {
+            console.warn('[Message] REST send failed, fallback to STOMP:', err?.message || err);
+            const client = getStompClient();
+            if (client?.connected) {
+                client.publish({
+                    destination: '/app/chat.send',
+                    body: JSON.stringify(payload)
+                });
+            }
+            throw err;
         }
     }, []);
 
