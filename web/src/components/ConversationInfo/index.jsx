@@ -3,7 +3,7 @@ import {
   Bell, Pin, Users, Clock, Hash, Image as ImageIcon, FileText, Link as LinkIcon, 
   Trash2, AlertTriangle, EyeOff, ChevronDown, ChevronRight, X, Download, PlayCircle,
   UserPlus, Shield, ShieldCheck, MoreVertical, LogOut, Palette, Search, Zap, Trash2 as TrashIcon,
-  Edit3, Check
+  Edit3, Check, MessageSquareLock
 } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { useChat } from '../../hooks/useChat';
@@ -13,6 +13,7 @@ import { chatApi } from '../../api/chatApi';
 import { userApi } from '../../api/userApi';
 import { updateConversationWallpaper } from '../../store/chatSlice';
 import GroupAvatar from '../GroupAvatar';
+import AIAssistantPanel from '../AIAssistantPanel';
 
 const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   const dispatch = useDispatch();
@@ -137,6 +138,18 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
      }
   };
 
+  const handleDisbandGroup = async () => {
+    if (window.confirm('GIẢI TÁN NHÓM? Tất cả tin nhắn và thành viên sẽ bị xóa vĩnh viễn.')) {
+      try {
+        await chatApi.disbandGroup(conversationId);
+        fetchConversations();
+        onClose();
+      } catch (err) {
+        console.error("Failed to disband group", err);
+      }
+    }
+  };
+
   const handleRenameGroup = async () => {
     if (!editName.trim() || editName.trim() === conversation.name) {
       setIsEditingName(false);
@@ -149,6 +162,17 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
     } catch (err) {
       console.error('Rename failed:', err);
       alert('Không thể đổi tên nhóm. Vui lòng thử lại.');
+    }
+  };
+  
+  const handleToggleChatRestriction = async () => {
+    if (!isAdmin) return;
+    try {
+      await chatApi.toggleChatRestriction(conversationId);
+      fetchConversations();
+    } catch (err) {
+      console.error('Toggle restriction failed:', err);
+      alert('Không thể cập nhật quyền chat. Vui lòng thử lại.');
     }
   };
 
@@ -304,6 +328,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
 
         <div className="h-2 bg-slate-50 dark:bg-slate-900/50" />
 
+        {/* Trợ lý AI (Chỉ cho Nhóm) */}
+        {conversation.type === 'GROUP' && (
+          <AIAssistantPanel conversationId={conversationId} />
+        )}
+
+        <div className="h-2 bg-slate-50 dark:bg-slate-900/50 mt-6" />
+
         {/* Thành viên nhóm */}
         {conversation.type === 'GROUP' && (
            <div className="px-4 py-3">
@@ -388,7 +419,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                            </div>
                            
                            {/* Menu 3 chấm cho quản lý thành viên */}
-                           {isAdmin && m.userId !== (user?.userId || user?.id) && (
+                           {isAdmin && m.userId !== (user?.userId || user?.id) && !(currentMember?.role === 'ADMIN' && m.role === 'OWNER') && (
                              <div className="relative">
                                <button 
                                  onClick={(e) => { e.stopPropagation(); setMemberMenuId(memberMenuId === m.userId ? null : m.userId); }}
@@ -564,6 +595,61 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                         <span className="text-[15px] font-black tracking-tight text-foreground">Rời nhóm</span>
                      </button>
                    )}
+                   {conversation.type === 'GROUP' && (
+                     <button 
+                       onClick={isOwner ? handleDisbandGroup : undefined}
+                       disabled={!isOwner}
+                       className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all border border-transparent ${
+                         isOwner 
+                           ? 'hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 group scale-100 hover:scale-[1.02] hover:border-red-100 dark:hover:border-red-500/20 cursor-pointer' 
+                           : 'text-foreground/40 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
+                       }`}
+                     >
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
+                          isOwner 
+                            ? 'bg-red-100/50 dark:bg-red-500/5 group-hover:scale-110 text-red-600' 
+                            : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
+                        }`}>
+                           <AlertTriangle size={22} />
+                        </div>
+                        <div className="flex flex-col items-start">
+                          <span className="text-[15px] font-black tracking-tight text-inherit">Giải tán nhóm</span>
+                          {!isOwner && <span className="text-[10px] font-bold opacity-70 mt-0.5">Chỉ trưởng nhóm mới có quyền</span>}
+                        </div>
+                     </button>
+                   )}
+                   {conversation.type === 'GROUP' && (
+                     <button 
+                        onClick={isAdmin ? handleToggleChatRestriction : undefined}
+                        disabled={!isAdmin}
+                        className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all border border-transparent ${
+                          isAdmin 
+                            ? 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-indigo-600 group scale-100 hover:scale-[1.02] hover:border-indigo-100 dark:hover:border-indigo-500/20 cursor-pointer' 
+                            : 'text-foreground/40 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
+                        }`}
+                     >
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
+                          isAdmin 
+                            ? 'bg-indigo-100/50 dark:bg-indigo-500/5 group-hover:scale-110 text-indigo-600' 
+                            : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
+                        }`}>
+                           <MessageSquareLock size={22} />
+                        </div>
+                        <div className="flex flex-col items-start text-left">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-[15px] font-black tracking-tight text-inherit">Chỉ Admin mới có thể chat</span>
+                            {conversation.onlyAdminsCanChat && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />}
+                          </div>
+                          <span className="text-[10px] font-bold opacity-70 mt-0.5">
+                            {conversation.onlyAdminsCanChat ? 'Đã bật' : 'Đang tắt'} • {isAdmin ? 'Quản trị viên có thể thay đổi' : 'Chỉ quản trị viên mới có quyền'}
+                          </span>
+                        </div>
+                        <div className="flex-1" />
+                        <div className={`w-10 h-5 rounded-full relative transition-colors ${conversation.onlyAdminsCanChat ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${conversation.onlyAdminsCanChat ? 'left-6' : 'left-1'}`} />
+                        </div>
+                     </button>
+                   )}
                    <button 
                     onClick={onClearHistory}
                     className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
@@ -574,11 +660,6 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                       <span className="text-[15px] font-black tracking-tight text-foreground">Xóa lịch sử trò chuyện</span>
                    </button>
                    
-                   <div className="mt-8 p-6 bg-surface-200 dark:bg-surface-200/40 rounded-[32px] border border-border text-center">
-                      <Shield size={32} className="mx-auto mb-4 text-emerald-500 opacity-60" />
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/60">Mã hóa đầu cuối</p>
-                      <p className="text-[9px] font-bold text-foreground/40 mt-2 italic">Tin nhắn của bạn được bảo mật tuyệt đối.</p>
-                   </div>
                 </div>
               )}
            </div>

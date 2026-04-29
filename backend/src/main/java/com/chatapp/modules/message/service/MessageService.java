@@ -60,6 +60,22 @@ public class MessageService {
                                 "Không thể gửi tin nhắn. Người dùng đã bị chặn.");
                     }
                 }
+            } else {
+                // Group chat restriction check
+                com.chatapp.modules.conversation.domain.Conversation conv = 
+                    conversationService.getConversationById(command.getConversationId());
+                
+                if (conv != null && Boolean.TRUE.equals(conv.getOnlyAdminsCanChat())) {
+                    com.chatapp.modules.conversation.domain.UserConversation uc = 
+                        userConversationRepository.findById(command.getSenderId(), command.getConversationId()).orElse(null);
+                    
+                    if (uc == null || (!"OWNER".equals(uc.getRole()) && !"ADMIN".equals(uc.getRole()))) {
+                        log.warn("Unauthorized chat attempt in restricted group: user {} in conv {}", 
+                            command.getSenderId(), command.getConversationId());
+                        throw new com.chatapp.common.exception.ValidationException(
+                            "Chỉ quản trị viên mới có quyền gửi tin nhắn trong nhóm này.");
+                    }
+                }
             }
 
             String messageId = UUID.randomUUID().toString();
@@ -78,9 +94,7 @@ public class MessageService {
                     command.getContent(),
                     type);
 
-            if (command.getMediaUrls() != null && !command.getMediaUrls().isEmpty()) {
-                message.setMediaUrls(command.getMediaUrls());
-            }
+
 
             if (command.getReplyToMessageId() != null) {
                 log.debug("Adding reply info for message: {}", command.getReplyToMessageId());

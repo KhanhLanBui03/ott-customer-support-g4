@@ -41,6 +41,9 @@ public class MessageResponse {
 
     private VoteInfoDTO vote;
 
+    // Transcript for voice message (speech-to-text)
+    private String transcript;
+
     @Data
     @Builder
     @NoArgsConstructor

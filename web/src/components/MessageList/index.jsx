@@ -1,12 +1,164 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus } from 'lucide-react';
+import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Languages, Sparkles as SparklesIcon, Play, Pause, Volume2 } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
 import VoteDetailsModal from '../VoteDetailsModal';
+import { useTheme } from '../../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
+
+// Voice Player Component
+const VoicePlayer = ({ url }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setLoading(false);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleProgressClick = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    if (audioRef.current) {
+      audioRef.current.currentTime = percent * duration;
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleTranscribe = async () => {
+    setIsTranscribing(true);
+    setTranscript('Đang biên dịch...');
+
+    try {
+      const response = await chatApi.transcribeVoiceUrl(url);
+      const payload = response;
+      const transcriptText = payload?.data?.transcript || payload?.transcript;
+
+      if (payload?.success && transcriptText) {
+        setTranscript(transcriptText);
+      } else {
+        setTranscript(`Lỗi: ${payload?.message || 'Không thể biên dịch'}`);
+      }
+    } catch (error) {
+      console.error('Transcription error:', error);
+      const message = error?.response?.data?.message || error?.message || 'Biên dịch thất bại';
+      setTranscript(`Lỗi: ${message}`);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  return (
+    <div className="py-2 px-4 bg-black/10 dark:bg-white/5 rounded-[20px] min-w-[260px] space-y-2">
+      <audio ref={audioRef} src={url} />
+
+      <div className="flex items-center space-x-3">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+          disabled={loading}
+          className="relative z-20 p-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 pointer-events-auto"
+        >
+          {loading ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : isPlaying ? (
+            <Pause size={16} fill="currentColor" />
+          ) : (
+            <Play size={16} fill="currentColor" />
+          )}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div
+            onClick={handleProgressClick}
+            className="relative h-1.5 bg-black/20 dark:bg-white/10 rounded-full cursor-pointer group"
+          >
+            <div
+              className="absolute h-full bg-indigo-500 rounded-full transition-all"
+              style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-indigo-500 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ left: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 flex-shrink-0">
+          <span className="text-xs font-mono font-bold text-foreground/60 whitespace-nowrap">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleTranscribe}
+          disabled={isTranscribing}
+          className="text-[11px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 transition-all disabled:opacity-60 disabled:cursor-not-allowed z-10"
+        >
+          {isTranscribing ? 'Đang biên dịch...' : 'Biên dịch'}
+        </button>
+      </div>
+
+      {transcript && (
+        <div className="text-xs font-semibold text-foreground/70 bg-white/30 dark:bg-black/20 rounded-xl px-3 py-2 border border-border/40">
+          {transcript}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Zalo-style colors for group chat member names
 const MEMBER_COLORS = [
@@ -31,6 +183,7 @@ const getDocViewerUrl = (u, e) => {
 };
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward }) => {
+  const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
     return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -73,6 +226,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [selectedFile, setSelectedFile] = useState(null);
   const [isFileModalLoading, setIsFileModalLoading] = useState(true);
   const [reactionDetail, setReactionDetail] = useState(null);
+  const [translatedMessages, setTranslatedMessages] = useState({}); // { messageId: text }
+  const [translationLoading, setTranslationLoading] = useState({}); // { messageId: boolean }
 
 
 
@@ -362,6 +517,21 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         }
       } else if (action === 'REPLY') {
         onReply(messageId);
+      } else if (action === 'TRANSLATE') {
+        const msg = messages.find(m => m.messageId === messageId);
+        if (!msg || !msg.content) return;
+        
+        setTranslationLoading(prev => ({ ...prev, [messageId]: true }));
+        setActiveMenu(null);
+        try {
+          const res = await chatApi.translateText(msg.content);
+          setTranslatedMessages(prev => ({ ...prev, [messageId]: res.data.translation }));
+        } catch (err) {
+          console.error("Translation failed:", err);
+          alert("Không thể dịch tin nhắn này.");
+        } finally {
+          setTranslationLoading(prev => ({ ...prev, [messageId]: false }));
+        }
       }
       setActiveMenu(null);
     } catch (err) {
@@ -536,9 +706,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                     <React.Fragment key={msg.messageId || index}>
                       {dateHeader}
                       <div className="flex justify-center my-6 group relative">
-                        <div className="px-5 py-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-full border border-indigo-100 dark:border-indigo-500/10 flex items-center space-x-2 shadow-sm">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/50"></span>
-                          <span className="text-[11px] font-black text-indigo-700/80 dark:text-indigo-200/60 uppercase tracking-widest">{msg.content}</span>
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
+                          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${
+                            isDark ? 'text-white/30' : 'text-slate-500'
+                          }`}>
+                            {msg.content}
+                          </span>
+                          <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
                         </div>
                       </div>
                     </React.Fragment>
@@ -649,7 +824,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               </div>
                             ) : (
                               <div className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
-                                <div className="relative group/bubble-main w-fit">
+                                <div className="relative group/bubble-main w-fit max-w-[85vw] lg:max-w-[560px]">
                                   {/* Emoji Quick Picker */}
                                   <div className={cn(`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} hidden group-hover/bubble-main:flex items-center space-x-1 p-1 bg-[#1e2330]/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-full z-[100] animate-in fade-in zoom-in slide-in-from-bottom-2 duration-200`)}>
                                     {EMOJIS.map(emoji => (
@@ -670,6 +845,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       <div className="fixed inset-0 z-[90]" onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
                                       <div className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999]`}>
                                         <button onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Reply size={18} className="text-indigo-400" /> <span>Trả lời</span></button>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('TRANSLATE', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Languages size={18} className="text-indigo-400" /> <span>Dịch tin nhắn</span></button>
                                         <button onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /><span>{isPinned ? 'Gỡ ghim' : 'Ghim tin nhắn'}</span></button>
                                         <div className="h-px bg-border my-1.5 mx-2" />
                                         <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Xóa phía tôi</span></button>
@@ -691,7 +867,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : '',
                                     "overflow-hidden transition-all duration-300"
                                   )}>
-                                    {msg.type === 'STICKER' ? (
+                                    {msg.type === 'VOICE' ? (
+                                      <div className="p-2">
+                                        {msg.mediaUrls && msg.mediaUrls[0] && (
+                                          <VoicePlayer url={msg.mediaUrls[0]} />
+                                        )}
+                                      </div>
+                                    ) : msg.type === 'STICKER' ? (
                                       <div className="relative group/sticker">
                                         <img
                                           src={msg.content}
@@ -762,15 +944,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               }
 
                                               const getRows = (c) => {
-                                                if (c <= 4) return [c];
-                                                if (c === 5) return [3, 2];
+                                                if (c <= 5) return [c];
                                                 if (c === 6) return [3, 3];
                                                 if (c === 7) return [4, 3];
                                                 if (c === 8) return [4, 4];
                                                 const rows = [];
                                                 let rem = c;
                                                 while (rem > 0) {
-                                                  if (rem >= 4) { rows.push(4); rem -= 4; }
+                                                  if (rem >= 5) { rows.push(5); rem -= 5; }
                                                   else { rows.push(rem); rem = 0; }
                                                 }
                                                 return rows;
@@ -782,10 +963,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               return (
                                                 <div className="flex flex-col gap-[2px]">
                                                   {rows.map((rowSize, rowIndex) => {
+                                                    const gridColsClass = {
+                                                      1: 'grid-cols-1',
+                                                      2: 'grid-cols-2',
+                                                      3: 'grid-cols-3',
+                                                      4: 'grid-cols-4',
+                                                      5: 'grid-cols-5'
+                                                    }[rowSize] || 'grid-cols-5';
                                                     const rowUrls = urls.slice(currentIndex, currentIndex + rowSize);
                                                     currentIndex += rowSize;
                                                     return (
-                                                      <div key={rowIndex} className={cn("grid gap-[2px]", `grid-cols-${rowSize}`)}>
+                                                      <div key={rowIndex} className={cn("grid gap-[2px]", gridColsClass)}>
                                                         {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
                                                       </div>
                                                     );
@@ -796,6 +984,26 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           </div>
                                         )}
                                         {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+                                        
+                                        {/* Translation Display */}
+                                        {translationLoading[msg.messageId] && (
+                                          <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
+                                            <Loader2 size={12} className="animate-spin" />
+                                            <span>AI đang dịch...</span>
+                                          </div>
+                                        )}
+                                        {translatedMessages[msg.messageId] && (
+                                          <div className={cn(
+                                            "mt-1 mx-2 mb-2 p-3 rounded-xl border flex flex-col",
+                                            isMe ? "bg-white/10 border-white/10" : "bg-indigo-500/5 border-indigo-500/10"
+                                          )}>
+                                            <div className="flex items-center space-x-1.5 mb-1 opacity-60">
+                                              <SparklesIcon size={10} className="text-indigo-400" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Bản dịch AI</span>
+                                            </div>
+                                            <p className="text-[13px] leading-relaxed italic">{translatedMessages[msg.messageId]}</p>
+                                          </div>
+                                        )}
                                         <div className={cn("flex justify-end px-3 pb-2", (msg.content || msg.mediaUrls?.length > 0) ? "mt-1" : "mt-1")}>
                                           <span className={`text-[9px] font-black opacity-70 tabular-nums uppercase tracking-widest ${isMe ? 'text-white' : 'text-foreground'}`}>
                                             {formatMessageTime(msg.createdAt)}

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { useChat } from '../../hooks/useChat';
 import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
 import ForwardModal from '../ForwardModal';
 import { chatApi } from '../../api/chatApi';
-import { Phone, Video, Info, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle } from 'lucide-react';
+import { Phone, Video, PanelRight, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
 import GroupAvatar from '../GroupAvatar';
 
@@ -14,7 +14,36 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
   const { user } = useSelector(state => state.auth);
   const { messages, fetchMessages, fetchConversations, messagesLoading, conversations, friends, fetchFriends } = useChat();
   const [showPinsDropdown, setShowPinsDropdown] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
+  const tagMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (tagMenuRef.current && !tagMenuRef.current.contains(event.target)) {
+        setIsTagMenuOpen(false);
+      }
+    };
+
+    if (isTagMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isTagMenuOpen]);
+
+  const TAGS = [
+    { key: 'customer', label: 'Khách hàng', color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500/20', bgColor: 'bg-red-500/5' },
+    { key: 'family', label: 'Gia đình', color: 'bg-emerald-500', textColor: 'text-emerald-500', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5' },
+    { key: 'work', label: 'Công việc', color: 'bg-orange-500', textColor: 'text-orange-500', borderColor: 'border-orange-500/20', bgColor: 'bg-orange-500/5' },
+    { key: 'friends', label: 'Bạn bè', color: 'bg-purple-500', textColor: 'text-purple-500', borderColor: 'border-purple-500/20', bgColor: 'bg-purple-500/5' },
+    { key: 'later', label: 'Trả lời sau', color: 'bg-yellow-500', textColor: 'text-amber-500', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5' },
+    { key: 'colleague', label: 'Đồng nghiệp', color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500/20', bgColor: 'bg-blue-500/5' }
+  ];
+
   const [replyingTo, setReplyingTo] = useState(null);
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
@@ -45,57 +74,15 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
     if (!lastSeenAt) return 'Offline';
     const now = Date.now();
     const diff = Math.floor((now - lastSeenAt) / 1000); // seconds
-    if (diff < 60) return 'Active just now';
-    if (diff < 3600) return `Active ${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `Active ${Math.floor(diff / 3600)}h ago`;
-    return `Active ${Math.floor(diff / 86400)}d ago`;
+    if (diff < 60) return 'Vừa mới truy cập';
+    if (diff < 3600) return `Hoạt động ${Math.floor(diff / 60)} phút trước`;
+    if (diff < 86400) return `Hoạt động ${Math.floor(diff / 3600)} giờ trước`;
+    return `Hoạt động ${Math.floor(diff / 86400)} ngày trước`;
   };
 
-  const handleDeleteConversation = async () => {
-    if (window.confirm('Xóa cuộc trò chuyện này? Bạn sẽ không thể xem lại tin nhắn cũ.')) {
-      try {
-        await chatApi.deleteConversation(conversationId);
-        fetchConversations(); // Update list and clear active
-        if (onBack) onBack(); // Go back or clear selection without reload
-      } catch (err) {
-        console.error("Failed to delete conversation", err);
-      }
-    }
-  };
 
-  const handleBlockUser = async () => {
-    if (!currentMember) return;
-    const friendId = currentMember.userId || currentMember.id;
-    const isBlocked = Array.isArray(friends) && friends.some(f => 
-      String(f.userId || f.id || f.friendId) === String(friendId) && f.status === 'BLOCKED'
-    );
 
-    if (window.confirm(isBlocked ? 'Bỏ chặn người dùng này?' : 'Chặn người dùng này? Họ sẽ không thể gửi tin nhắn cho bạn.')) {
-      try {
-        if (isBlocked) {
-          await friendApi.unblockUser(friendId);
-        } else {
-          await friendApi.blockUser(friendId);
-        }
-        fetchFriends();
-        fetchConversations();
-      } catch (err) {
-        console.error("Failed to block/unblock user", err);
-      }
-    }
-  };
 
-  const handleDisbandGroup = async () => {
-    if (window.confirm('GIẢI TÁN NHÓM? Tất cả tin nhắn và thành viên sẽ bị xóa vĩnh viễn.')) {
-      try {
-        await chatApi.disbandGroup(conversationId);
-        fetchConversations();
-        if (onBack) onBack();
-      } catch (err) {
-        console.error("Failed to disband group", err);
-      }
-    }
-  };
 
   const scrollToMessage = (messageId) => {
     const element = document.getElementById(`msg-${messageId}`);
@@ -111,19 +98,19 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
     if (conversationId) {
       fetchMessages(conversationId);
       setShowPinsDropdown(false); // Reset dropdown when switching convs
-      setShowMoreMenu(false);
+
       setReplyingTo(null);
     }
   }, [conversationId, fetchMessages]);
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background transition-colors overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-background transition-colors">
       {/* Header */}
       <div className={`
         ${onBack ? 'h-20 px-4' : 'h-[88px] px-8'} 
         glass-premium flex items-center justify-between z-30 sticky top-0 transition-all
       `}>
-        <div className="flex items-center space-x-3 overflow-hidden">
+        <div className="flex items-center space-x-3">
           {onBack && (
             <button 
               onClick={onBack}
@@ -147,12 +134,12 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
           <div className="min-w-0">
             <h2 className={`
               ${onBack ? 'text-base' : 'text-xl'} 
-              font-black text-foreground tracking-tighter leading-none mb-1 flex items-center space-x-1.5 truncate
+              font-bold text-foreground tracking-tighter leading-none mb-1.5 flex items-center space-x-1.5 truncate
             `}>
               <span className="truncate">
                 {currentConv?.type === 'SINGLE' 
-                  ? (currentMember?.fullName || currentMember?.name || currentConv?.name || 'Signal Hub')
-                  : (currentConv?.name || 'Signal Hub')}
+                  ? (currentMember?.fullName || currentMember?.name || currentConv?.name || 'Người dùng')
+                  : (currentConv?.name || 'Nhóm chat')}
               </span>
               {currentConv?.isAI ? (
                 <SparklesIcon size={onBack ? 14 : 16} className="text-indigo-500 animate-pulse" />
@@ -161,24 +148,14 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
               )}
             </h2>
             <div className="flex items-center space-x-2">
-              <span className={`text-[9px] font-mono font-black uppercase tracking-[0.1em] ${currentMember?.status === 'ONLINE' ? 'text-green-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : 'Node Active'}
+              <span className={`text-[11px] font-medium ${currentMember?.status === 'ONLINE' ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : 'Vừa mới truy cập'}
               </span>
               
+              <div className="w-px h-3 bg-border mx-1" />
+              
               {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (
-                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border ${
-                  (() => {
-                    const friend = Array.isArray(friends) && friends.find(f => {
-                      const fId = String(f.userId || f.id || f.friendId || '');
-                      const mId = String(currentMember?.userId || currentMember?.id || '');
-                      return fId === mId && fId !== '';
-                    });
-                    if (friend?.status === 'BLOCKED') return 'text-red-500 border-red-500/20 bg-red-500/5';
-                    return friend?.status === 'ACCEPTED' 
-                      ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' 
-                      : 'text-amber-500 border-amber-500/20 bg-amber-500/5';
-                  })()
-                }`}>
+                <span className="text-[11px] font-medium text-slate-400">
                   {(() => {
                     const friend = Array.isArray(friends) && friends.find(f => {
                       const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
@@ -194,10 +171,97 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
               )}
               
               {currentConv?.type === 'GROUP' && (
-                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-indigo-500/20 bg-indigo-500/5 text-indigo-500 tracking-wider">
+                <span className="text-[11px] font-medium text-indigo-500/70">
                   Nhóm trò chuyện
                 </span>
               )}
+
+              <div className="w-px h-3 bg-border mx-1" />
+
+              {/* Classification Tag Indicator */}
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsTagMenuOpen(!isTagMenuOpen);
+                  }}
+                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg transition-all hover:bg-surface-200 group ${
+                    currentConv?.tag ? 'bg-surface-100 shadow-sm border border-border/50' : 'text-slate-400'
+                  }`}
+                >
+                  <div 
+                    className={`w-2.5 h-2.5 rounded-sm rotate-45 transition-transform group-hover:scale-110 ${
+                      currentConv?.tag 
+                        ? TAGS.find(t => t.key === currentConv.tag)?.color 
+                        : 'border border-slate-400 bg-transparent'
+                    }`}
+                    style={{ clipPath: 'polygon(0% 0%, 75% 0%, 100% 50%, 75% 100%, 0% 100%)' }}
+                  />
+                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${currentConv?.tag ? TAGS.find(t => t.key === currentConv.tag)?.textColor : 'text-slate-400'}`}>
+                    {currentConv?.tag ? TAGS.find(t => t.key === currentConv.tag)?.label : 'Phân loại'}
+                  </span>
+                </button>
+
+                {isTagMenuOpen && (
+                  <div 
+                    ref={tagMenuRef}
+                    className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-border dark:border-white/10 shadow-2xl rounded-2xl py-2 z-[100001] animate-in fade-in slide-in-from-top-4 duration-300"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                       <div className="px-5 py-3 mb-1 border-b border-border/40 dark:border-white/10 bg-surface-100 dark:bg-white/5 rounded-t-2xl">
+                         <p className="text-[11px] font-bold uppercase text-foreground/40 dark:text-white/50 tracking-widest text-center">Phân loại hội thoại</p>
+                       </div>
+                       {TAGS.map(tag => (
+                         <button
+                           key={tag.key}
+                           onClick={async (e) => {
+                             e.stopPropagation();
+                             try {
+                               await chatApi.updateConversationTag(conversationId, tag.key);
+                               setIsTagMenuOpen(false);
+                               fetchConversations();
+                             } catch (err) {
+                               console.error("Failed to update tag", err);
+                             }
+                           }}
+                           className="w-full flex items-center space-x-4 px-5 py-3 hover:bg-foreground/5 dark:hover:bg-white/5 transition-all text-left group"
+                         >
+                           <div className={`w-4 h-4 ${tag.color} rounded-[4px] rotate-45 flex-shrink-0 shadow-sm transition-transform group-hover:scale-110`} style={{ clipPath: 'polygon(0% 0%, 75% 0%, 100% 50%, 75% 100%, 0% 100%)' }} />
+                           <span className={`text-[14px] font-bold ${currentConv?.tag === tag.key ? 'text-indigo-600' : 'text-foreground/70 dark:text-white/80'}`}>{tag.label}</span>
+                         </button>
+                       ))}
+                       
+                       <div className="h-px bg-border dark:bg-white/5 my-2 mx-2" />
+                       
+                       {currentConv?.tag && (
+                         <button
+                           onClick={async (e) => {
+                             e.stopPropagation();
+                             try {
+                               await chatApi.updateConversationTag(conversationId, null);
+                               setIsTagMenuOpen(false);
+                               fetchConversations();
+                             } catch (err) {
+                               console.error("Failed to update tag", err);
+                             }
+                           }}
+                           className="w-full flex items-center space-x-4 px-5 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all text-left"
+                         >
+                           <Trash2 size={16} className="text-red-500" />
+                           <span className="text-[14px] font-bold text-red-500">Gỡ nhãn phân loại</span>
+                         </button>
+                       )}
+
+                       <button
+                         className="w-full flex items-center justify-center py-3 text-foreground/40 hover:text-indigo-600 transition-colors border-t border-border dark:border-white/5 mt-1"
+                         onClick={(e) => { e.stopPropagation(); alert("Tính năng đang phát triển!"); }}
+                       >
+                         <span className="text-[13px] font-medium">Quản lý thẻ phân loại</span>
+                       </button>
+                    </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -222,63 +286,8 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
             onClick={onToggleInfo}
             className={`p-2.5 rounded-xl transition-all ${isInfoOpen ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}
           >
-            <Info size={20} />
+            <PanelRight size={20} />
           </button>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowMoreMenu(!showMoreMenu)}
-              className={`p-3 relative z-50 rounded-xl transition-all ${showMoreMenu ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}
-            >
-              <MoreVertical size={20} />
-            </button>
-
-            {showMoreMenu && (
-              <div className="absolute top-full right-0 mt-2 w-64 glass-premium shadow-2xl rounded-[24px] p-2 z-50 animate-msg">
-                <button 
-                  onClick={() => { onToggleInfo(); setShowMoreMenu(false); }}
-                  className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-foreground hover:bg-indigo-50 rounded-2xl transition-all"
-                >
-                  <Info size={18} className="text-indigo-500" />
-                  <span>Conversation Info</span>
-                </button>
-                <div className="h-px bg-border my-1 mx-2" />
-                <button
-                  onClick={() => { handleDeleteConversation(); setShowMoreMenu(false); }}
-                  className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-all"
-                >
-                  <Trash2 size={18} />
-                  <span>Xóa lịch sử</span>
-                </button>
-
-                {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (
-                  <>
-                    <div className="h-px bg-border my-1 mx-2" />
-                    <button
-                      onClick={() => { handleBlockUser(); setShowMoreMenu(false); }}
-                      className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-red-600 hover:bg-red-50 rounded-2xl transition-all"
-                    >
-                      <Ban size={18} />
-                      <span>{Array.isArray(friends) && friends.some(f => String(f.userId || f.id || f.friendId) === String(currentMember?.userId || currentMember?.id) && f.status === 'BLOCKED') ? 'Bỏ chặn' : 'Chặn người dùng'}</span>
-                    </button>
-                  </>
-                )}
-
-                {currentConv?.type === 'GROUP' && currentConv?.members?.find(m => String(m.userId || m.id) === String(user?.userId || user?.id))?.role === 'OWNER' && (
-                  <>
-                    <div className="h-px bg-border my-1 mx-2" />
-                    <button
-                      onClick={() => { handleDisbandGroup(); setShowMoreMenu(false); }}
-                      className="w-full flex items-center space-x-3 px-4 py-3.5 text-[14px] font-bold text-red-700 hover:bg-red-50 rounded-2xl transition-all"
-                    >
-                      <AlertCircle size={18} />
-                      <span>Giải tán nhóm</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -295,10 +304,10 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
               </div>
               <div className="flex-1 truncate">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 dark:text-indigo-400 leading-tight mb-0.5">
-                  {currentConv.pinnedMessages.length} Pinned Messages
+                  {currentConv.pinnedMessages.length} Tin nhắn đã ghim
                 </p>
                 <p className="text-[14px] font-bold text-slate-700 dark:text-slate-200 truncate">
-                  {currentConv?.pinnedMessages?.[currentConv.pinnedMessages.length - 1]?.content || "Media Attachment"}
+                  {currentConv?.pinnedMessages?.[currentConv.pinnedMessages.length - 1]?.content || "Tệp đính kèm"}
                 </p>
               </div>
             </div>
@@ -332,10 +341,10 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
                 >
                   <div className="flex-1 min-w-0 pr-4">
                     <p className="text-[9px] font-black uppercase text-indigo-500/60 mb-1 tracking-widest">
-                      {currentConv?.members?.find(m => String(m.userId || m.id) === String(pin.senderId))?.fullName || pin.senderName || "Member"}
+                      {currentConv?.members?.find(m => String(m.userId || m.id) === String(pin.senderId))?.fullName || pin.senderName || "Thành viên"}
                     </p>
                     <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate">
-                      {pin.content || "Media Attachment"}
+                      {pin.content || "Tệp đính kèm"}
                     </p>
                   </div>
                   <button

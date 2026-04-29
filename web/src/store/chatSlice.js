@@ -296,7 +296,18 @@ const chatSlice = createSlice({
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
         conv.wallpaperUrl = wallpaperUrl || null;
+      }
+    },
 
+    updateConversation: (state, action) => {
+      const { conversationId, ...updates } = action.payload || {};
+      if (!conversationId) return;
+      const index = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (index !== -1) {
+        state.conversations[index] = {
+          ...state.conversations[index],
+          ...updates
+        };
       }
     },
   },
@@ -336,6 +347,7 @@ export const {
   optimisticVote,
   resetUnreadCount,
   setMessageRead,
+  updateConversation,
   updateConversationWallpaper
 } = chatSlice.actions;
 export default chatSlice.reducer;
