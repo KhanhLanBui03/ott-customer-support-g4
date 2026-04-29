@@ -194,6 +194,101 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Check for blocks or restrictions
+  const renderInputArea = () => {
+    const currentConv = conversations.find(c => c.conversationId === conversationId);
+    if (!currentConv) return null;
+
+    // 1. Single chat block check
+    if (currentConv.type === 'SINGLE' && !currentConv.isAI) {
+      const otherMember = currentConv.members?.find(m => {
+        const mId = String(m.userId || m.id || '').toLowerCase();
+        const uId = String(user?.userId || user?.id || '').toLowerCase();
+        return mId !== '' && mId !== uId;
+      });
+
+      const isBlocked = Array.isArray(friends) && friends.some(f => {
+        const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+        const mId = String(otherMember?.userId || otherMember?.id || '').toLowerCase();
+        return fId !== '' && fId === mId && f.status === 'BLOCKED';
+      });
+
+      if (isBlocked) {
+        return (
+          <div className="flex items-center justify-center space-x-3 p-4 bg-red-50/50 dark:bg-red-500/5 rounded-[32px] border border-red-500/10 animate-pulse">
+            <ShieldAlert className="text-red-500" size={20} />
+            <span className="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
+              Bạn không thể gửi tin nhắn cho người này
+            </span>
+          </div>
+        );
+      }
+    }
+
+    // 2. Group chat restriction check
+    if (currentConv.type === 'GROUP' && currentConv.onlyAdminsCanChat) {
+      const myId = String(user?.userId || user?.id || '').toLowerCase();
+      const myMemberInfo = currentConv.members?.find(m => String(m.userId || m.id || '').toLowerCase() === myId);
+      const isAdmin = myMemberInfo?.role === 'OWNER' || myMemberInfo?.role === 'ADMIN';
+
+      if (!isAdmin) {
+        return (
+          <div className="flex items-center justify-center space-x-3 p-4 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-[32px] border border-indigo-500/10">
+            <ShieldAlert className="text-indigo-500" size={20} />
+            <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
+              Chỉ Quản trị viên mới có quyền gửi tin nhắn
+            </span>
+          </div>
+        );
+      }
+    }
+
+    // 3. Normal input area
+    return (
+      <form onSubmit={handleSend} className="flex items-center space-x-1.5 sm:space-x-4 bg-background p-2 sm:p-2.5 pr-2 sm:pr-4 rounded-[40px] shadow-2xl shadow-indigo-500/5 dark:shadow-black/40 border border-border relative z-10 group focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
+        <button
+          type="button"
+          onClick={onOpenVoteModal}
+          className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative"
+        >
+          <BarChart2 size={24} />
+          <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
+            Bình chọn
+          </span>
+        </button>
+
+        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative">
+          <Paperclip size={20} className={isUploading ? 'animate-spin' : ''} />
+        </button>
+        <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
+        <div className="w-[1px] h-8 bg-border hidden sm:block" />
+        <textarea
+          ref={textInputRef}
+          className="flex-1 bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-1 sm:px-2 font-bold tracking-tight min-w-0 resize-none py-2 max-h-32 no-scrollbar overflow-y-auto"
+          placeholder={isUploading ? "Đang đồng bộ tập tin..." : "Soạn tin nhắn..."}
+          value={text}
+          onChange={(e) => {
+            handleInputChange(e);
+            e.target.style.height = 'auto';
+            e.target.style.height = `${e.target.scrollHeight}px`;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend(e);
+            }
+          }}
+          rows={1}
+          disabled={isUploading}
+        />
+        <div className="flex items-center space-x-1 sm:space-x-2">
+          <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`w-10 h-10 flex items-center justify-center transition-all rounded-full active:scale-90 focus:outline-none ${showEmojis ? 'text-white bg-indigo-500 shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}><Smile size={20} /></button>
+          <button type="submit" disabled={(!text.trim() && attachments.length === 0) || isUploading} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all flex-shrink-0 focus:outline-none ${(text.trim() || attachments.length > 0) && !isUploading ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-xl shadow-indigo-500/40 scale-100 hover:scale-110 active:scale-90' : 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-700 scale-95 cursor-not-allowed opacity-50'}`}><Send size={20} fill="currentColor" /></button>
+        </div>
+      </form>
+    );
+  };
+
   return (
     <div className="relative animate-msg z-50">
       {/* Attachments Preview */}
@@ -330,7 +425,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
               key={i}
               type="button"
               onClick={() => handleSend(null, suggestion, 'TEXT')}
-              className="flex-shrink-0 px-4 py-1.5 bg-white dark:bg-slate-800 border border-border hover:border-indigo-500/40 hover:bg-indigo-500/5 text-[12px] font-black text-foreground/70 hover:text-indigo-500 rounded-full transition-all shadow-sm whitespace-nowrap active:scale-95"
+              className="flex-shrink-0 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-[13px] font-bold text-slate-800 dark:text-slate-200 rounded-2xl transition-all shadow-md whitespace-nowrap active:scale-95"
             >
               {suggestion}
             </button>
@@ -345,77 +440,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
         </div>
       )}
 
-      {/* Blocked Notification */}
-      {(() => {
-        const currentConv = conversations.find(c => c.conversationId === conversationId);
-        if (currentConv?.type === 'SINGLE' && !currentConv?.isAI) {
-          const otherMember = currentConv.members?.find(m => {
-            const mId = String(m.userId || m.id || '').toLowerCase();
-            const uId = String(user?.userId || user?.id || '').toLowerCase();
-            return mId !== '' && mId !== uId;
-          });
-
-          const isBlocked = Array.isArray(friends) && friends.some(f => {
-            const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
-            const mId = String(otherMember?.userId || otherMember?.id || '').toLowerCase();
-            return fId !== '' && fId === mId && f.status === 'BLOCKED';
-          });
-
-          if (isBlocked) {
-            return (
-              <div className="flex items-center justify-center space-x-3 p-4 bg-red-50/50 dark:bg-red-500/5 rounded-[32px] border border-red-500/10 animate-pulse">
-                <ShieldAlert className="text-red-500" size={20} />
-                <span className="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
-                  Bạn không thể gửi tin nhắn cho người này
-                </span>
-              </div>
-            );
-          }
-        }
-        return (
-          <form onSubmit={handleSend} className="flex items-center space-x-1.5 sm:space-x-4 bg-background p-2 sm:p-2.5 pr-2 sm:pr-4 rounded-[40px] shadow-2xl shadow-indigo-500/5 dark:shadow-black/40 border border-border relative z-10 group focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
-            <button
-              type="button"
-              onClick={onOpenVoteModal}
-              className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative"
-            >
-              <BarChart2 size={24} />
-              <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
-                Bình chọn
-              </span>
-            </button>
-
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative">
-              <Paperclip size={20} className={isUploading ? 'animate-spin' : ''} />
-            </button>
-            <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
-            <div className="w-[1px] h-8 bg-border hidden sm:block" />
-            <textarea
-              ref={textInputRef}
-              className="flex-1 bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-1 sm:px-2 font-bold tracking-tight min-w-0 resize-none py-2 max-h-32 no-scrollbar overflow-y-auto"
-              placeholder={isUploading ? "Đang đồng bộ tập tin..." : "Soạn tin nhắn..."}
-              value={text}
-              onChange={(e) => {
-                handleInputChange(e);
-                e.target.style.height = 'auto';
-                e.target.style.height = `${e.target.scrollHeight}px`;
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend(e);
-                }
-              }}
-              rows={1}
-              disabled={isUploading}
-            />
-            <div className="flex items-center space-x-1 sm:space-x-2">
-              <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`w-10 h-10 flex items-center justify-center transition-all rounded-full active:scale-90 focus:outline-none ${showEmojis ? 'text-white bg-indigo-500 shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}><Smile size={20} /></button>
-              <button type="submit" disabled={(!text.trim() && attachments.length === 0) || isUploading} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all flex-shrink-0 focus:outline-none ${(text.trim() || attachments.length > 0) && !isUploading ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-xl shadow-indigo-500/40 scale-100 hover:scale-110 active:scale-90' : 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-700 scale-95 cursor-not-allowed opacity-50'}`}><Send size={20} fill="currentColor" /></button>
-            </div>
-          </form>
-        );
-      })()}
+      {/* Blocked Notification or Message Input */}
+      {renderInputArea()}
     </div>
   );
 };
