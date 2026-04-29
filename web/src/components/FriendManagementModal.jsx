@@ -13,6 +13,8 @@ import { useTheme } from '../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
+const cn = (...classes) => classes.filter(Boolean).join(" ");
+
 const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
   const dispatch = useDispatch();
   const { friends, conversations } = useSelector(state => state.chat);
