@@ -94,9 +94,7 @@ public class MessageService {
                     command.getContent(),
                     type);
 
-            if (command.getMediaUrls() != null && !command.getMediaUrls().isEmpty()) {
-                message.setMediaUrls(command.getMediaUrls());
-            }
+
 
             if (command.getReplyToMessageId() != null) {
                 log.debug("Adding reply info for message: {}", command.getReplyToMessageId());

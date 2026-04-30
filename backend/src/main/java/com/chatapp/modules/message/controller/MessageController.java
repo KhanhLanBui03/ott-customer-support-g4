@@ -11,12 +11,15 @@ import com.chatapp.modules.message.dto.CreateVoteRequest;
 import com.chatapp.modules.message.dto.SubmitVoteRequest;
 import com.chatapp.modules.message.dto.response.MessageResponse;
 import com.chatapp.modules.message.service.MessageService;
+
+import com.chatapp.modules.message.service.WhisperService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -28,6 +31,7 @@ public class MessageController {
 
     private final MessageService messageService;
     private final UserRepository userRepository;
+    private final WhisperService openAIWhisperService;
 
     @GetMapping("/{conversationId}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMessages(
@@ -226,6 +230,40 @@ public class MessageController {
                         .conversationId(message.getForwardedFrom().getConversationId())
                         .senderName(message.getForwardedFrom().getSenderName())
                         .build())
+                .transcript(message.getTranscript())
                 .build();
+    }
+
+
+    @PostMapping("/speech-to-text")
+    public ResponseEntity<ApiResponse<Map<String, String>>> speechToText(@RequestParam("file") MultipartFile file) {
+        String transcript = openAIWhisperService.transcribe(file);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("transcript", transcript), "Speech-to-text success"));
+    }
+
+    @PostMapping("/speech-to-text-url")
+    public ResponseEntity<ApiResponse<Map<String, String>>> speechToTextFromUrl(@RequestParam("url") String url) {
+        try {
+            // 1. Download file from URL to temp file
+            java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("audio", ".webm");
+            try (java.io.InputStream in = new java.net.URL(url).openStream()) {
+                java.nio.file.Files.copy(in, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            // 2. Convert temp file to MultipartFile (Spring doesn't support direct, so use MockMultipartFile)
+            MultipartFile multipartFile =
+                new MockMultipartFile(
+                    tempFile.getFileName().toString(),
+                    tempFile.getFileName().toString(),
+                    "audio/webm",
+                    java.nio.file.Files.readAllBytes(tempFile)
+                );
+            // 3. Transcribe
+            String transcript = openAIWhisperService.transcribe(multipartFile);
+            // 4. Delete temp file
+            java.nio.file.Files.deleteIfExists(tempFile);
+            return ResponseEntity.ok(ApiResponse.success(Map.of("transcript", transcript), "Speech-to-text success"));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Speech-to-text failed: " + e.getMessage(), 500));
+        }
     }
 }
