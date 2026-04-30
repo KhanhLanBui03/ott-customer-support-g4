@@ -1,16 +1,20 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useChat } from '../../hooks/useChat';
-import { setReplyingTo, setActiveConversation } from '../../store/chatSlice';
+import { setReplyingTo, setActiveConversation, resetUnreadCount } from '../../store/chatSlice';
 import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
 import ForwardModal from '../ForwardModal';
 import { chatApi } from '../../api/chatApi';
-import { Phone, Video, PanelRight, MoreVertical, ShieldCheck, Pin, X, ChevronDown, ChevronUp, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle } from 'lucide-react';
+import { Phone, Video, PanelRight, MoreVertical, MoreHorizontal, ShieldCheck, Pin, X, ChevronDown, ChevronUp, ChevronRight, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle, MessageCircle } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
 import GroupAvatar from '../GroupAvatar';
+import { useTheme } from '../../hooks/useTheme';
+
+const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBack, onRefreshMessages }) => {
+  const { isDark } = useTheme();
   const conversationId = conversation?.conversationId;
   const { user } = useSelector(state => state.auth);
   const { replyingTo } = useSelector(state => state.chat);
@@ -18,16 +22,21 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
   const { messages, fetchMessages, fetchConversations, messagesLoading, conversations, friends, fetchFriends } = useChat();
   const [showPinsDropdown, setShowPinsDropdown] = useState(false);
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
+  const [showStrangerMenu, setShowStrangerMenu] = useState(false);
   const tagMenuRef = useRef(null);
+  const strangerMenuRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (tagMenuRef.current && !tagMenuRef.current.contains(event.target)) {
         setIsTagMenuOpen(false);
       }
+      if (strangerMenuRef.current && !strangerMenuRef.current.contains(event.target)) {
+        setShowStrangerMenu(false);
+      }
     };
 
-    if (isTagMenuOpen) {
+    if (isTagMenuOpen || showStrangerMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     } else {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -36,7 +45,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isTagMenuOpen]);
+  }, [isTagMenuOpen, showStrangerMenu]);
 
   const TAGS = [
     { key: 'customer', label: 'Khách hàng', color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500/20', bgColor: 'bg-red-500/5' },
@@ -99,8 +108,15 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
   useEffect(() => {
     if (conversationId) {
       dispatch(setActiveConversation(conversationId));
+      dispatch(resetUnreadCount(conversationId));
+      
+      // Mark as read in backend
+      friendApi.markAsRead?.(conversationId).catch(() => {});
+      // Also try chatApi if it's the one responsible
+      chatApi.markConversationAsRead?.(conversationId).catch(() => {});
+
       fetchMessages(conversationId);
-      setShowPinsDropdown(false); // Reset dropdown when switching convs
+      setShowPinsDropdown(false); 
 
       dispatch(setReplyingTo(null));
     }
@@ -300,78 +316,214 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
 
       {/* Pinned Messages Bar */}
       {currentConv?.pinnedMessages && currentConv.pinnedMessages.length > 0 && (
-        <div className="relative z-20">
-          <div
-            onClick={() => setShowPinsDropdown(!showPinsDropdown)}
-            className="bg-indigo-500/5 dark:bg-indigo-500/10 backdrop-blur-md border-b border-indigo-500/10 px-8 py-3.5 flex items-center justify-between cursor-pointer hover:bg-indigo-500/10 transition-colors group/pin-bar"
+        <div className={`relative z-20 ${isDark ? 'bg-[#1e2330]' : 'bg-[#f0f7ff]'} border-b ${isDark ? 'border-white/5' : 'border-[#d7e9fb]'} transition-all duration-500 ease-in-out overflow-hidden shadow-sm`}>
+          <div 
+            className="transition-all duration-500 ease-in-out relative"
+            style={{ 
+              maxHeight: showPinsDropdown ? '500px' : '48px',
+              minHeight: '48px'
+            }}
           >
-            <div className="flex items-center space-x-4 overflow-hidden flex-1 relative">
-              <div className="p-2.5 bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 group-hover/pin-bar:scale-110 transition-transform">
-                <Pin size={14} fill="currentColor" />
+            {/* Collapsed State - Always in DOM but fades out */}
+            <div 
+              className={cn(
+                "flex items-center justify-between px-4 sm:px-6 h-[48px] cursor-pointer transition-all duration-500 absolute inset-x-0 top-0 z-10",
+                isDark ? "hover:bg-white/5" : "hover:bg-[#e1efff]",
+                showPinsDropdown ? "opacity-0 -translate-y-4 pointer-events-none" : "opacity-100 translate-y-0"
+              )}
+              onClick={() => setShowPinsDropdown(true)}
+            >
+              <div className="flex items-center space-x-3 overflow-hidden">
+                <div className={isDark ? "text-blue-400" : "text-[#0068ff]"}>
+                  <MessageCircle size={18} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className={`text-[10px] font-bold uppercase leading-none mb-0.5 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tin nhắn</span>
+                  <p className={`text-[13px] font-medium truncate leading-tight ${isDark ? 'text-white/90' : 'text-slate-900'}`}>
+                    {(() => {
+                      const lastPin = currentConv.pinnedMessages[currentConv.pinnedMessages.length - 1];
+                      const sender = lastPin.senderName || "Thành viên";
+                      return (
+                        <>
+                          <span className="font-bold">{sender}:</span> {lastPin.content || "[Tệp đính kèm]"}
+                        </>
+                      );
+                    })()}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 truncate">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 dark:text-indigo-400 leading-tight mb-0.5">
-                  {currentConv.pinnedMessages.length} Tin nhắn đã ghim
-                </p>
-                <p className="text-[14px] font-bold text-slate-700 dark:text-slate-200 truncate">
-                  {currentConv?.pinnedMessages?.[currentConv.pinnedMessages.length - 1]?.content || "Tệp đính kèm"}
-                </p>
+              
+              <div className="flex items-center space-x-2 ml-4">
+                {currentConv.pinnedMessages.length > 1 && (
+                  <div className={`flex items-center space-x-1 px-2 py-1 rounded-md border transition-colors ${isDark ? 'bg-white/10 border-white/10 hover:bg-white/20' : 'bg-slate-200/50 border-slate-300/30 hover:bg-slate-200'}`}>
+                    <span className={`text-[11px] font-bold ${isDark ? 'text-white/80' : 'text-slate-600'}`}>+{currentConv.pinnedMessages.length - 1} ghim</span>
+                    <ChevronDown size={12} className={isDark ? 'text-white/40' : 'text-slate-400'} />
+                  </div>
+                )}
+                <button className={`p-1.5 transition-colors ${isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-[#0068ff]'}`}>
+                  <MoreHorizontal size={18} />
+                </button>
               </div>
             </div>
-            <div className="flex items-center space-x-3 ml-4">
-              <button
-                type="button"
-                onClick={async (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const lastPinId = currentConv?.pinnedMessages?.[currentConv.pinnedMessages.length - 1]?.messageId;
-                  if (lastPinId) {
-                    await chatApi.unpinMessage(conversationId, lastPinId);
-                    fetchConversations();
-                  }
-                }}
-                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-              >
-                <X size={18} />
-              </button>
+
+            {/* Expanded State - Slides and fades in */}
+            <div className={cn(
+              "flex flex-col transition-all duration-500 ease-in-out",
+              showPinsDropdown ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+            )}>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-4 sm:px-6 py-2 border-b shrink-0 ${isDark ? 'border-white/5 bg-white/5' : 'border-[#d7e9fb] bg-[#e1efff]'}`}>
+                <span className={`text-[11px] font-bold uppercase tracking-wide ${isDark ? 'text-white/40' : 'text-slate-600'}`}>
+                  Danh sách ghim ({currentConv.pinnedMessages.length})
+                </span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPinsDropdown(false);
+                  }}
+                  className={`flex items-center space-x-1 text-[11px] font-bold transition-colors uppercase ${isDark ? 'text-white/40 hover:text-white' : 'text-[#0068ff] hover:text-blue-700'}`}
+                >
+                  <span>Thu gọn</span>
+                  <ChevronUp size={14} />
+                </button>
+              </div>
+              
+              {/* List */}
+              <div className={`max-h-64 overflow-y-auto no-scrollbar ${isDark ? 'bg-[#0b0e14]' : 'bg-white'}`}>
+                {currentConv.pinnedMessages.slice().reverse().map((pin) => (
+                  <div 
+                    key={pin.messageId}
+                    onClick={() => scrollToMessage(pin.messageId)}
+                    className={`flex items-center justify-between px-4 sm:px-6 py-3 cursor-pointer border-b last:border-0 group transition-colors ${isDark ? 'hover:bg-white/5 border-white/5' : 'hover:bg-[#f0f7ff] border-slate-100'}`}
+                  >
+                    <div className="flex items-center space-x-3 overflow-hidden">
+                      <div className={isDark ? 'text-blue-400' : 'text-[#0068ff]'}>
+                        <MessageCircle size={18} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className={`text-[10px] font-bold uppercase leading-none mb-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Tin nhắn</span>
+                        <p className={`text-[13px] font-medium truncate leading-tight ${isDark ? 'text-white/90' : 'text-slate-800'}`}>
+                          <span className="font-bold">{pin.senderName}:</span> {pin.content || "[Tệp đính kèm]"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await chatApi.unpinMessage(conversationId, pin.messageId);
+                          fetchConversations();
+                        }}
+                        className={`p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:text-red-500 ${isDark ? 'text-white/20' : 'text-slate-300'}`}
+                        title="Gỡ ghim"
+                      >
+                        <X size={16} />
+                      </button>
+                      <button className={`p-1.5 transition-all ${isDark ? 'text-white/20 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}>
+                        <MoreHorizontal size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Footer */}
+              <div className={`flex justify-center p-2 border-t shrink-0 ${isDark ? 'border-white/5 bg-white/5' : 'border-[#d7e9fb] bg-[#e1efff]'}`}>
+                <button className={`text-[11px] font-bold transition-all flex items-center space-x-1 uppercase ${isDark ? 'text-white/40 hover:text-white' : 'text-[#0068ff] hover:text-blue-700'}`}>
+                  <span>Xem tất cả ở bảng tin nhóm</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
             </div>
           </div>
-
-          {/* Dropdown Content */}
-          {showPinsDropdown && (
-            <div className="absolute top-full left-0 right-0 glass-premium shadow-2xl max-h-64 overflow-y-auto animate-msg border-t-0">
-              {currentConv?.pinnedMessages?.slice(0).reverse().map((pin, i) => (
-                <div
-                  key={pin.messageId}
-                  onClick={() => scrollToMessage(pin.messageId)}
-                  className="px-8 py-4 border-b border-indigo-500/5 flex items-center justify-between hover:bg-indigo-500/5 cursor-pointer transition-colors group"
-                >
-                  <div className="flex-1 min-w-0 pr-4">
-                    <p className="text-[9px] font-black uppercase text-indigo-500/60 mb-1 tracking-widest">
-                      {currentConv?.members?.find(m => String(m.userId || m.id) === String(pin.senderId))?.fullName || pin.senderName || "Thành viên"}
-                    </p>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300 truncate">
-                      {pin.content || "Tệp đính kèm"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      await chatApi.unpinMessage(conversationId, pin.messageId);
-                      fetchConversations();
-                    }}
-                    className="p-1.5 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
+
+      {/* Add Friend Bar for Strangers */}
+      {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (() => {
+        const friendStatus = (() => {
+          const friend = Array.isArray(friends) && friends.find(f => {
+            const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+            const mId = String(currentMember?.userId || currentMember?.id || '').toLowerCase();
+            return fId !== '' && fId === mId;
+          });
+          return friend?.status;
+        })();
+
+        if (friendStatus === 'ACCEPTED' || friendStatus === 'BLOCKED') return null;
+
+        return (
+          <div className={`relative z-10 ${isDark ? 'bg-[#1a1e26] border-white/5' : 'bg-slate-50 border-slate-200'} border-b px-4 sm:px-6 py-2.5 flex items-center justify-between transition-colors`}>
+            <div className="flex items-center space-x-3 text-slate-500 dark:text-slate-400">
+              <UserPlus size={18} className="flex-shrink-0" />
+              <span className="text-[13px] font-medium">
+                {friendStatus === 'PENDING' ? 'Đã gửi lời mời kết bạn' : 'Gửi yêu cầu kết bạn tới người này'}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              {friendStatus !== 'PENDING' && (
+                <button 
+                  onClick={async () => {
+                    try {
+                      await friendApi.sendFriendRequest(currentMember.userId || currentMember.id);
+                      fetchFriends();
+                    } catch (err) {
+                      console.error("Failed to send friend request", err);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-[#0068ff] hover:bg-blue-700 text-white text-[12px] font-bold rounded-lg transition-all shadow-sm"
+                >
+                  Gửi kết bạn
+                </button>
+              )}
+              <div className="relative" ref={strangerMenuRef}>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStrangerMenu(!showStrangerMenu);
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+
+                {showStrangerMenu && (
+                  <div className={`absolute top-full right-0 mt-2 w-48 border shadow-2xl rounded-xl py-2 z-[100] animate-in fade-in zoom-in-95 duration-200 ${isDark ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200'}`}>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await friendApi.blockUser(currentMember.userId || currentMember.id);
+                          setShowStrangerMenu(false);
+                          fetchFriends();
+                          fetchConversations();
+                        } catch (err) {
+                          console.error("Failed to block user", err);
+                        }
+                      }}
+                      className="w-full flex items-center px-4 py-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-left group"
+                    >
+                      <Ban size={16} className="text-red-500 mr-3" />
+                      <span className="text-[13px] font-bold text-red-500">Chặn người này</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alert("Tính năng báo xấu đang được phát triển!");
+                        setShowStrangerMenu(false);
+                      }}
+                      className={`w-full flex items-center px-4 py-2 hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors text-left group ${isDark ? 'text-white' : 'text-slate-700'}`}
+                    >
+                      <AlertCircle size={16} className="text-slate-400 mr-3" />
+                      <span className="text-[13px] font-bold">Báo xấu</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Messages Area */}
       <div className="flex-1 flex flex-col min-h-0 relative">
@@ -382,6 +534,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
           loading={messagesLoading}
           onRefresh={localOnRefresh}
           onReply={(msg) => dispatch(setReplyingTo(msg))}
+          onScrollToMessage={scrollToMessage}
           onForward={(msg) => {
             setForwardingMessage(msg);
             setIsForwardModalOpen(true);
@@ -395,6 +548,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
           conversationId={conversationId} 
           replyingTo={replyingTo}
           onCancelReply={() => dispatch(setReplyingTo(null))}
+          onScrollToMessage={scrollToMessage}
         />
       </div>
 

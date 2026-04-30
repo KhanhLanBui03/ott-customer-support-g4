@@ -32,6 +32,7 @@ const Chat = () => {
     conversations,
     activeConversationId,
     fetchConversations,
+    fetchFriends,
     fetchMessages,
     selectConversation,
     loading
@@ -41,6 +42,13 @@ const Chat = () => {
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isWallpaperLoading, setIsWallpaperLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (activeConversationId) {
+      fetchFriends();
+    }
+  }, [activeConversationId]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -78,6 +86,7 @@ const Chat = () => {
 
   useEffect(() => {
     fetchConversations();
+    fetchFriends();
     // Fetch initial notifications
     const fetchNotifications = () => {
       friendApi.getPendingRequests().then(res => {
@@ -619,7 +628,7 @@ const Chat = () => {
                   onStartCall={handleStartCall}
                   onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                   isInfoOpen={isInfoOpen}
-                  onBack={isMobile ? () => selectConversation(null) : undefined}
+                  onBack={() => selectConversation(null)}
                   onRefreshMessages={() => fetchMessages(activeConversationId)}
                 />
               ) : !isMobile ? (

@@ -9,7 +9,7 @@ export const useChat = () => {
   const [messagesLoading, setMessagesLoading] = useState(false);
 
   const fetchConversationsAction = useCallback(async () => {
-    dispatch(fetchConversations());
+    return dispatch(fetchConversations());
   }, [dispatch]);
   
   const fetchFriendsAction = useCallback(async () => {
@@ -32,15 +32,20 @@ export const useChat = () => {
   }, [dispatch]);
 
   const selectConversation = useCallback((id) => {
-    if (id === activeConversationId) return;
-    dispatch(setActiveConversation(id));
-    if (id) {
-       // Optimistic Reset
-       dispatch(resetUnreadCount(id));
-       // Mark read in backend
-       chatApi.markConversationAsRead(id).catch(err => console.error("Failed to mark as read", err));
-       fetchMessages(id);
+    if (!id) {
+      dispatch(setActiveConversation(null));
+      return;
     }
+    
+    // Always reset unread count when selected, even if already active
+    dispatch(resetUnreadCount(id));
+    // Mark read in backend
+    chatApi.markConversationAsRead(id).catch(err => console.error("Failed to mark as read", err));
+
+    if (id === activeConversationId) return;
+    
+    dispatch(setActiveConversation(id));
+    fetchMessages(id);
   }, [dispatch, fetchMessages, activeConversationId]);
 
   const create = useCallback(async (type, memberIds, name = null) => {
@@ -51,12 +56,12 @@ export const useChat = () => {
         name,
         isGroup: type === 'GROUP' 
       });
-      await fetchConversations();
+      await fetchConversationsAction();
       return { payload: result.data || result };
     } catch (err) {
       return { error: err };
     }
-  }, [fetchConversations]);
+  }, [fetchConversationsAction]);
 
   const inviteMember = useCallback(async (conversationId, userId) => {
     try {

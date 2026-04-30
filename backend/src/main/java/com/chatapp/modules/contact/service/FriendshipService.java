@@ -185,6 +185,10 @@ public class FriendshipService {
                 .build();
         
         friendshipRepository.save(blocked);
+        
+        // Notify both parties to refresh their friend list
+        publishNotification(blockerId, "FRIEND_BLOCK", mapToResponse(blockedId, "BLOCKED", true, blocked.getCreatedAt()));
+        publishNotification(blockedId, "FRIEND_BLOCK", mapToResponse(blockerId, "BLOCKED", false, blocked.getCreatedAt()));
     }
 
     public void unblockUser(String blockerId, String blockedId) {
@@ -194,6 +198,10 @@ public class FriendshipService {
                 f.setStatus(Friendship.Status.ACCEPTED.name());
                 f.setUpdatedAt(System.currentTimeMillis());
                 friendshipRepository.save(f);
+                
+                // Notify both parties
+                publishNotification(blockerId, "FRIEND_UNBLOCK", mapToResponse(blockedId, "ACCEPTED", true, f.getCreatedAt()));
+                publishNotification(blockedId, "FRIEND_UNBLOCK", mapToResponse(blockerId, "ACCEPTED", false, f.getCreatedAt()));
             }
         });
     }

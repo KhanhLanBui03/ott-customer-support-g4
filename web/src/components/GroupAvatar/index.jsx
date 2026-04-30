@@ -56,13 +56,13 @@ const GroupAvatar = ({ conversation, size = "h-12 w-12", isLarge = false, isActi
   const remainingCount = members.length - 3;
   const count = displayMembers.length;
 
-  const renderMember = (member, idx, customSize = "w-full h-full", customTextSize = "text-[8px]") => {
+  const renderMember = (member, idx, customSize = "w-full h-full", customTextSize = "text-[10px]") => {
     const isCountSlot = idx === 3 && members.length > 4;
     
     if (isCountSlot) {
       return (
-        <div key="count" className={`${customSize} bg-slate-700 flex items-center justify-center border border-white/10`}>
-          <span className="text-[9px] font-black text-white">
+        <div key="count" className={`${customSize} bg-slate-800/90 dark:bg-slate-700/90 flex items-center justify-center`}>
+          <span className="text-[10px] font-black text-white/90 font-mono tracking-tighter">
             {members.length > 99 ? '99+' : `+${remainingCount}`}
           </span>
         </div>
@@ -70,11 +70,11 @@ const GroupAvatar = ({ conversation, size = "h-12 w-12", isLarge = false, isActi
     }
 
     return (
-      <div key={member.userId || idx} className={`${customSize} bg-surface-100 flex items-center justify-center overflow-hidden border border-white/20`}>
+      <div key={member.userId || idx} className={`${customSize} bg-indigo-50/80 dark:bg-slate-800/80 flex items-center justify-center overflow-hidden relative group/avatar`}>
         {member.avatarUrl ? (
-          <img src={member.avatarUrl} alt="" className="w-full h-full object-cover" />
+          <img src={member.avatarUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover/avatar:scale-110" />
         ) : (
-          <span className={`${customTextSize} font-black text-foreground/70 uppercase`}>
+          <span className={`${customTextSize} font-black text-indigo-500/70 dark:text-indigo-400/70 uppercase font-serif italic`}>
             {member.fullName?.charAt(0) || '?'}
           </span>
         )}
@@ -83,30 +83,32 @@ const GroupAvatar = ({ conversation, size = "h-12 w-12", isLarge = false, isActi
   };
 
   return (
-    <div className={`${containerClasses} bg-surface-300`}>
-      {count === 2 ? (
-        <div className="flex h-full w-full">
-          {displayMembers.map((m, i) => renderMember(m, i, "w-1/2 h-full", "text-[12px]"))}
-        </div>
-      ) : count === 3 ? (
-        <div className="flex h-full w-full">
-          {renderMember(displayMembers[0], 0, "w-1/2 h-full", "text-[12px]")}
-          <div className="w-1/2 h-full flex flex-col">
-            {renderMember(displayMembers[1], 1, "w-full h-1/2", "text-[8px]")}
-            {renderMember(displayMembers[2], 2, "w-full h-1/2", "text-[8px]")}
+    <div className={`${containerClasses} bg-white dark:bg-slate-800 p-[1.5px]`}>
+      <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-100 dark:bg-slate-900">
+        {count === 2 ? (
+          <div className="flex h-full w-full gap-[1.5px]">
+            {displayMembers.map((m, i) => renderMember(m, i, "w-1/2 h-full", "text-[14px]"))}
           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 grid-rows-2 h-full w-full gap-0">
-          {displayMembers.map((m, i) => renderMember(m, i, "w-full h-full", "text-[8px]"))}
-          {/* Fill empty slots if count is 1 (unlikely for group) or 0 */}
-          {count < 4 && Array.from({ length: 4 - count }).map((_, i) => (
-            <div key={`empty-${i}`} className="w-full h-full bg-surface-100/30 flex items-center justify-center">
-              {count === 0 && i === 0 && <Users size={12} className="text-foreground/20" />}
+        ) : count === 3 ? (
+          <div className="flex h-full w-full gap-[1.5px]">
+            {renderMember(displayMembers[0], 0, "w-1/2 h-full", "text-[14px]")}
+            <div className="w-1/2 h-full flex flex-col gap-[1.5px]">
+              {renderMember(displayMembers[1], 1, "w-full h-1/2", "text-[10px]")}
+              {renderMember(displayMembers[2], 2, "w-full h-1/2", "text-[10px]")}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 grid-rows-2 h-full w-full gap-[1.5px]">
+            {displayMembers.map((m, i) => renderMember(m, i, "w-full h-full", "text-[10px]"))}
+            {/* Fill empty slots if count is 1 (unlikely for group) or 0 */}
+            {count < 4 && Array.from({ length: 4 - count }).map((_, i) => (
+              <div key={`empty-${i}`} className="w-full h-full bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center">
+                {count === 0 && i === 0 && <Users size={14} className="text-slate-400/50" />}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
