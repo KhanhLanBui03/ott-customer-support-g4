@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon } from 'lucide-react';
+import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon, Mic, Square } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
 import { useChat } from '../../hooks/useChat';
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import { addOptimisticMessage } from '../../store/chatSlice';
 
 const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteModal }) => {
@@ -14,10 +15,12 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const [showEmojis, setShowEmojis] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [isVoiceUploading, setIsVoiceUploading] = useState(false);
   const { sendMessage, sendTyping } = useWebSocket();
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const { conversations, friends } = useChat();
+  const { isRecording, durationFormatted, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
   const fileInputRef = useRef();
   const textInputRef = useRef();
   const typingTimeoutRef = useRef(null);
@@ -109,6 +112,68 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     }
     setShowEmojis(false);
     setSuggestions([]);
+  };
+
+  const handleVoiceStart = async () => {
+    try {
+      await startRecording();
+      setShowEmojis(false);
+    } catch (err) {
+      console.error('Failed to start voice recording:', err);
+      alert(err?.message || 'Không thể bắt đầu ghi âm');
+    }
+  };
+
+  const handleVoiceStop = async () => {
+    try {
+      setIsVoiceUploading(true);
+      const audioFile = await stopRecording();
+      const response = await chatApi.uploadVoiceMessage(audioFile);
+      const voiceUrl = response?.data?.url || response?.url;
+
+      if (voiceUrl) {
+        const optimisticMsg = {
+          content: '',
+          senderId: user?.userId || user?.id,
+          mediaUrls: [voiceUrl],
+          type: 'VOICE',
+          status: 'SENDING',
+          createdAt: Date.now(),
+          replyTo: replyingTo ? { messageId: replyingTo.messageId, content: replyingTo.content, senderName: replyingTo.senderName } : null
+        };
+
+        dispatch(addOptimisticMessage({ conversationId, message: optimisticMsg }));
+        sendMessage(conversationId, '', 'VOICE', [voiceUrl], replyingTo?.messageId);
+
+        if (replyingTo) onCancelReply();
+        setText('');
+        setAttachments([]);
+        setLocalAttachments([]);
+        setSuggestions([]);
+        setShowEmojis(false);
+      }
+    } catch (err) {
+      console.error('Failed to send voice message:', err);
+      cancelRecording();
+      alert('Failed to send voice message: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsVoiceUploading(false);
+    }
+  };
+
+  const handleVoiceToggle = async () => {
+    if (isVoiceUploading) return;
+    if (isRecording) {
+      await handleVoiceStop();
+    } else {
+      await handleVoiceStart();
+    }
+  };
+
+  const handleVoiceCancel = () => {
+    if (isRecording) {
+      cancelRecording();
+    }
   };
 
   const handleInputChange = (e) => {
@@ -282,6 +347,39 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           disabled={isUploading}
         />
         <div className="flex items-center space-x-1 sm:space-x-2">
+          <button
+            type="button"
+            onClick={handleVoiceToggle}
+            disabled={isUploading || isVoiceUploading}
+            className={`w-10 h-10 flex items-center justify-center transition-all rounded-full active:scale-90 focus:outline-none ${isRecording ? 'text-white bg-rose-500 shadow-lg shadow-rose-500/30' : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10'} ${(isUploading || isVoiceUploading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={isRecording ? `Dừng ghi âm ${durationFormatted}` : 'Ghi âm'}
+          >
+            {isVoiceUploading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : isRecording ? (
+              <Square size={18} fill="currentColor" />
+            ) : (
+              <Mic size={20} />
+            )}
+          </button>
+          {isRecording && (
+            <div className="flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-rose-600 dark:text-rose-300">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+              </span>
+              <span className="text-[11px] font-black uppercase tracking-widest whitespace-nowrap">
+                {durationFormatted}
+              </span>
+              <button
+                type="button"
+                onClick={handleVoiceCancel}
+                className="ml-1 rounded-full bg-rose-500/15 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-500/25 transition-colors"
+              >
+                Hủy
+              </button>
+            </div>
+          )}
           <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`w-10 h-10 flex items-center justify-center transition-all rounded-full active:scale-90 focus:outline-none ${showEmojis ? 'text-white bg-indigo-500 shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}><Smile size={20} /></button>
           <button type="submit" disabled={(!text.trim() && attachments.length === 0) || isUploading} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all flex-shrink-0 focus:outline-none ${(text.trim() || attachments.length > 0) && !isUploading ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-xl shadow-indigo-500/40 scale-100 hover:scale-110 active:scale-90' : 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-700 scale-95 cursor-not-allowed opacity-50'}`}><Send size={20} fill="currentColor" /></button>
         </div>
