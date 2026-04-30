@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useChat } from '../../hooks/useChat';
+import { setReplyingTo, setActiveConversation } from '../../store/chatSlice';
 import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
 import ForwardModal from '../ForwardModal';
@@ -12,6 +13,8 @@ import GroupAvatar from '../GroupAvatar';
 const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBack, onRefreshMessages }) => {
   const conversationId = conversation?.conversationId;
   const { user } = useSelector(state => state.auth);
+  const { replyingTo } = useSelector(state => state.chat);
+  const dispatch = useDispatch();
   const { messages, fetchMessages, fetchConversations, messagesLoading, conversations, friends, fetchFriends } = useChat();
   const [showPinsDropdown, setShowPinsDropdown] = useState(false);
   const [isTagMenuOpen, setIsTagMenuOpen] = useState(false);
@@ -44,7 +47,6 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
     { key: 'colleague', label: 'Đồng nghiệp', color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500/20', bgColor: 'bg-blue-500/5' }
   ];
 
-  const [replyingTo, setReplyingTo] = useState(null);
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
 
@@ -96,12 +98,17 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
 
   useEffect(() => {
     if (conversationId) {
+      dispatch(setActiveConversation(conversationId));
       fetchMessages(conversationId);
       setShowPinsDropdown(false); // Reset dropdown when switching convs
 
-      setReplyingTo(null);
+      dispatch(setReplyingTo(null));
     }
-  }, [conversationId, fetchMessages]);
+
+    return () => {
+      dispatch(setActiveConversation(null));
+    };
+  }, [conversationId, fetchMessages, dispatch]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background transition-colors">
@@ -374,7 +381,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
           messages={messages[conversationId] || []}
           loading={messagesLoading}
           onRefresh={localOnRefresh}
-          onReply={setReplyingTo}
+          onReply={(msg) => dispatch(setReplyingTo(msg))}
           onForward={(msg) => {
             setForwardingMessage(msg);
             setIsForwardModalOpen(true);
@@ -387,7 +394,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
         <MessageInput 
           conversationId={conversationId} 
           replyingTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
+          onCancelReply={() => dispatch(setReplyingTo(null))}
         />
       </div>
 

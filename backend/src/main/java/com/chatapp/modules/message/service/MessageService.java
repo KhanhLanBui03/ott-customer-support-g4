@@ -106,7 +106,17 @@ public class MessageService {
                         .messageId(repliedMessage.getMessageId())
                         .content(repliedMessage.getContent())
                         .senderName(repliedMessage.getSenderName())
+                        .senderId(repliedMessage.getSenderId())
+                        .type(repliedMessage.getType())
+                        .mediaUrls(repliedMessage.getMediaUrls())
                         .build());
+                
+                System.out.println("DEBUG: Created ReplyInfo - Type: " + message.getReplyTo().getType() 
+                    + ", MediaCount: " + (message.getReplyTo().getMediaUrls() != null ? message.getReplyTo().getMediaUrls().size() : 0));
+                
+                log.info("Populated reply info: type={}, mediaCount={}", 
+                    message.getReplyTo().getType(), 
+                    message.getReplyTo().getMediaUrls() != null ? message.getReplyTo().getMediaUrls().size() : 0);
             }
 
             if (command.getForwardedFrom() != null) {
@@ -187,6 +197,13 @@ public class MessageService {
         if (!toUpdate.isEmpty()) {
             log.info("Bulk updating {} messages as read by {} in {}", toUpdate.size(), userId, conversationId);
             messageRepository.saveAll(toUpdate);
+        }
+
+        // Also reset the unread count for this user in this conversation
+        try {
+            conversationService.markAsRead(userId, conversationId);
+        } catch (Exception e) {
+            log.warn("Failed to reset unread count for user {} in conversation {}: {}", userId, conversationId, e.getMessage());
         }
 
         // Publish read receipt event (we can still use the single messageId for the

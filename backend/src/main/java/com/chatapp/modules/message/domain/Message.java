@@ -28,36 +28,47 @@ public class Message {
 
     @DynamoDBAttribute(attributeName = "senderId")
     @DynamoDBIndexHashKey(globalSecondaryIndexName = "senderIndex")
+    @com.fasterxml.jackson.annotation.JsonProperty("senderId")
     private String senderId;
 
     @DynamoDBAttribute(attributeName = "senderName")
+    @com.fasterxml.jackson.annotation.JsonProperty("senderName")
     private String senderName;
 
     @DynamoDBAttribute(attributeName = "content")
+    @com.fasterxml.jackson.annotation.JsonProperty("content")
     private String content; // Encrypted if E2E enabled
 
     @DynamoDBAttribute(attributeName = "type")
+    @com.fasterxml.jackson.annotation.JsonProperty("type")
     private String type; // TEXT, IMAGE, FILE, VIDEO, AUDIO, STICKER
 
     @DynamoDBAttribute(attributeName = "mediaUrls")
+    @com.fasterxml.jackson.annotation.JsonProperty("mediaUrls")
     private List<String> mediaUrls;
 
     @DynamoDBAttribute(attributeName = "status")
+    @com.fasterxml.jackson.annotation.JsonProperty("status")
     private String status; // SENDING, SENT, DELIVERED, READ
 
     @DynamoDBAttribute(attributeName = "readBy")
+    @com.fasterxml.jackson.annotation.JsonProperty("readBy")
     private List<ReadReceipt> readBy;
 
     @DynamoDBAttribute(attributeName = "editedAt")
+    @com.fasterxml.jackson.annotation.JsonProperty("editedAt")
     private Long editedAt;
 
     @DynamoDBAttribute(attributeName = "editHistory")
+    @com.fasterxml.jackson.annotation.JsonProperty("editHistory")
     private List<EditRecord> editHistory;
 
     @DynamoDBAttribute(attributeName = "recalledAt")
+    @com.fasterxml.jackson.annotation.JsonProperty("recalledAt")
     private Long recalledAt;
 
     @DynamoDBAttribute(attributeName = "isRecalled")
+    @com.fasterxml.jackson.annotation.JsonProperty("isRecalled")
     private Boolean isRecalled;
 
     @DynamoDBAttribute(attributeName = "updatedAt")
@@ -67,6 +78,7 @@ public class Message {
     private ForwardInfo forwardedFrom;
 
     @DynamoDBAttribute(attributeName = "replyTo")
+    @com.fasterxml.jackson.annotation.JsonProperty("replyTo")
     private ReplyInfo replyTo;
 
     @DynamoDBAttribute(attributeName = "reactions")
@@ -147,9 +159,29 @@ public class Message {
     @AllArgsConstructor
     @DynamoDBDocument
     public static class ReplyInfo {
+        @DynamoDBAttribute(attributeName = "messageId")
+        @com.fasterxml.jackson.annotation.JsonProperty("messageId")
         private String messageId;
+
+        @DynamoDBAttribute(attributeName = "content")
+        @com.fasterxml.jackson.annotation.JsonProperty("content")
         private String content;
+
+        @DynamoDBAttribute(attributeName = "senderName")
+        @com.fasterxml.jackson.annotation.JsonProperty("senderName")
         private String senderName;
+
+        @DynamoDBAttribute(attributeName = "senderId")
+        @com.fasterxml.jackson.annotation.JsonProperty("senderId")
+        private String senderId;
+
+        @DynamoDBAttribute(attributeName = "type")
+        @com.fasterxml.jackson.annotation.JsonProperty("type")
+        private String type;
+
+        @DynamoDBAttribute(attributeName = "mediaUrls")
+        @com.fasterxml.jackson.annotation.JsonProperty("mediaUrls")
+        private List<String> mediaUrls;
     }
 
     public static Message create(String conversationId, String messageId, String senderId,

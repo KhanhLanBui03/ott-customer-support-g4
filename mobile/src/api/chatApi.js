@@ -1,4 +1,5 @@
 import axiosClient from './axiosClient';
+import { Platform } from 'react-native';
 
 /**
  * Messages API endpoints
@@ -96,11 +97,39 @@ export const conversationApi = {
     return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}`, data);
   },
 
+  // Update conversation wallpaper
+  updateConversationWallpaper: (conversationId, wallpaperUrl) => {
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/wallpaper`, { wallpaperUrl });
+  },
+
   // Mute/unmute conversation
   muteConversation: (conversationId, data) => {
     // Expected: { mutedUntil } - null to unmute, timestamp to mute until
     return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/mute`, data);
   },
+
+  // Mark all messages in conversation as read
+  markAsRead: (conversationId) => {
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/read`);
+  },
 };
 
-export default { chatApi, conversationApi };
+export const mediaApi = {
+  uploadFile: (file, folder = 'chat-media') => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: Platform.OS === 'android' ? file.uri : file.uri.replace('file://', ''),
+      type: file.type || 'image/jpeg',
+      name: file.name || 'file.jpg',
+    });
+    formData.append('folder', folder);
+
+    return axiosClient.post('/media/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+};
+
+export default { chatApi, conversationApi, mediaApi };
