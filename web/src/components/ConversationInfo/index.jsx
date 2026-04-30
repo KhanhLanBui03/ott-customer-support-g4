@@ -17,7 +17,7 @@ import AIAssistantPanel from '../AIAssistantPanel';
 
 const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   const dispatch = useDispatch();
-  const { messages, fetchConversations, inviteMember, removeMember } = useChat();
+  const { messages, fetchConversations, inviteMember, removeMember, fetchFriends, friends: allFriends, selectConversation } = useChat();
   const fileInputRef = React.useRef(null);
   const { user } = useAuth();
   const [sections, setSections] = useState({
@@ -30,7 +30,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   });
   
   const [isInviting, setIsInviting] = useState(false);
-  const [friends, setFriends] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [inviteSearch, setInviteSearch] = useState('');
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState('');
@@ -38,6 +38,10 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   const [editName, setEditName] = useState('');
   const [memberMenuId, setMemberMenuId] = useState(null);
   const [isWallpaperLoading, setIsWallpaperLoading] = useState(false);
+
+  React.useEffect(() => {
+    fetchFriends();
+  }, [fetchFriends]);
 
   const conversationId = conversation?.conversationId;
   const currentMessages = useMemo(() => messages[conversationId] || [], [messages, conversationId]);
@@ -58,7 +62,9 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
     try {
       const response = await friendApi.getFriends();
       const inGroupIds = conversation.members?.map(m => m.userId) || [];
-      setFriends((response.data || []).filter(f => !inGroupIds.includes(f.userId)));
+      const data = response?.data || response || [];
+      const friendsList = Array.isArray(data) ? data : [];
+      setSearchResults(friendsList.filter(f => !inGroupIds.includes(f.userId)));
     } catch (err) {
       console.error(err);
     }
@@ -78,7 +84,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
         return;
       }
 
-      setFriends([found]);
+      setSearchResults([found]);
     } catch (err) {
       setGlobalError('Không tìm thấy người dùng với số điện thoại này');
     } finally {
@@ -130,6 +136,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
      if (window.confirm('Rời khỏi nhóm chat này?')) {
         try {
            await chatApi.leaveConversation(conversationId);
+           selectConversation(null); // Clear active chat immediately
            fetchConversations();
            onClose();
         } catch (err) {
@@ -142,6 +149,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
     if (window.confirm('GIẢI TÁN NHÓM? Tất cả tin nhắn và thành viên sẽ bị xóa vĩnh viễn.')) {
       try {
         await chatApi.disbandGroup(conversationId);
+        selectConversation(null); // Clear active chat immediately
         fetchConversations();
         onClose();
       } catch (err) {
@@ -267,7 +275,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   };
 
   return (
-    <div className="w-[360px] h-full bg-sidebar border-l border-border flex flex-col overflow-hidden animate-slide-left shadow-2xl z-40 transition-colors">
+    <div className="w-full lg:w-[360px] h-full bg-sidebar border-l border-border flex flex-col overflow-hidden animate-slide-left shadow-2xl z-40 transition-colors">
       <div className="h-[72px] px-6 border-b border-border flex items-center justify-between flex-shrink-0 glass-premium z-10">
         <h3 className="text-[17px] font-black text-foreground tracking-tight">Thông tin hội thoại</h3>
         <button onClick={onClose} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-all active:scale-90">
@@ -380,7 +388,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                           </button>
                         </div>
                         {globalError && <p className="text-xs text-red-500 font-bold">{globalError}</p>}
-                        {friends.map(f => (
+                        {searchResults.map(f => (
                           <div key={f.userId} className="flex items-center justify-between p-3 hover:bg-surface-200 dark:hover:bg-white/5 rounded-2xl transition-all">
                             <div className="flex items-center space-x-3">
                               <div className="w-9 h-9 rounded-xl bg-surface-200 overflow-hidden">
@@ -650,15 +658,78 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                         </div>
                      </button>
                    )}
-                   <button 
-                    onClick={onClearHistory}
-                    className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
-                   >
+                    <button 
+                      onClick={onClearHistory}
+                      className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
+                    >
                       <div className="w-11 h-11 rounded-2xl bg-red-100/50 dark:bg-red-500/5 flex items-center justify-center group-hover:scale-110 transition-transform">
-                         <Trash2 size={22} />
+                          <Trash2 size={22} />
                       </div>
                       <span className="text-[15px] font-black tracking-tight text-foreground">Xóa lịch sử trò chuyện</span>
-                   </button>
+                    </button>
+
+                    {conversation.type === 'SINGLE' && !conversation.isAI && (() => {
+                      const otherMember = conversation.members?.find(m => {
+                        const mId = String(m.userId || m.id || '');
+                        const uId = String(user?.id || user?.userId || '');
+                        return mId !== uId && mId !== '';
+                      });
+                      const otherMemberId = otherMember?.userId || otherMember?.id;
+                      const friendInfo = Array.isArray(allFriends) && allFriends.find(f => {
+                        const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+                        return fId !== '' && fId === otherMemberId?.toLowerCase();
+                      });
+                      const isBlocked = friendInfo?.status === 'BLOCKED';
+                      const iBlockedThem = isBlocked && friendInfo?.isRequester;
+                      const theyBlockedMe = isBlocked && !friendInfo?.isRequester;
+
+                      if (!otherMemberId) return null;
+                      if (theyBlockedMe) return null; // Can't block/unblock if already blocked by them
+
+                      return (
+                        <button 
+                          onClick={async () => {
+                            if (iBlockedThem) {
+                              try {
+                                await friendApi.unblockUser(otherMemberId);
+                                await fetchFriends();
+                                await fetchConversations();
+                                alert(`Đã bỏ chặn ${otherMember.fullName || 'người này'}.`);
+                              } catch (err) {
+                                console.error("Unblock failed:", err);
+                                alert("Không thể bỏ chặn người dùng này. Vui lòng thử lại.");
+                              }
+                            } else {
+                              if (window.confirm(`Bạn có chắc chắn muốn chặn ${otherMember.fullName || 'người này'}?`)) {
+                                try {
+                                  await friendApi.blockUser(otherMemberId);
+                                  await fetchFriends();
+                                  await fetchConversations();
+                                  onClose();
+                                } catch (err) {
+                                  console.error("Block failed:", err);
+                                  alert("Không thể chặn người dùng này. Vui lòng thử lại.");
+                                }
+                              }
+                            }
+                          }}
+                          className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent ${
+                            isBlocked 
+                              ? 'hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 hover:border-emerald-100 dark:hover:border-emerald-500/20' 
+                              : 'hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 hover:border-red-100 dark:hover:border-red-500/20'
+                          }`}
+                        >
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${
+                            isBlocked ? 'bg-emerald-100/50 dark:bg-emerald-500/5 text-emerald-600' : 'bg-red-100/50 dark:bg-red-500/5 text-red-500'
+                          }`}>
+                              {isBlocked ? <ShieldCheck size={22} /> : <Shield size={22} />}
+                          </div>
+                          <span className="text-[15px] font-black tracking-tight text-foreground">
+                            {iBlockedThem ? 'Bỏ chặn người này' : 'Chặn người này'}
+                          </span>
+                        </button>
+                      );
+                    })()}
                    
                 </div>
               )}

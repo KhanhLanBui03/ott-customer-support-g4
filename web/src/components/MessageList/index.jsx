@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Play, Pause, Volume2 } from 'lucide-react';
+import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Play, Pause, Volume2, Languages } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
@@ -182,7 +182,7 @@ const getDocViewerUrl = (u, e) => {
   return `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
 };
 
-const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward }) => {
+const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage }) => {
   const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
@@ -742,7 +742,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                 const isLastInGroup = index === messages.length - 1 || (nextMsg && nextMsg.senderId !== msg.senderId) || (nextMsg && (nextMsg.createdAt - msg.createdAt > 120000)) || (nextMsg && nextMsg.type === 'SYSTEM');
 
                 const isMe = msg.senderId === meId;
-                const isCall = msg.type === 'CALL_LOG' || msg.content?.includes('Call');
+                const isCall = msg.type === 'CALL_LOG';
                 const isSystem = msg.type === 'SYSTEM';
                 const isRecalled = msg.isRecalled;
                 const isPinned = pinnedIds.includes(msg.messageId);
@@ -828,9 +828,60 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               </div>
                             )}
                             {msg.replyTo && (
-                              <div onClick={() => scrollToMessage(msg.replyTo.messageId)} className={cn("mb-1 p-2.5 rounded-2xl bg-surface-100/50 backdrop-blur-sm border-l-4 border-indigo-500 cursor-pointer hover:bg-surface-100 transition-all max-w-sm", isMe ? 'mr-1' : 'ml-1')}>
-                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.1em] mb-0.5">{msg.replyTo.senderName}</p>
-                                <p className="text-[12px] text-foreground/60 truncate italic">{msg.replyTo.content || '[Attachment]'}</p>
+                              <div 
+                                onClick={() => onScrollToMessage(msg.replyTo.messageId)} 
+                                className={cn(
+                                  "mb-1 flex items-stretch p-2.5 rounded-xl border-l-[3px] border-indigo-500 cursor-pointer transition-all max-w-sm overflow-hidden shadow-sm",
+                                  isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-gray-50',
+                                  isMe ? 'mr-1' : 'ml-1'
+                                )}
+                              >
+                                {(() => {
+                                  const originalMsg = messages.find(m => m.messageId === msg.replyTo.messageId);
+                                  const hasMedia = originalMsg && ((originalMsg.mediaUrls && originalMsg.mediaUrls.length > 0) || originalMsg.type === 'STICKER');
+                                  
+                                  return (
+                                    <>
+                                      {hasMedia && (
+                                        <div className="flex-shrink-0 mr-2.5 flex items-center">
+                                          {originalMsg.type === 'IMAGE' ? (
+                                            <img src={originalMsg.mediaUrls?.[0]} className="h-9 w-9 rounded-md object-cover border border-slate-200 dark:border-white/5 shadow-sm" alt="image" />
+                                          ) : originalMsg.type === 'STICKER' ? (
+                                            <img src={originalMsg.content} className="h-9 w-9 rounded-md object-contain drop-shadow-md" alt="sticker" />
+                                          ) : (
+                                            <div className="h-9 w-9 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100 dark:bg-indigo-500/10 dark:border-indigo-500/20"><FileText size={16} /></div>
+                                          )}
+                                        </div>
+                                      )}
+                                      <div className="flex flex-col justify-center min-w-0 flex-1">
+                                        <p className={cn("text-[13px] font-bold truncate leading-tight mb-0.5", isDark ? 'text-gray-100' : 'text-slate-800')}>{msg.replyTo.senderName}</p>
+                                        <p className={cn("text-[12px] truncate leading-tight", isDark ? 'text-gray-400' : 'text-slate-500')}>
+                                          {(() => {
+                                            if (msg.replyTo.content && msg.replyTo.content !== '[Attachment]') return msg.replyTo.content;
+                                            if (originalMsg) {
+                                              if (originalMsg.type === 'IMAGE') return '[Hình ảnh]';
+                                              if (originalMsg.type === 'VIDEO') return '[Video]';
+                                              if (originalMsg.type === 'STICKER') return '[Nhãn dán]';
+                                              if (originalMsg.type === 'FILE' && originalMsg.mediaUrls?.length > 0) {
+                                                try {
+                                                  const url = originalMsg.mediaUrls[0];
+                                                  const decoded = decodeURIComponent(url);
+                                                  let name = decoded.split('/').pop().split('?')[0];
+                                                  name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
+                                                  name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
+                                                  return `[Tệp] ${name}`;
+                                                } catch(e) {
+                                                   return '[Tệp đính kèm]';
+                                                }
+                                              }
+                                            }
+                                            return msg.replyTo.content || '[Tệp đính kèm]';
+                                          })()}
+                                        </p>
+                                      </div>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             )}
 

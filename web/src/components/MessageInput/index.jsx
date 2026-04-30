@@ -1,13 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon, Mic, Square } from 'lucide-react';
+import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon, Mic, Square, Video } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
 import { useChat } from '../../hooks/useChat';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import { addOptimisticMessage } from '../../store/chatSlice';
 
-const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteModal }) => {
+const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteModal, onScrollToMessage }) => {
   const [text, setText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [attachments, setAttachments] = useState([]);
@@ -46,9 +46,9 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   ];
 
   const sampleGifs = [
-    { id: 1, url: 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKMGpx9YJb3r9p6/giphy.gif', title: 'Hello' },
-    { id: 2, url: 'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l41lTfuxNf64YQ13O/giphy.gif', title: 'Wow' },
-    { id: 3, url: 'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKVUn7iM8FMEU24/giphy.gif', title: 'Happy' }
+    { id: 1, url: 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKMGpx9YJb3r9p6/giphy.gif', title: 'Hello' },
+    { id: 2, url: 'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l41lTfuxNf64YQ13O/giphy.gif', title: 'Wow' },
+    { id: 3, url: 'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKVUn7iM8FMEU24/giphy.gif', title: 'Happy' }
   ];
 
   const handleTabChange = (tabId) => {
@@ -330,7 +330,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
         <textarea
           ref={textInputRef}
           className="flex-1 bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-1 sm:px-2 font-bold tracking-tight min-w-0 resize-none py-2 max-h-32 no-scrollbar overflow-y-auto"
-          placeholder={isUploading ? "Đang đồng bộ tập tin..." : "Soạn tin nhắn..."}
+          placeholder={isUploading ? "Đang đồng bộ tập vị tin..." : "Soạn tin nhắn..."}
           value={text}
           onChange={(e) => {
             handleInputChange(e);
@@ -491,8 +491,32 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       {/* Reply Preview Bar */}
       {replyingTo && (
         <div className="absolute bottom-full mb-3 left-0 right-0 glass-premium p-3 rounded-[24px] border border-indigo-500/20 shadow-xl flex items-center justify-between animate-msg z-20">
-          <div className="flex items-center space-x-3 overflow-hidden">
+          <div 
+            className="flex flex-1 items-center space-x-3 overflow-hidden cursor-pointer hover:bg-surface-200/50 p-2 -m-2 rounded-[18px] transition-all"
+            onClick={(e) => {
+              if (!replyingTo?.messageId) return;
+              if (onScrollToMessage) {
+                onScrollToMessage(replyingTo.messageId);
+              }
+            }}
+          >
             <div className="w-1 h-8 bg-indigo-500 rounded-full flex-shrink-0" />
+            
+            {/* Attachment Thumbnail if available */}
+            {((replyingTo.mediaUrls && replyingTo.mediaUrls.length > 0) || replyingTo.type === 'STICKER') && (
+              <div className="flex-shrink-0">
+                {replyingTo.type === 'IMAGE' ? (
+                  <img src={replyingTo.mediaUrls?.[0]} className="h-8 w-8 rounded-lg object-cover border border-indigo-500/20 shadow-sm" alt="image" />
+                ) : replyingTo.type === 'STICKER' ? (
+                  <img src={replyingTo.content} className="h-8 w-8 rounded-lg object-contain drop-shadow-md" alt="sticker" />
+                ) : replyingTo.type === 'VIDEO' ? (
+                  <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 border border-indigo-500/20"><Video size={14} /></div>
+                ) : (
+                  <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 border border-indigo-500/20"><FileText size={14} /></div>
+                )}
+              </div>
+            )}
+
             <div className="min-w-0">
               <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.1em] mb-0.5">
                 Đang trả lời {(() => {
@@ -505,7 +529,30 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                   return freshMember?.fullName || freshMember?.name || replyingTo.senderName;
                 })()}
               </p>
-              <p className="text-[13px] text-foreground/60 truncate font-semibold">{replyingTo.content || '[Attachment]'}</p>
+              <p className="text-[13px] text-foreground/60 truncate font-semibold">
+                {(() => {
+                  if (replyingTo.content && replyingTo.type !== 'STICKER') return replyingTo.content;
+                  if (replyingTo.type === 'IMAGE') return 'Hình ảnh';
+                  if (replyingTo.type === 'VIDEO') return 'Video';
+                  if (replyingTo.type === 'STICKER') return 'Nhãn dán';
+                  if (replyingTo.type === 'FILE') {
+                    if (replyingTo.mediaUrls && replyingTo.mediaUrls.length > 0) {
+                      try {
+                        const url = replyingTo.mediaUrls[0];
+                        const decoded = decodeURIComponent(url);
+                        let name = decoded.split('/').pop().split('?')[0];
+                        name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
+                        name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
+                        return name || 'Tệp đính kèm';
+                      } catch(e) {
+                         return 'Tệp đính kèm';
+                      }
+                    }
+                    return 'Tệp đính kèm';
+                  }
+                  return '[Attachment]';
+                })()}
+              </p>
             </div>
           </div>
           <button onClick={onCancelReply} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"><X size={18} /></button>

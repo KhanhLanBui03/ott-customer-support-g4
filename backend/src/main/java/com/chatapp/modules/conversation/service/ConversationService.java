@@ -88,6 +88,11 @@ public class ConversationService {
                           Boolean.TRUE.equals(request.getIsGroup()) || 
                           (request.getName() != null && !request.getName().isEmpty()) ||
                           allMemberIds.size() > 2;
+                          
+        if (isGroup && allMemberIds.size() < 3) {
+            throw new ValidationException("Group must have at least 3 members (creator + 2 others)");
+        }
+
         long now = System.currentTimeMillis();
         String convId = isGroup ? UUID.randomUUID().toString() : generateSingleId(allMemberIds);
 
@@ -604,6 +609,7 @@ public class ConversationService {
             
             // Broadcast the new system message to everyone
             eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+            eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
             
         } catch (Exception e) {
             log.error("Failed to notify new member via WebSocket", e);
@@ -630,6 +636,67 @@ public class ConversationService {
             UserConversation targetUc = userConversationRepository.findById(memberId, conversationId).orElse(null);
             if (targetUc != null && ("OWNER".equals(targetUc.getRole()) || "ADMIN".equals(targetUc.getRole()))) {
                 throw new ValidationException("Admins cannot remove other admins or owners");
+            }
+        }
+
+        // Special handling if the OWNER leaves
+        if (isSelf && isOwner) {
+            if (conv.getMemberIds().size() <= 1) {
+                // Last member leaving, disband the group
+                disbandGroup(adminId, conversationId);
+                return;
+            } else {
+                // Transfer ownership
+                String newOwnerId = null;
+                
+                // Fetch all remaining members in a single batch query
+                Set<String> remainingMembers = new HashSet<>(conv.getMemberIds());
+                remainingMembers.remove(adminId);
+                
+                List<UserConversation> remainingUcs = userConversationRepository.findAllByIds(remainingMembers, conversationId);
+                
+                // 1. Try to find an ADMIN
+                for (UserConversation uc : remainingUcs) {
+                    if ("ADMIN".equals(uc.getRole())) {
+                        newOwnerId = uc.getUserId();
+                        break;
+                    }
+                }
+                
+                // 2. If no ADMIN, pick the first available MEMBER
+                if (newOwnerId == null && !remainingMembers.isEmpty()) {
+                    newOwnerId = remainingMembers.iterator().next();
+                }
+                
+                // Assign new owner
+                if (newOwnerId != null) {
+                    final String targetNewOwnerId = newOwnerId;
+                    userConversationRepository.findById(newOwnerId, conversationId).ifPresent(uc -> {
+                        uc.setRole("OWNER");
+                        userConversationRepository.save(uc);
+                    });
+                    
+                    // Push a SYSTEM message about ownership transfer
+                    User newOwnerUser = userRepository.findById(newOwnerId).orElse(null);
+                    String newOwnerName = newOwnerUser != null ? newOwnerUser.getFullName() : "Một thành viên";
+                    
+                    Message transferMsg = Message.builder()
+                            .conversationId(conversationId)
+                            .messageId(java.util.UUID.randomUUID().toString())
+                            .senderId("SYSTEM")
+                            .senderName("Hệ thống")
+                            .content("Trưởng nhóm đã nhường quyền cho " + newOwnerName + ".")
+                            .type("SYSTEM")
+                            .status("SENT")
+                            .createdAt(System.currentTimeMillis())
+                            .isRecalled(false)
+                            .isEncrypted(false)
+                            .build();
+                    
+                    messageRepository.save(transferMsg);
+                    updateLastMessage(conversationId, transferMsg.getContent(), transferMsg.getCreatedAt(), "SYSTEM");
+                    eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, transferMsg));
+                }
             }
         }
 
@@ -662,6 +729,7 @@ public class ConversationService {
         messageRepository.save(sysMsg);
         updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
         eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
     }
 
     public void assignRole(String adminId, String conversationId, String memberId, String newRole) {
@@ -702,6 +770,7 @@ public class ConversationService {
         messageRepository.save(sysMsg);
         updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
         eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
     }
 
     public void updateNickname(String userId, String conversationId, String memberId, String nickname) {
@@ -732,7 +801,12 @@ public class ConversationService {
     }
 
     public void deleteConversationForUser(String userId, String conversationId) {
-        userConversationRepository.findById(userId, conversationId).ifPresent(userConversationRepository::delete);
+        Conversation conv = conversationRepository.findById(conversationId).orElse(null);
+        if (conv != null && "GROUP".equals(conv.getType())) {
+            removeMemberFromGroup(userId, conversationId, userId);
+        } else {
+            userConversationRepository.findById(userId, conversationId).ifPresent(userConversationRepository::delete);
+        }
     }
 
     public void togglePin(String userId, String conversationId) {

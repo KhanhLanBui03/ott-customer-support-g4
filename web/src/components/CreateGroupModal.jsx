@@ -22,7 +22,8 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
   const fetchFriends = async () => {
     try {
       const response = await friendApi.getFriends();
-      setFriends(response.data || []);
+      const data = response?.data || response || [];
+      setFriends(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to fetch friends", err);
     }
@@ -35,7 +36,7 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
   };
 
   const handleCreateGroup = async () => {
-    if (!groupName.trim()) return;
+    if (!groupName.trim() || selectedIds.length < 2) return;
     
     setLoading(true);
     try {
@@ -94,7 +95,7 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/40">
                 Thêm thành viên ({selectedIds.length})
               </label>
-              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic">Có thể thêm sau</span>
+              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic">Tối thiểu 2 người</span>
             </div>
             <div className="relative">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-foreground/30" size={18} />
@@ -169,11 +170,16 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
         <div className="p-8 border-t border-border bg-surface-100">
           <button
             onClick={handleCreateGroup}
-            disabled={loading || !groupName.trim()}
+            disabled={loading || !groupName.trim() || selectedIds.length < 2}
             className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black uppercase tracking-[0.3em] text-[12px] shadow-xl shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:grayscale disabled:scale-100 flex items-center justify-center space-x-3"
           >
             {loading ? (
               <div className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin" />
+            ) : selectedIds.length < 2 ? (
+              <>
+                <Users size={18} />
+                <span>Chọn thêm {2 - selectedIds.length} người</span>
+              </>
             ) : (
               <>
                 <Users size={18} />
