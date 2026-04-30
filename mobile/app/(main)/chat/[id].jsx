@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MessageList from '../../../src/components/MessageList';
@@ -10,6 +10,7 @@ import MessageModal from '../../../src/components/MessageModal';
 import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi } from '../../../src/api/chatApi';
+import { formatLastSeen } from '../../../src/utils/dateUtils';
 
 const ChatDetailScreen = () => {
   const insets = useSafeAreaInsets();
@@ -307,8 +308,9 @@ const ChatDetailScreen = () => {
       >
         <View style={styles.messagesHeader}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={24} color="#667eea" />
+            <Ionicons name="chevron-back" size={28} color="#6366f1" />
           </TouchableOpacity>
+          
           <TouchableOpacity 
             style={styles.headerContent} 
             onPress={() => router.push(`/chat-info/${encodeURIComponent(realId)}`)}
@@ -318,30 +320,42 @@ const ChatDetailScreen = () => {
               {isOnline && <View style={styles.headerOnlineBadge} />}
             </View>
             <View style={styles.headerInfo}>
-              <View style={styles.nameContainer}>
+              <View style={styles.nameRow}>
                 <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
-                <MaterialIcons name="verified-user" size={16} color="#6366f1" style={styles.shieldIcon} />
-              </View>
-              <View style={styles.statusRow}>
-                <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : styles.statusOffline]}>
-                  {isOnline ? 'Online' : 'Offline'}
-                </Text>
                 {conversation?.type === 'SINGLE' && (
                   <View style={[
-                    styles.statusTag, 
-                    friendshipStatus === 'ACCEPTED' ? styles.friendTag : styles.strangerTag
+                    styles.miniTag, 
+                    friendshipStatus === 'ACCEPTED' ? styles.friendMiniTag : styles.strangerMiniTag
                   ]}>
                     <Text style={[
-                      styles.statusTagText,
-                      friendshipStatus === 'ACCEPTED' ? styles.friendTagText : styles.strangerTagText
+                      styles.miniTagText,
+                      friendshipStatus === 'ACCEPTED' ? styles.friendMiniTagText : styles.strangerMiniTagText
                     ]}>
-                      {friendshipStatus === 'ACCEPTED' ? 'BẠN BÈ' : 'NGƯỜI LẠ'}
+                      {friendshipStatus === 'ACCEPTED' ? 'BẠN' : 'LẠ'}
                     </Text>
                   </View>
                 )}
               </View>
+              <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : styles.statusOffline]} numberOfLines={1}>
+                {otherMember ? formatLastSeen(otherMember.status || otherMember.presence, otherMember.lastSeenAt || otherMember.last_seen_at) : (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')}
+              </Text>
             </View>
           </TouchableOpacity>
+
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerActionButton}>
+              <MaterialIcons name="call" size={24} color="#6366f1" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerActionButton}>
+              <MaterialIcons name="videocam" size={24} color="#6366f1" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerActionButton}
+              onPress={() => router.push(`/chat-info/${encodeURIComponent(realId)}`)}
+            >
+              <MaterialIcons name="info-outline" size={24} color="#6366f1" />
+            </TouchableOpacity>
+          </View>
         </View>
  
         <View style={styles.chatArea}>
@@ -435,33 +449,46 @@ const styles = StyleSheet.create({
   headerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6' },
   headerOnlineBadge: { position: 'absolute', right: 0, bottom: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#4ade80', borderWidth: 2, borderColor: '#fff' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  headerStatus: { fontSize: 12, fontWeight: '500' },
+  headerStatus: { fontSize: 12, color: '#64748b', fontWeight: '400' },
   statusOnline: { color: '#10b981' },
-  statusOffline: { color: '#9ca3af' },
-  statusTag: {
-    paddingHorizontal: 8,
+  statusOffline: { color: '#94a3b8' },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  miniTag: {
+    paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
   },
-  friendTag: {
-    backgroundColor: '#ecfdf5',
-    borderColor: '#10b981',
+  friendMiniTag: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
   },
-  strangerTag: {
+  strangerMiniTag: {
     backgroundColor: '#fff7ed',
-    borderColor: '#f97316',
+    borderColor: '#ffedd5',
   },
-  statusTagText: {
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  miniTagText: {
+    fontSize: 9,
+    fontWeight: '800',
   },
-  friendTagText: {
-    color: '#10b981',
+  friendMiniTagText: {
+    color: '#16a34a',
   },
-  strangerTagText: {
-    color: '#f97316',
+  strangerMiniTagText: {
+    color: '#ea580c',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerActionButton: {
+    padding: 8,
   },
 });
 

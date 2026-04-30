@@ -64,6 +64,16 @@ const MessageList = React.forwardRef(({
     onPressMessage(item);
   };
 
+  const isAtBottom = useRef(true);
+
+  const handleScroll = (event) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    // Kiểm tra xem có đang ở gần cuối danh sách không (cách đáy 100px để trừ hao)
+    const paddingToBottom = 100;
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    isAtBottom.current = isCloseToBottom;
+  };
+
   // Sử dụng Ref để lưu trữ props mới nhất cho callback ổn định
   const propsRef = useRef({ conversationId, sendReadReceipt, currentUserId });
   useEffect(() => {
@@ -102,14 +112,21 @@ const MessageList = React.forwardRef(({
 
   useEffect(() => {
     readMessageIds.current.clear();
+    isAtBottom.current = true; // Reset khi đổi hội thoại
   }, [conversationId]);
 
   useEffect(() => {
     if (messages.length > 0 && !isRefreshing) {
-      setTimeout(() => {
-        const listRef = ref?.current || null;
-        listRef?.scrollToEnd({ animated: true });
-      }, 100);
+      // Chỉ tự động cuộn xuống nếu đang ở đáy hoặc tin nhắn mới nhất là của mình
+      const lastMessage = messages[messages.length - 1];
+      const isMyMessage = String(lastMessage?.senderId) === String(currentUserId);
+      
+      if (isAtBottom.current || isMyMessage) {
+        setTimeout(() => {
+          const listRef = ref?.current || null;
+          listRef?.scrollToEnd({ animated: true });
+        }, 100);
+      }
     }
   }, [messages.length, typingUsers, isRefreshing]);
 
@@ -138,7 +155,13 @@ const MessageList = React.forwardRef(({
         showReadStatus={shouldShowStatus}
         onReact={onReact}
         onLongPress={() => onLongPress(item)}
-        onPressMessage={onPressReply}
+        onPressMessage={(msgId) => {
+          // Khi nhấn vào reply để scroll, tạm thời tắt auto scroll tới đáy
+          if (typeof msgId === 'string' || typeof msgId === 'number') {
+            isAtBottom.current = false;
+          }
+          onPressReply?.(msgId);
+        }}
         isHighlighted={highlightedMessageId === (item.messageId || item.id)}
         allMessages={messages}
       />
@@ -190,12 +213,14 @@ const MessageList = React.forwardRef(({
         ListFooterComponent={renderTypingIndicator}
         contentContainerStyle={styles.listContent}
         onContentSizeChange={(w, h) => {
-          // Chỉ scroll xuống nếu không phải đang refresh (tải tin nhắn cũ)
-          if (!isRefreshing) {
+          // Chỉ scroll xuống nếu đang ở đáy và không phải đang refresh
+          if (isAtBottom.current && !isRefreshing) {
             const listRef = ref?.current || null;
             listRef?.scrollToEnd({ animated: true });
           }
         }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshing={isRefreshing}
         onRefresh={onRefresh}
         onViewableItemsChanged={onViewableItemsChanged}

@@ -5,10 +5,10 @@ import { Alert } from 'react-native';
 export const openFile = async (url, fileName) => {
   try {
     const fileUri = FileSystem.cacheDirectory + fileName;
-    
+
     // Kiểm tra xem file đã tồn tại trong cache chưa
     const fileInfo = await FileSystem.getInfoAsync(fileUri);
-    
+
     if (!fileInfo.exists) {
       console.log(`[FileUtil] Downloading: ${url} to ${fileUri}`);
       const downloadRes = await FileSystem.downloadAsync(url, fileUri);
