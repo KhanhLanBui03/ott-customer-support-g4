@@ -51,4 +51,7 @@ public class Conversation {
 
     @DynamoDBAttribute(attributeName = "pinnedMessageIds")
     private Set<String> pinnedMessageIds;
+
+    @DynamoDBAttribute(attributeName = "onlyAdminsCanChat")
+    private Boolean onlyAdminsCanChat;
 }

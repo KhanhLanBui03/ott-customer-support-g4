@@ -12,11 +12,15 @@ import {
 } from 'react-native';
 import { MaterialIcons, Ionicons, FontAwesome5, Feather } from '@expo/vector-icons';
 
+import { useSelector } from 'react-redux';
+import CONFIG from '../config';
+
 const { width, height } = Dimensions.get('window');
 
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '😡'];
 
 const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) => {
+  const BASE_URL = CONFIG.API_URL.split('/api')[0];
   if (!message) return null;
 
   const handleAction = (type) => {
@@ -53,10 +57,24 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) =
             <View style={styles.modalContent}>
               {/* Message Focus Area */}
               <View style={[styles.focusContainer, isOwn ? styles.ownFocus : styles.otherFocus]}>
-                <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble]}>
-                  <Text style={[styles.messageText, isOwn ? styles.ownText : styles.otherText]}>
-                    {message.content}
-                  </Text>
+                <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble, (message.type === 'IMAGE' || message.type === 'VIDEO') && styles.mediaBubble]}>
+                  {message.type === 'IMAGE' && message.mediaUrls?.[0] && (
+                    <Image 
+                      source={{ uri: message.mediaUrls[0].startsWith('http') ? message.mediaUrls[0] : `${BASE_URL}${message.mediaUrls[0].startsWith('/') ? '' : '/'}${message.mediaUrls[0]}` }} 
+                      style={styles.focusMedia}
+                      resizeMode="cover"
+                    />
+                  )}
+                  {message.type === 'VIDEO' && (
+                    <View style={styles.focusVideoPlaceholder}>
+                      <Ionicons name="play-circle" size={48} color="#fff" />
+                    </View>
+                  )}
+                  {message.content ? (
+                    <Text style={[styles.messageText, isOwn ? styles.ownText : styles.otherText, (message.type === 'IMAGE' || message.type === 'VIDEO') && { marginTop: 8 }]}>
+                      {message.content}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
 
@@ -80,21 +98,23 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) =
               <View style={styles.menuGrid}>
                 <View style={styles.menuRow}>
                   <MenuButton icon="reply" label="Trả lời" type="reply" color="#6366f1" />
-                  <MenuButton icon="arrow-forward" label="Chuyển tiếp" type="forward" color="#3b82f6" />
-                  <MenuButton icon="folder-open" label="Lưu tin nhắn" type="save" color="#10b981" />
                   <MenuButton icon="content-copy" label="Sao chép" type="copy" color="#6b7280" />
+                  <MenuButton icon="arrow-forward" label="Chuyển tiếp" type="forward" color="#3b82f6" />
+                  <MenuButton icon="share" label="Chia sẻ" type="share" color="#8b5cf6" />
                 </View>
                 <View style={styles.menuRow}>
                   <MenuButton icon="push-pin" label="Ghim" type="pin" color="#f59e0b" />
+                  <MenuButton icon="folder-open" label="Lưu tin nhắn" type="save" color="#10b981" />
                   <MenuButton icon="notifications" label="Nhắc hẹn" type="remind" color="#ec4899" />
-                  <MenuButton icon="check-box" label="Chọn nhiều" type="select" color="#8b5cf6" />
-                  <MenuButton icon="flash-on" label="Tin nhanh" type="quick" color="#06b6d4" />
+                  <MenuButton icon="info" label="Chi tiết" type="info" color="#6b7280" />
                 </View>
                 <View style={styles.menuRow}>
+                  {isOwn && (
+                    <MenuButton icon="history" label="Thu hồi" type="recall" color="#ef4444" />
+                  )}
+                  <MenuButton icon="delete" label={isOwn ? "Xóa ở tôi" : "Xóa"} type="delete" color="#ef4444" />
                   <MenuButton icon="g-translate" label="Dịch" type="translate" color="#10b981" />
-                  <MenuButton icon="visibility" label="Đọc văn bản" type="read" color="#f43f5e" />
-                  <MenuButton icon="info" label="Chi tiết" type="info" color="#6b7280" />
-                  <MenuButton icon="delete" label="Xóa" type="delete" color="#ef4444" />
+                  <MenuButton icon="check-box" label="Chọn nhiều" type="select" color="#8b5cf6" />
                 </View>
               </View>
             </View>
@@ -209,6 +229,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#475569',
     textAlign: 'center',
+  },
+  mediaBubble: {
+    padding: 4,
+    overflow: 'hidden',
+    width: width * 0.7,
+  },
+  focusMedia: {
+    width: '100%',
+    height: width * 0.7,
+    borderRadius: 16,
+  },
+  focusVideoPlaceholder: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#1f2937',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

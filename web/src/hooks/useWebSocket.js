@@ -12,7 +12,8 @@ import {
     updateMessageStatus,
     setMessageRead,
     setUserStatus,
-    updateMemberInfo
+    updateMemberInfo,
+    updateConversation,
 } from '../store/chatSlice';
 import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
 import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
@@ -20,6 +21,7 @@ import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
 // Shared state between hook instances
 let _globalSubscriptions = [];
 let _presenceSubscription = null;
+let _activeConvId = null; // Lưu trữ ID hội thoại đang mở toàn cục để các callback cũ cũng nhận được
 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
@@ -31,6 +33,10 @@ export const useWebSocket = () => {
         userRef.current = user;
     }, [user]);
 
+    // Đồng bộ ID hội thoại đang mở vào biến toàn cục lập tức trong render để tránh race condition
+    const activeConversationId = useSelector(state => state.chat.activeConversationId);
+    _activeConvId = activeConversationId;
+
     const handleIncomingMessage = useCallback((message) => {
         try {
             const event = JSON.parse(message.body);
@@ -40,11 +46,38 @@ export const useWebSocket = () => {
             const currentUserId = currentUser?.userId || currentUser?.id;
 
             if (event.eventType === 'MESSAGE_SEND') {
+                const msg = event.payload;
                 dispatch(addMessage({
                     conversationId: event.conversationId,
-                    message: event.payload,
+                    message: msg,
                     currentUserId
                 }));
+
+                // Auto-read if conversation is active AND tab is visible
+                // NOTE: Removed document.hasFocus() check because when web-to-web on same machine,
+                // the other browser window loses focus, preventing auto-read receipts
+                if (_activeConvId === event.conversationId &&
+                    document.visibilityState === 'visible' &&
+                    String(msg.senderId) !== String(currentUserId) &&
+                    msg.messageId && !String(msg.messageId).startsWith('temp-')) {
+
+                    const client = getStompClient();
+                    if (client?.connected) {
+                        client.publish({
+                            destination: '/app/message.read',
+                            body: JSON.stringify({
+                                conversationId: event.conversationId,
+                                messageId: msg.messageId
+                            })
+                        });
+
+                        // Reset unread count locally if we're in the chat
+                        dispatch(updateConversation({
+                            conversationId: event.conversationId,
+                            unreadCount: 0
+                        }));
+                    }
+                }
             } else if (event.eventType === 'MESSAGE_RECALL') {
                 dispatch(recallMessage({
                     conversationId: event.conversationId,
@@ -100,7 +133,8 @@ export const useWebSocket = () => {
                 dispatch(setMessageRead({
                     conversationId: event.conversationId,
                     messageId: payload.messageId || payload,
-                    userId: payload.userId || event.userId
+                    userId: payload.userId || event.userId,
+                    currentUserId: currentUserId
                 }));
             } else if (event.eventType === 'WALLPAPER_UPDATED') {
                 const payload = event.payload || {};
@@ -116,11 +150,11 @@ export const useWebSocket = () => {
             } else if (event.eventType === 'CONVERSATION_UPDATE') {
                 const payload = event.payload || {};
                 const conversationId = event.conversationId || payload.conversationId || payload.id;
-
-                if (conversationId && Object.prototype.hasOwnProperty.call(payload, 'wallpaperUrl')) {
-                    dispatch(updateConversationWallpaper({
+                
+                if (conversationId) {
+                    dispatch(updateConversation({
                         conversationId,
-                        wallpaperUrl: payload.wallpaperUrl ?? null
+                        ...payload
                     }));
                 } else {
                     dispatch(fetchConversations());

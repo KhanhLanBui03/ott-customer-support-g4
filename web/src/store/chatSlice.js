@@ -33,6 +33,7 @@ const initialState = {
   typingUsers: {}, // { conversationId: [ { userId, name } ] }
   friends: [],
   loading: false,
+  replyingTo: null,
 };
 
 const chatSlice = createSlice({
@@ -56,12 +57,13 @@ const chatSlice = createSlice({
       }
 
       const messages = state.messages[conversationId];
+      const myId = String(currentUserId);
 
       // If we find an optimistic message from the same sender (sent within last 10s), replace it
       const now = Date.now();
       const optimisticIdx = messages.findIndex(m =>
         m.status === 'SENDING' &&
-        String(m.senderId) === String(message.senderId) &&
+        String(m.senderId) === myId &&
         (m.type === message.type) &&
         (message.type === 'TEXT' ? m.content === message.content : true) &&
         (now - (m.createdAt || 0)) < 10000
@@ -77,29 +79,26 @@ const chatSlice = createSlice({
         messages.push(message);
       }
 
-      // Implicit Read Receipt: If someone sends a message, they've read everything before it.
-      if (message.senderId) {
-        const senderIdStr = String(message.senderId);
-        messages.forEach(m => {
-          if (String(m.senderId) !== senderIdStr) {
-            if (!m.readBy) m.readBy = [];
-            if (!m.readBy.some(id => String(id) === senderIdStr)) {
-              m.readBy.push(senderIdStr);
-            }
-          }
-        });
-      }
-
-      // Update last message in conversation list
+      // 2. Cập nhật danh sách hội thoại
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
+        const isOtherSender = String(message.senderId) !== myId;
+        const isOpenConversation = state.activeConversationId === conversationId;
+
         conv.lastMessage = message.content;
         conv.lastMessageTime = message.createdAt;
 
-        if (state.activeConversationId !== conversationId && message.senderId !== currentUserId) {
-          conv.unreadCount = (conv.unreadCount || 0) + 1;
+        if (isOtherSender) {
+          if (!isOpenConversation) {
+            // Nếu đang ở ngoài, tăng số tin nhắn chưa đọc
+            conv.unreadCount = (conv.unreadCount || 0) + 1;
+          }
+        } else {
+          // Nếu mình là người gửi, đảm bảo unreadCount là 0 (vì mình đã xem)
+          conv.unreadCount = 0;
         }
 
+        // Đưa hội thoại lên đầu danh sách
         const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
         if (idx !== -1) {
           const [item] = state.conversations.splice(idx, 1);
@@ -184,17 +183,34 @@ const chatSlice = createSlice({
       }
     },
     setTyping: (state, action) => {
-      const { conversationId, userId, name, isTyping } = action.payload;
-      if (!state.typingUsers[conversationId]) {
-        state.typingUsers[conversationId] = [];
+      const { conversationId, userId, isTyping } = action.payload;
+      
+      // Normalize ID (Same logic as other reducers)
+      let realId = conversationId;
+      if (conversationId && !conversationId.includes('#')) {
+        const myId = state.currentUserId || '';
+        const exactConv = state.conversations.find(c => c.conversationId === conversationId);
+        if (!exactConv) {
+          const participants = [String(myId), String(conversationId)].sort();
+          realId = `SINGLE#${participants[0]}#${participants[1]}`;
+        }
+      }
+
+      if (!state.typingUsers[realId]) {
+        state.typingUsers[realId] = [];
       }
 
       if (isTyping) {
-        if (!state.typingUsers[conversationId].find(u => u.userId === userId)) {
-          state.typingUsers[conversationId].push({ userId, name });
+        if (!state.typingUsers[realId].find(u => String(u.userId) === String(userId))) {
+          // Tìm tên người dùng từ danh sách thành viên hội thoại
+          const conv = state.conversations.find(c => c.conversationId === realId);
+          const member = conv?.members?.find(m => String(m.userId || m.id) === String(userId));
+          const name = member?.fullName || member?.name || 'Ai đó';
+          
+          state.typingUsers[realId].push({ userId, name });
         }
       } else {
-        state.typingUsers[conversationId] = state.typingUsers[conversationId].filter(u => u.userId !== userId);
+        state.typingUsers[realId] = state.typingUsers[realId].filter(u => String(u.userId) !== String(userId));
       }
     },
     setUserStatus: (state, action) => {
@@ -307,7 +323,7 @@ const chatSlice = createSlice({
     },
 
     setMessageRead: (state, action) => {
-      const { conversationId, messageId, userId } = action.payload;
+      const { conversationId, messageId, userId, currentUserId } = action.payload;
       const messages = state.messages[conversationId];
       if (messages) {
         // Find the index of the message that was read
@@ -322,7 +338,16 @@ const chatSlice = createSlice({
           }
         }
       }
+
+      // Reset unread count locally if the reader is me
+      if (currentUserId && String(userId) === String(currentUserId)) {
+        const conv = state.conversations.find(c => c.conversationId === conversationId);
+        if (conv) {
+          conv.unreadCount = 0;
+        }
+      }
     },
+    
 
     updateConversationWallpaper: (state, action) => {
       const { conversationId, wallpaperUrl } = action.payload || {};
@@ -330,8 +355,27 @@ const chatSlice = createSlice({
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
         conv.wallpaperUrl = wallpaperUrl || null;
-
       }
+    },
+
+    updateConversation: (state, action) => {
+      const { conversationId, ...updates } = action.payload || {};
+      if (!conversationId) return;
+      const index = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (index !== -1) {
+        // Guard: Nếu đây là hội thoại đang mở, không cho phép unreadCount > 0
+        if (state.activeConversationId === conversationId && updates.unreadCount > 0) {
+          updates.unreadCount = 0;
+        }
+        
+        state.conversations[index] = {
+          ...state.conversations[index],
+          ...updates
+        };
+      }
+    },
+    setReplyingTo: (state, action) => {
+      state.replyingTo = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -370,7 +414,10 @@ export const {
   optimisticVote,
   resetUnreadCount,
   setMessageRead,
+  updateMemberInfo,
+  updateConversation,
   updateConversationWallpaper,
-  updateMemberInfo
+  setReplyingTo
 } = chatSlice.actions;
+
 export default chatSlice.reducer;

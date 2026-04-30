@@ -1,4 +1,5 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   addMessage,
@@ -8,9 +9,10 @@ import {
   updateMemberInfo,
   setTyping,
   setMessageRead,
+  markConversationRead,
+  setUserStatus,
 } from '../store/chatSlice';
 import {
-  initializeSocket,
   onMessageReceive,
   offMessageReceive,
   onUserTyping,
@@ -21,6 +23,10 @@ import {
   offMessageUpdate,
   onMessageRead,
   offMessageRead,
+  onMessageRecall,
+  offMessageRecall,
+  onMessageDelete,
+  offMessageDelete,
   onWallpaperUpdated,
   offWallpaperUpdated,
   onUserUpdate,
@@ -29,43 +35,90 @@ import {
   emitTypingStart,
   emitTypingStop,
   emitReadReceipt,
+  emitRecallMessage,
 } from '../utils/socket';
 
 export const useWebSocket = () => {
   const { accessToken, user } = useSelector((state) => state.auth);
+  const currentConversationId = useSelector((state) => state.chat.currentConversationId);
   const dispatch = useDispatch();
+  const [appState, setAppState] = useState(AppState.currentState);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
-    if (accessToken && user) {
-      initializeSocket(accessToken);
-    }
-  }, [accessToken, user]);
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      setAppState(nextAppState);
+      appStateRef.current = nextAppState;
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const activeConvIdRef = useRef(currentConversationId);
+  activeConvIdRef.current = currentConversationId; // Đồng bộ lập tức trong render
+
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // Socket đã được khởi tạo trong _layout.jsx với globalHandler
+  // KHÔNG gọi initializeSocket ở đây vì sẽ xóa globalHandler của _layout.jsx
 
   // Nhận tin nhắn mới
   useEffect(() => {
     const handleMessageReceive = (message) => {
       console.log('[WS] Mobile received message:', message.messageId);
+      const currentUser = userRef.current;
+      const currentUserId = userRef.current?.userId || userRef.current?.id || null;
+
       dispatch(
         addMessage({
           conversationId: message.conversationId,
           message: message,
-          currentUserId: user?.userId || user?.id,
+          currentUserId: currentUserId,
         })
       );
-      // Khi có tin nhắn mới, cập nhật lại danh sách hội thoại để sắp xếp lại
-      dispatch(fetchConversations());
+
+      // Tự động gửi Read Receipt nếu đang mở hội thoại này VÀ app đang active
+      const activeConversationId = activeConvIdRef.current;
+      const currentAppState = appStateRef.current;
+
+      const isFromMe = currentUserId && String(message.senderId) === String(currentUserId);
+
+      if (activeConversationId &&
+        activeConversationId === message.conversationId &&
+        currentAppState === 'active' &&
+        !isFromMe &&
+        message.messageId && !message.messageId.startsWith('temp-')) {
+        console.log('[WS] ✅ Sending auto-read receipt for:', message.messageId);
+        emitReadReceipt(message.messageId, message.conversationId);
+        dispatch(markConversationRead(message.conversationId));
+      } else {
+        console.log('[WS] ⏭️ Skipping auto-read:', {
+          match: activeConversationId === message.conversationId,
+          isFromMe,
+          hasId: !!message.messageId
+        });
+      }
+
+      // Khi có tin nhắn mới, Redux addMessage đã cập nhật lastMessage và unreadCount
+      // Không gọi fetchConversations ở đây để tránh ghi đè state local bằng data server cũ (race condition)
     };
 
     onMessageReceive(handleMessageReceive);
     return () => offMessageReceive(handleMessageReceive);
-  }, [dispatch, user]);
+  }, [dispatch]);
 
   // Nhận cập nhật trạng thái online/offline
   useEffect(() => {
     const handleStatusChange = (statusData) => {
       console.log('[WS] User status changed:', statusData.userId, statusData.status);
-      // Fetch lại conversations để cập nhật member status
-      dispatch(fetchConversations());
+      // Cập nhật trực tiếp member.status trong store để UI phản ánh ngay lập tức
+      dispatch(setUserStatus({
+        userId: statusData.userId,
+        status: statusData.status,
+        lastSeenAt: statusData.lastSeenAt,
+      }));
     };
 
     onUserStatusChange(handleStatusChange);
@@ -98,6 +151,38 @@ export const useWebSocket = () => {
 
     onMessageRead(handleMessageRead);
     return () => offMessageRead(handleMessageRead);
+  }, [dispatch]);
+
+  // Nhận sự kiện thu hồi tin nhắn
+  useEffect(() => {
+    const handleMessageRecall = (payload) => {
+      if (!payload || !payload.messageId) return;
+      console.log('[WS] Mobile received recall:', payload.messageId);
+      dispatch(updateMessage({
+        conversationId: payload.conversationId,
+        message: {
+          ...payload,
+          status: 'RECALLED',
+          isRecalled: true,
+          content: 'Tin nhắn đã bị thu hồi'
+        }
+      }));
+    };
+
+    onMessageRecall(handleMessageRecall);
+    return () => offMessageRecall(handleMessageRecall);
+  }, [dispatch]);
+
+  // Nhận sự kiện xóa tin nhắn
+  useEffect(() => {
+    const handleMessageDelete = (payload) => {
+      if (!payload || !payload.messageId) return;
+      console.log('[WS] Mobile received delete:', payload.messageId);
+      // Ở đây có thể dispatch action xóa tin nhắn khỏi store nếu cần
+    };
+
+    onMessageDelete(handleMessageDelete);
+    return () => offMessageDelete(handleMessageDelete);
   }, [dispatch]);
 
   useEffect(() => {
@@ -162,6 +247,7 @@ export const useWebSocket = () => {
     sendTypingStart,
     sendTypingStop,
     sendReadReceipt,
+    sendRecallMessage: emitRecallMessage,
   };
 };
 

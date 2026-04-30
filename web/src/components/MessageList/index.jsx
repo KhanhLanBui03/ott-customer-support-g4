@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus } from 'lucide-react';
+import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Languages, Sparkles as SparklesIcon } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
 import VoteDetailsModal from '../VoteDetailsModal';
+import { useTheme } from '../../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -31,6 +32,7 @@ const getDocViewerUrl = (u, e) => {
 };
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward }) => {
+  const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
     return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -73,6 +75,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [selectedFile, setSelectedFile] = useState(null);
   const [isFileModalLoading, setIsFileModalLoading] = useState(true);
   const [reactionDetail, setReactionDetail] = useState(null);
+  const [translatedMessages, setTranslatedMessages] = useState({}); // { messageId: text }
+  const [translationLoading, setTranslationLoading] = useState({}); // { messageId: boolean }
 
 
 
@@ -113,6 +117,12 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
+            // Chỉ gửi read receipt nếu tab đang hiển thị
+            // NOTE: Removed document.hasFocus() - khi web-web trên cùng máy, cửa sổ khác mất focus
+            if (document.visibilityState !== 'visible') {
+              return;
+            }
+
             const messageId = entry.target.getAttribute('data-message-id');
             if (messageId && !messageId.startsWith('temp-')) {
               console.log(`[ReadReceipt] 👁️ Message visible: ${messageId}`);
@@ -141,6 +151,30 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     });
 
     return () => observer.disconnect();
+  }, [messages, conversationId, meId, sendRead]);
+
+  // FIX: Khi tab trở lại visible (từ hidden), gửi read receipt cho tin nhắn cuối cùng chưa đọc
+  useEffect(() => {
+    if (!conversationId || !messages || messages.length === 0) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Tìm tin nhắn cuối cùng của người khác mà mình chưa đọc
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          if (String(msg.senderId) !== String(meId) &&
+              msg.messageId && !String(msg.messageId).startsWith('temp-') &&
+              (!msg.readBy || !msg.readBy.some(id => String(id) === String(meId)))) {
+            console.log(`[ReadReceipt] 👁️ Tab became visible, marking last unread: ${msg.messageId}`);
+            sendRead(conversationId, msg.messageId);
+            break;
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [messages, conversationId, meId, sendRead]);
 
 
@@ -388,6 +422,21 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         }
       } else if (action === 'REPLY') {
         onReply(messageId);
+      } else if (action === 'TRANSLATE') {
+        const msg = messages.find(m => m.messageId === messageId);
+        if (!msg || !msg.content) return;
+        
+        setTranslationLoading(prev => ({ ...prev, [messageId]: true }));
+        setActiveMenu(null);
+        try {
+          const res = await chatApi.translateText(msg.content);
+          setTranslatedMessages(prev => ({ ...prev, [messageId]: res.data.translation }));
+        } catch (err) {
+          console.error("Translation failed:", err);
+          alert("Không thể dịch tin nhắn này.");
+        } finally {
+          setTranslationLoading(prev => ({ ...prev, [messageId]: false }));
+        }
       }
       setActiveMenu(null);
     } catch (err) {
@@ -562,9 +611,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                     <React.Fragment key={msg.messageId || index}>
                       {dateHeader}
                       <div className="flex justify-center my-6 group relative">
-                        <div className="px-5 py-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-full border border-indigo-100 dark:border-indigo-500/10 flex items-center space-x-2 shadow-sm">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/50"></span>
-                          <span className="text-[11px] font-black text-indigo-700/80 dark:text-indigo-200/60 uppercase tracking-widest">{msg.content}</span>
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
+                          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${
+                            isDark ? 'text-white/30' : 'text-slate-500'
+                          }`}>
+                            {msg.content}
+                          </span>
+                          <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
                         </div>
                       </div>
                     </React.Fragment>
@@ -675,7 +729,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               </div>
                             ) : (
                               <div className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
-                                <div className="relative group/bubble-main w-fit">
+                                <div className="relative group/bubble-main w-fit max-w-[85vw] lg:max-w-[560px]">
                                   {/* Emoji Quick Picker */}
                                   <div className={cn(`absolute -top-12 ${isMe ? 'right-0' : 'left-0'} hidden group-hover/bubble-main:flex items-center space-x-1 p-1 bg-[#1e2330]/95 backdrop-blur-xl border border-white/10 shadow-2xl rounded-full z-[100] animate-in fade-in zoom-in slide-in-from-bottom-2 duration-200`)}>
                                     {EMOJIS.map(emoji => (
@@ -696,6 +750,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       <div className="fixed inset-0 z-[90]" onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
                                       <div className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999]`}>
                                         <button onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Reply size={18} className="text-indigo-400" /> <span>Trả lời</span></button>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('TRANSLATE', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Languages size={18} className="text-indigo-400" /> <span>Dịch tin nhắn</span></button>
                                         <button onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /><span>{isPinned ? 'Gỡ ghim' : 'Ghim tin nhắn'}</span></button>
                                         <div className="h-px bg-border my-1.5 mx-2" />
                                         <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Xóa phía tôi</span></button>
@@ -788,15 +843,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               }
 
                                               const getRows = (c) => {
-                                                if (c <= 4) return [c];
-                                                if (c === 5) return [3, 2];
+                                                if (c <= 5) return [c];
                                                 if (c === 6) return [3, 3];
                                                 if (c === 7) return [4, 3];
                                                 if (c === 8) return [4, 4];
                                                 const rows = [];
                                                 let rem = c;
                                                 while (rem > 0) {
-                                                  if (rem >= 4) { rows.push(4); rem -= 4; }
+                                                  if (rem >= 5) { rows.push(5); rem -= 5; }
                                                   else { rows.push(rem); rem = 0; }
                                                 }
                                                 return rows;
@@ -808,10 +862,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               return (
                                                 <div className="flex flex-col gap-[2px]">
                                                   {rows.map((rowSize, rowIndex) => {
+                                                    const gridColsClass = {
+                                                      1: 'grid-cols-1',
+                                                      2: 'grid-cols-2',
+                                                      3: 'grid-cols-3',
+                                                      4: 'grid-cols-4',
+                                                      5: 'grid-cols-5'
+                                                    }[rowSize] || 'grid-cols-5';
                                                     const rowUrls = urls.slice(currentIndex, currentIndex + rowSize);
                                                     currentIndex += rowSize;
                                                     return (
-                                                      <div key={rowIndex} className={cn("grid gap-[2px]", `grid-cols-${rowSize}`)}>
+                                                      <div key={rowIndex} className={cn("grid gap-[2px]", gridColsClass)}>
                                                         {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
                                                       </div>
                                                     );
@@ -822,6 +883,26 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           </div>
                                         )}
                                         {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+                                        
+                                        {/* Translation Display */}
+                                        {translationLoading[msg.messageId] && (
+                                          <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
+                                            <Loader2 size={12} className="animate-spin" />
+                                            <span>AI đang dịch...</span>
+                                          </div>
+                                        )}
+                                        {translatedMessages[msg.messageId] && (
+                                          <div className={cn(
+                                            "mt-1 mx-2 mb-2 p-3 rounded-xl border flex flex-col",
+                                            isMe ? "bg-white/10 border-white/10" : "bg-indigo-500/5 border-indigo-500/10"
+                                          )}>
+                                            <div className="flex items-center space-x-1.5 mb-1 opacity-60">
+                                              <SparklesIcon size={10} className="text-indigo-400" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Bản dịch AI</span>
+                                            </div>
+                                            <p className="text-[13px] leading-relaxed italic">{translatedMessages[msg.messageId]}</p>
+                                          </div>
+                                        )}
                                         <div className={cn("flex justify-end px-3 pb-2", (msg.content || msg.mediaUrls?.length > 0) ? "mt-1" : "mt-1")}>
                                           <span className={`text-[9px] font-black opacity-70 tabular-nums uppercase tracking-widest ${isMe ? 'text-white' : 'text-foreground'}`}>
                                             {formatMessageTime(msg.createdAt)}
@@ -834,18 +915,20 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
                                 </div>
 
-                                {/* Seen Avatars - Moved outside the w-fit bubble-main to avoid vertical displacement */}
+                                  {/* Seen Avatars - Moved outside the w-fit bubble-main to avoid vertical displacement */}
                                 <div className={cn(
                                   "flex items-center px-1 min-h-[20px]",
                                   ((msg.reactions && Object.keys(msg.reactions).length > 0) || (optimisticReactions[msg.messageId] && optimisticReactions[msg.messageId].length > 0)) ? "mt-4" : "mt-2",
                                   isMe ? 'justify-end' : 'justify-start ml-1'
                                 )}>
-                                  {isMe && msg.readBy && msg.readBy.length > 0 && (
+                                  {msg.readBy && msg.readBy.length > 0 && isMe && (
                                     <div className="flex items-center space-x-[-6px] transition-all duration-500 animate-in fade-in slide-in-from-right-2">
                                       {msg.readBy.filter(vId => {
                                         const readerId = String(vId);
-                                        if (readerId === String(meId)) return false;
+                                        // 1. Chỉ hiển thị avatar người khác đã xem dưới tin nhắn của chính mình gửi
+                                        if (readerId === String(msg.senderId)) return false;
 
+                                        // 2. CHỈ hiển thị nếu đây là tin nhắn MỚI NHẤT mà người này đã đọc
                                         const isLatestRead = !messages.slice(index + 1).some(m =>
                                           m.readBy && m.readBy.some(id => String(id) === readerId)
                                         );
@@ -891,7 +974,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
                                           const isOtherOnline = currentConv?.members?.some(m =>
                                             String(m.userId || m.id) !== String(meId) &&
-                                            String(m.status || m.presence || '').toUpperCase() === 'ONLINE'
+                                            (String(m.status || m.presence || '').toUpperCase() === 'ONLINE' || m.isOnline === true)
                                           );
 
                                           if (isOtherOnline) {

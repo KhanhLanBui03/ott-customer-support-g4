@@ -1,16 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
 import MessageModal from '../../../src/components/MessageModal';
-import { fetchMessages, sendMessage, setCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, updateMessageReactions } from '../../../src/store/chatSlice';
+import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
+import { conversationApi } from '../../../src/api/chatApi';
 
 const ChatDetailScreen = () => {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const router = useRouter();
   const { id: rawConversationId } = useLocalSearchParams();
@@ -20,7 +22,10 @@ const ChatDetailScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
 
   // KÍCH HOẠT WEBSOCKET TRỰC TIẾP TẠI ĐÂY
-  const { sendMessageRealtime, sendReadReceipt } = useWebSocket();
+  const { sendMessageRealtime, sendReadReceipt, sendTypingStart, sendTypingStop } = useWebSocket();
+
+  // Track screen focus state - khi screen mất focus (user back ra), chặn read receipts
+  const isFocusedRef = React.useRef(true);
 
   const chatState = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
@@ -33,32 +38,76 @@ const ChatDetailScreen = () => {
   const wallpaperUrl = conversation?.wallpaperUrl || null;
   const isLoading = chatState.loading;
 
-  // Effect 1: Khởi tạo chat - chạy khi conversationId hoặc currentUser thay đổi
+  // Ref để truy cập messages mới nhất bên trong useFocusEffect mà không cần thêm deps
+  const messagesRef = React.useRef(messages);
+  React.useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Effect 1: Tải dữ liệu ban đầu - chỉ chạy khi conversationId thay đổi
   useEffect(() => {
     if (!conversationId || !currentUser) return;
 
-    const initChat = async () => {
-      // 1. Đồng bộ danh sách hội thoại nếu cần
-      if (conversations.length === 0) {
-        await dispatch(fetchConversations());
+    // Đồng bộ danh sách hội thoại nếu cần
+    if (conversations.length === 0) {
+      dispatch(fetchConversations());
+    }
+
+    // Tải tin nhắn
+    dispatch(fetchMessages(conversationId));
+  }, [conversationId, currentUser?.userId, currentUser?.id, dispatch]);
+
+  // Effect 2: Xử lý focus/blur - CORE LOGIC cho seen/delivered
+  // Y như web: vào chat = set active + gửi read receipt (→ seen)
+  //           rời chat = clear active (→ đã nhận)
+  useFocusEffect(
+    useCallback(() => {
+      // === KHI SCREEN ĐƯỢC FOCUS (user vào/quay lại chat) ===
+      isFocusedRef.current = true;
+      console.log('[Chat] Screen gained focus, realId:', realId);
+
+      if (realId) {
+        // 1. Set conversation hiện tại để useWebSocket auto-read cho tin nhắn mới
+        dispatch(setCurrentConversation(realId));
+
+        // 2. Reset unread count local
+        dispatch(markConversationRead(realId));
+
+        // 3. Reset unread count trên server
+        conversationApi.markAsRead(realId).catch(e =>
+          console.warn('[Chat] markAsRead API error:', e.message)
+        );
+
+        // 4. Gửi read receipt cho tin nhắn mới nhất từ người khác
+        //    → server broadcast MESSAGE_READ → web chuyển từ "Đã nhận" sang "seen"
+        const myId = String(currentUser?.userId || currentUser?.id || '');
+        const currentMessages = messagesRef.current;
+        const latestFromOther = [...currentMessages].reverse().find(m =>
+          String(m.senderId) !== myId &&
+          m.messageId &&
+          !String(m.messageId).startsWith('temp-')
+        );
+        if (latestFromOther) {
+          console.log('[Chat] Sending read receipt for latest unread:', latestFromOther.messageId);
+          sendReadReceipt(latestFromOther.messageId, realId);
+        }
       }
 
-      // 2. Tải tin nhắn - Để fetchMessages tự giải quyết realId bằng getState() mới nhất
-      dispatch(fetchMessages(conversationId));
-      
-      // 3. Cập nhật ID hiện tại vào store (dùng để highlight hoặc socket)
-      // Chúng ta gọi getRealId ở đây với dữ liệu mới nhất từ selector
-      const latestRealId = getRealId(chatState, conversationId, currentUser.userId || currentUser.id);
-      dispatch(setCurrentConversation(latestRealId));
-    };
+      // === KHI SCREEN MẤT FOCUS (user rời chat) ===
+      return () => {
+        isFocusedRef.current = false;
+        console.log('[Chat] Screen lost focus, clearing current conversation');
+        dispatch(clearCurrentConversation());
+        dispatch(clearReplyingTo());
+      };
+    }, [dispatch, realId, sendReadReceipt, currentUser?.userId, currentUser?.id])
+  );
 
-    initChat();
-
-    return () => {
-      dispatch(setCurrentConversation(null));
-      dispatch(clearReplyingTo());
-    };
-  }, [conversationId, currentUser?.userId, currentUser?.id, dispatch]);
+  // Wrap sendReadReceipt - chỉ gửi khi screen đang focused
+  const guardedSendReadReceipt = useCallback((messageId, convId) => {
+    if (!isFocusedRef.current) {
+      return;
+    }
+    sendReadReceipt(messageId, convId);
+  }, [sendReadReceipt]);
 
   // Effect 2: Refresh thông tin hội thoại định kỳ (avatar, status) - KHÔNG re-fetch messages
   useEffect(() => {
@@ -69,27 +118,74 @@ const ChatDetailScreen = () => {
     return () => clearInterval(interval);
   }, [dispatch]);
 
-  const handleSendMessage = (content, replyToMessageId) => {
-    if (!content.trim() || !realId) return;
+  const flatListRef = useRef(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+
+  const handleScrollToMessage = (messageId) => {
+    const index = messages.findIndex(m => m.messageId === messageId);
+    if (index !== -1 && flatListRef.current) {
+      flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+    }
+  };
+
+  const handleSendMessage = (content, replyToMessageId, type = 'TEXT', mediaUrls = []) => {
+    const isMedia = mediaUrls.length > 0;
+    if ((!content.trim() && !isMedia) || !realId) return;
 
     dispatch(sendMessage({
       conversationId: realId,
-      content,
-      type: 'TEXT',
-      replyToMessageId
+      content: content || '',
+      type,
+      replyToMessageId,
+      mediaUrls
     }));
   };
 
+  const handlePressMessage = (message) => {
+    if (!message || !realId || !message.messageId) return;
+    if (String(message.senderId) === String(currentUser?.userId || currentUser?.id)) return;
+
+    // Chỉ gửi read receipt khi người dùng thật sự click vào tin nhắn trong màn chat
+    guardedSendReadReceipt(String(message.messageId), realId);
+    dispatch(markConversationRead(realId));
+  };
+
   const handleReaction = async (messageId, emoji) => {
+    if (!realId || !messageId) return;
+
+    const currentUserId = currentUser?.userId || currentUser?.id;
+    const msg = messages.find(m => m.messageId === messageId);
+    if (!msg) return;
+
+    // Kiểm tra xem đã react với emoji này chưa
+    const alreadyReacted = msg.reactions?.[emoji]?.some(uid => String(uid) === String(currentUserId));
+
+    // 1. Optimistic Update: Cập nhật UI ngay lập tức
+    dispatch(toggleMessageReaction({
+      conversationId: realId,
+      messageId,
+      emoji,
+      userId: currentUserId
+    }));
+
     try {
-      await dispatch(updateMessageReactions({ conversationId: realId, messageId, reactions: { [emoji]: [currentUser.userId] } }));
-      // Gọi API thực tế
       const { chatApi } = require('../../../src/api/chatApi');
-      await chatApi.addReaction(messageId, realId, { emoji });
-    } catch (error) {
-      if (error.response?.status !== 401) {
-        console.error('Reaction error:', error);
+      if (alreadyReacted) {
+        await chatApi.removeReaction(messageId, realId, { emoji });
+      } else {
+        await chatApi.addReaction(messageId, realId, { emoji });
       }
+    } catch (error) {
+      // Nếu lỗi, thực hiện toggle lại để hoàn tác (revert)
+      dispatch(toggleMessageReaction({
+        conversationId: realId,
+        messageId,
+        emoji,
+        userId: currentUserId
+      }));
+      console.error('Reaction error:', error);
     }
   };
 
@@ -126,7 +222,7 @@ const ChatDetailScreen = () => {
 
   const isOnline = useMemo(() => {
     if (conversation?.type === 'GROUP') return false;
-    return otherMember?.status === 'ONLINE' || otherMember?.isOnline === true;
+    return String(otherMember?.status || '').toUpperCase() === 'ONLINE' || otherMember?.isOnline === true;
   }, [conversation, otherMember]);
 
   const onlineUsers = useMemo(() => {
@@ -175,9 +271,26 @@ const ChatDetailScreen = () => {
         }
         break;
       case 'delete':
-        Alert.alert('Xác nhận', 'Bạn có muốn xóa tin nhắn này?', [
+        Alert.alert('Xác nhận', 'Bạn có muốn xóa tin nhắn này ở phía bạn?', [
           { text: 'Hủy', style: 'cancel' },
-          { text: 'Xóa', onPress: () => {} } // Sẽ implement API sau
+          { text: 'Xóa', onPress: () => {
+            // Implement delete local logic if needed
+          }} 
+        ]);
+        break;
+      case 'recall':
+        Alert.alert('Thu hồi tin nhắn', 'Tin nhắn này sẽ bị thu hồi với tất cả mọi người. Bạn có chắc chắn?', [
+          { text: 'Hủy', style: 'cancel' },
+          { 
+            text: 'Thu hồi', 
+            style: 'destructive',
+            onPress: () => {
+              dispatch(recallMessage({ 
+                messageId: message.messageId, 
+                conversationId: realId 
+              }));
+            } 
+          }
         ]);
         break;
       default:
@@ -245,34 +358,52 @@ const ChatDetailScreen = () => {
                 blurRadius={10}
               >
                 <MessageList
+                  ref={flatListRef}
                   messages={messages}
                   conversationId={realId}
                   currentUserId={currentUser?.userId || currentUser?.id}
                   onlineUsers={onlineUsers}
                   typingUsers={chatState.typingUsers?.[realId] || []}
-                  sendReadReceipt={sendReadReceipt}
+                  sendReadReceipt={guardedSendReadReceipt}
                   onLoadMore={handleLoadMore}
                   onReact={handleReaction}
                   onLongPress={handleLongPressMessage}
+                  onPressReply={handleScrollToMessage}
+                  highlightedMessageId={highlightedMessageId}
                 />
               </ImageBackground>
             </View>
           ) : (
             <MessageList
+              ref={flatListRef}
               messages={messages}
               conversationId={realId}
               currentUserId={currentUser?.userId || currentUser?.id}
               onlineUsers={onlineUsers}
               typingUsers={chatState.typingUsers?.[realId] || []}
-              sendReadReceipt={sendReadReceipt}
+              sendReadReceipt={guardedSendReadReceipt}
+              onPressMessage={handlePressMessage}
               onLoadMore={handleLoadMore}
               onReact={handleReaction}
               onLongPress={handleLongPressMessage}
+              onPressReply={handleScrollToMessage}
+              highlightedMessageId={highlightedMessageId}
             />
           )}
         </View>
 
-        <MessageInput onSendMessage={handleSendMessage} />
+        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: '#fff' }}>
+          <MessageInput 
+            onSendMessage={handleSendMessage} 
+            onTypingChange={(isTyping) => {
+              if (isTyping) {
+                sendTypingStart(realId);
+              } else {
+                sendTypingStop(realId);
+              }
+            }}
+          />
+        </View>
 
         <MessageModal
           visible={modalVisible}

@@ -21,6 +21,12 @@ export const chatApi = {
   deleteConversation: (id) => axiosClient.delete(`/conversations/${encodeURIComponent(id)}/me`), // Alias for backward compatibility
   updateWallpaper: (conversationId, wallpaperUrl) =>
     axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/wallpaper`, { wallpaperUrl }),
+  renameConversation: (conversationId, name) =>
+    axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/name`, { name }),
+  updateConversationTag: (conversationId, tag) =>
+    axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/tag`, { tag }),
+  toggleChatRestriction: (conversationId) =>
+    axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`),
   
   uploadMedia: (file, folder = 'chat') => {
     const formData = new FormData();
@@ -41,6 +47,15 @@ export const chatApi = {
   createVote: (conversationId, data) => axiosClient.post(`/messages/${encodeURIComponent(conversationId)}/vote`, data),
   submitVote: (conversationId, messageId, data) => axiosClient.put(`/messages/${encodeURIComponent(conversationId)}/vote/${messageId}`, data),
   closeVote: (conversationId, messageId) => axiosClient.put(`/messages/${encodeURIComponent(conversationId)}/vote/${messageId}/close`),
+  
+  // AI assistant actions
+  getGroupSummary: (conversationId, timeRange = 0) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/summary?timeRange=${timeRange}`),
+  getGroupStats: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/stats`),
+  draftAnnouncement: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/announcement`),
+  askAI: (conversationId, question) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/ask`, { question }),
+  translateText: (content, targetLang = 'Tiếng Việt') => axiosClient.post('/ai/translate', { content, targetLang }),
+  getSmartReplies: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/suggest-replies`),
+  extractTasks: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/extract-tasks`),
 };
 
 export default chatApi;

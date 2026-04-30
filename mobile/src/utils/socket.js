@@ -16,12 +16,12 @@ let userUpdateHandlers = new Set();
 let wallpaperUpdateHandlers = new Set();
 let globalHandlers = new Set();
 
-export const initializeSocket = (token, userId, globalHandler) => {
-  globalHandlers.clear();
+export const initializeSocket = (token, userId, globalHandler = null) => {
   if (globalHandler) globalHandlers.add(globalHandler);
-  if (stompClient && stompClient.connected) {
-    console.log('📡 Mobile socket already connected');
-    return stompClient;
+
+  if (stompClient) {
+    console.log('🔌 Deactivating old socket for fresh initialization...');
+    stompClient.deactivate();
   }
 
   const baseUrl = CONFIG.API_URL.split('/api')[0];
@@ -47,9 +47,22 @@ export const initializeSocket = (token, userId, globalHandler) => {
     onConnect: (frame) => {
       console.log('✅ Mobile STOMP Connected. User:', frame.headers['user-name']);
       
-      // Đảm bảo luôn subscribe lại khi connect/reconnect
-      console.log('📡 Mobile Subscribing to /user/queue/messages...');
-      stompClient.subscribe('/user/queue/messages', (message) => {
+      // 1. Subscribe to presence (online/offline)
+      console.log('📡 Mobile Subscribing to /topic/presence...');
+      stompClient.subscribe('/topic/presence', (message) => {
+        try {
+          const payload = JSON.parse(message.body);
+          console.log('👤 Presence update:', payload.userId, payload.status);
+          statusHandlers.forEach(handler => handler(payload));
+        } catch (e) {
+          console.error('❌ Error parsing presence message:', e);
+        }
+      });
+
+      // 2. Subscribe to user-specific queues
+      console.log('📡 Mobile Subscribing to /user/queue/messages and /user/queue/conversations...');
+      
+      const handleEvent = (message) => {
         try {
           const event = JSON.parse(message.body);
           console.log('📥 Mobile received event:', event.eventType, 'for conversation:', event.conversationId);
@@ -62,17 +75,17 @@ export const initializeSocket = (token, userId, globalHandler) => {
             console.log('💬 Processing MESSAGE_SEND:', msg.messageId);
             messageHandlers.forEach(handler => handler(msg));
           } else if (event.eventType === 'USER_TYPING') {
-            typingHandlers.forEach(handler => handler(event.payload));
+            typingHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
           } else if (event.eventType === 'MESSAGE_EDIT') {
             editHandlers.forEach(handler => handler(event.payload));
           } else if (event.eventType === 'MESSAGE_DELETE') {
             deleteHandlers.forEach(handler => handler(event.payload));
           } else if (event.eventType === 'MESSAGE_RECALL') {
-            recallHandlers.forEach(handler => handler(event.payload));
+            recallHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
           } else if (event.eventType === 'MESSAGE_REACTION') {
-            reactionHandlers.forEach(handler => handler(event.payload));
+            reactionHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
           } else if (event.eventType === 'MESSAGE_STATUS_UPDATE' || event.eventType === 'MESSAGE_UPDATE') {
-            messageUpdateHandlers.forEach(handler => handler(event.payload));
+            messageUpdateHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
           } else if (event.eventType === 'MESSAGE_READ') {
             readHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
           } else if (event.eventType === 'WALLPAPER_UPDATED' || (event.eventType === 'CONVERSATION_UPDATE' && event.payload && Object.prototype.hasOwnProperty.call(event.payload, 'wallpaperUrl'))) {
@@ -91,7 +104,10 @@ export const initializeSocket = (token, userId, globalHandler) => {
         } catch (e) {
           console.error('❌ Error parsing STOMP message:', e);
         }
-      });
+      };
+
+      stompClient.subscribe('/user/queue/messages', handleEvent);
+      stompClient.subscribe('/user/queue/conversations', handleEvent);
     },
     onStompError: (frame) => {
       console.error('❌ STOMP error:', frame.headers['message']);
@@ -116,8 +132,11 @@ export const onUserTyping = (handler) => typingHandlers.add(handler);
 export const offUserTyping = (handler) => typingHandlers.delete(handler);
 
 export const onMessageEdit = (handler) => editHandlers.add(handler);
+export const offMessageEdit = (handler) => editHandlers.delete(handler);
 export const onMessageDelete = (handler) => deleteHandlers.add(handler);
+export const offMessageDelete = (handler) => deleteHandlers.delete(handler);
 export const onMessageRecall = (handler) => recallHandlers.add(handler);
+export const offMessageRecall = (handler) => recallHandlers.delete(handler);
 export const onReaction = (handler) => reactionHandlers.add(handler);
 export const offReaction = (handler) => reactionHandlers.delete(handler);
 export const onMessageUpdate = (handler) => messageUpdateHandlers.add(handler);
@@ -175,6 +194,15 @@ export const emitReadReceipt = (messageId, conversationId) => {
   }
 };
 
+export const emitRecallMessage = (messageId, conversationId) => {
+  if (stompClient?.connected) {
+    stompClient.publish({
+      destination: '/app/message.recall',
+      body: JSON.stringify({ messageId, conversationId }),
+    });
+  }
+};
+
 export const disconnectSocket = () => {
   if (stompClient) {
     stompClient.deactivate();
@@ -205,5 +233,6 @@ export default {
   emitSendMessage,
   emitTypingStart,
   emitTypingStop,
-  emitReadReceipt
+  emitReadReceipt,
+  emitRecallMessage,
 };

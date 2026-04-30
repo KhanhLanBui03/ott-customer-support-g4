@@ -135,7 +135,7 @@ const ChatInfoScreen = () => {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={() => router.replace(`/chat/${encodeURIComponent(realId)}`)} style={styles.backButton}>
           <Ionicons name="close" size={28} color="#fff" />
         </Pressable>
         <Text style={styles.headerTitle}>Thông tin hội thoại</Text>
@@ -160,12 +160,12 @@ const ChatInfoScreen = () => {
           <InfoItem
             icon={<MaterialIcons name="image" size={22} color="#94a3b8" />}
             label="ẢNH/VIDEO ĐÃ CHIA SẺ"
-            onPress={() => {}}
+            onPress={() => router.push(`/shared-media/${encodeURIComponent(realId || conversationId)}`)}
           />
           <InfoItem
             icon={<MaterialIcons name="insert-drive-file" size={22} color="#94a3b8" />}
             label="FILE ĐÃ CHIA SẺ"
-            onPress={() => {}}
+            onPress={() => router.push(`/shared-files/${encodeURIComponent(realId || conversationId)}`)}
           />
         </View>
 

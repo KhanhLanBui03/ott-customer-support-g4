@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -12,18 +12,64 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import CONFIG from '../config';
 import { setReplyingTo } from '../store/chatSlice';
-
-const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestReadBy = [], showReadStatus = true, onReact, onLongPress }) => {
+import { openFile } from '../utils/fileUtils';
+import * as FileSystem from 'expo-file-system/legacy';
+import MediaViewer from './MediaViewer';
+import VideoThumbnail from './VideoThumbnail';
+import FileViewerModal from './FileViewerModal';
+const ChatBubble = ({ 
+  message, 
+  isOwn: initialIsOwn, 
+  isOnline = false, 
+  latestReadBy = [], 
+  showReadStatus = true, 
+  onReact, 
+  onLongPress, 
+  onPressMessage,
+  isHighlighted = false,
+  allMessages = []
+}) => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const conversations = useSelector(state => state.chat.conversations);
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
 
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isHighlighted) {
+      Animated.sequence([
+        Animated.timing(highlightAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+  }, [isHighlighted]);
+
+  const highlightBorder = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#FFD700'], // Gold border
+  });
+
   const currentUserIdStr = String(user?.userId || user?.id || '');
+  
+  // State cho Media Viewer
+  const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
+  const [fileExists, setFileExists] = useState(false);
+  const [fileViewerVisible, setFileViewerVisible] = useState(false);
+  const [selectedFile, setSelectedFile] = useState({ url: '', name: '' });
   const isOwn = initialIsOwn || (currentUserIdStr !== '' && String(message.senderId || '') === currentUserIdStr);
   const [reactionModalVisible, setReactionModalVisible] = useState(false);
   const [selectedReactionEmoji, setSelectedReactionEmoji] = useState('');
@@ -32,6 +78,23 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
     setSelectedReactionEmoji(emoji);
     setReactionModalVisible(true);
   };
+
+  // Kiểm tra file có trong máy không
+  useEffect(() => {
+    if (message.type === 'FILE') {
+      const mediaUrls = message.mediaUrls || message.media_urls || [];
+      const url = mediaUrls[0];
+      if (url) {
+        const fileName = url.split('/').pop();
+        if (fileName) {
+          const fileUri = FileSystem.cacheDirectory + fileName;
+          FileSystem.getInfoAsync(fileUri).then(info => {
+            setFileExists(info.exists);
+          }).catch(() => setFileExists(false));
+        }
+      }
+    }
+  }, [message]);
 
   const closeReactionDetail = () => setReactionModalVisible(false);
 
@@ -47,38 +110,31 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
     return found?.fullName || found?.name || found?.username || 'Người dùng';
   };
 
-  // Animation for swipe to reply
   const translateX = useRef(new Animated.Value(0)).current;
 
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Nhạy hơn (dx > 10) và đảm bảo là vuốt ngang
         return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 10;
       },
       onPanResponderMove: (_, gestureState) => {
-        // Cho phép vuốt sang trái (âm), giới hạn tối đa -80 để tạo cảm giác chắc chắn
         if (gestureState.dx < 0) {
           const limitedDx = Math.max(gestureState.dx, -30);
           translateX.setValue(limitedDx);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        // Rút ngắn biên độ kích hoạt từ -50 xuống -40
         if (gestureState.dx < -10) {
-          // Kích hoạt trả lời
           dispatch(setReplyingTo(message));
         }
-        // Luôn trả về vị trí cũ mượt mà với hiệu ứng Spring nhanh hơn
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 100, // Tăng độ nảy
+          tension: 100,
           friction: 8
         }).start();
       },
       onPanResponderTerminate: () => {
-        // Đảm bảo không bị kẹt khi bị gián đoạn
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true
@@ -93,7 +149,7 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
     return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
-  const senderInfo = React.useMemo(() => {
+  const senderInfo = useMemo(() => {
     if (isOwn) return null;
     const msgSenderId = String(message.senderId || '');
     for (const conv of conversations) {
@@ -124,7 +180,6 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
 
   const renderReactions = () => {
     if (!message.reactions || Object.keys(message.reactions).length === 0) return null;
-
     return (
       <View style={[styles.reactionsContainer, isOwn ? styles.ownReactions : styles.otherReactions]}>
         {Object.entries(message.reactions).map(([emoji, users]) => {
@@ -161,13 +216,15 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
       return { id: String(reader || ''), avatarUrl: null, name: null };
     };
 
+    const msgSenderId = String(message.senderId || '');
     const readers = readSource
       .map(mapReader)
-      .filter((reader) => reader.id && reader.id !== currentUserIdStr)
+      .filter((reader) => reader.id && reader.id !== msgSenderId)
       .reduce((unique, reader) => {
         if (!unique.some((r) => r.id === reader.id)) unique.push(reader);
         return unique;
       }, []);
+
     if (readers.length === 0) return null;
 
     return (
@@ -183,7 +240,6 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
               }
             }
           }
-
           return (
             <Image
               key={`read-${reader.id}-${index}`}
@@ -203,19 +259,15 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
 
   const renderDeliveryStatus = () => {
     if (!isOwn || !showReadStatus) return null;
-
     const users = Array.isArray(latestReadBy) ? latestReadBy : [];
     const hasReadByOther = users.some((reader) => {
       const id = reader && typeof reader === 'object' ? String(reader.userId || reader.id || '') : String(reader || '');
       return id && id !== currentUserIdStr;
     });
-
     if (hasReadByOther) return null;
-
     const statusText = !isOnline ? 'Đã gửi' : 'Đã nhận';
     const iconName = !isOnline ? 'check' : 'check-circle';
     const iconColor = !isOnline ? '#6b7280' : '#4338ca';
-
     return (
       <View style={styles.deliveryStatus}>
         <MaterialIcons name={iconName} size={12} color={iconColor} />
@@ -245,8 +297,9 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
       )}
 
       <TouchableOpacity 
-        activeOpacity={0.8}
-        onLongPress={onLongPress}
+        activeOpacity={message.isRecalled ? 1 : 0.8}
+        onPress={() => !message.isRecalled && onPressMessage?.(message)}
+        onLongPress={() => !message.isRecalled && onLongPress?.()}
         style={[styles.messageWrapper, isOwn ? styles.ownWrapper : styles.otherWrapper]}
       >
         {!isOwn && (
@@ -256,40 +309,238 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
         )}
         
         <View style={[styles.bubbleContainer, isOwn ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
-          <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble]}>
-            {/* Reply Section */}
-            {message.replyTo && (
-              <View style={[styles.replyBubble, isOwn ? styles.ownReplyBubble : styles.otherReplyBubble]}>
-                <View style={styles.replyLine} />
-                <View style={styles.replyContent}>
-                  <Text style={styles.replySender} numberOfLines={1}>
-                    {(() => {
-                      const repliedUserId = String(message.replyTo.senderId || '');
-                      const currentMeId = String(user?.userId || user?.id || '');
-                      if (repliedUserId === currentMeId) return 'Bạn';
+          <Animated.View style={[
+            styles.bubble, 
+            isOwn ? styles.ownBubble : styles.otherBubble, 
+            { borderColor: highlightBorder, borderWidth: 2 }
+          ]}>
+            {message.replyTo && (() => {
+              const r = message.replyTo;
+              console.log('[ReplyDebug] Original Message ReplyTo:', r);
+              
+              // Fallback: Nếu Server không trả về mediaUrls trong replyTo, hãy thử tìm trong store cục bộ
+              let mediaUrls = r.mediaUrls || r.media_urls || [];
+              let type = r.type || '';
+              
+              if (mediaUrls.length === 0 || !type) {
+                // Tìm tin nhắn gốc trong danh sách tin nhắn hiện tại
+                const originalMsg = allMessages?.find(m => m.messageId === r.messageId);
+                if (originalMsg) {
+                  if (mediaUrls.length === 0) mediaUrls = originalMsg.mediaUrls || originalMsg.media_urls || [];
+                  if (!type) type = originalMsg.type || '';
+                  console.log('[ReplyDebug] Recovered from local store:', { type, mediaUrls });
+                }
+              }
+              const senderId = r.senderId || r.sender_id || '';
+              
+              // Tự động suy luận loại tin nhắn nếu Server trả về thiếu field 'type' (Self-healing)
+              if (!type && mediaUrls.length > 0) {
+                const firstUrl = mediaUrls[0].toLowerCase();
+                if (firstUrl.match(/\.(mp4|webm|ogg|mov)/i)) type = 'VIDEO';
+                else if (firstUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i)) type = 'IMAGE';
+                else type = 'FILE';
+              }
 
-                      let name = message.replyTo.senderName;
-                      for (const conv of conversations) {
-                        const found = (conv.members || []).find(m => String(m.userId || m.id || '') === repliedUserId);
-                        if (found) { name = found.fullName || found.name; break; }
-                      }
-                      return name;
-                    })()}
-                  </Text>
-                  <Text style={styles.replyText} numberOfLines={1}>{message.replyTo.content}</Text>
+              const isImageReply = type === 'IMAGE' || (type !== 'VIDEO' && type !== 'FILE' && mediaUrls.length > 0);
+              const isVideoReply = type === 'VIDEO';
+              const isFileReply = type === 'FILE';
+              
+              // Lấy cấu hình icon cho file trong reply
+              const getFileConfig = (u) => {
+                const ext = u.split('.').pop().split('?')[0].toLowerCase();
+                if (ext === 'pdf') return { color: '#ef4444', icon: 'file-pdf-box' };
+                if (['doc', 'docx'].includes(ext)) return { color: '#3b82f6', icon: 'file-word-box' };
+                if (['xls', 'xlsx'].includes(ext)) return { color: '#10b981', icon: 'file-excel-box' };
+                if (['zip', 'rar', '7z'].includes(ext)) return { color: '#f59e0b', icon: 'zip-box' };
+                return { color: '#6366f1', icon: 'file-document-outline' };
+              };
+
+              const thumbUrl = (isImageReply || isVideoReply) && mediaUrls[0] 
+                ? (mediaUrls[0].startsWith('http') ? mediaUrls[0] : `${BASE_URL}${mediaUrls[0].startsWith('/') ? '' : '/'}${mediaUrls[0]}`)
+                : null;
+
+              let typeLabel = '[Tin nhắn]';
+              if (isImageReply) typeLabel = '[Hình ảnh]';
+              else if (isVideoReply) typeLabel = '[Video]';
+              else if (isFileReply) {
+                const fileName = mediaUrls[0]?.split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '');
+                typeLabel = fileName ? decodeURIComponent(fileName) : '[Tệp tin]';
+              }
+
+              return (
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => onPressMessage?.(r.messageId)}
+                  style={[styles.replyBubble, isOwn ? styles.ownReplyBubble : styles.otherReplyBubble]}
+                >
+                  <View style={styles.replyLine} />
+                  
+                  {/* Hiển thị Thumbnail hoặc Icon File */}
+                  {isFileReply && mediaUrls[0] ? (
+                    <View style={[styles.replyThumbnail, { backgroundColor: getFileConfig(mediaUrls[0]).color, alignItems: 'center', justifyContent: 'center' }]}>
+                      <MaterialCommunityIcons name={getFileConfig(mediaUrls[0]).icon} size={18} color="#fff" />
+                    </View>
+                  ) : thumbUrl ? (
+                    <Image 
+                      source={{ uri: thumbUrl }} 
+                      style={styles.replyThumbnail} 
+                      resizeMode="cover" 
+                    />
+                  ) : null}
+
+                  <View style={styles.replyContent}>
+                    <Text style={styles.replySender} numberOfLines={1}>
+                      {(() => {
+                        const currentMeId = String(user?.userId || user?.id || '');
+                        if (String(senderId) === currentMeId) return 'Bạn';
+                        let name = r.senderName || r.sender_name;
+                        for (const conv of conversations) {
+                          const found = (conv.members || []).find(m => String(m.userId || m.id || '') === String(senderId));
+                          if (found) { name = found.fullName || found.name; break; }
+                        }
+                        return name || 'Người dùng';
+                      })()}
+                    </Text>
+                    <Text style={styles.replyText} numberOfLines={1}>
+                      {r.content || typeLabel}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })()}
+
+            {/* Media Content - Grid Layout */}
+            {!message.isRecalled && (() => {
+              const mediaUrls = message.mediaUrls || message.media_urls || [];
+              if (mediaUrls.length === 0) return null;
+
+              if (message.type === 'FILE') {
+                const url = mediaUrls[0];
+                if (!url) return null;
+                const fileName = url.split('/').pop();
+                const ext = fileName.split('.').pop().toUpperCase();
+                
+                const getFileColor = (u) => {
+                  const e = u.split('.').pop().toLowerCase();
+                  if (e === 'pdf') return '#ef4444';
+                  if (['doc', 'docx'].includes(e)) return '#3b82f6';
+                  if (['xls', 'xlsx'].includes(e)) return '#10b981';
+                  if (['zip', 'rar', '7z'].includes(e)) return '#f59e0b';
+                  return '#6366f1';
+                };
+
+                return (
+                  <TouchableOpacity 
+                    style={[styles.fileBubble, isOwn ? styles.ownFileBubble : styles.otherFileBubble]}
+                    onPress={async () => {
+                      const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+                      // Làm sạch tên file: bỏ UUID và decode URI
+                      const cleanName = decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''));
+                      setSelectedFile({ url: fullUrl, name: cleanName });
+                      setFileViewerVisible(true);
+                    }}
+                  >
+                    <View style={[styles.fileIconBig, { backgroundColor: getFileColor(url) }]}>
+                      <Text style={styles.fileIconText}>{ext}</Text>
+                    </View>
+                    <View style={styles.fileInfo}>
+                      <Text style={[styles.fileName, { color: isOwn ? '#fff' : '#1e293b' }]} numberOfLines={1}>
+                        {decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''))}
+                      </Text>
+                      <View style={styles.fileStatusRow}>
+                        <Text style={[styles.fileSize, { color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748b' }]}>
+                          {ext} • 22 KB
+                        </Text>
+                        {fileExists && (
+                          <View style={styles.downloadedBadge}>
+                            <MaterialIcons name="check-circle" size={12} color="#10b981" />
+                            <Text style={styles.downloadedText}>Đã có trên máy</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }
+
+              // Logic Grid
+              const total = mediaUrls.length;
+              const renderGridItem = (url, index, gridStyle) => {
+                const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+                const isLastItem = index === 3 && total > 4;
+                return (
+                  <TouchableOpacity 
+                    key={index} 
+                    activeOpacity={0.9} 
+                    style={[styles.gridImageContainer, gridStyle]}
+                    onPress={() => {
+                      setSelectedMediaIndex(index);
+                      setMediaViewerVisible(true);
+                    }}
+                  >
+                    {message.type === 'VIDEO' ? (
+                      <VideoThumbnail videoUrl={fullUrl} style={styles.gridImage} />
+                    ) : (
+                      <Image source={{ uri: fullUrl }} style={styles.gridImage} resizeMode="cover" />
+                    )}
+                    {isLastItem && (
+                      <View style={styles.moreImagesOverlay}><Text style={styles.moreImagesText}>+{total - 4}</Text></View>
+                    )}
+                  </TouchableOpacity>
+                );
+              };
+
+              let gridContent = null;
+              if (total === 1) gridContent = renderGridItem(mediaUrls[0], 0, styles.singleImage);
+              else if (total === 2) gridContent = (
+                <View style={styles.row}>
+                  {renderGridItem(mediaUrls[0], 0, styles.halfImage)}
+                  {renderGridItem(mediaUrls[1], 1, styles.halfImage)}
                 </View>
+              );
+              else if (total === 3) gridContent = (
+                <View style={styles.row}>
+                  {renderGridItem(mediaUrls[0], 0, styles.twoThirdImage)}
+                  <View style={styles.column}>
+                    {renderGridItem(mediaUrls[1], 1, styles.oneThirdImage)}
+                    {renderGridItem(mediaUrls[2], 2, styles.oneThirdImage)}
+                  </View>
+                </View>
+              );
+              else gridContent = (
+                <View style={styles.grid2x2}>
+                  <View style={styles.row}>
+                    {renderGridItem(mediaUrls[0], 0, styles.quarterImage)}
+                    {renderGridItem(mediaUrls[1], 1, styles.quarterImage)}
+                  </View>
+                  <View style={styles.row}>
+                    {renderGridItem(mediaUrls[2], 2, styles.quarterImage)}
+                    {renderGridItem(mediaUrls[3], 3, styles.quarterImage)}
+                  </View>
+                </View>
+              );
+
+              return <View style={styles.mediaGridContainer}>{gridContent}</View>;
+            })()}
+
+            {message.isRecalled ? (
+              <View style={styles.recalledContent}>
+                <MaterialIcons name="history" size={16} color={isOwn ? 'rgba(255,255,255,0.7)' : '#9ca3af'} style={{ marginRight: 4 }} />
+                <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : styles.otherRecalledText]}>
+                  Tin nhắn đã bị thu hồi
+                </Text>
               </View>
+            ) : (
+              message.content ? (
+                <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText, (message.mediaUrls?.length > 0) && { marginTop: 8 }]}>
+                  {message.content}
+                </Text>
+              ) : null
             )}
-
-            <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>
-              {message.isRecalled ? '[Tin nhắn đã thu hồi]' : message.content}
-            </Text>
-
             <Text style={[styles.timeInside, isOwn ? styles.ownTime : styles.otherTime]}>
               {formatTime(message.createdAt || Date.now())}
             </Text>
-          </View>
-
+          </Animated.View>
           {renderReactions()}
         </View>
 
@@ -341,6 +592,26 @@ const ChatBubble = ({ message, isOwn: initialIsOwn, isOnline = false, latestRead
           </View>
         </View>
       </Modal>
+
+      <MediaViewer 
+        visible={mediaViewerVisible}
+        onClose={() => setMediaViewerVisible(false)}
+        allMedia={(() => {
+          const mediaUrls = message.mediaUrls || message.media_urls || [];
+          return mediaUrls.map(url => ({
+            url: url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`,
+            type: message.type
+          }));
+        })()}
+        initialIndex={selectedMediaIndex}
+      />
+
+      <FileViewerModal
+        visible={fileViewerVisible}
+        onClose={() => setFileViewerVisible(false)}
+        fileUrl={selectedFile.url}
+        fileName={selectedFile.name}
+      />
     </Animated.View>
   );
 };
@@ -362,258 +633,190 @@ const styles = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 20 },
   ownText: { color: '#fff' },
   otherText: { color: '#1f2937' },
-  timeInside: {
-    fontSize: 10,
-    marginTop: 2,
-    alignSelf: 'flex-end',
-    minWidth: 45,
-    textAlign: 'right'
-  },
+  timeInside: { fontSize: 10, marginTop: 2, alignSelf: 'flex-end', minWidth: 45, textAlign: 'right' },
   ownTime: { color: 'rgba(255, 255, 255, 0.7)' },
   otherTime: { color: '#9ca3af' },
-
-  // Status (Seen)
-  statusContainer: {
-     marginTop: 6,
-       minHeight: 22,
-       zIndex: 1,
-  },
-  ownStatus: {
-    alignItems: 'flex-end',
-    paddingRight: 4,
-  },
-  otherStatus: {
-    alignItems: 'flex-start',
-    paddingLeft: 4,
-  },
-  deliveryStatus: {
+  statusContainer: { marginTop: 6, minHeight: 22, zIndex: 1 },
+  ownStatus: { alignItems: 'flex-end', paddingRight: 4 },
+  otherStatus: { alignItems: 'flex-start', paddingLeft: 4 },
+  deliveryStatus: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
+  deliveryStatusText: { fontSize: 11, marginLeft: 4, letterSpacing: 0.2 },
+  deliveryStatusOnline: { color: '#4338ca' },
+  deliveryStatusSent: { color: '#6b7280' },
+  replyBubble: { flexDirection: 'row', borderRadius: 8, padding: 8, marginBottom: 6, minWidth: 150, alignSelf: 'stretch' },
+  ownReplyBubble: { backgroundColor: 'rgba(255, 255, 255, 1)' },
+  otherReplyBubble: { backgroundColor: 'rgba(0, 0, 0, 0.05)' },
+  replyLine: { width: 3, backgroundColor: '#667eea', borderRadius: 2, marginRight: 8 },
+  replyContent: { flex: 1, justifyContent: 'center' },
+  replySender: { fontSize: 12, fontWeight: '700', color: '#667eea', marginBottom: 2 },
+  replyText: { fontSize: 12, color: '#6b7280' },
+  replyThumbnail: { width: 30, height: 30, borderRadius: 4, marginRight: 8 },
+  reactionsContainer: { position: 'absolute', bottom: -18, flexDirection: 'row', zIndex: 10, elevation: 4 },
+  ownReactions: { right: 0 },
+  otherReactions: { left: 0 },
+  readReceiptsContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 2 },
+  readAvatar: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: '#fff' },
+  moreReadersBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center', marginLeft: -6, borderWidth: 1.5, borderColor: '#fff' },
+  moreReadersText: { fontSize: 10, fontWeight: 'bold', color: '#6b7280' },
+  reactionBadge: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 6, paddingVertical: 2, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1 },
+  reactionEmoji: { fontSize: 12 },
+  reactionCount: { fontSize: 10, fontWeight: '700', marginLeft: 2, color: '#6b7280' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 16 },
+  modalContent: { width: '100%', maxWidth: 520, borderRadius: 24, overflow: 'hidden', backgroundColor: '#0f172a' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  closeButton: { padding: 8 },
+  modalBody: { flexDirection: 'row', minHeight: 220 },
+  modalEmojiColumn: { width: 90, paddingVertical: 14, paddingHorizontal: 10, backgroundColor: '#111827', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.08)' },
+  modalEmojiButton: { marginBottom: 10, backgroundColor: '#0f172a', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center' },
+  modalEmojiButtonActive: { backgroundColor: '#2563eb' },
+  modalEmoji: { fontSize: 20 },
+  modalEmojiCount: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  modalUserColumn: { flex: 1, padding: 16 },
+  modalSectionLabel: { color: '#94a3b8', marginBottom: 12, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  modalUserList: { paddingBottom: 18 },
+  modalUserItem: { marginBottom: 10, backgroundColor: '#1e293b', borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14 },
+  modalUserText: { color: '#fff', fontSize: 14 },
+  recalledContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 4,
   },
-  deliveryStatusText: {
-    fontSize: 11,
-    marginLeft: 4,
-    letterSpacing: 0.2,
+  recalledText: {
+    fontStyle: 'italic',
   },
-  deliveryStatusOnline: {
-    color: '#4338ca',
+  ownRecalledText: {
+    color: 'rgba(255,255,255,0.7)',
   },
-  deliveryStatusSent: {
-    color: '#6b7280',
+  otherRecalledText: {
+    color: '#9ca3af',
   },
-  deliveryStatusSending: {
-    color: '#667eea',
+  mediaGridContainer: {
+    width: 260,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
-
-  // Reply styles
-  replyBubble: {
+  row: {
     flexDirection: 'row',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 6,
-    minWidth: 150,
-    alignSelf: 'stretch',
   },
-  ownReplyBubble: {
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-  },
-  otherReplyBubble: {
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  replyLine: {
-    width: 3,
-    backgroundColor: '#667eea',
-    borderRadius: 2,
-    marginRight: 8,
-  },
-  replyContent: {
+  column: {
+    flexDirection: 'column',
     flex: 1,
+  },
+  gridImageContainer: {
+    padding: 1,
+    overflow: 'hidden',
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e5e7eb',
+  },
+  singleImage: {
+    width: 260,
+    height: 320,
+  },
+  halfImage: {
+    width: 130,
+    height: 180,
+  },
+  twoThirdImage: {
+    width: 173,
+    height: 240,
+  },
+  oneThirdImage: {
+    width: 87,
+    height: 120,
+  },
+  grid2x2: {
+    width: 260,
+    height: 260,
+  },
+  quarterImage: {
+    width: 130,
+    height: 130,
+  },
+  moreImagesOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  replySender: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#667eea',
-    marginBottom: 2,
-  },
-  replyText: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-
-  // Reactions
-  reactionsContainer: {
-    position: 'absolute',
-    bottom: -18,
-    flexDirection: 'row',
-    zIndex: 10,
-    elevation: 4,
-  },
-  ownReactions: {
-    right: 0,
-  },
-  otherReactions: {
-    left: 0,
-  },
-  // Seen Indicators
-  readReceiptsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  readAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  moreReadersBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: -6,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  moreReadersText: {
-    fontSize: 10,
+  moreImagesText: {
+    color: '#fff',
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#6b7280',
   },
-  reactionBadgeWrapper: {
-    marginRight: 6,
-    marginBottom: 4,
-    alignItems: 'flex-start',
+  playIconOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
-  reactionBadge: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+  fileBubble: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    minWidth: 240,
+    maxWidth: '100%',
+    marginVertical: 4,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    elevation: 2,
+  },
+  ownFileBubble: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  otherFileBubble: {
+    backgroundColor: '#fff',
+    borderColor: '#e2e8f0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  reactionDetails: {
-    marginTop: 2,
-    backgroundColor: '#f9fafb',
+  fileIconBig: {
+    width: 44,
+    height: 44,
     borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    maxWidth: 200,
-  },
-  reactionDetailsText: {
-    fontSize: 10,
-    color: '#374151',
-  },
-  reactionEmoji: {
-    fontSize: 12,
-  },
-  reactionCount: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginLeft: 2,
-    color: '#6b7280',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
   },
-  modalContent: {
-    width: '100%',
-    maxWidth: 520,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: '#0f172a',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  modalTitle: {
+  fileIconText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '900',
   },
-  closeButton: {
-    padding: 8,
-  },
-  modalBody: {
-    flexDirection: 'row',
-    minHeight: 220,
-  },
-  modalEmojiColumn: {
-    width: 90,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    backgroundColor: '#111827',
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.08)',
-  },
-  modalEmojiButton: {
-    marginBottom: 10,
-    backgroundColor: '#0f172a',
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-  },
-  modalEmojiButtonActive: {
-    backgroundColor: '#2563eb',
-  },
-  modalEmoji: {
-    fontSize: 20,
-  },
-  modalEmojiCount: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
-  modalUserColumn: {
+  fileInfo: {
     flex: 1,
-    padding: 16,
+    marginLeft: 12,
   },
-  modalSectionLabel: {
-    color: '#94a3b8',
-    marginBottom: 12,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  modalUserList: {
-    paddingBottom: 18,
-  },
-  modalUserItem: {
-    marginBottom: 10,
-    backgroundColor: '#1e293b',
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  modalUserText: {
-    color: '#fff',
+  fileName: {
     fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  fileStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fileSize: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  downloadedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  downloadedText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#10b981',
   },
 });
 
-export default ChatBubble;
+export default React.memo(ChatBubble);

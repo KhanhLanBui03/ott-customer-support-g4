@@ -7,8 +7,11 @@ import com.chatapp.modules.auth.dto.request.UpdateProfileRequest;
 import com.chatapp.modules.auth.repository.UserRepository;
 import com.chatapp.modules.auth.service.SessionService;
 import com.chatapp.common.util.ValidationUtil;
+import com.chatapp.modules.conversation.repository.ConversationRepository;
+import com.chatapp.modules.conversation.repository.UserConversationRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -131,7 +134,14 @@ public class UserController {
     @org.springframework.beans.factory.annotation.Autowired
     private com.chatapp.common.util.JwtUtil jwtUtil;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private SessionService sessionService;
+
     private String getUserId(jakarta.servlet.http.HttpServletRequest request) {
+        
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return jwtUtil.extractUserId(authHeader.substring(7));
