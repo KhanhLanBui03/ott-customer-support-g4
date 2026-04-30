@@ -59,9 +59,16 @@ const HomeScreen = () => {
 
     const isOnline = otherMember?.status === 'ONLINE' || otherMember?.isOnline === true;
 
+    const isUnread = item.isUnread === true;
+    const unreadCount = item.unreadCount || 0;
+    const unreadText = unreadCount > 9 ? '9+' : String(unreadCount);
+    const isOwnLastMessage = String(item.lastMessageSenderId || item.lastSenderId || '') === currentUserId;
+    const lastMessagePreview = item.lastMessage || 'Chưa có tin nhắn';
+    const previewText = isOwnLastMessage ? `Bạn: ${lastMessagePreview}` : lastMessagePreview;
+
     return (
       <TouchableOpacity
-        style={styles.conversationItem}
+        style={[styles.conversationItem, isUnread && styles.conversationItemUnread]}
         onPress={() => router.push(`/chat/${encodeURIComponent(item.conversationId)}`)}
       >
         <View style={styles.avatarContainer}>
@@ -71,12 +78,19 @@ const HomeScreen = () => {
         <View style={styles.conversationInfo}>
           <View style={styles.conversationHeader}>
             <Text style={styles.conversationName} numberOfLines={1}>{displayName}</Text>
-            <Text style={styles.conversationTime}>
-              {item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-            </Text>
+            <View style={styles.rightLabel}>
+              {unreadCount > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>{unreadText}</Text>
+                </View>
+              )}
+              <Text style={styles.conversationTime}>
+                {item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.lastMessage} numberOfLines={1}>
-            {item.lastMessage || 'Chưa có tin nhắn'}
+          <Text style={[styles.lastMessage, isUnread && styles.lastMessageUnread]} numberOfLines={1}>
+            {previewText}
           </Text>
         </View>
       </TouchableOpacity>
@@ -139,6 +153,32 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
+  conversationItemUnread: {
+    backgroundColor: '#eef2ff',
+  },
+  rightLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#4338ca',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  lastMessageUnread: {
+    fontWeight: '700',
+    color: '#111827',
+  },
   avatarContainer: { position: 'relative' },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#f3f4f6' },
   onlineBadge: {
@@ -157,6 +197,7 @@ const styles = StyleSheet.create({
   conversationName: { fontSize: 16, fontWeight: '600', color: '#1f2937' },
   conversationTime: { fontSize: 12, color: '#9ca3af' },
   lastMessage: { fontSize: 14, color: '#6b7280' },
+  lastMessageUnread: { fontWeight: '700', color: '#111827' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100 },
   emptyText: { color: '#9ca3af', fontSize: 16 },

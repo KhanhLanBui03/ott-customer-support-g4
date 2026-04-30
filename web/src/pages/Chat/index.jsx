@@ -91,8 +91,12 @@ const Chat = () => {
 
     // Auto-refresh notifications every 30 seconds as fallback
     const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [fetchConversations, dispatch]);
+    return () => {
+      clearInterval(interval);
+      // Xóa active conversation khi thoát khỏi màn hình chat chính để tránh auto-read "ma"
+      selectConversation(null);
+    };
+  }, [fetchConversations, dispatch, selectConversation]);
 
   useEffect(() => {
     const disconnect = connect((stream) => setRemoteStream(stream));

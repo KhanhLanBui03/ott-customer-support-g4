@@ -10,9 +10,9 @@ import axiosClient from './axiosClient';
 
 export const mediaApi = {
   // Upload file to S3
-  uploadMedia: (formData) => {
+  uploadMedia: (formData, folder = 'chat') => {
     // Expected formData: FormData object with 'file' and 'conversationId'
-    return axiosClient.post('/media/upload', formData, {
+    return axiosClient.post(`/media/upload?folder=${folder}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

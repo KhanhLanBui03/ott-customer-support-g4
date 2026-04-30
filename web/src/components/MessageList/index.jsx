@@ -235,6 +235,30 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const meId = user?.userId || user?.id;
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
 
+  // Synchronize optimistic reactions with server state
+  useEffect(() => {
+    if (!messages) return;
+    setOptimisticReactions(prev => {
+      const newState = { ...prev };
+      let changed = false;
+      messages.forEach(msg => {
+        if (newState[msg.messageId]) {
+          // If server has reactions, filter out the ones we have optimistically added that are now in server state
+          if (msg.reactions) {
+            const originalLength = newState[msg.messageId].length;
+            newState[msg.messageId] = newState[msg.messageId].filter(local => {
+              const serverUsers = msg.reactions[local.emoji] || [];
+              return !serverUsers.some(uid => String(uid) === String(local.userId));
+            });
+            if (newState[msg.messageId].length === 0) delete newState[msg.messageId];
+            if (originalLength !== (newState[msg.messageId]?.length || 0)) changed = true;
+          }
+        }
+      });
+      return changed ? newState : prev;
+    });
+  }, [messages]);
+
 
 
   useEffect(() => {
@@ -244,16 +268,23 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
+            // Chỉ gửi read receipt nếu tab đang hiển thị
+            // NOTE: Removed document.hasFocus() - khi web-web trên cùng máy, cửa sổ khác mất focus
+            if (document.visibilityState !== 'visible') {
+              return;
+            }
+
             const messageId = entry.target.getAttribute('data-message-id');
             if (messageId && !messageId.startsWith('temp-')) {
               console.log(`[ReadReceipt] 👁️ Message visible: ${messageId}`);
               sendRead(conversationId, messageId);
+              // Stop observing once sent
               observer.unobserve(entry.target);
             }
           }
         });
       },
-      { threshold: 0.1, rootMargin: '0px 0px -10% 0px' }
+      { threshold: 0.1, rootMargin: '0px 0px 0px 0px' }
     );
 
     const messageElements = document.querySelectorAll(`[data-message-sender]`);
@@ -264,12 +295,37 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       const msgId = el.getAttribute('data-message-id');
       const msg = messages.find(m => String(m.messageId) === String(msgId));
 
-      if (msg && (!msg.readBy || !msg.readBy.includes(meId))) {
+      // ONLY observe if I HAVEN'T read it yet
+      if (msg && (!msg.readBy || !msg.readBy.some(id => String(id) === String(meId)))) {
         observer.observe(el);
       }
     });
 
     return () => observer.disconnect();
+  }, [messages, conversationId, meId, sendRead]);
+
+  // FIX: Khi tab trở lại visible (từ hidden), gửi read receipt cho tin nhắn cuối cùng chưa đọc
+  useEffect(() => {
+    if (!conversationId || !messages || messages.length === 0) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Tìm tin nhắn cuối cùng của người khác mà mình chưa đọc
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          if (String(msg.senderId) !== String(meId) &&
+              msg.messageId && !String(msg.messageId).startsWith('temp-') &&
+              (!msg.readBy || !msg.readBy.some(id => String(id) === String(meId)))) {
+            console.log(`[ReadReceipt] 👁️ Tab became visible, marking last unread: ${msg.messageId}`);
+            sendRead(conversationId, msg.messageId);
+            break;
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [messages, conversationId, meId, sendRead]);
 
 
@@ -588,7 +644,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
     return (
       <div className={cn(
-        "absolute -bottom-3 flex items-center z-30",
+        "absolute -bottom-5 flex items-center z-30",
         isMe ? 'right-0' : 'left-0'
       )}>
         <div className="flex items-center space-x-1">
@@ -1016,18 +1072,20 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
                                 </div>
 
-                                {/* Seen Avatars - Moved outside the w-fit bubble-main to avoid vertical displacement */}
+                                  {/* Seen Avatars - Moved outside the w-fit bubble-main to avoid vertical displacement */}
                                 <div className={cn(
                                   "flex items-center px-1 min-h-[20px]",
                                   ((msg.reactions && Object.keys(msg.reactions).length > 0) || (optimisticReactions[msg.messageId] && optimisticReactions[msg.messageId].length > 0)) ? "mt-4" : "mt-2",
                                   isMe ? 'justify-end' : 'justify-start ml-1'
                                 )}>
-                                  {isMe && msg.readBy && msg.readBy.length > 0 && (
+                                  {msg.readBy && msg.readBy.length > 0 && isMe && (
                                     <div className="flex items-center space-x-[-6px] transition-all duration-500 animate-in fade-in slide-in-from-right-2">
                                       {msg.readBy.filter(vId => {
                                         const readerId = String(vId);
-                                        if (readerId === String(meId)) return false;
+                                        // 1. Chỉ hiển thị avatar người khác đã xem dưới tin nhắn của chính mình gửi
+                                        if (readerId === String(msg.senderId)) return false;
 
+                                        // 2. CHỈ hiển thị nếu đây là tin nhắn MỚI NHẤT mà người này đã đọc
                                         const isLatestRead = !messages.slice(index + 1).some(m =>
                                           m.readBy && m.readBy.some(id => String(id) === readerId)
                                         );
@@ -1073,7 +1131,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
                                           const isOtherOnline = currentConv?.members?.some(m =>
                                             String(m.userId || m.id) !== String(meId) &&
-                                            String(m.status || m.presence || '').toUpperCase() === 'ONLINE'
+                                            (String(m.status || m.presence || '').toUpperCase() === 'ONLINE' || m.isOnline === true)
                                           );
 
                                           if (isOtherOnline) {

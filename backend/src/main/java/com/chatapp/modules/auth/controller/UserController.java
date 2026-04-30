@@ -7,8 +7,11 @@ import com.chatapp.modules.auth.dto.request.UpdateProfileRequest;
 import com.chatapp.modules.auth.repository.UserRepository;
 import com.chatapp.modules.auth.service.SessionService;
 import com.chatapp.common.util.ValidationUtil;
+import com.chatapp.modules.conversation.repository.ConversationRepository;
+import com.chatapp.modules.conversation.repository.UserConversationRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,7 +31,9 @@ public class UserController {
 
     private final UserRepository userRepository;
     private final ValidationUtil validationUtil;
-    private final SessionService sessionService;
+    private final com.chatapp.modules.message.event.MessageEventListener messageEventListener;
+    private final ConversationRepository conversationRepository;
+    private final UserConversationRepository userConversationRepository;
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMe(Authentication authentication) {
@@ -74,6 +79,42 @@ public class UserController {
         user.setUpdatedAt(System.currentTimeMillis());
         userRepository.save(user);
 
+        // Notify all conversations this user is part of to update their cached member info
+        String fullName = user.getFullName();
+        String avatarUrl = user.getAvatarUrl();
+        
+        java.util.List<com.chatapp.modules.conversation.domain.UserConversation> userConvs = 
+            userConversationRepository.findByUserIdOrderByUpdatedAtDesc(userId);
+            
+        for (com.chatapp.modules.conversation.domain.UserConversation uc : userConvs) {
+            String convId = uc.getConversationId();
+            
+            // Update the UserConversation record if it's a SINGLE chat
+            if (convId.startsWith("SINGLE#")) {
+                // We need to update the UserConversation record of the OTHER person
+                String[] parts = convId.split("#");
+                String otherUserId = parts[1].equals(userId) ? parts[2] : parts[1];
+                
+                userConversationRepository.findById(otherUserId, convId).ifPresent(otherUc -> {
+                    otherUc.setName(fullName);
+                    otherUc.setAvatarUrl(avatarUrl);
+                    userConversationRepository.save(otherUc);
+                });
+            }
+
+            // Broadcast an event to all members of this conversation
+            java.util.Map<String, Object> updatePayload = new java.util.HashMap<>();
+            updatePayload.put("userId", userId);
+            updatePayload.put("fullName", fullName);
+            updatePayload.put("avatarUrl", avatarUrl);
+            
+            eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of(
+                "USER_UPDATE", 
+                convId, 
+                updatePayload
+            ));
+        }
+
         Map<String, Object> data = new java.util.HashMap<>();
         data.put("userId", user.getUserId());
         data.put("phoneNumber", user.getPhoneNumber());
@@ -93,7 +134,14 @@ public class UserController {
     @org.springframework.beans.factory.annotation.Autowired
     private com.chatapp.common.util.JwtUtil jwtUtil;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private SessionService sessionService;
+
     private String getUserId(jakarta.servlet.http.HttpServletRequest request) {
+        
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return jwtUtil.extractUserId(authHeader.substring(7));
