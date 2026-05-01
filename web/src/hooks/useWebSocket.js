@@ -48,6 +48,7 @@ export const useWebSocket = () => {
 
             if (event.eventType === 'MESSAGE_SEND') {
                 const msg = event.payload;
+                try { console.debug('[useWebSocket] incoming MESSAGE_SEND payload', event.conversationId, msg); } catch(e){}
                 dispatch(addMessage({
                     conversationId: event.conversationId,
                     message: msg,
