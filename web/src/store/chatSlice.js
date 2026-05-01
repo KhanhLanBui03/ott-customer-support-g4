@@ -36,9 +36,14 @@ const initialState = {
   replyingTo: null,
 };
 
-const isAudioUrl = (value) => typeof value === 'string' && /\.(mp3|m4a|webm|wav|ogg|opus)(\?|$)/i.test(value);
+const isAudioUrl = (value) => {
+  if (typeof value !== 'string') return false;
+  return /\.(mp3|m4a|webm|wav|ogg|opus|aac)(\?|$)/i.test(value) || 
+         value.includes('chat-media/') || 
+         value.includes('voice-messages/');
+};
 
-const urlRegex = /(https?:\/\/[^\s"'<>]+\.(?:mp3|m4a|webm|wav|ogg|opus|mp4|jpg|jpeg|png|gif|svg)(?:\?[^\s"'<>]*)?)/gi;
+const urlRegex = /(https?:\/\/[^\s"'<>]+\.(?:mp3|m4a|webm|wav|ogg|opus|aac|mp4|jpg|jpeg|png|gif|svg)(?:\?[^\s"'<>]*)?)/gi;
 
 const extractCandidateUrls = (source) => {
   const candidates = [];
@@ -104,7 +109,7 @@ const getMessagePreviewText = (message) => {
 
   const firstMediaUrl = Array.isArray(message.mediaUrls) && message.mediaUrls.length > 0 ? message.mediaUrls[0] : '';
   if (message.type === 'VOICE' || isAudioUrl(firstMediaUrl) || isAudioUrl(message.content)) {
-    return '[Tin nhắn thoại]';
+    return 'Tin nhắn thoại';
   }
 
   if (Array.isArray(message.mediaUrls) && message.mediaUrls.length > 0) {
@@ -297,7 +302,7 @@ const chatSlice = createSlice({
     setUserStatus: (state, action) => {
       const { userId, status, lastSeenAt } = action.payload;
 
-      // Update in all conversations where this user is a member
+      // 1. Update in all conversations where this user is a member
       state.conversations.forEach(conv => {
         if (conv.members) {
           const member = conv.members.find(m => String(m.userId || m.id) === String(userId));
@@ -308,6 +313,15 @@ const chatSlice = createSlice({
           }
         }
       });
+
+      // 2. Update in friends list
+      if (state.friends) {
+        const friend = state.friends.find(f => String(f.userId || f.id) === String(userId));
+        if (friend) {
+          friend.status = status;
+          if (lastSeenAt) friend.lastSeenAt = lastSeenAt;
+        }
+      }
     },
     pinMessageOptimistic: (state, action) => {
       const { conversationId, messageId } = action.payload;
@@ -480,7 +494,12 @@ const chatSlice = createSlice({
         const uniqueConvs = (action.payload || []).reduce((acc, current) => {
           const x = acc.find(item => String(item.conversationId) === String(current.conversationId));
           if (!x) {
-            return acc.concat([current]);
+            // Format lastMessage if it's a voice URL
+            let lastMessage = current.lastMessage;
+            if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
+              lastMessage = "Tin nhắn thoại";
+            }
+            return acc.concat([{ ...current, lastMessage }]);
           } else {
             return acc;
           }

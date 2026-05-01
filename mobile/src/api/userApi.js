@@ -40,6 +40,11 @@ export const userApi = {
   searchUser: (phoneNumber) => {
     return axiosClient.get('/users/search', { params: { phoneNumber } });
   },
+
+  // Delete account (lock for 30 days)
+  deleteAccount: () => {
+    return axiosClient.delete('/users/me');
+  },
 };
 
 /**

@@ -64,6 +64,12 @@ export const authApi = {
     // Expected: { currentPassword, newPassword }
     return axiosClient.post('/auth/change-password', data);
   },
+
+  // Restoration APIs
+  restoreVerifyPhone: (data) => axiosClient.post('/auth/restore/verify-phone', data),
+  restoreSendOtp: (email) => axiosClient.post('/auth/restore/send-otp', { email }),
+  restoreVerifyOtp: (data) => axiosClient.post('/auth/restore/verify-otp', data),
+  restoreResetPassword: (data) => axiosClient.post('/auth/restore/reset-password', data),
 };
 
 export default authApi;
