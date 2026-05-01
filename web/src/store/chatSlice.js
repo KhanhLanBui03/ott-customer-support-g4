@@ -36,6 +36,84 @@ const initialState = {
   replyingTo: null,
 };
 
+const isAudioUrl = (value) => typeof value === 'string' && /\.(mp3|m4a|webm|wav|ogg|opus)(\?|$)/i.test(value);
+
+const urlRegex = /(https?:\/\/[^\s"'<>]+\.(?:mp3|m4a|webm|wav|ogg|opus|mp4|jpg|jpeg|png|gif|svg)(?:\?[^\s"'<>]*)?)/gi;
+
+const extractCandidateUrls = (source) => {
+  const candidates = [];
+
+  const pushCandidate = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(pushCandidate);
+      return;
+    }
+    if (typeof value === 'string') {
+      candidates.push(value);
+      return;
+    }
+    if (typeof value === 'object') {
+      ['url', 'fileUrl', 'mediaUrl', 'voiceUrl', 'audioUrl', 'attachmentUrl', 'src'].forEach((key) => {
+        if (value[key]) pushCandidate(value[key]);
+      });
+    }
+  };
+
+  if (!source || typeof source !== 'object') return candidates;
+
+  if (Array.isArray(source.attachments)) source.attachments.forEach(pushCandidate);
+  if (Array.isArray(source.files)) source.files.forEach(pushCandidate);
+
+  ['fileUrl', 'mediaUrl', 'voiceUrl', 'audioUrl', 'attachmentUrl', 'url', 'src'].forEach((key) => {
+    if (source[key]) pushCandidate(source[key]);
+  });
+
+  if (source.payload) pushCandidate(source.payload);
+
+  const text = String(source.content || '');
+  const matches = text.match(urlRegex);
+  if (matches && matches.length > 0) candidates.push(...matches);
+
+  const serialized = JSON.stringify(source);
+  const deepMatches = serialized.match(urlRegex);
+  if (deepMatches && deepMatches.length > 0) candidates.push(...deepMatches);
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+};
+
+const normalizeMessage = (message) => {
+  const msg = { ...message };
+  const candidates = extractCandidateUrls(msg);
+
+  if (candidates.length > 0) {
+    msg.mediaUrls = msg.mediaUrls && msg.mediaUrls.length > 0 ? msg.mediaUrls : candidates;
+
+    const firstMediaUrl = msg.mediaUrls[0];
+    if (isAudioUrl(firstMediaUrl) || isAudioUrl(msg.content)) {
+      msg.type = 'VOICE';
+    }
+  }
+
+  return msg;
+};
+
+const getMessagePreviewText = (message) => {
+  if (!message) return '';
+  if (message.isRecalled) return '[Tin nhắn đã bị thu hồi]';
+
+  const firstMediaUrl = Array.isArray(message.mediaUrls) && message.mediaUrls.length > 0 ? message.mediaUrls[0] : '';
+  if (message.type === 'VOICE' || isAudioUrl(firstMediaUrl) || isAudioUrl(message.content)) {
+    return '[Tin nhắn thoại]';
+  }
+
+  if (Array.isArray(message.mediaUrls) && message.mediaUrls.length > 0) {
+    return '[Đính kèm]';
+  }
+
+  return message.content || '';
+};
+
 const chatSlice = createSlice({
   name: 'chat',
   initialState,
@@ -48,10 +126,11 @@ const chatSlice = createSlice({
     },
     setMessages: (state, action) => {
       const { conversationId, messages } = action.payload;
-      state.messages[conversationId] = messages;
+      state.messages[conversationId] = Array.isArray(messages) ? messages.map(normalizeMessage) : messages;
     },
     addMessage: (state, action) => {
       const { conversationId, message, currentUserId } = action.payload;
+      const normalizedMessage = normalizeMessage(message);
       if (!state.messages[conversationId]) {
         state.messages[conversationId] = [];
       }
@@ -64,29 +143,29 @@ const chatSlice = createSlice({
       const optimisticIdx = messages.findIndex(m =>
         m.status === 'SENDING' &&
         String(m.senderId) === myId &&
-        (m.type === message.type) &&
-        (message.type === 'TEXT' ? m.content === message.content : true) &&
+        (m.type === normalizedMessage.type) &&
+        (normalizedMessage.type === 'TEXT' ? m.content === normalizedMessage.content : true) &&
         (now - (m.createdAt || 0)) < 10000
       );
 
       if (optimisticIdx !== -1) {
         messages[optimisticIdx] = {
-          ...message,
+          ...normalizedMessage,
           status: 'SENT',
-          mediaUrls: message.mediaUrls && message.mediaUrls.length > 0 ? message.mediaUrls : messages[optimisticIdx].mediaUrls
+          mediaUrls: normalizedMessage.mediaUrls && normalizedMessage.mediaUrls.length > 0 ? normalizedMessage.mediaUrls : messages[optimisticIdx].mediaUrls
         };
-      } else if (!messages.find(m => m.messageId === message.messageId)) {
-        messages.push(message);
+      } else if (!messages.find(m => m.messageId === normalizedMessage.messageId)) {
+        messages.push(normalizedMessage);
       }
 
       // 2. Cập nhật danh sách hội thoại
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
-        const isOtherSender = String(message.senderId) !== myId;
-        const isOpenConversation = String(state.activeConversationId) === String(conversationId);
+        const isOtherSender = String(normalizedMessage.senderId) !== myId;
+        const isOpenConversation = state.activeConversationId === conversationId;
 
-        conv.lastMessage = message.content;
-        conv.lastMessageTime = message.createdAt;
+        conv.lastMessage = getMessagePreviewText(normalizedMessage);
+        conv.lastMessageTime = normalizedMessage.createdAt;
 
         conv.lastMessageSenderId = message.senderId;
         conv.lastMessageSenderName = message.senderName;
@@ -129,12 +208,13 @@ const chatSlice = createSlice({
     updateMessage: (state, action) => {
       const { conversationId, message } = action.payload;
       if (state.messages[conversationId]) {
-        const idx = state.messages[conversationId].findIndex(m => m.messageId === message.messageId);
+        const normalizedMessage = normalizeMessage(message);
+        const idx = state.messages[conversationId].findIndex(m => m.messageId === normalizedMessage.messageId);
         if (idx !== -1) {
           // Merge fields instead of replacing to avoid losing data like senderName/mediaUrls
           state.messages[conversationId][idx] = {
             ...state.messages[conversationId][idx],
-            ...message
+            ...normalizedMessage
           };
         }
       }
@@ -158,7 +238,7 @@ const chatSlice = createSlice({
         if (messages && messages.length > 0) {
           const lastMsg = messages[messages.length - 1];
           if (lastMsg.messageId === messageId) {
-            conv.lastMessage = "[Tin nhắn đã bị thu hồi]";
+            conv.lastMessage = getMessagePreviewText(lastMsg);
           }
         }
       }
@@ -175,7 +255,7 @@ const chatSlice = createSlice({
         const messages = state.messages[conversationId];
         if (messages && messages.length > 0) {
           const lastMsg = messages[messages.length - 1];
-          conv.lastMessage = lastMsg.isRecalled ? "[Tin nhắn đã bị thu hồi]" : lastMsg.content;
+          conv.lastMessage = getMessagePreviewText(lastMsg);
           conv.lastMessageTime = lastMsg.createdAt;
         } else {
           conv.lastMessage = "";

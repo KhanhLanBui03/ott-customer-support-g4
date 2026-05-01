@@ -51,16 +51,7 @@ export const useWebSocket = () => {
 
             if (event.eventType === 'MESSAGE_SEND' || event.eventType === 'MESSAGE_NEW') {
                 const msg = event.payload;
-                const conversationId = event.conversationId;
-
-                // Kiểm tra xem hội thoại đã tồn tại trong sidebar chưa
-                const convExists = conversationsRef.current.some(c => String(c.conversationId) === String(conversationId));
-                
-                if (!convExists) {
-                    console.log('[STOMP] 🆕 Nhận tin nhắn từ hội thoại mới, đang tải lại danh sách...');
-                    dispatch(fetchConversations());
-                }
-
+                try { console.debug('[useWebSocket] incoming MESSAGE_SEND payload', event.conversationId, msg); } catch(e){}
                 dispatch(addMessage({
                     conversationId: event.conversationId,
                     message: msg,

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Play, Pause, Volume2, Languages } from 'lucide-react';
+import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Play, Pause, Volume2, Languages, Sparkles as SparklesIcon } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
@@ -974,7 +974,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : '',
                                     "overflow-hidden transition-all duration-300"
                                   )}>
-                                    {msg.type === 'VOICE' ? (
+                                    {(msg.type === 'VOICE' || (msg.mediaUrls && msg.mediaUrls[0] && (msg.mediaUrls[0].match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)))) ? (
                                       <div className="p-2">
                                         {msg.mediaUrls && msg.mediaUrls[0] && (
                                           <VoicePlayer url={msg.mediaUrls[0]} />

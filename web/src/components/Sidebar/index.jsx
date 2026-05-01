@@ -9,6 +9,26 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
   const { user } = useSelector(state => state.auth);
   const [tagMenuId, setTagMenuId] = useState(null);
 
+  const isAudioUrl = (value) => typeof value === 'string' && /\.(mp3|m4a|webm|wav|ogg|opus)(\?|$)/i.test(value);
+
+  const getPreviewText = (conv) => {
+    const raw = String(conv?.lastMessage || '').trim();
+    if (!raw) return '';
+
+    if (raw === '[Tin nhắn đã bị thu hồi]') return raw;
+
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      if (isAudioUrl(raw)) return '[Tin nhắn thoại]';
+      return '[Đính kèm]';
+    }
+
+    if (/^\[(attachment|đính kèm|file|tin nhắn thoại)\]$/i.test(raw)) {
+      return raw;
+    }
+
+    return raw;
+  };
+
   const TAGS = [
     { key: 'customer', label: 'Khách hàng', color: 'bg-red-500' },
     { key: 'family', label: 'Gia đình', color: 'bg-emerald-500' },
@@ -177,7 +197,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                           ) : conv.type === 'GROUP' && conv.lastMessageSenderName ? (
                             <span className="text-foreground/50 mr-1 font-semibold">{conv.lastMessageSenderName.split(' ').pop()}:</span>
                           ) : null}
-                          {conv.lastMessage}
+                          {getPreviewText(conv)}
                         </>
                       ) : (
                         <div className="flex items-center space-x-2">

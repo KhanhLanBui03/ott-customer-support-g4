@@ -133,7 +133,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
 
       if (voiceUrl) {
         const optimisticMsg = {
-          content: '',
+          content: voiceUrl,
           senderId: user?.userId || user?.id,
           mediaUrls: [voiceUrl],
           type: 'VOICE',
@@ -143,7 +143,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
         };
 
         dispatch(addOptimisticMessage({ conversationId, message: optimisticMsg }));
-        sendMessage(conversationId, '', 'VOICE', [voiceUrl], replyingTo?.messageId);
+        sendMessage(conversationId, voiceUrl, 'VOICE', [voiceUrl], replyingTo?.messageId);
 
         if (replyingTo) onCancelReply();
         setText('');
