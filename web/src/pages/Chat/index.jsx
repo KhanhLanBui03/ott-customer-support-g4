@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useChat } from '../../hooks/useChat';
 import { useAuth } from '../../hooks/useAuth';
-import { useVideoCall } from '../../hooks/useVideoCall';
+import { useAgoraCall } from '../../hooks/useAgoraCall';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Sidebar from '../../components/Sidebar';
 import ChatWindow from '../../components/ChatWindow';
@@ -70,19 +70,41 @@ const Chat = () => {
     { key: 'colleague', label: 'Đồng nghiệp', color: 'bg-blue-500' }
   ];
 
-  // Call management
-  const [localStream, setLocalStream] = useState(null);
-  const [remoteStream, setRemoteStream] = useState(null);
+  const activeConversation = conversations.find(c => c.conversationId === activeConversationId) || (
+    activeConversationId?.includes('shop-expert-ai-bot') ? {
+      conversationId: activeConversationId,
+      name: 'Ecommerce AI Expert',
+      type: 'SINGLE',
+      isAI: true,
+      avatar: null,
+      members: [
+        { userId: user?.userId || user?.id, status: 'ONLINE', name: user?.name },
+        { userId: 'shop-expert-ai-bot', status: 'ONLINE', name: 'ShopExpert AI' }
+      ]
+    } : null
+  );
+
+  // ─── Agora Video Call ────────────────────────────────────────────────────
   const {
     callStatus,
+    callerId,
+    callerName,
     incomingSignal,
+    callType,
+    cameraError,
     duration,
     formatDuration,
     startCall,
     acceptCall,
     endCall,
-    connect
-  } = useVideoCall(activeConversationId);
+    connect,
+    localVideoTrack,
+    localAudioTrack,
+    remoteUsers,
+    toggleMic,
+    toggleCamera,
+  } = useAgoraCall(activeConversationId, activeConversation);
+
 
   useEffect(() => {
     fetchConversations();
@@ -108,44 +130,113 @@ const Chat = () => {
   }, [fetchConversations, dispatch, selectConversation]);
 
   useEffect(() => {
-    const disconnect = connect((stream) => setRemoteStream(stream));
+    const disconnect = connect();
     return () => disconnect?.();
   }, [connect]);
 
-  const handleStartCall = () => {
-    startCall(
-      (stream) => setLocalStream(stream),
-      (stream) => setRemoteStream(stream)
-    );
-  };
+  const handleStartCall = (type = 'video') => startCall(type);
 
-  const handleAcceptCall = () => {
-    acceptCall(
-      incomingSignal,
-      (stream) => setLocalStream(stream),
-      (stream) => setRemoteStream(stream)
-    );
-  };
+  const handleAcceptCall = () => acceptCall(incomingSignal);
 
-  const handleHangup = () => {
-    endCall();
-    setLocalStream(null);
-    setRemoteStream(null);
-  };
+  const handleHangup = () => endCall();
 
-  const activeConversation = conversations.find(c => c.conversationId === activeConversationId) || (
-    activeConversationId?.includes('shop-expert-ai-bot') ? {
-      conversationId: activeConversationId,
-      name: 'Ecommerce AI Expert',
-      type: 'SINGLE',
-      isAI: true,
-      avatar: null,
-      members: [
-        { userId: user?.userId || user?.id, status: 'ONLINE', name: user?.name },
-        { userId: 'shop-expert-ai-bot', status: 'ONLINE', name: 'ShopExpert AI' }
-      ]
-    } : null
-  );
+
+  // ─── Thông tin người nghe/gọi (phải đặt SAU activeConversation) ──────────
+  const myId = user?.userId || user?.id;
+
+  const remoteInfo = React.useMemo(() => {
+    // 1. Nếu có callerId, nghĩa là mình đang NHẬN cuộc gọi (Incoming)
+    if (callerId) {
+      const callConv = conversations.find(c => c.conversationId === incomingSignal?.conversationId);
+      
+      // Nếu là cuộc gọi Nhóm, hiển thị Tên và Avatar của Nhóm
+      if (callConv?.type === 'GROUP' || incomingSignal?.signal?.conversationType === 'GROUP') {
+        return { 
+          name: callConv?.name || incomingSignal?.signal?.conversationName || 'Nhóm trò chuyện', 
+          avatar: callConv?.avatar || incomingSignal?.signal?.conversationAvatar || null 
+        };
+      }
+      
+      // Nếu là cuộc gọi Cá nhân (SINGLE), hiển thị người gọi
+      let avatar = incomingSignal?.signal?.senderAvatar || null;
+      let name = callerName;
+      
+      // Tìm trong cuộc hội thoại 1-1 trước
+      if (callConv) {
+        const found = callConv.members?.find(m => String(m.userId) === String(callerId));
+        if (found) { 
+          avatar = found.avatar || found.avatarUrl || avatar; 
+          if (found.fullName || found.name) {
+              name = found.fullName || found.name;
+          }
+        }
+      }
+
+      // FALLBACK: Nếu vẫn chưa có (ví dụ cuộc trò chuyện 1-1 chưa load), tìm trong TOÀN BỘ danh sách nhóm/bạn bè
+      if (!avatar || name === callerName) {
+        for (const conv of conversations) {
+          const found = conv.members?.find(m => String(m.userId) === String(callerId));
+          if (found) {
+            avatar = found.avatar || found.avatarUrl || avatar;
+            if (found.fullName || found.name) {
+                name = found.fullName || found.name;
+            }
+            if (avatar) break; // Dừng khi tìm thấy avatar
+          }
+        }
+      }
+
+      return { name, avatar };
+    }
+    
+    // 2. Nếu không có callerId, nghĩa là mình đang GỌI ĐI (Outgoing)
+    if (!activeConversation) return { name: 'Người dùng', avatar: null };
+
+    // Nếu là cuộc gọi Nhóm
+    if (activeConversation.type === 'GROUP') {
+      return { 
+        name: activeConversation.name || 'Nhóm trò chuyện', 
+        avatar: activeConversation.avatar || null 
+      };
+    }
+
+    // Nếu là cuộc gọi Cá nhân
+    const other = activeConversation.members?.find(m => String(m.userId) !== String(myId));
+    return {
+      name: other?.fullName || other?.name || activeConversation.name || 'Người dùng',
+      avatar: other?.avatar || other?.avatarUrl || null,
+    };
+  }, [callerId, callerName, conversations, activeConversation, myId, incomingSignal]);
+
+  // ─── Danh sách Remote Streams cho Group Call ─────────────────────────────
+  const remoteStreams = React.useMemo(() => {
+    if (!remoteUsers || remoteUsers.length === 0) return [];
+    
+    return remoteUsers.map(user => {
+      let memberName = 'Người dùng';
+      let memberAvatar = null;
+      
+      // Tìm thông tin user trong tất cả các cuộc hội thoại
+      for (const conv of conversations) {
+        const found = conv.members?.find(m => String(m.userId) === String(user.uid));
+        if (found) {
+          memberName = found.fullName || found.name || memberName;
+          memberAvatar = found.avatar || found.avatarUrl || memberAvatar;
+          break;
+        }
+      }
+      
+      return {
+        uid: user.uid,
+        videoTrack: user.videoTrack,
+        audioTrack: user.audioTrack,
+        hasVideo: user.hasVideo,
+        hasAudio: user.hasAudio,
+        name: memberName,
+        avatar: memberAvatar,
+      };
+    });
+  }, [remoteUsers, conversations]);
 
   const [contextMenu, setContextMenu] = useState(null);
 
@@ -626,6 +717,7 @@ const Chat = () => {
                 <ChatWindow
                   conversation={activeConversation}
                   onStartCall={handleStartCall}
+                  isCallActive={callStatus !== 'idle'}
                   onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                   isInfoOpen={isInfoOpen}
                   onBack={() => selectConversation(null)}
@@ -764,10 +856,17 @@ const Chat = () => {
       <VideoCall
         status={callStatus}
         duration={formatDuration()}
-        localStream={localStream}
-        remoteStream={remoteStream}
+        localVideoTrack={localVideoTrack}
+        localAudioTrack={localAudioTrack}
+        remoteStreams={remoteStreams}
+        remoteName={remoteInfo.name}
+        remoteAvatar={remoteInfo.avatar}
+        callType={callType}
+        cameraError={cameraError}
         onHangup={handleHangup}
         onAccept={handleAcceptCall}
+        onToggleMic={toggleMic}
+        onToggleCamera={toggleCamera}
       />
     </div >
   );

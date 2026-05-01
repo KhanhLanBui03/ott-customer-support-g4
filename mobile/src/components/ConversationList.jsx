@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getPreviewText } from '../utils/messageUtils';
 
 /**
  * ConversationList Component (Mobile)
@@ -78,7 +79,7 @@ const ConversationList = ({
             </Text>
           </View>
           <Text style={styles.previewText} numberOfLines={1}>
-            {item.lastMessage || 'No messages yet'}
+            {getPreviewText(item.lastMessage)}
           </Text>
         </View>
 
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundImage: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    backgroundColor: '#667eea',
   },
 
   avatarText: {

@@ -8,6 +8,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 
+import { getPreviewText } from '../utils/messageUtils';
+
 /**
  * ConversationItem Component
  * Displays a single conversation item with avatar, name, and last message
@@ -45,7 +47,7 @@ const ConversationItem = ({ conversation, onPress, isActive }) => {
         </View>
 
         <Text style={styles.preview} numberOfLines={1}>
-          {conversation.lastMessage || 'No messages yet'}
+          {getPreviewText(conversation.lastMessage)}
         </Text>
       </View>
     </TouchableOpacity>
