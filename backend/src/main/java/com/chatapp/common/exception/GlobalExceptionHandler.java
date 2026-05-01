@@ -132,6 +132,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(LockedAccountException.class)
+    public ResponseEntity<ApiResponse<?>> handleLockedAccountException(
+            LockedAccountException ex, WebRequest request) {
+        log.warn("LockedAccountException: {}", ex.getMessage());
+        ErrorDTO error = ErrorDTO.builder()
+                .code("ACCOUNT_LOCKED")
+                .message(ex.getMessage())
+                .metadata(Map.of("lockedAt", ex.getLockedAt()))
+                .build();
+        ApiResponse<?> response = ApiResponse.error(error, HttpStatus.FORBIDDEN.value());
+        response.setPath(request.getDescription(false).replace("uri=", ""));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<?>> handleGlobalException(Exception ex, WebRequest request) {
         log.error("Unexpected exception occurred", ex);

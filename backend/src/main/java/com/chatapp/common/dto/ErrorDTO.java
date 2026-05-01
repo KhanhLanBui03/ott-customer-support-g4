@@ -20,6 +20,7 @@ public class ErrorDTO {
     private String detail;
     private List<String> errors;
     private Map<String, String> fieldErrors;
+    private Map<String, Object> metadata;
     private LocalDateTime timestamp;
     
     public static ErrorDTO of(String code, String message) {

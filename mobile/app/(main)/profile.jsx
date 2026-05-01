@@ -18,6 +18,7 @@ import { logoutUser, restoreState } from '../../src/store/authSlice';
 import { clearChatState } from '../../src/store/chatSlice';
 import { userApi } from '../../src/api/userApi';
 import * as SecureStore from 'expo-secure-store';
+import DeleteAccountModal from '../../src/components/DeleteAccountModal';
 
 const ProfileScreen = () => {
   const dispatch = useDispatch();
@@ -25,6 +26,7 @@ const ProfileScreen = () => {
 
   const user = useSelector((state) => state.auth.user);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [showDeleteModal, setShowDeleteModal] = React.useState(false);
 
   const fetchLatestProfile = async () => {
     try {
@@ -165,7 +167,7 @@ const ProfileScreen = () => {
         <View style={[styles.section, { marginBottom: 30 }]}>
           <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>Vùng nguy hiểm</Text>
           <View style={styles.menuCard}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Xác nhận', 'Bạn có chắc muốn xóa tài khoản?')}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => setShowDeleteModal(true)}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="trash-outline" size={20} color="#ef4444" />
                 <Text style={[styles.menuItemText, { color: '#ef4444' }]}>Xóa tài khoản</Text>
@@ -174,6 +176,11 @@ const ProfileScreen = () => {
           </View>
         </View>
       </ScrollView>
+
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+      />
     </SafeAreaView>
   );
 };
