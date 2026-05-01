@@ -15,14 +15,28 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
     const raw = String(conv?.lastMessage || '').trim();
     if (!raw) return '';
 
+    // Handle recalled messages
     if (raw === '[Tin nhắn đã bị thu hồi]') return raw;
 
+    // Handle call JSON
+    if (raw.startsWith('{') && raw.includes('callType')) {
+      try {
+        const data = JSON.parse(raw);
+        return data.callType === 'video' ? '[Cuộc gọi video]' : '[Cuộc gọi thoại]';
+      } catch (e) {
+        // Fallback to raw if parsing fails
+      }
+    }
+
+    // Handle URLs
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
       if (isAudioUrl(raw)) return '[Tin nhắn thoại]';
       return '[Đính kèm]';
     }
 
-    if (/^\[(attachment|đính kèm|file|tin nhắn thoại)\]$/i.test(raw)) {
+    // Handle explicit tags
+    const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại'];
+    if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
       return raw;
     }
 
@@ -134,7 +148,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                 
                 <div className="flex items-center justify-between">
                   <div className={`text-[13px] truncate leading-tight flex-1 pr-2 flex items-center ${conv.unreadCount > 0 ? 'text-indigo-500 dark:text-indigo-400 font-bold' : 'text-foreground/60 font-medium'}`}>
-                    
+
                     {/* Tag Indicator at start of message line */}
                     <div className="relative mr-2 flex-shrink-0">
                       <button
@@ -146,11 +160,11 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                         style={{ clipPath: 'polygon(0% 0%, 75% 0%, 100% 50%, 75% 100%, 0% 100%)' }}
                         title="Phân loại"
                       />
-                      
+
                       {tagMenuId === conv.conversationId && (
                         <>
                           <div className="fixed inset-0 z-[60]" onClick={() => setTagMenuId(null)} />
-                          <div 
+                          <div
                              className="absolute left-0 top-full mt-2 w-48 border border-border dark:border-white/10 shadow-2xl rounded-xl py-1.5 z-[70] animate-in fade-in slide-in-from-top-2 duration-200"
                              style={{ backgroundColor: !document.documentElement.classList.contains('dark') ? '#ffffff' : '#1e2330' }}
                            >
@@ -193,27 +207,18 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                       {conv.lastMessage ? (
                         <>
                           {conv.lastMessageSenderId === (user?.userId || user?.id) ? (
-                            <span className="text-indigo-500 dark:text-indigo-400/70 mr-1 font-semibold">Bạn:</span>
+                            <span className="text-indigo-500 dark:text-indigo-400/70 mr-1 font-bold">Bạn:</span>
                           ) : conv.type === 'GROUP' && conv.lastMessageSenderName ? (
-                            <span className="text-foreground/50 mr-1 font-semibold">{conv.lastMessageSenderName.split(' ').pop()}:</span>
+                            <span className="text-foreground/50 mr-1 font-bold">{conv.lastMessageSenderName.split(' ').pop()}:</span>
                           ) : null}
                           {getPreviewText(conv)}
                         </>
                       ) : (
-                        <div className="flex items-center space-x-2">
-                          <span className="italic text-foreground/30 text-[11px] font-semibold">{statusText || 'Bắt đầu trò chuyện...'}</span>
-                          {conv.type === 'GROUP' && (
-                            <span className="text-[11px] font-semibold text-foreground/40 flex items-center">
-                              <span className="mx-1 text-foreground/20">|</span>
-                              <Users size={12} className="mr-1 opacity-70" />
-                              {conv.members?.length || 0}
-                            </span>
-                          )}
-                        </div>
+                        <span className="italic text-foreground/30 text-[11px] font-bold">{statusText || 'Bắt đầu trò chuyện...'}</span>
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2 flex-shrink-0">
                     {conv.unreadCount > 0 && (
                       <div className="min-w-[18px] h-[18px] px-1 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-500/30">
@@ -224,7 +229,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                     )}
 
                     <div className="hidden group-hover:flex items-center ml-1">
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onContextMenu(e, conv.conversationId);

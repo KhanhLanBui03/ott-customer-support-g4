@@ -188,15 +188,29 @@ export const useVideoCall = (conversationId) => {
         const answer = JSON.parse(signal.payload);
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
+        // ✅ FIX: Flush pending ICE candidates ngay sau khi setRemoteDescription
+        if (pendingIceRef.current.length > 0) {
+          console.log('[WebRTC] Flushing', pendingIceRef.current.length, 'pending ICE candidates');
+          for (const candidate of pendingIceRef.current) {
+            try {
+              await pc.addIceCandidate(candidate);
+            } catch (e) {
+              console.warn('[WebRTC] Failed to add pending ICE:', e);
+            }
+          }
+          pendingIceRef.current = [];
+        }
+
         setStatus('connected');
       }
 
       // ❗ nhận ICE
       if (type === 'ICE_CANDIDATE') {
         const pc = pcRef.current;
+        if (!pc) return;
         const candidate = new RTCIceCandidate(JSON.parse(signal.payload));
 
-        if (pc && pc.remoteDescription) {
+        if (pc.remoteDescription) {
           await pc.addIceCandidate(candidate);
         } else {
           pendingIceRef.current.push(candidate);
@@ -213,16 +227,16 @@ export const useVideoCall = (conversationId) => {
     return () => offCallSignal(handler);
   }, []);
 
-  const startCall = useCallback(async (onLocalStream, onRemoteTrack) => {
+  const startCall = useCallback(async (onLocalStream) => {
     try {
       activeCallConvIdRef.current = conversationId;
 
       const stream = await getLocalStream();
 
-      // ✅ stream đã READY thật
-      onLocalStream(stream);
+      // ✅ Stream đã READY — cập nhật local video
+      onLocalStream?.(stream);
 
-      const pc = ensurePeer(onRemoteTrack);
+      const pc = ensurePeer();
 
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
@@ -237,22 +251,36 @@ export const useVideoCall = (conversationId) => {
       setStatus('outgoing');
 
     } catch (e) {
+      console.error('[WebRTC] startCall error:', e);
       setError(e.message);
       endCall(false);
     }
   }, [conversationId, ensurePeer, getLocalStream, endCall, setStatus]);
 
-  const acceptCall = useCallback(async (signalData, onLocalStream, onRemoteTrack) => {
+  const acceptCall = useCallback(async (signalData, onLocalStream) => {
     try {
       const stream = await getLocalStream();
-      onLocalStream(stream);
+      onLocalStream?.(stream);
 
-      const pc = ensurePeer(onRemoteTrack);
+      const pc = ensurePeer();
 
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
       const offer = JSON.parse(signalData.signal.payload);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // ✅ FIX: Flush pending ICE candidates phía callee (bên nhận)
+      if (pendingIceRef.current.length > 0) {
+        console.log('[WebRTC] Callee flushing', pendingIceRef.current.length, 'pending ICE');
+        for (const candidate of pendingIceRef.current) {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch (e) {
+            console.warn('[WebRTC] Failed to add pending ICE:', e);
+          }
+        }
+        pendingIceRef.current = [];
+      }
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -264,6 +292,7 @@ export const useVideoCall = (conversationId) => {
 
       setStatus('connected');
     } catch (e) {
+      console.error('[WebRTC] acceptCall error:', e);
       setError(e.message);
       endCall(false);
     }
