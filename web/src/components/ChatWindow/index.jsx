@@ -13,7 +13,7 @@ import { useTheme } from '../../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
-const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBack, onRefreshMessages }) => {
+const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isInfoOpen, onBack, onRefreshMessages }) => {
   const { isDark } = useTheme();
   const conversationId = conversation?.conversationId;
   const { user } = useSelector(state => state.auth);
@@ -58,6 +58,36 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
 
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [pendingCallType, setPendingCallType] = useState(null);
+
+  const handleCallClick = (type) => {
+    if (currentConv?.type === 'GROUP') {
+      setPendingCallType(type);
+      setCountdown(3);
+    } else {
+      onStartCall(type);
+    }
+  };
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0 && pendingCallType) {
+      onStartCall(pendingCallType);
+      setPendingCallType(null);
+    }
+  }, [countdown, pendingCallType, onStartCall]);
+
+  useEffect(() => {
+    const handleStartCallAgain = (e) => {
+      const type = e.detail?.type || 'video';
+      handleCallClick(type);
+    };
+    window.addEventListener('START_CALL_AGAIN', handleStartCallAgain);
+    return () => window.removeEventListener('START_CALL_AGAIN', handleStartCallAgain);
+  }, []);
 
   useEffect(() => {
     if (replyingTo) {
@@ -127,7 +157,49 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
   }, [conversationId, fetchMessages, dispatch]);
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background transition-colors">
+    <div className="flex-1 flex flex-col h-full bg-background transition-colors overflow-hidden">
+      {/* ─── GROUP CALL COUNTDOWN OVERLAY ─── */}
+      {countdown > 0 && (
+        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative flex items-center justify-center">
+            {/* Vòng tròn loading */}
+            <svg className="w-48 h-48 animate-spin-slow" viewBox="0 0 100 100">
+              <circle
+                className="text-white/20 stroke-current"
+                strokeWidth="4"
+                cx="50" cy="50" r="45" fill="transparent"
+              />
+              <circle
+                className="text-indigo-500 stroke-current drop-shadow-[0_0_15px_rgba(99,102,241,0.8)]"
+                strokeWidth="4"
+                strokeLinecap="round"
+                cx="50" cy="50" r="45" fill="transparent"
+                strokeDasharray="282.7"
+                strokeDashoffset={282.7 - (282.7 * countdown) / 3}
+                style={{ transition: 'stroke-dashoffset 1s linear' }}
+              />
+            </svg>
+
+            {/* Số đếm ngược */}
+            <span className="absolute text-7xl font-black text-white drop-shadow-2xl">
+              {countdown}
+            </span>
+          </div>
+          <p className="mt-8 text-2xl font-bold text-white/90 animate-pulse">
+            {pendingCallType === 'audio' ? 'Chuẩn bị gọi thoại nhóm...' : 'Chuẩn bị gọi video nhóm...'}
+          </p>
+          <button
+            onClick={() => {
+              setCountdown(0);
+              setPendingCallType(null);
+            }}
+            className="mt-8 px-8 py-3 rounded-full bg-white/10 hover:bg-red-500/80 text-white font-medium transition-all hover:scale-105 active:scale-95"
+          >
+            Hủy
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className={`
         ${onBack ? 'h-20 px-4' : 'h-[88px] px-8'} 
@@ -176,7 +248,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
               </span>
               
               <div className="w-px h-3 bg-border mx-1" />
-              
+
               {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (
                 <span className="text-[11px] font-medium text-slate-400">
                   {(() => {
@@ -213,7 +285,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
                     currentConv?.tag ? 'bg-surface-100 shadow-sm border border-border/50' : 'text-slate-400'
                   }`}
                 >
-                  <div 
+                  <div
                     className={`w-2.5 h-2.5 rounded-sm rotate-45 transition-transform group-hover:scale-110 ${
                       currentConv?.tag 
                         ? TAGS.find(t => t.key === currentConv.tag)?.color 
@@ -227,7 +299,7 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
                 </button>
 
                 {isTagMenuOpen && (
-                  <div 
+                  <div
                     ref={tagMenuRef}
                     className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-border dark:border-white/10 shadow-2xl rounded-2xl py-2 z-[100001] animate-in fade-in slide-in-from-top-4 duration-300"
                     onClick={(e) => e.stopPropagation()}
@@ -254,9 +326,9 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
                            <span className={`text-[14px] font-bold ${currentConv?.tag === tag.key ? 'text-indigo-600' : 'text-foreground/70 dark:text-white/80'}`}>{tag.label}</span>
                          </button>
                        ))}
-                       
+
                        <div className="h-px bg-border dark:bg-white/5 my-2 mx-2" />
-                       
+
                        {currentConv?.tag && (
                          <button
                            onClick={async (e) => {
@@ -292,14 +364,16 @@ const ChatWindow = ({ conversation, onStartCall, onToggleInfo, isInfoOpen, onBac
         <div className="flex items-center space-x-2 sm:space-x-4">
           <div className="hidden sm:flex items-center bg-surface-200 p-1 rounded-2xl border border-cursor-dark/5">
             <button
-              onClick={onStartCall}
-              className="p-2.5 hover:bg-white hover:text-cursor-dark text-slate-500 dark:text-slate-400 rounded-xl transition-all shadow-sm"
+              onClick={() => handleCallClick('audio')}
+              disabled={isCallActive}
+              className="p-2.5 hover:bg-white hover:text-cursor-dark text-slate-500 dark:text-slate-400 rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Phone size={18} />
             </button>
             <button
-              onClick={onStartCall}
-              className="p-2.5 hover:bg-white hover:text-cursor-dark text-slate-500 dark:text-slate-400 rounded-xl transition-all shadow-sm"
+              onClick={() => handleCallClick('video')}
+              disabled={isCallActive}
+              className="p-2.5 hover:bg-white hover:text-cursor-dark text-slate-500 dark:text-slate-400 rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Video size={18} />
             </button>

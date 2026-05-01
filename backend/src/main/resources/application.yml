@@ -1,4 +1,5 @@
 server:
+  address: 0.0.0.0
   port: 8080
   servlet:
     context-path: /
@@ -87,12 +88,12 @@ aws.s3:
 
 # CORS Configuration
 cors:
-  allowed-origins:
-    - http://localhost:3000
-    - http://localhost:5173
-    - http://localhost:8081
-    - http://localhost:19000
-    - http://localhost:19006
+  allowed-origin-patterns:
+    - "http://localhost:*"
+    - "http://192.168.1.*:*"
+    - "http://172.*.*.*:*"
+    - "http://10.*.*.*:*"
+    - "http://*.local:*"
   allowed-methods:
     - GET
     - POST
@@ -174,3 +175,9 @@ twilio:
   account-sid: ${TWILIO_ACCOUNT_SID:dummy_sid}
   auth-token: ${TWILIO_AUTH_TOKEN:dummy_token}
   from-number: ${TWILIO_FROM_NUMBER:dummy_number}
+
+# Agora Configuration (Video Call)
+agora:
+  app-id: 0c719244693d48a58aeafa9e941689f1
+  app-certificate: ""
+  token-expiry-seconds: 3600

@@ -27,7 +27,9 @@ export const chatApi = {
     axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/tag`, { tag }),
   toggleChatRestriction: (conversationId) =>
     axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`),
-  
+
+  // sendMessage: (data) => axiosClient.post('/messages/send', data),
+
   uploadMedia: (file, folder = 'chat') => {
     const formData = new FormData();
     formData.append('file', file);
@@ -36,7 +38,7 @@ export const chatApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  
+
   uploadVoiceMessage: (file) => {
     const formData = new FormData();
     formData.append('file', file);

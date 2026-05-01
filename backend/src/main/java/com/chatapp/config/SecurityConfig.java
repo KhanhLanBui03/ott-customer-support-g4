@@ -97,9 +97,9 @@ public class SecurityConfig {
                 configuration.setAllowedOriginPatterns(Arrays.asList(
                                 "http://localhost:*",
                                 "http://127.0.0.1:*",
-                                "http://172.*",
-                                "http://192.*",
-                                "http://10.*",
+                                "http://172.*:*",
+                                "http://192.*:*",
+                                "http://10.*:*",
                                 "*")); // Cho phép tất cả trong môi trường dev
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
                 configuration.setAllowedHeaders(Arrays.asList(

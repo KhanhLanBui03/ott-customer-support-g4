@@ -1,6 +1,37 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PhoneOff, Shield, CheckCheck, Check, Clock, MoreHorizontal, Reply, Trash2, Pin, Image as ImageIcon, FileText, Download, Forward, Users, Lock, Unlock, Info, BarChart2, X, Loader2, Plus, Play, Pause, Volume2, Languages } from 'lucide-react';
+import {
+  PhoneOff,
+  Shield,
+  CheckCheck,
+  Check,
+  Clock,
+  MoreHorizontal,
+  Reply,
+  Trash2,
+  Pin,
+  Image as ImageIcon,
+  FileText,
+  Download,
+  Forward,
+  Users,
+  Lock,
+  Unlock,
+  Info,
+  BarChart2,
+  X,
+  Loader2,
+  Plus,
+  Play,
+  Pause,
+  Volume2,
+  Languages,
+  Sparkles as SparklesIcon,
+  Video as VideoIcon,
+  Phone,
+  ArrowUpRight,
+  ArrowDownLeft
+} from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
@@ -742,7 +773,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                 const isLastInGroup = index === messages.length - 1 || (nextMsg && nextMsg.senderId !== msg.senderId) || (nextMsg && (nextMsg.createdAt - msg.createdAt > 120000)) || (nextMsg && nextMsg.type === 'SYSTEM');
 
                 const isMe = msg.senderId === meId;
-                const isCall = msg.type === 'CALL_LOG';
+                const isCall = msg.type === 'CALL_LOG' || (msg.content && (msg.content.includes('Call') || msg.content.includes('Cuộc gọi') || msg.content.startsWith('{')));
                 const isSystem = msg.type === 'SYSTEM';
                 const isRecalled = msg.isRecalled;
                 const isPinned = pinnedIds.includes(msg.messageId);
@@ -828,8 +859,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               </div>
                             )}
                             {msg.replyTo && (
-                              <div 
-                                onClick={() => onScrollToMessage(msg.replyTo.messageId)} 
+                              <div
+                                onClick={() => onScrollToMessage(msg.replyTo.messageId)}
                                 className={cn(
                                   "mb-1 flex items-stretch p-2.5 rounded-xl border-l-[3px] border-indigo-500 cursor-pointer transition-all max-w-sm overflow-hidden shadow-sm",
                                   isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-gray-50',
@@ -839,7 +870,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                 {(() => {
                                   const originalMsg = messages.find(m => m.messageId === msg.replyTo.messageId);
                                   const hasMedia = originalMsg && ((originalMsg.mediaUrls && originalMsg.mediaUrls.length > 0) || originalMsg.type === 'STICKER');
-                                  
+
                                   return (
                                     <>
                                       {hasMedia && (
@@ -890,15 +921,79 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                 <Trash2 size={14} className="opacity-50" />
                                 <span className="text-[13px] font-medium">Tin nhắn đã bị thu hồi</span>
                               </div>
-                            ) : isCall ? (
-                              <div className="px-6 py-4 bg-background rounded-[24px] shadow-xl shadow-indigo-500/5 dark:shadow-black/20 flex items-center space-x-4 border border-border group-hover:scale-[1.02] transition-transform">
-                                <div className="p-3 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-full"><PhoneOff size={20} /></div>
-                                <div>
-                                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500/60 mb-0.5">VoIP Event</p>
-                                  <p className="text-sm font-black tracking-tight text-foreground">{msg.content}</p>
+                            ) : isCall ? (() => {
+                              let callData = null;
+                              try {
+                                if (msg.type === 'CALL_LOG') callData = JSON.parse(msg.content);
+                              } catch (e) {}
+
+                              const cType = callData?.callType || 'video';
+                              const cStatus = callData?.status || 'MISSED';
+                              const duration = callData?.duration || 0;
+
+                              let title = '';
+                              let subtitle = '';
+                              let isMissed = false;
+                              let ArrowIcon = null;
+                              let iconColor = 'text-slate-400';
+
+                              if (cStatus === 'MISSED' || cStatus === 'REJECTED') {
+                                isMissed = true;
+                                if (isMe) {
+                                  title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
+                                  subtitle = 'Cuộc gọi không được trả lời';
+                                  ArrowIcon = ArrowUpRight;
+                                  iconColor = 'text-red-500';
+                                } else {
+                                  title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+                                  subtitle = 'Bấm để gọi lại';
+                                  ArrowIcon = ArrowDownLeft;
+                                  iconColor = 'text-red-500';
+                                }
+                              } else {
+                                if (isMe) {
+                                  title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
+                                  ArrowIcon = ArrowUpRight;
+                                  iconColor = 'text-blue-400';
+                                } else {
+                                  title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
+                                  ArrowIcon = ArrowDownLeft;
+                                  iconColor = 'text-emerald-500';
+                                }
+
+                                const mins = Math.floor(duration / 60);
+                                const secs = duration % 60;
+                                subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                              }
+
+                              const MainIcon = cType === 'video' ? VideoIcon : Phone;
+
+                              return (
+                                <div className="w-[240px] rounded-[10px] flex flex-col group/call overflow-hidden bg-[#242526] border border-[#3A3B3C] shadow-sm">
+                                  <div className="p-3.5 pb-2">
+                                    <p className={cn("text-[15px] font-semibold mb-2", (isMissed && !isMe) ? "text-[#F33045]" : "text-[#E4E6EB]")}>
+                                      {title}
+                                    </p>
+                                    <div className="flex items-center space-x-2">
+                                      <div className="relative flex items-center justify-center text-slate-400">
+                                        <MainIcon size={18} fill="currentColor" className="opacity-80" />
+                                        <div className={cn("absolute -top-1 -right-1.5 p-0.5 rounded-full bg-[#242526]", iconColor)}>
+                                          <ArrowIcon size={12} strokeWidth={3} />
+                                        </div>
+                                      </div>
+                                      <span className="text-[14px] font-medium text-[#B0B3B8]">{subtitle}</span>
+                                    </div>
+                                  </div>
+                                  <div className="w-full h-[1px] bg-[#3A3B3C] mx-3 w-[calc(100%-24px)] mt-2" />
+                                  <button onClick={() => {
+                                    const event = new CustomEvent('START_CALL_AGAIN', { detail: { type: cType } });
+                                    window.dispatchEvent(event);
+                                  }} className="w-full py-2.5 flex items-center justify-center text-[14px] font-semibold text-[#2E89FF] hover:bg-white/5 active:bg-white/10 transition-colors">
+                                    Gọi lại
+                                  </button>
                                 </div>
-                              </div>
-                            ) : (msg.type === 'VOTE' && msg.vote) ? (
+                              );
+                            })() : (msg.type === 'VOTE' && msg.vote) ? (
                               <div className={`w-full max-w-[340px] bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500`}>
                                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-br from-indigo-500/5 to-transparent">
                                   <div className="flex items-start justify-between mb-4">
@@ -974,7 +1069,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : '',
                                     "overflow-hidden transition-all duration-300"
                                   )}>
-                                    {msg.type === 'VOICE' ? (
+                                    {(msg.type === 'VOICE' || (msg.mediaUrls && msg.mediaUrls[0] && (msg.mediaUrls[0].match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)))) ? (
                                       <div className="p-2">
                                         {msg.mediaUrls && msg.mediaUrls[0] && (
                                           <VoicePlayer url={msg.mediaUrls[0]} />

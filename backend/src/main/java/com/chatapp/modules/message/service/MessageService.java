@@ -138,11 +138,23 @@ public class MessageService {
 
                 // Update denormalized last message in conversations
                 String lastMessageText = savedMessage.getContent();
-                if (lastMessageText == null || lastMessageText.isBlank()) {
+                if ("CALL_LOG".equals(savedMessage.getType()) && lastMessageText != null) {
+                    try {
+                        // Parse friendly text for call log
+                        if (lastMessageText.contains("video")) {
+                            lastMessageText = "[Cuộc gọi video]";
+                        } else {
+                            lastMessageText = "[Cuộc gọi thoại]";
+                        }
+                    } catch (Exception e) {
+                        lastMessageText = "[Cuộc gọi]";
+                    }
+                } else if (lastMessageText == null || lastMessageText.isBlank()) {
                     lastMessageText = switch (savedMessage.getType()) {
                         case "IMAGE" -> "[Hình ảnh]";
                         case "VIDEO" -> "[Video]";
                         case "FILE" -> "[Tệp tin]";
+                        case "STICKER" -> "[Nhãn dán]";
                         default -> "[Đính kèm]";
                     };
                 }

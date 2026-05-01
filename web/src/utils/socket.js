@@ -17,7 +17,7 @@ export const initSocket = (token) => {
     }
 
     currentToken = token;
-    const socketUrl = import.meta.env.VITE_WS_URL_STOMP || 'http://localhost:8080/ws/chat';
+    const socketUrl = import.meta.env.VITE_WS_URL_STOMP || `http://${window.location.hostname}:8080/ws/chat`;
 
     console.log('[STOMP] Creating new STOMP client, URL:', socketUrl);
 
@@ -77,6 +77,7 @@ export const subscribeToCalls = (userId) => {
                 // { senderId, signal, conversationId }
                 const normalised = {
                     senderId: data.payload?.senderId,
+                    senderName: data.payload?.senderName,
                     signal: data.payload?.signal,
                     conversationId: data.conversationId,
                 };
@@ -91,7 +92,7 @@ export const subscribeToCalls = (userId) => {
     return callSubscription;
 };
 
-export const emitCallSignal = (conversationId, signal) => {
+export const emitCallSignal = (conversationId, signal, senderName = '') => {
     if (!stompClient || !stompClient.connected) {
         console.warn('[STOMP] Cannot emit signal: not connected');
         return;
@@ -99,7 +100,7 @@ export const emitCallSignal = (conversationId, signal) => {
 
     stompClient.publish({
         destination: '/app/call.signal',
-        body: JSON.stringify({ conversationId, signal }),
+        body: JSON.stringify({ conversationId, signal, senderName }),
     });
 };
 
