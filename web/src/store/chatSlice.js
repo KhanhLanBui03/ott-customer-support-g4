@@ -167,14 +167,15 @@ const chatSlice = createSlice({
         conv.lastMessage = getMessagePreviewText(normalizedMessage);
         conv.lastMessageTime = normalizedMessage.createdAt;
 
-        if (isOtherSender) {
-          if (!isOpenConversation) {
-            // Nếu đang ở ngoài, tăng số tin nhắn chưa đọc
-            conv.unreadCount = (conv.unreadCount || 0) + 1;
-          }
-        } else {
-          // Nếu mình là người gửi, đảm bảo unreadCount là 0 (vì mình đã xem)
+        conv.lastMessageSenderId = message.senderId;
+        conv.lastMessageSenderName = message.senderName;
+
+        if (isOpenConversation) {
+          // Nếu đang mở hội thoại này, luôn đảm bảo unreadCount là 0
           conv.unreadCount = 0;
+        } else if (isOtherSender) {
+          // Nếu đang ở ngoài và là tin nhắn từ người khác, tăng số tin nhắn chưa đọc
+          conv.unreadCount = (conv.unreadCount || 0) + 1;
         }
 
         // Đưa hội thoại lên đầu danh sách
@@ -457,6 +458,18 @@ const chatSlice = createSlice({
     setReplyingTo: (state, action) => {
       state.replyingTo = action.payload;
     },
+    updateFriendStatus: (state, action) => {
+      const friend = action.payload; // This is a FriendshipResponse
+      if (!friend || !friend.userId) return;
+      
+      if (!state.friends) state.friends = [];
+      const idx = state.friends.findIndex(f => String(f.userId || f.id) === String(friend.userId));
+      if (idx !== -1) {
+        state.friends[idx] = { ...state.friends[idx], ...friend };
+      } else {
+        state.friends.push(friend);
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -464,7 +477,15 @@ const chatSlice = createSlice({
         state.loading = true;
       })
       .addCase(fetchConversations.fulfilled, (state, action) => {
-        state.conversations = action.payload;
+        const uniqueConvs = (action.payload || []).reduce((acc, current) => {
+          const x = acc.find(item => String(item.conversationId) === String(current.conversationId));
+          if (!x) {
+            return acc.concat([current]);
+          } else {
+            return acc;
+          }
+        }, []);
+        state.conversations = uniqueConvs;
         state.loading = false;
       })
       .addCase(fetchConversations.rejected, (state) => {
@@ -497,7 +518,8 @@ export const {
   updateMemberInfo,
   updateConversation,
   updateConversationWallpaper,
-  setReplyingTo
+  setReplyingTo,
+  updateFriendStatus
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

@@ -14,27 +14,37 @@ const AIAssistantPanel = ({ conversationId }) => {
   const [type, setType] = useState(null); // 'summary', 'stats', 'ask', 'tasks'
   const [question, setQuestion] = useState('');
   const [timeRange, setTimeRange] = useState(0);
+  const [isCustomRange, setIsCustomRange] = useState(false);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
   const handleAction = async (actionType, payload = {}) => {
     setLoading(true);
     setType(actionType);
     setResult(null);
     try {
-      let response;
+      const startTs = isCustomRange && customStart ? new Date(customStart).getTime() : null;
+      const endTs = isCustomRange && customEnd ? new Date(customEnd).getTime() : null;
+      const currentRange = isCustomRange ? 0 : timeRange;
 
       switch (actionType) {
         case 'summary':
-          response = await chatApi.getGroupSummary(conversationId, timeRange);
+          if (isCustomRange && (!customStart || !customEnd)) {
+            setResult("Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc!");
+            setLoading(false);
+            return;
+          }
+          response = await chatApi.getGroupSummary(conversationId, currentRange, startTs, endTs);
           break;
         case 'stats':
-          response = await chatApi.getGroupStats(conversationId);
+          response = await chatApi.getGroupStats(conversationId, currentRange, startTs, endTs);
           break;
         case 'tasks':
-          response = await chatApi.extractTasks(conversationId);
+          response = await chatApi.extractTasks(conversationId, currentRange, startTs, endTs);
           break;
 
         case 'announcement':
-          response = await chatApi.draftAnnouncement(conversationId);
+          response = await chatApi.draftAnnouncement(conversationId, currentRange, startTs, endTs);
           break;
         case 'ask':
           response = await chatApi.askAI(conversationId, payload.question);
@@ -63,24 +73,56 @@ const AIAssistantPanel = ({ conversationId }) => {
 
   return (
     <div className="mt-6 px-4 space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between px-2">
-        <div className="flex items-center space-x-2">
-          <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
-            <BrainCircuit size={18} />
+      <div className="px-2 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
+              <BrainCircuit size={18} />
+            </div>
+            <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">Trợ lý AI</span>
           </div>
-          <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">Trợ lý AI</span>
+          <button 
+            onClick={() => setIsCustomRange(!isCustomRange)}
+            className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            {isCustomRange ? "Dùng chọn nhanh" : "Tùy chỉnh thời gian"}
+          </button>
         </div>
-        <select 
-          value={timeRange} 
-          onChange={(e) => setTimeRange(Number(e.target.value))}
-          className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 dark:text-indigo-400 text-[10px] font-bold rounded-lg px-2 py-1 outline-none cursor-pointer focus:border-indigo-500/50 transition-colors"
-        >
-          <option value={0} className="bg-background">Chưa đọc</option>
-          <option value={1} className="bg-background">1 giờ qua</option>
-          <option value={4} className="bg-background">4 giờ qua</option>
-          <option value={12} className="bg-background">12 giờ qua</option>
-          <option value={24} className="bg-background">24 giờ qua</option>
-        </select>
+
+        {isCustomRange ? (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold text-foreground/40 uppercase ml-1">Từ lúc</label>
+              <input 
+                type="datetime-local" 
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-foreground focus:border-indigo-500/50 outline-none transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold text-foreground/40 uppercase ml-1">Đến lúc</label>
+              <input 
+                type="datetime-local" 
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-foreground focus:border-indigo-500/50 outline-none transition-colors"
+              />
+            </div>
+          </div>
+        ) : (
+          <select 
+            value={timeRange} 
+            onChange={(e) => setTimeRange(Number(e.target.value))}
+            className="w-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 dark:text-indigo-400 text-[11px] font-bold rounded-lg px-3 py-2 outline-none cursor-pointer focus:border-indigo-500/50 transition-colors"
+          >
+            <option value={0} className="bg-background">Chưa đọc</option>
+            <option value={1} className="bg-background">1 giờ qua</option>
+            <option value={4} className="bg-background">4 giờ qua</option>
+            <option value={12} className="bg-background">12 giờ qua</option>
+            <option value={24} className="bg-background">24 giờ qua</option>
+          </select>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 px-2">

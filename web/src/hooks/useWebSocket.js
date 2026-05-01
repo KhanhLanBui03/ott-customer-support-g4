@@ -14,6 +14,7 @@ import {
     setUserStatus,
     updateMemberInfo,
     updateConversation,
+    updateFriendStatus
 } from '../store/chatSlice';
 import { chatApi } from '../api/chatApi';
 import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
@@ -27,16 +28,18 @@ let _activeConvId = null; // Lưu trữ ID hội thoại đang mở toàn cục 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
     const { token, user } = useSelector(state => state.auth);
-
+    const { conversations, activeConversationId } = useSelector(state => state.chat);
+    const conversationsRef = useRef(conversations);
     const userRef = useRef(user);
 
     useEffect(() => {
-        userRef.current = user;
-    }, [user]);
+        conversationsRef.current = conversations;
+    }, [conversations]);
 
-    // Đồng bộ ID hội thoại đang mở vào biến toàn cục lập tức trong render để tránh race condition
-    const activeConversationId = useSelector(state => state.chat.activeConversationId);
-    _activeConvId = activeConversationId;
+    useEffect(() => {
+        userRef.current = user;
+        _activeConvId = activeConversationId;
+    }, [user, activeConversationId]);
 
     const handleIncomingMessage = useCallback((message) => {
         try {
@@ -46,7 +49,7 @@ export const useWebSocket = () => {
             const currentUser = userRef.current;
             const currentUserId = currentUser?.userId || currentUser?.id;
 
-            if (event.eventType === 'MESSAGE_SEND') {
+            if (event.eventType === 'MESSAGE_SEND' || event.eventType === 'MESSAGE_NEW') {
                 const msg = event.payload;
                 try { console.debug('[useWebSocket] incoming MESSAGE_SEND payload', event.conversationId, msg); } catch(e){}
                 dispatch(addMessage({
@@ -90,8 +93,19 @@ export const useWebSocket = () => {
                     conversationId: event.conversationId,
                     messageId: event.payload.messageId || event.payload
                 }));
-            } else if (event.eventType === 'FRIEND_REQUEST' || event.eventType === 'FRIEND_ACCEPT' || event.eventType === 'FRIEND_DELETE') {
+            } else if (event.eventType === 'GROUP_INVITE') {
                 const data = event.payload?.data || event.payload;
+                dispatch(addPendingGroup(data));
+            } else if (event.eventType === 'FRIEND_REQUEST' || event.eventType === 'FRIEND_ACCEPT' || event.eventType === 'FRIEND_DELETE' || event.eventType === 'FRIEND_BLOCK' || event.eventType === 'FRIEND_UNBLOCK') {
+                const data = event.payload?.data || event.payload;
+                
+                // Always update friends list for any friendship event
+                if (data && data.userId) {
+                    dispatch(updateFriendStatus(data));
+                }
+                dispatch(fetchFriends());
+                dispatch(fetchConversations());
+
                 if (event.eventType === 'FRIEND_REQUEST') {
                     dispatch(addPendingFriend(data));
                 } else if (event.eventType === 'FRIEND_ACCEPT') {
@@ -100,16 +114,12 @@ export const useWebSocket = () => {
                         user: data,
                         message: `${data.fullName || 'Ai đó'} đã chấp nhận lời mời kết bạn.`
                     }));
-                    dispatch(fetchConversations());
-                    dispatch(fetchFriends());
                 } else if (event.eventType === 'FRIEND_DELETE') {
                     dispatch(addActivity({
                         type: 'FRIEND_DELETE',
                         user: data,
                         message: `${data.fullName || 'Ai đó'} đã hủy kết bạn.`
                     }));
-                    dispatch(fetchFriends());
-                    dispatch(fetchConversations());
                 }
             } else if (event.eventType === 'MESSAGE_STATUS_UPDATE' || event.eventType === 'MESSAGE_UPDATE') {
                 const conversationId = event.conversationId;
@@ -161,7 +171,7 @@ export const useWebSocket = () => {
                 } else {
                     dispatch(fetchConversations());
                 }
-            } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN') {
+            } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN' || event.eventType === 'MEMBER_UPDATE') {
                 dispatch(fetchConversations());
             } else if (event.eventType === 'USER_UPDATE') {
                 dispatch(updateMemberInfo(event.payload));

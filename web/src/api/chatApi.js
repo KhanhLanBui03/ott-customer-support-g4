@@ -70,13 +70,33 @@ export const chatApi = {
   closeVote: (conversationId, messageId) => axiosClient.put(`/messages/${encodeURIComponent(conversationId)}/vote/${messageId}/close`),
   
   // AI assistant actions
-  getGroupSummary: (conversationId, timeRange = 0) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/summary?timeRange=${timeRange}`),
-  getGroupStats: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/stats`),
-  draftAnnouncement: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/announcement`),
+  getGroupSummary: (conversationId, timeRange = 0, startTime = null, endTime = null) => {
+    let url = `/ai/group/${encodeURIComponent(conversationId)}/summary?timeRange=${timeRange}`;
+    if (startTime) url += `&startTime=${startTime}`;
+    if (endTime) url += `&endTime=${endTime}`;
+    return axiosClient.post(url);
+  },
+  getGroupStats: (conversationId, timeRange = 0, startTime = null, endTime = null) => {
+    let url = `/ai/group/${encodeURIComponent(conversationId)}/stats?timeRange=${timeRange}`;
+    if (startTime) url += `&startTime=${startTime}`;
+    if (endTime) url += `&endTime=${endTime}`;
+    return axiosClient.post(url);
+  },
+  draftAnnouncement: (conversationId, timeRange = 0, startTime = null, endTime = null) => {
+    let url = `/ai/group/${encodeURIComponent(conversationId)}/announcement?timeRange=${timeRange}`;
+    if (startTime) url += `&startTime=${startTime}`;
+    if (endTime) url += `&endTime=${endTime}`;
+    return axiosClient.post(url);
+  },
   askAI: (conversationId, question) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/ask`, { question }),
   translateText: (content, targetLang = 'Tiếng Việt') => axiosClient.post('/ai/translate', { content, targetLang }),
   getSmartReplies: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/suggest-replies`),
-  extractTasks: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/extract-tasks`),
+  extractTasks: (conversationId, timeRange = 0, startTime = null, endTime = null) => {
+    let url = `/ai/group/${encodeURIComponent(conversationId)}/extract-tasks?timeRange=${timeRange}`;
+    if (startTime) url += `&startTime=${startTime}`;
+    if (endTime) url += `&endTime=${endTime}`;
+    return axiosClient.post(url);
+  },
 };
 
 export default chatApi;

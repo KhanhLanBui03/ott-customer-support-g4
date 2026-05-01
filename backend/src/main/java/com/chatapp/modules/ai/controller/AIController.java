@@ -33,67 +33,53 @@ public class AIController {
     public ResponseEntity<com.chatapp.common.dto.ApiResponse<Map<String, String>>> getGroupSummary(
             jakarta.servlet.http.HttpServletRequest request, 
             @PathVariable String conversationId, 
-            @RequestParam(defaultValue = "200") int limit,
-            @RequestParam(defaultValue = "0") int timeRange) {
+            @RequestParam(defaultValue = "500") int limit,
+            @RequestParam(defaultValue = "0") int timeRange,
+            @RequestParam(required = false) Long startTime,
+            @RequestParam(required = false) Long endTime) {
         String userId = getUserId(request);
-        List<Message> allMessages = messageService.getConversationMessages(conversationId, limit, userId, null);
+        FilteredResult result = getFilteredMessages(userId, conversationId, limit, timeRange, startTime, endTime);
         
-        long cutoffTime = 0;
-        if (timeRange > 0) {
-            cutoffTime = System.currentTimeMillis() - (timeRange * 3600000L); // Hours to milliseconds
-        }
-        final long finalCutoffTime = cutoffTime;
-        
-        List<Message> filteredMessages;
-        if (timeRange > 0) {
-            filteredMessages = allMessages.stream()
-                    .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= finalCutoffTime)
-                    .collect(java.util.stream.Collectors.toList());
-        } else {
-            // For "Chưa đọc", fetch the number of missed messages based on unreadCount/lastUnreadCount
-            com.chatapp.modules.conversation.domain.UserConversation uc = userConversationRepository.findById(userId, conversationId).orElse(null);
-            int currentUnread = (uc != null && uc.getUnreadCount() != null) ? uc.getUnreadCount() : 0;
-            int lastUnread = (uc != null && uc.getLastUnreadCount() != null) ? uc.getLastUnreadCount() : 0;
-            int unreadMessagesCount = Math.max(currentUnread, lastUnread);
-            
-            if (unreadMessagesCount > 0) {
-                // getConversationMessages returns messages chronologically (oldest first)
-                // We want the LAST `unreadMessagesCount` messages.
-                int startIndex = Math.max(0, allMessages.size() - unreadMessagesCount);
-                filteredMessages = new java.util.ArrayList<>(allMessages.subList(startIndex, allMessages.size()));
-            } else {
-                // Fallback to readBy logic if counts are 0 but messages exist
-                filteredMessages = allMessages.stream()
-                        .filter(m -> m.getReadBy() == null || m.getReadBy().isEmpty() || m.getReadBy().stream().noneMatch(r -> userId.equals(r.getUserId())))
-                        .collect(java.util.stream.Collectors.toList());
-            }
-        }
-        
-        if (filteredMessages.isEmpty()) {
-            String msg = timeRange > 0 ? "Không có tin nhắn nào trong " + timeRange + " giờ qua." : "Bạn đã đọc hết tin nhắn! Không có tin nhắn chưa đọc nào cần tóm tắt.";
+        if (result.messages.isEmpty()) {
+            String msg = result.label.equals("chưa đọc") ? "Bạn đã đọc hết tin nhắn! Không có tin nhắn chưa đọc nào cần tóm tắt." : "Không có tin nhắn nào " + result.label + ".";
             return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("summary", "\u2705 " + msg)));
         }
         
-        String summary = aiService.summarizeMessages(filteredMessages);
-        String label = timeRange > 0 ? "trong " + timeRange + " giờ qua" : "chưa đọc";
-        String result = "\ud83d\udcec Tóm tắt " + filteredMessages.size() + " tin nhắn " + label + ":\n\n" + summary;
-        return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("summary", result)));
+        String summary = aiService.summarizeMessages(result.messages);
+        String finalResult = "\ud83d\udcec Tóm tắt " + result.messages.size() + " tin nhắn " + result.label + ":\n\n" + summary;
+        return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("summary", finalResult)));
     }
 
     @PostMapping("/group/{conversationId}/stats")
-    public ResponseEntity<com.chatapp.common.dto.ApiResponse<Map<String, String>>> getGroupStats(jakarta.servlet.http.HttpServletRequest request, @PathVariable String conversationId, @RequestParam(defaultValue = "100") int limit) {
+    public ResponseEntity<com.chatapp.common.dto.ApiResponse<Map<String, String>>> getGroupStats(
+            jakarta.servlet.http.HttpServletRequest request, 
+            @PathVariable String conversationId, 
+            @RequestParam(defaultValue = "500") int limit,
+            @RequestParam(defaultValue = "0") int timeRange,
+            @RequestParam(required = false) Long startTime,
+            @RequestParam(required = false) Long endTime) {
         String userId = getUserId(request);
-        List<Message> messages = messageService.getConversationMessages(conversationId, limit, userId, null);
-        String stats = aiService.analyzeActivity(messages);
+        FilteredResult result = getFilteredMessages(userId, conversationId, limit, timeRange, startTime, endTime);
+        if (result.messages.isEmpty()) return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("stats", "Không có dữ liệu để thống kê " + result.label + ".")));
+        
+        String stats = aiService.analyzeActivity(result.messages);
         return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("stats", stats)));
     }
 
     @PostMapping("/group/{conversationId}/announcement")
-    public ResponseEntity<com.chatapp.common.dto.ApiResponse<Map<String, String>>> draftAnnouncement(jakarta.servlet.http.HttpServletRequest request, @PathVariable String conversationId, @RequestParam(defaultValue = "100") int limit) {
+    public ResponseEntity<com.chatapp.common.dto.ApiResponse<Map<String, String>>> draftAnnouncement(
+            jakarta.servlet.http.HttpServletRequest request, 
+            @PathVariable String conversationId, 
+            @RequestParam(defaultValue = "500") int limit,
+            @RequestParam(defaultValue = "0") int timeRange,
+            @RequestParam(required = false) Long startTime,
+            @RequestParam(required = false) Long endTime) {
         String userId = getUserId(request);
-        List<Message> messages = messageService.getConversationMessages(conversationId, limit, userId, null);
-        String announcement = aiService.draftAnnouncement(messages);
-        return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("announcement", "\ud83d\udce3 BẢN THẢO THÔNG BÁO:\n\n" + announcement)));
+        FilteredResult result = getFilteredMessages(userId, conversationId, limit, timeRange, startTime, endTime);
+        if (result.messages.isEmpty()) return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("announcement", "Không có nội dung thảo luận " + result.label + " để soạn thông báo.")));
+
+        String announcement = aiService.draftAnnouncement(result.messages);
+        return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("announcement", "\ud83d\udce3 BẢN THẢO THÔNG BÁO (" + result.label + "):\n\n" + announcement)));
     }
 
     @PostMapping("/group/{conversationId}/ask")
@@ -123,10 +109,60 @@ public class AIController {
     }
 
     @PostMapping("/group/{conversationId}/extract-tasks")
-    public ResponseEntity<com.chatapp.common.dto.ApiResponse<Map<String, String>>> extractTasks(jakarta.servlet.http.HttpServletRequest request, @PathVariable String conversationId) {
+    public ResponseEntity<com.chatapp.common.dto.ApiResponse<Map<String, String>>> extractTasks(
+            jakarta.servlet.http.HttpServletRequest request, 
+            @PathVariable String conversationId,
+            @RequestParam(defaultValue = "500") int limit,
+            @RequestParam(defaultValue = "0") int timeRange,
+            @RequestParam(required = false) Long startTime,
+            @RequestParam(required = false) Long endTime) {
         String userId = getUserId(request);
-        List<Message> messages = messageService.getConversationMessages(conversationId, 50, userId, null);
-        String tasks = aiService.extractTasks(messages);
+        FilteredResult result = getFilteredMessages(userId, conversationId, limit, timeRange, startTime, endTime);
+        if (result.messages.isEmpty()) return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("tasks", "Không tìm thấy lịch hẹn nào " + result.label + ".")));
+
+        String tasks = aiService.extractTasks(result.messages);
         return ResponseEntity.ok(com.chatapp.common.dto.ApiResponse.success(Map.of("tasks", tasks)));
+    }
+
+    private static class FilteredResult {
+        List<Message> messages;
+        String label;
+        FilteredResult(List<Message> m, String l) { this.messages = m; this.label = l; }
+    }
+
+    private FilteredResult getFilteredMessages(String userId, String conversationId, int limit, int timeRange, Long startTime, Long endTime) {
+        List<Message> allMessages = messageService.getConversationMessages(conversationId, limit, userId, null);
+        List<Message> filteredMessages;
+        String label;
+
+        if (startTime != null && endTime != null) {
+            filteredMessages = allMessages.stream()
+                    .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startTime && m.getCreatedAt() <= endTime)
+                    .collect(java.util.stream.Collectors.toList());
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("HH:mm dd/MM");
+            label = "từ " + sdf.format(new java.util.Date(startTime)) + " đến " + sdf.format(new java.util.Date(endTime));
+        } else if (timeRange > 0) {
+            long cutoffTime = System.currentTimeMillis() - (timeRange * 3600000L);
+            filteredMessages = allMessages.stream()
+                    .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= cutoffTime)
+                    .collect(java.util.stream.Collectors.toList());
+            label = "trong " + timeRange + " giờ qua";
+        } else {
+            com.chatapp.modules.conversation.domain.UserConversation uc = userConversationRepository.findById(userId, conversationId).orElse(null);
+            int currentUnread = (uc != null && uc.getUnreadCount() != null) ? uc.getUnreadCount() : 0;
+            int lastUnread = (uc != null && uc.getLastUnreadCount() != null) ? uc.getLastUnreadCount() : 0;
+            int unreadMessagesCount = Math.max(currentUnread, lastUnread);
+
+            if (unreadMessagesCount > 0) {
+                int startIndex = Math.max(0, allMessages.size() - unreadMessagesCount);
+                filteredMessages = new java.util.ArrayList<>(allMessages.subList(startIndex, allMessages.size()));
+            } else {
+                filteredMessages = allMessages.stream()
+                        .filter(m -> m.getReadBy() == null || m.getReadBy().isEmpty() || m.getReadBy().stream().noneMatch(r -> userId.equals(r.getUserId())))
+                        .collect(java.util.stream.Collectors.toList());
+            }
+            label = "chưa đọc";
+        }
+        return new FilteredResult(filteredMessages, label);
     }
 }
