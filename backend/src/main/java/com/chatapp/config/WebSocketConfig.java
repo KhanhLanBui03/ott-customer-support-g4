@@ -67,19 +67,22 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
                     String authHeader = accessor.getFirstNativeHeader("Authorization");
+                    log.info("[WS-AUTH] CONNECT attempt with header: {}", authHeader != null ? "Present" : "Missing");
+
                     if (authHeader != null && authHeader.startsWith("Bearer ")) {
                         String token = authHeader.substring(7);
                         if (jwtUtil.validateToken(token)) {
                             String userId = jwtUtil.extractUserId(token);
+                            log.info("[WS-AUTH] WebSocket authenticated for user: {}", userId);
+                            
                             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                                     userId, null, new ArrayList<>());
                             accessor.setUser(authentication);
-                            log.debug("WebSocket authenticated for user: {}", userId);
                         } else {
-                            log.warn("Invalid JWT token during WebSocket connection");
+                            log.warn("[WS-AUTH] Invalid JWT token");
                         }
                     } else {
-                        log.warn("WebSocket connected without Authorization header or Bearer prefix");
+                        log.warn("[WS-AUTH] Missing or invalid Authorization header");
                     }
                 }
                 return message;

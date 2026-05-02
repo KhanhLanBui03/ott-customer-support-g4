@@ -20,6 +20,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import MediaViewer from './MediaViewer';
 import VideoThumbnail from './VideoThumbnail';
 import FileViewerModal from './FileViewerModal';
+import VoicePlayer from './common/VoicePlayer';
 const ChatBubble = ({ 
   message, 
   isOwn: initialIsOwn, 
@@ -145,7 +146,14 @@ const ChatBubble = ({
 
   const getAvatarUrl = (url, name) => {
     if (!url) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=random&color=fff&size=128&bold=true`;
+    if (typeof url !== 'string') return url;
     if (url.startsWith('http')) return url;
+    return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const getFullUrl = (url) => {
+    if (!url || typeof url !== 'string') return '';
+    if (url.startsWith('http') || url.startsWith('file://') || url.startsWith('blob:') || url.startsWith('data:')) return url;
     return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
@@ -341,7 +349,8 @@ const ChatBubble = ({
                 else type = 'FILE';
               }
 
-              const isImageReply = type === 'IMAGE' || (type !== 'VIDEO' && type !== 'FILE' && mediaUrls.length > 0);
+              const isVoiceReply = type === 'VOICE' || (r.content && (r.content.includes('chat-media/') || r.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
+              const isImageReply = type === 'IMAGE' || (type !== 'VIDEO' && type !== 'FILE' && type !== 'VOICE' && mediaUrls.length > 0);
               const isVideoReply = type === 'VIDEO';
               const isFileReply = type === 'FILE';
               
@@ -360,12 +369,15 @@ const ChatBubble = ({
                 : null;
 
               let typeLabel = '[Tin nhắn]';
-              if (isImageReply) typeLabel = '[Hình ảnh]';
+              if (isVoiceReply) typeLabel = 'Tin nhắn thoại';
+              else if (isImageReply) typeLabel = '[Hình ảnh]';
               else if (isVideoReply) typeLabel = '[Video]';
               else if (isFileReply) {
                 const fileName = mediaUrls[0]?.split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '');
                 typeLabel = fileName ? decodeURIComponent(fileName) : '[Tệp tin]';
               }
+
+              const displayReplyText = isVoiceReply ? 'Tin nhắn thoại' : (r.content || typeLabel);
 
               return (
                 <TouchableOpacity 
@@ -386,6 +398,10 @@ const ChatBubble = ({
                       style={styles.replyThumbnail} 
                       resizeMode="cover" 
                     />
+                  ) : isVoiceReply ? (
+                    <View style={[styles.replyThumbnail, { backgroundColor: 'rgba(102, 126, 234, 0.1)', alignItems: 'center', justifyContent: 'center' }]}>
+                      <MaterialIcons name="mic" size={16} color="#667eea" />
+                    </View>
                   ) : null}
 
                   <View style={styles.replyContent}>
@@ -402,7 +418,7 @@ const ChatBubble = ({
                       })()}
                     </Text>
                     <Text style={styles.replyText} numberOfLines={1}>
-                      {r.content || typeLabel}
+                      {displayReplyText}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -433,7 +449,7 @@ const ChatBubble = ({
                   <TouchableOpacity 
                     style={[styles.fileBubble, isOwn ? styles.ownFileBubble : styles.otherFileBubble]}
                     onPress={async () => {
-                      const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+                      const fullUrl = getFullUrl(url);
                       // Làm sạch tên file: bỏ UUID và decode URI
                       const cleanName = decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''));
                       setSelectedFile({ url: fullUrl, name: cleanName });
@@ -466,7 +482,7 @@ const ChatBubble = ({
               // Logic Grid
               const total = mediaUrls.length;
               const renderGridItem = (url, index, gridStyle) => {
-                const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+                const fullUrl = getFullUrl(url);
                 const isLastItem = index === 3 && total > 4;
                 return (
                   <TouchableOpacity 
@@ -527,15 +543,30 @@ const ChatBubble = ({
               <View style={styles.recalledContent}>
                 <MaterialIcons name="history" size={16} color={isOwn ? 'rgba(255,255,255,0.7)' : '#9ca3af'} style={{ marginRight: 4 }} />
                 <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : styles.otherRecalledText]}>
-                  Tin nhắn đã bị thu hồi
+                   Tin nhắn đã bị thu hồi
                 </Text>
               </View>
             ) : (
-              message.content ? (
-                <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText, (message.mediaUrls?.length > 0) && { marginTop: 8 }]}>
-                  {message.content}
-                </Text>
-              ) : null
+              (() => {
+                const mediaFiles = message.mediaUrls || message.media_urls || [];
+                const firstMedia = mediaFiles[0];
+                const isVoice = message.type === 'VOICE' || 
+                               (message.content && message.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ||
+                               (firstMedia && String(firstMedia).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+                
+                if (isVoice) {
+                  const voiceUrl = firstMedia || message.content;
+                  const fullVoiceUrl = getFullUrl(voiceUrl);
+                  if (!fullVoiceUrl) return null;
+                  return <VoicePlayer url={fullVoiceUrl} isOwn={isOwn} />;
+                }
+
+                return message.content ? (
+                  <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText, (message.mediaUrls?.length > 0) && { marginTop: 8 }]}>
+                    {message.content}
+                  </Text>
+                ) : null;
+              })()
             )}
             <Text style={[styles.timeInside, isOwn ? styles.ownTime : styles.otherTime]}>
               {formatTime(message.createdAt || Date.now())}
@@ -599,7 +630,7 @@ const ChatBubble = ({
         allMedia={(() => {
           const mediaUrls = message.mediaUrls || message.media_urls || [];
           return mediaUrls.map(url => ({
-            url: url.startsWith('http') ? url : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`,
+            url: getFullUrl(url),
             type: message.type
           }));
         })()}

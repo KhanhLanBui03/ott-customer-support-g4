@@ -244,6 +244,8 @@ public class FriendshipService {
                 .phoneNumber(user.getPhoneNumber())
                 .avatarUrl(user.getAvatarUrl())
                 .status(status)
+                .userStatus(user.getStatus())
+                .lastSeenAt(user.getLastSeenAt())
                 .isRequester(isRequester)
                 .createdAt(createdAt)
                 .build();

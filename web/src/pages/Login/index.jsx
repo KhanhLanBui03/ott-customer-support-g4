@@ -3,12 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Zap, Shield, Mail, Lock, ArrowRight } from 'lucide-react';
 import { getAuthPersist, getRememberedEmail, setRememberedEmail } from '../../utils/storage';
+import AccountRestoreModal from '../../components/AccountRestore/AccountRestoreModal';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(getAuthPersist());
   const [error, setError] = useState('');
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [lockedAt, setLockedAt] = useState(null);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -32,7 +35,16 @@ const Login = () => {
       }
       navigate('/');
     } catch (err) {
+      const errorData = err?.response?.data?.error;
       const message = err?.response?.data?.message || 'Signal mismatch. Access denied.';
+
+      // Handle locked account
+      if (errorData?.code === 'ACCOUNT_LOCKED') {
+        setLockedAt(errorData.metadata?.lockedAt);
+        setShowRestoreModal(true);
+        return;
+      }
+
       if (/not verified/i.test(message)) {
         navigate('/register', {
           state: {
@@ -136,6 +148,14 @@ const Login = () => {
           </Link>
         </p>
       </div>
+
+      {showRestoreModal && (
+        <AccountRestoreModal
+          email={email}
+          lockedAt={lockedAt}
+          onClose={() => setShowRestoreModal(false)}
+        />
+      )}
     </div>
   );
 };

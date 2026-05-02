@@ -15,6 +15,8 @@ import { useAuth } from '../../src/hooks/useAuth';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import AccountRestoreModal from '../../src/components/AccountRestore/AccountRestoreModal';
+
 /**
  * LoginScreen (Mobile)
  * Strict login with Gmail only (consistent with Web version)
@@ -28,10 +30,25 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [lockedAt, setLockedAt] = useState(null);
 
   // Hiển thị thông báo lỗi từ hệ thống
   useEffect(() => {
     if (authError) {
+      // Handle locked account (Object or String detection)
+      const isLocked = (typeof authError === 'object' && authError.code === 'ACCOUNT_LOCKED') || 
+                      (typeof authError === 'string' && authError.includes('trạng thái chờ xóa'));
+
+      if (isLocked) {
+        // Nếu là string, chúng ta lấy thời gian hiện tại hoặc từ metadata nếu có
+        const lockTime = authError.metadata?.lockedAt || new Date().toISOString();
+        setLockedAt(lockTime);
+        setShowRestoreModal(true);
+        setLocalError(''); // Clear local error to show modal instead
+        return;
+      }
+
       // Nếu là lỗi hết hạn phiên, hiển thị trực tiếp
       if (authError === 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.') {
         setLocalError(authError);
@@ -76,7 +93,8 @@ const LoginScreen = () => {
       // Quan trọng: Gửi đúng trường email cho Backend
       await login(value, password.trim(), Platform.OS + '-device', 'Mobile App');
     } catch (err) {
-      console.log('Login error:', err);
+      console.log('Login error caught in component:', err);
+      // Backend error is already handled in useEffect via authError from useAuth
     }
   };
 
@@ -184,6 +202,13 @@ const LoginScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AccountRestoreModal
+        visible={showRestoreModal}
+        email={email}
+        lockedAt={lockedAt}
+        onClose={() => setShowRestoreModal(false)}
+      />
     </SafeAreaView>
   );
 };
