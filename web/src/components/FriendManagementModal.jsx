@@ -171,16 +171,6 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                 )}
               </button>
             )}
-            {view !== 'list' && (
-              <button 
-                onClick={() => setView('list')}
-                className={`text-[11px] font-black uppercase tracking-widest transition-colors ${
-                  isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                Quay lại
-              </button>
-            )}
           </div>
           <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${
             isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'
@@ -407,18 +397,6 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
           )}
         </div>
 
-        {/* Footer Action for List View */}
-        {view === 'list' && (
-          <div className={`p-8 border-t flex justify-center shrink-0 ${isDark ? 'border-white/5' : 'border-slate-50'}`}>
-            <button
-              onClick={() => setView('search')}
-              className="w-full py-4 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-600/20 flex items-center justify-center space-x-3"
-            >
-              <UserPlus size={18} />
-              <span>Tìm bạn mới</span>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

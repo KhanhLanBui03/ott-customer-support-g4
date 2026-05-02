@@ -74,13 +74,16 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     let type = finalType;
     let finalAttachments = [...attachments];
 
-    if (customType === 'IMAGE' || customType === 'STICKER') {
+    // Important: if handleSend is called as onSubmit, customType will be the Event object.
+    const isExplicitType = typeof customType === 'string' && ['IMAGE', 'STICKER', 'VIDEO', 'FILE', 'VOICE'].includes(customType);
+
+    if (isExplicitType) {
       type = customType;
       if (customContent && !finalAttachments.includes(customContent)) {
         finalAttachments = [customContent];
       }
-    } else if (customType === null && attachments.length > 0) {
-      const firstUrl = attachments[0].toLowerCase();
+    } else if (attachments.length > 0) {
+      const firstUrl = String(attachments[0]).toLowerCase();
       if (firstUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)/i)) type = 'IMAGE';
       else if (firstUrl.match(/\.(mp4|webm|ogg)/i)) type = 'VIDEO';
       else type = 'FILE';
@@ -106,7 +109,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     sendTyping(conversationId, false);
 
     if (customContent === null) setText('');
-    if (customType === null) {
+    if (!isExplicitType) {
       setAttachments([]);
       setLocalAttachments([]);
     }

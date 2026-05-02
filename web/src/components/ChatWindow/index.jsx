@@ -5,6 +5,7 @@ import { setReplyingTo, setActiveConversation, resetUnreadCount, updateFriendSta
 import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
 import ForwardModal from '../ForwardModal';
+import CreateVoteModal from '../CreateVoteModal';
 import { chatApi } from '../../api/chatApi';
 import { Phone, Video, PanelRight, MoreVertical, MoreHorizontal, ShieldCheck, Pin, X, ChevronDown, ChevronUp, ChevronRight, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle, MessageCircle } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
@@ -13,7 +14,7 @@ import { useTheme } from '../../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
-const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isInfoOpen, onBack, onRefreshMessages }) => {
+const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isInfoOpen, onBack, onRefreshMessages, openLightbox, allChatImages }) => {
   const { isDark } = useTheme();
   const conversationId = conversation?.conversationId;
   const { user } = useSelector(state => state.auth);
@@ -58,6 +59,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
 
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
+  const [isCreateVoteOpen, setIsCreateVoteOpen] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [pendingCallType, setPendingCallType] = useState(null);
 
@@ -155,6 +157,16 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
       dispatch(setActiveConversation(null));
     };
   }, [conversationId, fetchMessages, dispatch]);
+
+  const handleCreateVote = async (voteData) => {
+    try {
+      await chatApi.createVote(conversationId, voteData);
+      // Logic handle after create (socket will notify new message)
+    } catch (err) {
+      console.error("Failed to create vote:", err);
+      alert("Không thể tạo cuộc bình chọn. Vui lòng thử lại.");
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background transition-colors overflow-hidden">
@@ -642,6 +654,8 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
             setForwardingMessage(msg);
             setIsForwardModalOpen(true);
           }}
+          openLightbox={openLightbox}
+          allChatImages={allChatImages}
         />
       </div>
 
@@ -652,6 +666,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
           replyingTo={replyingTo}
           onCancelReply={() => dispatch(setReplyingTo(null))}
           onScrollToMessage={scrollToMessage}
+          onOpenVoteModal={() => setIsCreateVoteOpen(true)}
         />
       </div>
 
@@ -663,6 +678,12 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
           setForwardingMessage(null);
         }}
         messageToForward={forwardingMessage}
+      />
+
+      <CreateVoteModal 
+        isOpen={isCreateVoteOpen}
+        onClose={() => setIsCreateVoteOpen(false)}
+        onCreate={handleCreateVote}
       />
     </div>
   );

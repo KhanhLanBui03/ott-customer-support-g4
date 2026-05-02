@@ -93,6 +93,11 @@ public class MessageService {
                     senderName,
                     command.getContent(),
                     type);
+            
+            // Fix: Set media URLs from command
+            if (command.getMediaUrls() != null && !command.getMediaUrls().isEmpty()) {
+                message.setMediaUrls(command.getMediaUrls());
+            }
 
 
 

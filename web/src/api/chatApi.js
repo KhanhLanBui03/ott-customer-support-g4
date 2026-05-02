@@ -23,6 +23,8 @@ export const chatApi = {
     axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/wallpaper`, { wallpaperUrl }),
   renameConversation: (conversationId, name) =>
     axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/name`, { name }),
+  updateConversationAvatar: (conversationId, avatarUrl) =>
+    axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/avatar`, { avatarUrl }),
   updateConversationTag: (conversationId, tag) =>
     axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/tag`, { tag }),
   toggleChatRestriction: (conversationId) =>

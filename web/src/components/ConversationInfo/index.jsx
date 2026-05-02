@@ -15,10 +15,11 @@ import { updateConversationWallpaper } from '../../store/chatSlice';
 import GroupAvatar from '../GroupAvatar';
 import AIAssistantPanel from '../AIAssistantPanel';
 
-const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
+const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox, allChatImages }) => {
   const dispatch = useDispatch();
   const { messages, fetchConversations, inviteMember, removeMember, fetchFriends, friends: allFriends, selectConversation } = useChat();
   const fileInputRef = React.useRef(null);
+  const avatarInputRef = React.useRef(null);
   const { user } = useAuth();
   const [sections, setSections] = useState({
     members: true,
@@ -54,6 +55,28 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   const isOwner = currentMember?.role === 'OWNER';
   const isOnlyMember = conversation.type === 'GROUP' && conversation.members?.length === 1;
   const isAdmin = currentMember?.role === 'ADMIN' || isOwner || isOnlyMember;
+
+  const getFileIcon = (url) => {
+    const getExt = (u) => {
+      if (u.startsWith('blob:')) return 'file';
+      return u.split('.').pop().split('?')[0].toLowerCase();
+    };
+    const ext = getExt(url);
+    const colorClass =
+      ext === 'pdf' ? 'bg-red-500' :
+        ['doc', 'docx'].includes(ext) ? 'bg-blue-500' :
+          ['xls', 'xlsx'].includes(ext) ? 'bg-emerald-500' :
+            ['zip', 'rar', '7z'].includes(ext) ? 'bg-amber-500' :
+              'bg-indigo-500';
+
+    return (
+      <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-white relative overflow-hidden flex-shrink-0 shadow-sm ${colorClass}`}>
+        <FileText size={18} className="mb-[-2px] opacity-40" />
+        <span className="text-[9px] font-black uppercase tracking-tighter leading-none">{ext}</span>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+      </div>
+    );
+  };
 
   const handleFetchFriends = async () => {
     setIsInviting(true);
@@ -185,20 +208,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
   };
 
   const mediaItems = useMemo(() => {
-    const items = [];
-    currentMessages.forEach(msg => {
-      if (msg.mediaUrls && (msg.type === 'IMAGE' || msg.type === 'VIDEO' || msg.type === 'TEXT')) {
-        msg.mediaUrls.forEach(url => {
-          const isImg = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i);
-          const isVid = url.match(/\.(mp4|webm|ogg)/i);
-          if (isImg || isVid) {
-            items.push({ url, type: isImg ? 'IMAGE' : 'VIDEO', createdAt: msg.createdAt });
-          }
-        });
-      }
-    });
-    return items.reverse();
-  }, [currentMessages]);
+    return allChatImages;
+  }, [allChatImages]);
 
   const fileItems = useMemo(() => {
     const items = [];
@@ -207,7 +218,15 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
         msg.mediaUrls.forEach(url => {
           const isMedia = url.match(/\.(jpeg|jpg|gif|png|webp|svg|mp4|webm|ogg)/i);
           if (!isMedia) {
-            items.push({ url, name: url.split('/').pop(), createdAt: msg.createdAt, metadata: msg.metadata });
+            const decoded = decodeURIComponent(url);
+            const cleanUrl = decoded.split('?')[0];
+            let name = cleanUrl.split('/').pop();
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i;
+            name = name.replace(uuidPattern, '');
+            const longPrefixPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i;
+            name = name.replace(longPrefixPattern, '');
+            
+            items.push({ url, name, createdAt: msg.createdAt, metadata: msg.metadata });
           }
         });
       }
@@ -239,6 +258,34 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
       alert('Không thể cập nhật ảnh nền. Vui lòng thử lại.');
     } finally {
       setIsWallpaperLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Ảnh quá lớn. Vui lòng chọn ảnh dưới 2MB.');
+      return;
+    }
+
+    setGlobalLoading(true);
+    try {
+      const uploadRes = await chatApi.uploadMedia(file, 'avatars');
+      const avatarUrl = uploadRes?.mediaUrl || uploadRes?.data?.mediaUrl || uploadRes?.url || uploadRes?.data?.url;
+
+      if (!avatarUrl) {
+        throw new Error('Không lấy được URL ảnh từ server');
+      }
+
+      await chatApi.updateConversationAvatar(conversationId, avatarUrl);
+      fetchConversations();
+    } catch (err) {
+      console.error('Update avatar failed:', err);
+      alert('Không thể cập nhật ảnh đại diện. Vui lòng thử lại.');
+    } finally {
+      setGlobalLoading(false);
       e.target.value = '';
     }
   };
@@ -288,9 +335,27 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
           <div className="relative group">
             <GroupAvatar conversation={conversation} size="w-28 h-28" isLarge />
             {conversation.type === 'GROUP' && (
-              <div className="absolute -bottom-1 -right-1 w-9 h-9 bg-indigo-500 rounded-2xl shadow-xl flex items-center justify-center text-white border-4 border-white dark:border-[#0b0e14]">
-                  <Users size={16} />
-              </div>
+              <>
+                <div className="absolute -bottom-1 -right-1 w-9 h-9 bg-indigo-500 rounded-2xl shadow-xl flex items-center justify-center text-white border-4 border-white dark:border-[#0b0e14]">
+                    <Users size={16} />
+                </div>
+                {isAdmin && (
+                  <button 
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity cursor-pointer overflow-hidden"
+                    title="Đổi ảnh đại diện nhóm"
+                  >
+                    <ImageIcon size={24} />
+                    <input 
+                      type="file" 
+                      ref={avatarInputRef}
+                      onChange={handleAvatarChange}
+                      className="hidden" 
+                      accept="image/*"
+                    />
+                  </button>
+                )}
+              </>
             )}
           </div>
           
@@ -477,7 +542,11 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                    {mediaItems.length > 0 ? (
                      <div className="grid grid-cols-3 gap-3">
                         {mediaItems.slice(0, 12).map((item, idx) => (
-                          <div key={idx} className="aspect-square bg-slate-100 dark:bg-slate-800 rounded-2xl border-2 border-white dark:border-slate-700 overflow-hidden relative group cursor-pointer transition-all hover:scale-105 shadow-md">
+                          <div
+                            key={idx}
+                            className="aspect-square rounded-xl overflow-hidden cursor-pointer relative group"
+                            onClick={() => openLightbox(mediaItems, idx)}
+                          >
                              {item.type === 'IMAGE' ? (
                                <img src={item.url} alt="" className="w-full h-full object-cover" />
                              ) : (
@@ -493,6 +562,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                         <ImageIcon size={32} className="mx-auto mb-3" />
                         <p className="text-xs font-bold italic tracking-tight">Chưa có ảnh/video nào</p>
                      </div>
+                   )}
+                   {mediaItems.length > 12 && (
+                     <button 
+                       onClick={() => openLightbox(mediaItems, 0)}
+                       className="w-full mt-4 py-3 bg-surface-100 hover:bg-indigo-500 hover:text-white text-foreground/70 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-sm active:scale-95"
+                     >
+                       Xem tất cả ảnh & video ({mediaItems.length})
+                     </button>
                    )}
                 </div>
               )}
@@ -510,10 +587,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory }) => {
                 <div className="mt-3 space-y-2 px-2">
                    {fileItems.length > 0 ? (
                       fileItems.slice(0, 5).map((file, idx) => (
-                        <div key={idx} className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02]">
-                           <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 rounded-2xl flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-sm">
-                              <FileText size={24} />
-                           </div>
+                        <div key={idx} onClick={() => window.open(file.url, '_blank')} className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02] cursor-pointer active:scale-[0.98]">
+                           {getFileIcon(file.url)}
                            <div className="flex-1 min-w-0">
                               <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{file.name || 'Tệp đính kèm'}</p>
                            </div>

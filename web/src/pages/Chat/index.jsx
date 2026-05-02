@@ -15,6 +15,7 @@ import NotificationModal from '../../components/NotificationModal';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
 import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
+import MediaLightbox from '../../components/MediaLightbox';
 import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
 import { setConversations } from '../../store/chatSlice';
@@ -35,7 +36,8 @@ const Chat = () => {
     fetchFriends,
     fetchMessages,
     selectConversation,
-    loading
+    loading,
+    messages
   } = useChat();
 
   useWebSocket(); // Initialize global real-time listener
@@ -60,6 +62,11 @@ const Chat = () => {
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const [friendsInitialView, setFriendsInitialView] = useState('list');
   const [selectedTags, setSelectedTags] = useState([]); // List of tag keys
+  const [lightboxData, setLightboxData] = useState({ isOpen: false, images: [], currentIndex: 0 });
+
+  const openLightbox = (images, index = 0) => {
+    setLightboxData({ isOpen: true, images, currentIndex: index });
+  };
 
   const TAGS = [
     { key: 'customer', label: 'Khách hàng', color: 'bg-red-500' },
@@ -237,6 +244,30 @@ const Chat = () => {
       };
     });
   }, [remoteUsers, conversations]);
+
+  const allChatImages = React.useMemo(() => {
+    const images = [];
+    const currentMessages = messages[activeConversationId] || [];
+    currentMessages.forEach(msg => {
+      if (msg.mediaUrls) {
+        msg.mediaUrls.forEach(url => {
+          const cleanUrl = url.split('?')[0].toLowerCase();
+          const isImg = cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)/i);
+          const isVid = cleanUrl.match(/\.(mp4|webm|ogg)/i);
+          if (isImg || isVid) {
+            images.push({ 
+              url, 
+              type: isImg ? 'IMAGE' : 'VIDEO', 
+              createdAt: msg.createdAt,
+              senderName: msg.senderName,
+              messageId: msg.messageId
+            });
+          }
+        });
+      }
+    });
+    return images; // These are already in order of messages (usually oldest to newest)
+  }, [messages, activeConversationId]);
 
   const [contextMenu, setContextMenu] = useState(null);
 
@@ -722,6 +753,8 @@ const Chat = () => {
                   isInfoOpen={isInfoOpen}
                   onBack={() => selectConversation(null)}
                   onRefreshMessages={() => fetchMessages(activeConversationId)}
+                  openLightbox={openLightbox}
+                  allChatImages={allChatImages}
                 />
               ) : !isMobile ? (
                 <WelcomeCarousel 
@@ -739,6 +772,8 @@ const Chat = () => {
                 conversation={activeConversation}
                 onClose={() => setIsInfoOpen(false)}
                 onClearHistory={() => handleDeleteConversation(activeConversationId)}
+                openLightbox={openLightbox}
+                allChatImages={allChatImages}
               />
             )}
 
@@ -851,6 +886,14 @@ const Chat = () => {
         isOpen={isFriendsOpen}
         onClose={() => setIsFriendsOpen(false)}
         initialView={friendsInitialView}
+      />
+
+      <MediaLightbox 
+        isOpen={lightboxData.isOpen}
+        onClose={() => setLightboxData(prev => ({ ...prev, isOpen: false }))}
+        images={lightboxData.images}
+        currentIndex={lightboxData.currentIndex}
+        onIndexChange={(index) => setLightboxData(prev => ({ ...prev, currentIndex: index }))}
       />
 
       <VideoCall
