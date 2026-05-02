@@ -81,9 +81,14 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
     const myId = state.auth.user?.userId || state.auth.user?.id;
     const realId = getRealId(state.chat, messageData.conversationId, myId);
 
+    // Chuẩn hóa content: Nếu là VOICE, content nên chứa URL để đồng bộ với Web
+    const finalContent = (messageData.type === 'VOICE' && !messageData.content && messageData.mediaUrls?.length > 0) 
+      ? messageData.mediaUrls[0] 
+      : messageData.content;
+
     const payload = {
       conversationId: realId,
-      content: messageData.content,
+      content: finalContent || '',
       type: messageData.type || 'TEXT',
       senderId: myId,
       replyToMessageId: messageData.replyToMessageId,
@@ -94,6 +99,17 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
     return null; 
   } catch (error) { return rejectWithValue(error.response?.data?.message); }
 });
+
+const isVoiceMessage = (message) => {
+  if (!message) return false;
+  if (message.type === 'VOICE') return true;
+  const content = message.content || '';
+  if (typeof content !== 'string') return false;
+  return content.includes('chat-media/') || 
+         content.includes('voice-messages/') || 
+         content.includes('s3.ap-southeast-1') ||
+         content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i);
+};
 
 const chatSlice = createSlice({
   name: 'chat',
@@ -246,6 +262,8 @@ const chatSlice = createSlice({
           let preview = message.content;
           if (message.isRecalled) {
             preview = "[Tin nhắn đã bị thu hồi]";
+          } else if (isVoiceMessage(message)) {
+            preview = "Tin nhắn thoại";
           } else if (message.type === 'IMAGE') {
             preview = "[Hình ảnh]";
           } else if (message.type === 'VIDEO') {
@@ -334,12 +352,21 @@ const chatSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchConversations.fulfilled, (state, action) => {
-        state.conversations = action.payload.map(conv => ({
-          ...conv,
-          unreadCount: conv.unreadCount ?? 0,
-          isUnread: (conv.unreadCount ?? 0) > 0,
-          lastMessageSenderId: conv.lastMessageSenderId || conv.lastSenderId,
-        }));
+        state.conversations = action.payload.map(conv => {
+          let lastMessage = conv.lastMessage;
+          // Check if lastMessage is a voice URL
+          if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
+            lastMessage = "Tin nhắn thoại";
+          }
+          
+          return {
+            ...conv,
+            lastMessage,
+            unreadCount: conv.unreadCount ?? 0,
+            isUnread: (conv.unreadCount ?? 0) > 0,
+            lastMessageSenderId: conv.lastMessageSenderId || conv.lastSenderId,
+          };
+        });
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
         const { conversationId, messages, isLoadMore } = action.payload;

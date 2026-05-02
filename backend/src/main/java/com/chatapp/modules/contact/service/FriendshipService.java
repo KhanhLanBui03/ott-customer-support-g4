@@ -122,33 +122,50 @@ public class FriendshipService {
     }
 
     public void rejectFriendRequest(String requesterId, String addresseeId) {
+        log.info("Rejecting friend request from {} to {}", requesterId, addresseeId);
         Optional<Friendship> friendshipOpt = friendshipRepository.find(requesterId, addresseeId);
         if (friendshipOpt.isPresent()) {
-            friendshipRepository.delete(friendshipOpt.get());
+            Friendship friendship = friendshipOpt.get();
+            friendshipRepository.delete(friendship);
+            
+            // Notify the requester that their request was rejected
+            publishNotification(requesterId, "FRIEND_REQUEST_REJECTED", mapToResponse(addresseeId, "NONE", false, friendship.getCreatedAt()));
+        }
+    }
+
+    public void cancelFriendRequest(String requesterId, String addresseeId) {
+        log.info("Cancelling friend request from {} to {}", requesterId, addresseeId);
+        Optional<Friendship> friendshipOpt = friendshipRepository.find(requesterId, addresseeId);
+        if (friendshipOpt.isPresent()) {
+            Friendship friendship = friendshipOpt.get();
+            if (Friendship.Status.PENDING.name().equals(friendship.getStatus())) {
+                friendshipRepository.delete(friendship);
+                
+                // Notify the addressee that the request was cancelled
+                publishNotification(addresseeId, "FRIEND_REQUEST_CANCELLED", mapToResponse(requesterId, "NONE", true, friendship.getCreatedAt()));
+            }
         }
     }
 
     public List<FriendshipResponse> getFriends(String userId) {
         java.util.Map<String, FriendshipResponse> friendsMap = new java.util.LinkedHashMap<>();
 
-        // Friends where current user is requester
+        // Friendship records where current user is requester
         List<Friendship> initiated = friendshipRepository.findByRequesterId(userId);
         for (Friendship f : initiated) {
-            if (Friendship.Status.ACCEPTED.name().equals(f.getStatus()) || Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
-                FriendshipResponse resp = mapToResponse(f.getAddresseeId(), f.getStatus(), true, f.getCreatedAt());
-                if (resp != null) friendsMap.put(resp.getUserId(), resp);
-            }
+            if (Friendship.Status.REJECTED.name().equals(f.getStatus())) continue;
+            FriendshipResponse resp = mapToResponse(f.getAddresseeId(), f.getStatus(), true, f.getCreatedAt());
+            if (resp != null) friendsMap.put(resp.getUserId(), resp);
         }
         
-        // Friends where current user is addressee
+        // Friendship records where current user is addressee
         List<Friendship> receivedKeysOnly = friendshipRepository.findByAddresseeId(userId);
         for (Friendship keyItem : receivedKeysOnly) {
             friendshipRepository.find(keyItem.getRequesterId(), keyItem.getAddresseeId())
                 .ifPresent(f -> {
-                    if (Friendship.Status.ACCEPTED.name().equals(f.getStatus()) || Friendship.Status.BLOCKED.name().equals(f.getStatus())) {
-                        FriendshipResponse resp = mapToResponse(f.getRequesterId(), f.getStatus(), false, f.getCreatedAt());
-                        if (resp != null) friendsMap.put(resp.getUserId(), resp);
-                    }
+                    if (Friendship.Status.REJECTED.name().equals(f.getStatus())) return;
+                    FriendshipResponse resp = mapToResponse(f.getRequesterId(), f.getStatus(), false, f.getCreatedAt());
+                    if (resp != null) friendsMap.put(resp.getUserId(), resp);
                 });
         }
 
@@ -227,6 +244,8 @@ public class FriendshipService {
                 .phoneNumber(user.getPhoneNumber())
                 .avatarUrl(user.getAvatarUrl())
                 .status(status)
+                .userStatus(user.getStatus())
+                .lastSeenAt(user.getLastSeenAt())
                 .isRequester(isRequester)
                 .createdAt(createdAt)
                 .build();

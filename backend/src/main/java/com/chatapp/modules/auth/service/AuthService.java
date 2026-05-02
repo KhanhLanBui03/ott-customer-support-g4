@@ -115,6 +115,13 @@ public class AuthService {
         System.out.println("USER STATUS AT LOGIN: " + user.getStatus());
         System.out.println("=================================================");
 
+        // If account is LOCKED, stop login and notify user
+        if ("LOCKED".equals(user.getStatus())) {
+            log.info("Access denied for LOCKED user: {}", user.getUserId());
+            throw new com.chatapp.common.exception.LockedAccountException(
+                "Tài khoản của bạn đang trong trạng thái chờ xóa.", user.getUpdatedAt());
+        }
+
         // Update status to ONLINE
         user.updateStatus("ONLINE");
         userRepository.save(user);

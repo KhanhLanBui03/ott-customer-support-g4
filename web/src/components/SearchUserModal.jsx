@@ -16,6 +16,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
   if (!isOpen) return null;
 
   const friendshipStatus = foundUser?.friendshipStatus || 'NONE';
+  const friendshipIsRequester = Boolean(foundUser?.isRequester);
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
@@ -41,9 +42,22 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
     setLoading(true);
     try {
       await friendApi.sendRequest(foundUser.userId);
-      setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING' }));
+      setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING', isRequester: true }));
     } catch (err) {
       setError('Gửi lời mời kết bạn thất bại');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelFriendRequest = async () => {
+    if (!foundUser) return;
+    setLoading(true);
+    try {
+      await friendApi.cancelRequest(foundUser.userId);
+      setFoundUser(prev => ({ ...prev, friendshipStatus: 'NONE', isRequester: null }));
+    } catch (err) {
+      setError('Hủy lời mời kết bạn thất bại');
     } finally {
       setLoading(false);
     }
@@ -146,10 +160,21 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
                   <span>Bạn bè</span>
                 </div>
               ) : friendshipStatus === 'PENDING' ? (
-                <div className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 shadow-sm">
-                  <Check size={16} />
-                  <span>Đã gửi lời mời</span>
-                </div>
+                friendshipIsRequester ? (
+                  <button
+                    onClick={handleCancelFriendRequest}
+                    disabled={loading}
+                    className="w-full py-4 bg-red-50 border border-red-100 text-red-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 shadow-sm hover:bg-red-100 transition-all disabled:opacity-50"
+                  >
+                    <X size={16} />
+                    <span>Hủy yêu cầu</span>
+                  </button>
+                ) : (
+                  <div className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 shadow-sm">
+                    <Check size={16} />
+                    <span>Đã nhận lời mời</span>
+                  </div>
+                )
               ) : (
                 <button
                   onClick={handleAddFriend}

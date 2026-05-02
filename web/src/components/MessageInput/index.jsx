@@ -534,6 +534,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
               </p>
               <p className="text-[13px] text-foreground/60 truncate font-semibold">
                 {(() => {
+                  const isVoice = replyingTo.type === 'VOICE' || (replyingTo.content && (replyingTo.content.includes('chat-media/') || replyingTo.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
+                  if (isVoice) return 'Tin nhắn thoại';
                   if (replyingTo.content && replyingTo.type !== 'STICKER') return replyingTo.content;
                   if (replyingTo.type === 'IMAGE') return 'Hình ảnh';
                   if (replyingTo.type === 'VIDEO') return 'Video';

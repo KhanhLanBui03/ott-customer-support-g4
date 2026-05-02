@@ -899,11 +899,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                         <p className={cn("text-[13px] font-bold truncate leading-tight mb-0.5", isDark ? 'text-gray-100' : 'text-slate-800')}>{msg.replyTo.senderName}</p>
                                         <p className={cn("text-[12px] truncate leading-tight", isDark ? 'text-gray-400' : 'text-slate-500')}>
                                           {(() => {
+                                            const isVoice = msg.replyTo.type === 'VOICE' || 
+                                                           (msg.replyTo.content && (msg.replyTo.content.includes('chat-media/') || msg.replyTo.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
+                                            
+                                            if (isVoice) return 'Tin nhắn thoại';
                                             if (msg.replyTo.content && msg.replyTo.content !== '[Attachment]') return msg.replyTo.content;
+                                            
                                             if (originalMsg) {
                                               if (originalMsg.type === 'IMAGE') return '[Hình ảnh]';
                                               if (originalMsg.type === 'VIDEO') return '[Video]';
                                               if (originalMsg.type === 'STICKER') return '[Nhãn dán]';
+                                              if (originalMsg.type === 'VOICE') return 'Tin nhắn thoại';
                                               if (originalMsg.type === 'FILE' && originalMsg.mediaUrls?.length > 0) {
                                                 try {
                                                   const url = originalMsg.mediaUrls[0];
@@ -1174,21 +1180,38 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     isPinned && msg.type !== 'STICKER' ? 'ring-2 ring-indigo-500/30' : '',
                                     "overflow-hidden transition-all duration-300"
                                   )}>
-                                    {(msg.type === 'VOICE' || (msg.mediaUrls && msg.mediaUrls[0] && (msg.mediaUrls[0].match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)))) ? (
-                                      <div className="p-2">
-                                        {msg.mediaUrls && msg.mediaUrls[0] && (
-                                          <VoicePlayer url={msg.mediaUrls[0]} />
-                                        )}
-                                      </div>
-                                    ) : msg.type === 'STICKER' ? (
-                                      <div className="relative group/sticker">
-                                        <img
-                                          src={msg.content}
-                                          alt="sticker"
-                                          className="max-w-[160px] sm:max-w-[220px] h-auto transition-transform duration-500 group-hover/sticker:scale-110 pointer-events-auto"
-                                        />
-                                      </div>
-                                    ) : (
+                                    {(() => {
+                                      const mediaFiles = msg.mediaUrls || msg.media_urls || [];
+                                      const voiceUrl = mediaFiles[0] || (msg.content && msg.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i) ? msg.content : null);
+                                      const isVoiceType = msg.type === 'VOICE' || 
+                                                         (voiceUrl && String(voiceUrl).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+                                      
+                                      // 1. Render Voice Player
+                                      if (isVoiceType) {
+                                        let fullUrl = voiceUrl;
+                                        if (fullUrl && !fullUrl.startsWith('http') && !fullUrl.startsWith('blob:')) {
+                                          const baseUrl = (window.CONFIG?.API_URL || '').split('/api')[0];
+                                          fullUrl = `${baseUrl}${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`;
+                                        }
+                                        return (
+                                          <div className="p-2 min-w-[260px]">
+                                            {fullUrl ? <VoicePlayer url={fullUrl} /> : <div className="p-3 text-xs opacity-50 italic text-center">Âm thanh lỗi...</div>}
+                                          </div>
+                                        );
+                                      }
+
+                                      // 2. Render Sticker
+                                      if (msg.type === 'STICKER' && msg.content && msg.content.startsWith('http')) {
+                                        return (
+                                          <div className="relative group/sticker">
+                                            <img src={msg.content} alt="sticker" className="max-w-[160px] sm:max-w-[220px] h-auto transition-transform duration-500 group-hover/sticker:scale-110 pointer-events-auto" />
+                                          </div>
+                                        );
+                                      }
+
+                                      // 3. Render Default (Images, Videos, Files, or Text)
+                                      return null;
+                                    })() || (
                                       <div className={cn("flex flex-col max-w-full", msg.mediaUrls?.length > 0 ? "min-w-[140px]" : "min-w-0")}>
                                         {msg.mediaUrls && msg.mediaUrls.length > 0 && (
                                           <div className="bg-black/5 dark:bg-black/40 backdrop-blur-sm">

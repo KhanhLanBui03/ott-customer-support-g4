@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useChat } from '../../hooks/useChat';
-import { setReplyingTo, setActiveConversation, resetUnreadCount } from '../../store/chatSlice';
+import { setReplyingTo, setActiveConversation, resetUnreadCount, updateFriendStatus } from '../../store/chatSlice';
 import MessageList from '../MessageList';
 import MessageInput from '../MessageInput';
 import ForwardModal from '../ForwardModal';
@@ -527,14 +527,15 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
 
       {/* Add Friend Bar for Strangers */}
       {currentConv?.type === 'SINGLE' && !currentConv?.isAI && (() => {
-        const friendStatus = (() => {
-          const friend = Array.isArray(friends) && friends.find(f => {
+        const friendEntry = (() => {
+          return Array.isArray(friends) && friends.find(f => {
             const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
             const mId = String(currentMember?.userId || currentMember?.id || '').toLowerCase();
             return fId !== '' && fId === mId;
           });
-          return friend?.status;
         })();
+        const friendStatus = friendEntry?.status;
+        const isRequester = Boolean(friendEntry?.isRequester);
 
         if (friendStatus === 'ACCEPTED' || friendStatus === 'BLOCKED') return null;
 
@@ -543,15 +544,43 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
             <div className="flex items-center space-x-3 text-slate-500 dark:text-slate-400">
               <UserPlus size={18} className="flex-shrink-0" />
               <span className="text-[13px] font-medium">
-                {friendStatus === 'PENDING' ? 'Đã gửi lời mời kết bạn' : 'Gửi yêu cầu kết bạn tới người này'}
+                {friendStatus === 'PENDING'
+                  ? (isRequester ? 'Đã gửi lời mời kết bạn' : 'Người này đã gửi lời mời kết bạn')
+                  : 'Gửi yêu cầu kết bạn tới người này'}
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              {friendStatus !== 'PENDING' && (
+              {friendStatus === 'PENDING' ? (
+                isRequester ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await friendApi.cancelRequest(currentMember.userId || currentMember.id);
+                        dispatch(updateFriendStatus({
+                          userId: currentMember.userId || currentMember.id,
+                          status: 'NONE',
+                          isRequester: null
+                        }));
+                        fetchFriends();
+                      } catch (err) {
+                        console.error("Failed to cancel friend request", err);
+                      }
+                    }}
+                    className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[12px] font-bold rounded-lg transition-all shadow-sm"
+                  >
+                    Hủy yêu cầu
+                  </button>
+                ) : null
+              ) : (
                 <button 
                   onClick={async () => {
                     try {
-                      await friendApi.sendFriendRequest(currentMember.userId || currentMember.id);
+                      await friendApi.sendRequest(currentMember.userId || currentMember.id);
+                      dispatch(updateFriendStatus({
+                        userId: currentMember.userId || currentMember.id,
+                        status: 'PENDING',
+                        isRequester: true
+                      }));
                       fetchFriends();
                     } catch (err) {
                       console.error("Failed to send friend request", err);

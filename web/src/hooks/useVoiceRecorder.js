@@ -5,171 +5,143 @@ export const useVoiceRecorder = () => {
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState(null);
 
-  const mediaRecorderRef = useRef(null);
-  const streamsRef = useRef([]);
-  const chunksRef = useRef([]);
-  const durationRef = useRef(0);
+  const audioContextRef = useRef(null);
+  const processorRef = useRef(null);
+  const inputRef = useRef(null);
+  const streamRef = useRef(null);
+  const pcmDataRef = useRef([]);
   const startTimeRef = useRef(null);
   const animationFrameRef = useRef(null);
 
-  // Update duration on animation frame
   useEffect(() => {
     if (!isRecording) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       return;
     }
-
     const updateDuration = () => {
       if (startTimeRef.current) {
         const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setDuration(elapsed);
-        durationRef.current = elapsed;
       }
       animationFrameRef.current = requestAnimationFrame(updateDuration);
     };
-
     animationFrameRef.current = requestAnimationFrame(updateDuration);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
+    return () => animationFrameRef.current && cancelAnimationFrame(animationFrameRef.current);
   }, [isRecording]);
 
-  // Initialize audio recording
   const startRecording = useCallback(async () => {
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamsRef.current.push(stream);
+      streamRef.current = stream;
 
-      // Determine supported MIME type
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'audio/mp4';
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = ''; // Use default
-          }
-        }
-      }
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType || undefined
-      });
+      const input = audioContext.createMediaStreamSource(stream);
+      inputRef.current = input;
 
-      chunksRef.current = [];
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
 
-      mediaRecorder.onstart = () => {
-        durationRef.current = 0;
-        startTimeRef.current = Date.now();
-        setDuration(0);
-        setIsRecording(true);
+      pcmDataRef.current = [];
+      processor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0);
+        pcmDataRef.current.push(new Float32Array(inputData));
       };
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
-      };
+      input.connect(processor);
+      processor.connect(audioContext.destination);
 
-      mediaRecorder.onerror = (e) => {
-        setError(`Recording error: ${e.error}`);
-        setIsRecording(false);
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-    } catch (err) {
-      setError(`Failed to access microphone: ${err.message}`);
-      setIsRecording(false);
-    }
-  }, []);
-
-  // Stop recording and return blob
-  const stopRecording = useCallback(async () => {
-    return new Promise((resolve, reject) => {
-      if (!mediaRecorderRef.current) {
-        reject(new Error('No recording in progress'));
-        return;
-      }
-
-      const mediaRecorder = mediaRecorderRef.current;
-
-      mediaRecorder.onstop = () => {
-        setIsRecording(false);
-        startTimeRef.current = null;
-        durationRef.current = 0;
-
-        // Stop all audio tracks
-        streamsRef.current.forEach(stream => {
-          stream.getTracks().forEach(track => track.stop());
-        });
-        streamsRef.current = [];
-
-        // Create blob with proper mime type
-        const mimeType = mediaRecorder.mimeType || 'audio/webm';
-        const audioBlob = new Blob(chunksRef.current, { type: mimeType });
-        
-        // Determine file extension based on mime type
-        let ext = 'webm';
-        if (mimeType.includes('mp4')) ext = 'm4a';
-        else if (mimeType.includes('ogg')) ext = 'ogg';
-        else if (mimeType.includes('wav')) ext = 'wav';
-        
-        // Create a File object from the blob
-        const audioFile = new File(
-          [audioBlob],
-          `voice_${Date.now()}.${ext}`,
-          { type: mimeType }
-        );
-
-        resolve(audioFile);
-      };
-
-      mediaRecorder.stop();
-    });
-  }, []);
-
-  // Cancel recording
-  const cancelRecording = useCallback(() => {
-    if (mediaRecorderRef.current) {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (err) {
-        console.warn('Cancel recording error:', err);
-      }
-
-      setIsRecording(false);
-      startTimeRef.current = null;
-      durationRef.current = 0;
+      startTimeRef.current = Date.now();
+      setIsRecording(true);
       setDuration(0);
-
-      streamsRef.current.forEach(stream => {
-        stream.getTracks().forEach(track => track.stop());
-      });
-      streamsRef.current = [];
-      chunksRef.current = [];
+    } catch (err) {
+      setError(`Không thể truy cập micro: ${err.message}`);
+      setIsRecording(false);
     }
   }, []);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (mediaRecorderRef.current && isRecording) {
-        cancelRecording();
+  const stopRecording = useCallback(async () => {
+    return new Promise((resolve) => {
+      if (!isRecording) return;
+
+      setIsRecording(false);
+
+      // Dừng các node
+      if (processorRef.current) processorRef.current.disconnect();
+      if (inputRef.current) inputRef.current.disconnect();
+      if (audioContextRef.current) audioContextRef.current.close();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+
+      // Tạo file WAV
+      const pcmBuffer = flattenPcm(pcmDataRef.current);
+      const wavBlob = encodeWAV(pcmBuffer, 16000);
+      const audioFile = new File([wavBlob], `voice_${Date.now()}.wav`, { type: 'audio/wav' });
+
+      resolve(audioFile);
+    });
+  }, [isRecording]);
+
+  const cancelRecording = useCallback(() => {
+    setIsRecording(false);
+    if (processorRef.current) processorRef.current.disconnect();
+    if (inputRef.current) inputRef.current.disconnect();
+    if (audioContextRef.current) audioContextRef.current.close();
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    pcmDataRef.current = [];
+  }, []);
+
+  // Helper: Gộp các mảng PCM
+  const flattenPcm = (chunks) => {
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const result = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return result;
+  };
+
+  // Helper: Đóng gói WAV header
+  const encodeWAV = (samples, sampleRate) => {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
       }
     };
-  }, []);
 
-  // Format duration to MM:SS
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+  };
+
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
