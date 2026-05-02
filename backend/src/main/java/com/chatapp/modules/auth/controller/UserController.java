@@ -181,13 +181,17 @@ public class UserController {
 
         // 2. Kiểm tra quan hệ bạn bè trong DB
         String status = "NONE";
+        Boolean isRequester = null;
         if (!myId.equals(user.getUserId())) {
             Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(myId, user.getUserId());
             Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(user.getUserId(), myId);
             
-            if (f1.isPresent()) status = f1.get().getStatus();
-            else if (f2.isPresent()) {
+            if (f1.isPresent()) {
+                status = f1.get().getStatus();
+                isRequester = true;
+            } else if (f2.isPresent()) {
                 status = f2.get().getStatus();
+                isRequester = false;
             }
         } else {
             status = "SELF"; // Tự tìm chính mình
@@ -201,6 +205,7 @@ public class UserController {
         data.put("fullName", user.getFullName() == null ? "" : user.getFullName());
         data.put("avatarUrl", user.getAvatarUrl() == null ? "" : user.getAvatarUrl());
         data.put("friendshipStatus", status);
+        data.put("isRequester", isRequester);
 
         return ResponseEntity.ok(ApiResponse.success(data, "User found"));
     }
