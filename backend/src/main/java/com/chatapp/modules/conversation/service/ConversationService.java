@@ -37,6 +37,7 @@ public class ConversationService {
 
     /**
      * Update denormalized last message fields across all user conversations
+     * If UserConversation record doesn't exist (e.g., user deleted conversation), recreate it
      */
     public void updateLastMessage(String conversationId, String content, Long timestamp, String senderId) {
         conversationRepository.findById(conversationId).ifPresent(conv -> {
@@ -46,19 +47,50 @@ public class ConversationService {
             conversationRepository.save(conv);
 
             for (String memberId : conv.getMemberIds()) {
-                userConversationRepository.findById(memberId, conversationId).ifPresent(uc -> {
-                    uc.setLastMessage(content);
-                    uc.setLastMessageSenderId(senderId);
-                    uc.setUpdatedAt(timestamp);
-                    
-                    // Increment unread count if sender is not this member
-                    if (!memberId.equals(senderId)) {
-                        int currentUnread = uc.getUnreadCount() != null ? uc.getUnreadCount() : 0;
-                        uc.setUnreadCount(currentUnread + 1);
+                userConversationRepository.findById(memberId, conversationId).ifPresentOrElse(
+                    uc -> {
+                        // Update existing UserConversation
+                        uc.setLastMessage(content);
+                        uc.setLastMessageSenderId(senderId);
+                        uc.setUpdatedAt(timestamp);
+                        
+                        // Increment unread count if sender is not this member
+                        if (!memberId.equals(senderId)) {
+                            int currentUnread = uc.getUnreadCount() != null ? uc.getUnreadCount() : 0;
+                            uc.setUnreadCount(currentUnread + 1);
+                        }
+                        
+                        userConversationRepository.save(uc);
+                    },
+                    () -> {
+                        // Recreate UserConversation if it was deleted (e.g., user deleted conversation)
+                        log.info("Recreating deleted UserConversation for user {} in conversation {}", memberId, conversationId);
+                        UserConversation newUc = UserConversation.builder()
+                                .userId(memberId)
+                                .conversationId(conversationId)
+                                .role("MEMBER")
+                                .joinedAt(timestamp)
+                                .type(conv.getType())
+                                .name(conv.getType().equals("GROUP") ? conv.getName() : null)
+                                .avatarUrl(conv.getType().equals("GROUP") ? conv.getAvatarUrl() : null)
+                                .lastMessage(content)
+                                .lastMessageSenderId(senderId)
+                                .updatedAt(timestamp)
+                                // Only set unread count if sender is not this member
+                                .unreadCount(memberId.equals(senderId) ? 0 : 1)
+                                .build();
+                        userConversationRepository.save(newUc);
+                        
+                        // Broadcast conversation recreate event to notify user immediately
+                        try {
+                            ConversationResponse recreatedConv = getConversationDetail(conversationId, memberId);
+                            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_RECREATED", conversationId, recreatedConv));
+                            log.info("Broadcasted CONVERSATION_RECREATED event for user {} in conversation {}", memberId, conversationId);
+                        } catch (Exception e) {
+                            log.warn("Failed to broadcast CONVERSATION_RECREATED event: {}", e.getMessage());
+                        }
                     }
-                    
-                    userConversationRepository.save(uc);
-                });
+                );
             }
             
             // Broadcast update to all members to refresh their conversation list (including unread count)
@@ -801,12 +833,9 @@ public class ConversationService {
     }
 
     public void deleteConversationForUser(String userId, String conversationId) {
-        Conversation conv = conversationRepository.findById(conversationId).orElse(null);
-        if (conv != null && "GROUP".equals(conv.getType())) {
-            removeMemberFromGroup(userId, conversationId, userId);
-        } else {
-            userConversationRepository.findById(userId, conversationId).ifPresent(userConversationRepository::delete);
-        }
+        // Simply delete the UserConversation record for this user
+        // This removes the conversation from the user's view without affecting the group or other members
+        userConversationRepository.findById(userId, conversationId).ifPresent(userConversationRepository::delete);
     }
 
     public void togglePin(String userId, String conversationId) {

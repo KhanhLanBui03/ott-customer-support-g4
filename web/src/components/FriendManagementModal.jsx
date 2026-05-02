@@ -45,8 +45,8 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
   const filteredFriends = useMemo(() => {
     const uniqueFriends = Array.from(new Map(friends.map(f => [f.userId, f])).values());
     return uniqueFriends.filter(f =>
-      f.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.phoneNumber.includes(searchTerm)
+      String(f.fullName || f.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(f.phoneNumber || '').includes(searchTerm)
     );
   }, [friends, searchTerm]);
 

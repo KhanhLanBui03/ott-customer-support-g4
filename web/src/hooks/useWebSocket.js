@@ -96,7 +96,7 @@ export const useWebSocket = () => {
             } else if (event.eventType === 'GROUP_INVITE') {
                 const data = event.payload?.data || event.payload;
                 dispatch(addPendingGroup(data));
-            } else if (event.eventType === 'FRIEND_REQUEST' || event.eventType === 'FRIEND_ACCEPT' || event.eventType === 'FRIEND_DELETE' || event.eventType === 'FRIEND_BLOCK' || event.eventType === 'FRIEND_UNBLOCK') {
+            } else if (event.eventType === 'FRIEND_REQUEST' || event.eventType === 'FRIEND_ACCEPT' || event.eventType === 'FRIEND_DELETE' || event.eventType === 'FRIEND_BLOCK' || event.eventType === 'FRIEND_UNBLOCK' || event.eventType === 'FRIEND_REQUEST_REJECTED' || event.eventType === 'FRIEND_REQUEST_CANCELLED') {
                 const data = event.payload?.data || event.payload;
                 
                 // Always update friends list for any friendship event
@@ -119,6 +119,18 @@ export const useWebSocket = () => {
                         type: 'FRIEND_DELETE',
                         user: data,
                         message: `${data.fullName || 'Ai đó'} đã hủy kết bạn.`
+                    }));
+                } else if (event.eventType === 'FRIEND_REQUEST_REJECTED') {
+                    dispatch(addActivity({
+                        type: 'FRIEND_REQUEST_REJECTED',
+                        user: data,
+                        message: `${data.fullName || 'Ai đó'} đã từ chối lời mời kết bạn.`
+                    }));
+                } else if (event.eventType === 'FRIEND_REQUEST_CANCELLED') {
+                    dispatch(addActivity({
+                        type: 'FRIEND_REQUEST_CANCELLED',
+                        user: data,
+                        message: `${data.fullName || 'Ai đó'} đã hủy lời mời kết bạn.`
                     }));
                 }
             } else if (event.eventType === 'MESSAGE_STATUS_UPDATE' || event.eventType === 'MESSAGE_UPDATE') {
@@ -171,6 +183,11 @@ export const useWebSocket = () => {
                 } else {
                     dispatch(fetchConversations());
                 }
+            } else if (event.eventType === 'CONVERSATION_RECREATED') {
+                // Conversation was recreated (e.g., user deleted it but received new message)
+                // Fetch conversations to add it back to the list
+                console.log('[STOMP] Conversation recreated:', event.conversationId);
+                dispatch(fetchConversations());
             } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN' || event.eventType === 'MEMBER_UPDATE') {
                 dispatch(fetchConversations());
             } else if (event.eventType === 'USER_UPDATE') {
