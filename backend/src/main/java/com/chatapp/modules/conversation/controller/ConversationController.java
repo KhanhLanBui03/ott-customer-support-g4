@@ -235,4 +235,16 @@ public class ConversationController {
         conversationService.toggleChatRestriction(userId, conversationId);
         return ResponseEntity.ok(ApiResponse.success(null, "Chat restriction toggled successfully"));
     }
+
+    @PutMapping("/{conversationId}/avatar")
+    public ResponseEntity<ApiResponse<Void>> updateAvatar(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String avatarUrl = body.get("avatarUrl");
+        log.info("Updating avatar for conversation: {} by user: {}", conversationId, userId);
+        conversationService.updateConversationAvatar(userId, conversationId, avatarUrl);
+        return ResponseEntity.ok(ApiResponse.success(null, "Avatar updated successfully"));
+    }
 }

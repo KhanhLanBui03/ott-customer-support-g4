@@ -20,6 +20,7 @@ import {
   Info,
   BarChart2,
   X,
+  ChevronRight,
   Loader2,
   Plus,
   Play,
@@ -213,7 +214,7 @@ const getDocViewerUrl = (u, e) => {
   return `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
 };
 
-const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage }) => {
+const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages }) => {
   const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
@@ -253,7 +254,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   const [isVoteDetailsOpen, setIsVoteDetailsOpen] = useState(false);
   const [selectedVote, setSelectedVote] = useState(null);
-  const [selectedImage, setSelectedImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isFileModalLoading, setIsFileModalLoading] = useState(true);
   const [reactionDetail, setReactionDetail] = useState(null);
@@ -345,8 +345,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         for (let i = messages.length - 1; i >= 0; i--) {
           const msg = messages[i];
           if (String(msg.senderId) !== String(meId) &&
-              msg.messageId && !String(msg.messageId).startsWith('temp-') &&
-              (!msg.readBy || !msg.readBy.some(id => String(id) === String(meId)))) {
+            msg.messageId && !String(msg.messageId).startsWith('temp-') &&
+            (!msg.readBy || !msg.readBy.some(id => String(id) === String(meId)))) {
             console.log(`[ReadReceipt] 👁️ Tab became visible, marking last unread: ${msg.messageId}`);
             sendRead(conversationId, msg.messageId);
             break;
@@ -607,7 +607,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       } else if (action === 'TRANSLATE') {
         const msg = messages.find(m => m.messageId === messageId);
         if (!msg || !msg.content) return;
-        
+
         setTranslationLoading(prev => ({ ...prev, [messageId]: true }));
         setActiveMenu(null);
         try {
@@ -643,6 +643,16 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       await chatApi.submitVote(conversationId, messageId, { optionIds: newOptionIds });
     } catch (err) {
       console.error('Failed to submit vote:', err);
+    }
+  };
+
+  const handleCloseVote = async (messageId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn đóng cuộc bình chọn này?')) return;
+    try {
+      await chatApi.closeVote(conversationId, messageId);
+    } catch (err) {
+      console.error('Failed to close vote:', err);
+      alert('Không thể đóng cuộc bình chọn. Vui lòng thử lại.');
     }
   };
 
@@ -773,7 +783,9 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                 const isLastInGroup = index === messages.length - 1 || (nextMsg && nextMsg.senderId !== msg.senderId) || (nextMsg && (nextMsg.createdAt - msg.createdAt > 120000)) || (nextMsg && nextMsg.type === 'SYSTEM');
 
                 const isMe = msg.senderId === meId;
-                const isCall = msg.type === 'CALL_LOG' || (msg.content && (msg.content.includes('Call') || msg.content.includes('Cuộc gọi') || msg.content.startsWith('{')));
+                const currentUserRole = currentConv?.members?.find(m => m.userId === meId)?.role;
+                const isAdmin = currentUserRole === 'ADMIN' || currentUserRole === 'OWNER';
+                const isCall = (msg.type === 'CALL_LOG' || (msg.content && (msg.content.includes('Call') || msg.content.includes('Cuộc gọi') || msg.content.startsWith('{')))) && msg.type !== 'VOTE';
                 const isSystem = msg.type === 'SYSTEM';
                 const isRecalled = msg.isRecalled;
                 const isPinned = pinnedIds.includes(msg.messageId);
@@ -795,9 +807,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                       <div className="flex justify-center my-6 group relative">
                         <div className="flex items-center space-x-2">
                           <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
-                          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${
-                            isDark ? 'text-white/30' : 'text-slate-500'
-                          }`}>
+                          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/30' : 'text-slate-500'
+                            }`}>
                             {msg.content}
                           </span>
                           <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
@@ -901,8 +912,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                   name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
                                                   name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
                                                   return `[Tệp] ${name}`;
-                                                } catch(e) {
-                                                   return '[Tệp đính kèm]';
+                                                } catch (e) {
+                                                  return '[Tệp đính kèm]';
                                                 }
                                               }
                                             }
@@ -921,11 +932,11 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                 <Trash2 size={14} className="opacity-50" />
                                 <span className="text-[13px] font-medium">Tin nhắn đã bị thu hồi</span>
                               </div>
-                            ) : isCall ? (() => {
+                            ) : isCall ? ((() => {
                               let callData = null;
                               try {
                                 if (msg.type === 'CALL_LOG') callData = JSON.parse(msg.content);
-                              } catch (e) {}
+                              } catch (e) { }
 
                               const cType = callData?.callType || 'video';
                               const cStatus = callData?.status || 'MISSED';
@@ -992,36 +1003,130 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     Gọi lại
                                   </button>
                                 </div>
-                              );
-                            })() : (msg.type === 'VOTE' && msg.vote) ? (
-                              <div className={`w-full max-w-[340px] bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500`}>
-                                <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-br from-indigo-500/5 to-transparent">
-                                  <div className="flex items-start justify-between mb-4">
-                                    <div className="space-y-1">
-                                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Cuộc bình chọn</p>
-                                      <h4 className="text-[16px] font-black text-slate-900 dark:text-white leading-tight">{msg.vote.question}</h4>
+                              )
+                            })()) : msg.type === 'VOTE' && msg.vote ? (
+                              <div className={cn(
+                                "w-full max-w-[500px] rounded-[28px] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500",
+                                isDark ? "glass-premium border border-white/10" : "bg-white border border-slate-200"
+                              )}>
+                                <div className={cn(
+                                  "p-6 border-b bg-gradient-to-br",
+                                  isDark ? "border-white/5 from-indigo-500/10 to-transparent" : "border-slate-100 from-indigo-50 to-transparent"
+                                )}>
+                                  <div className="flex items-center space-x-3 mb-2">
+                                    <div className={cn(
+                                      "w-8 h-8 rounded-xl flex items-center justify-center",
+                                      isDark ? "bg-indigo-500/20 text-indigo-400" : "bg-indigo-500/10 text-indigo-600"
+                                    )}>
+                                      <BarChart2 size={16} />
                                     </div>
-                                    <div className={cn("p-2.5 rounded-xl transition-all shadow-sm", msg.vote.isClosed ? "bg-red-500/10 text-red-500" : "bg-indigo-500/10 text-indigo-500")}><BarChart2 size={18} /></div>
+                                    <p className={cn(
+                                      "text-[10px] font-black uppercase tracking-[0.2em]",
+                                      isDark ? "text-indigo-400/80" : "text-indigo-600"
+                                    )}>Biểu quyết</p>
                                   </div>
+                                  <h4 className={cn(
+                                    "text-[16px] font-bold leading-snug",
+                                    isDark ? "text-white" : "text-slate-900"
+                                  )}>{msg.vote.question}</h4>
                                 </div>
-                                <div className="p-5 space-y-3 bg-slate-50/30 dark:bg-slate-900/30">
+                                
+                                <div className={cn(
+                                  "p-4 space-y-2.5",
+                                  isDark ? "bg-black/20" : "bg-slate-50/50"
+                                )}>
                                   {msg.vote.options.map((opt) => {
                                     const voterIds = opt.voterIds || [];
-                                    const percent = (msg.vote.options.reduce((s, o) => s + (o.voterIds?.length || 0), 0) > 0) ? (voterIds.length / msg.vote.options.reduce((s, o) => s + (o.voterIds?.length || 0), 0)) * 100 : 0;
+                                    const totalVotes = msg.vote.options.reduce((s, o) => s + (o.voterIds?.length || 0), 0);
+                                    const percent = totalVotes > 0 ? (voterIds.length / totalVotes) * 100 : 0;
                                     const isSelected = voterIds.includes(meId);
+                                    
                                     return (
-                                      <button key={opt.optionId} disabled={msg.vote.isClosed} onClick={() => handleVote(msg.messageId, opt.optionId, msg.vote.allowMultiple, msg.vote.options.filter(o => o.voterIds?.includes(meId)).map(o => o.optionId))} className={cn("w-full text-left p-4 rounded-[20px] transition-all relative overflow-hidden border-2", isSelected ? 'bg-indigo-500/10 border-indigo-500' : 'bg-white dark:bg-slate-800 border-transparent')}>
-                                        <div className="absolute left-0 top-0 bottom-0 bg-indigo-500/5 transition-all duration-1000" style={{ width: `${percent}%` }} />
-                                        <div className="relative flex items-center justify-between z-10">
+                                      <button 
+                                        key={opt.optionId} 
+                                        disabled={msg.vote.isClosed}
+                                        onClick={() => handleVote(msg.messageId, opt.optionId, msg.vote.allowMultiple, msg.vote.options.filter(o => o.voterIds?.includes(meId)).map(o => o.optionId))}
+                                        className={cn(
+                                          "w-full relative h-14 rounded-2xl border transition-all overflow-hidden group/opt",
+                                          isSelected 
+                                            ? (isDark ? "border-indigo-500/50 bg-indigo-500/10" : "border-indigo-500 bg-indigo-50") 
+                                            : (isDark ? "border-white/5 bg-white/5 hover:bg-white/10" : "border-slate-200 bg-white hover:bg-slate-50")
+                                        )}
+                                      >
+                                        <div 
+                                          className={cn(
+                                            "absolute inset-y-0 left-0 transition-all duration-1000",
+                                            isDark ? "bg-indigo-500/20" : "bg-indigo-500/10"
+                                          )} 
+                                          style={{ width: `${percent}%` }} 
+                                        />
+                                        <div className="relative flex items-center justify-between px-4 h-full z-10">
                                           <div className="flex items-center space-x-3">
-                                            <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", isSelected ? "bg-indigo-50 border-indigo-500" : "border-slate-200")}>{isSelected && <CheckCheck size={10} className="text-white" />}</div>
-                                            <span className="text-[14px] font-bold">{opt.text}</span>
+                                            <div className={cn(
+                                              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                                              isSelected 
+                                                ? "bg-indigo-500 border-indigo-500" 
+                                                : (isDark ? "border-white/20 group-hover/opt:border-white/40" : "border-slate-300 group-hover/opt:border-slate-400")
+                                            )}>
+                                              {isSelected && <Check size={12} className="text-white" />}
+                                            </div>
+                                            <span className={cn(
+                                              "text-[14px] font-medium",
+                                              isDark ? "text-white/90" : "text-slate-700"
+                                            )}>{opt.text}</span>
                                           </div>
-                                          <span className="text-[12px] font-black text-slate-400">{voterIds.length}</span>
+                                          <div className="flex flex-col items-end">
+                                            <span className={cn(
+                                              "text-[12px] font-black leading-none",
+                                              isDark ? "text-white/60" : "text-slate-400"
+                                            )}>{voterIds.length}</span>
+                                            {percent > 0 && (
+                                              <span className={cn(
+                                                "text-[8px] font-black mt-1 uppercase tracking-tighter",
+                                                isDark ? "text-indigo-400" : "text-indigo-600"
+                                              )}>{Math.round(percent)}%</span>
+                                            )}
+                                          </div>
                                         </div>
                                       </button>
                                     );
                                   })}
+                                </div>
+                                
+                                <div className={cn(
+                                  "px-5 py-4 border-t flex items-center justify-between",
+                                  isDark ? "bg-black/40 border-white/5" : "bg-white border-slate-100"
+                                )}>
+                                  <button 
+                                    onClick={() => { setSelectedVote(msg.vote); setIsVoteDetailsOpen(true); }}
+                                    className={cn(
+                                      "text-[12px] font-bold transition-colors flex items-center space-x-1.5 group/details",
+                                      isDark ? "text-indigo-400 hover:text-indigo-300" : "text-indigo-600 hover:text-indigo-700"
+                                    )}
+                                  >
+                                    <span>Xem chi tiết</span>
+                                    <ChevronRight size={14} className="group-hover/details:translate-x-1 transition-transform" />
+                                  </button>
+                                  
+                                  {(isMe || isAdmin) && !msg.vote.isClosed && (
+                                    <button 
+                                      onClick={() => handleCloseVote(msg.messageId)}
+                                      className={cn(
+                                        "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                                        isDark 
+                                          ? "bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20" 
+                                          : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100"
+                                      )}
+                                    >
+                                      Kết thúc
+                                    </button>
+                                  )}
+                                  {msg.vote.isClosed && (
+                                    <span className={cn(
+                                      "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
+                                      isDark ? "bg-white/5 text-white/40" : "bg-slate-100 text-slate-400"
+                                    )}>Đã đóng</span>
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -1060,8 +1165,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   <div className={cn(
                                     "relative transition-all duration-300 shadow-sm w-fit",
                                     msg.type === 'STICKER' ? 'bg-transparent shadow-none ring-0' : (msg.content && (!msg.mediaUrls || msg.mediaUrls.length === 0) ? 'px-5 py-3' : 'p-0'),
-                                    isMe 
-                                      ? (msg.type !== 'STICKER' ? 'bg-indigo-600 text-white shadow-sm' : '') 
+                                    isMe
+                                      ? (msg.type !== 'STICKER' ? 'bg-indigo-600 text-white shadow-sm' : '')
                                       : (msg.type !== 'STICKER' ? 'bg-surface-200 text-foreground border border-border' : ''),
                                     isMe
                                       ? "rounded-[22px] rounded-br-[4px]"
@@ -1090,14 +1195,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             {(() => {
                                               const urls = msg.mediaUrls;
                                               const count = urls.length;
-                                              
+
                                               const renderMediaItem = (url, idx, isSmall = true) => {
                                                 const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
                                                 const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
-                                                
+
                                                 if (isImage) {
                                                   return (
-                                                    <div key={idx} className={cn("overflow-hidden cursor-pointer group/img relative bg-surface-100 dark:bg-surface-200", isSmall ? "aspect-square" : "aspect-video")} onClick={() => setSelectedImage(url)}>
+                                                    <div key={idx} className={cn("overflow-hidden cursor-pointer group/img relative bg-surface-100 dark:bg-surface-200", isSmall ? "aspect-square" : "aspect-video")} onClick={() => {
+                                                      const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                      openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                    }}>
                                                       <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" alt="" />
                                                       <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/5 transition-colors" />
                                                     </div>
@@ -1137,7 +1245,10 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                 const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
                                                 if (isImage) {
                                                   return (
-                                                    <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => setSelectedImage(url)}>
+                                                    <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => {
+                                                      const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                      openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                    }}>
                                                       <img src={url} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
                                                     </div>
                                                   );
@@ -1186,7 +1297,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           </div>
                                         )}
                                         {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
-                                        
+
                                         {/* Translation Display */}
                                         {translationLoading[msg.messageId] && (
                                           <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
@@ -1218,7 +1329,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
                                 </div>
 
-                                  {/* Seen Avatars - Moved outside the w-fit bubble-main to avoid vertical displacement */}
+                                {/* Seen Avatars - Moved outside the w-fit bubble-main to avoid vertical displacement */}
                                 <div className={cn(
                                   "flex items-center px-1 min-h-[20px]",
                                   ((msg.reactions && Object.keys(msg.reactions).length > 0) || (optimisticReactions[msg.messageId] && optimisticReactions[msg.messageId].length > 0)) ? "mt-4" : "mt-2",
@@ -1343,40 +1454,6 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           vote={selectedVote}
           members={currentConv?.members}
         />
-
-        {selectedImage && (
-          <div
-            className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 sm:p-10 animate-fade-in"
-            onClick={() => setSelectedImage(null)}
-          >
-            <button
-              className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
-              onClick={() => setSelectedImage(null)}
-            >
-              <X size={24} />
-            </button>
-
-            <img
-              src={selectedImage}
-              alt="Full view"
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-msg"
-              onClick={(e) => e.stopPropagation()}
-            />
-
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center space-x-4">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open(selectedImage, '_blank');
-                }}
-                className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold backdrop-blur-md transition-all flex items-center space-x-2"
-              >
-                <Download size={18} />
-                <span>Tải ảnh gốc</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {selectedFile && (
           <div className="fixed inset-0 z-[9999] bg-[#1a1a1a] flex flex-col animate-fade-in text-white">

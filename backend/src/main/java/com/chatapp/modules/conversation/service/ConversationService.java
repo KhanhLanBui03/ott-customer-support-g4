@@ -913,6 +913,58 @@ public class ConversationService {
         eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
     }
 
+    public void updateConversationAvatar(String userId, String conversationId, String avatarUrl) {
+        log.info("Updating avatar for conversation: {}", conversationId);
+
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        UserConversation userUc = userConversationRepository.findById(userId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+        if (!"OWNER".equals(userUc.getRole()) && !"ADMIN".equals(userUc.getRole())) {
+            throw new ValidationException("Only admins or owner can change group avatar");
+        }
+
+        conv.setAvatarUrl(avatarUrl);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        conversationRepository.save(conv);
+
+        // Update denormalized avatar in UserConversation
+        for (String memberId : conv.getMemberIds()) {
+            userConversationRepository.findById(memberId, conversationId).ifPresent(uc -> {
+                uc.setAvatarUrl(avatarUrl);
+                uc.setUpdatedAt(System.currentTimeMillis());
+                userConversationRepository.save(uc);
+            });
+        }
+
+        // Create system message
+        com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+        String userName = user != null ? user.getFullName() : "Một người dùng";
+
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(userName + " đã thay đổi ảnh đại diện nhóm.")
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+
+        // Broadcast update event
+        ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+    }
+
     public void updateConversationTag(String userId, String conversationId, String tag) {
         userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
             uc.setTag(tag);

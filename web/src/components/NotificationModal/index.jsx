@@ -11,6 +11,7 @@ import { useTheme } from '../../hooks/useTheme';
 
 const NotificationModal = ({ isOpen, onClose }) => {
   const { pendingFriends, pendingGroups, activities } = useSelector(state => state.notification);
+  const { friends } = useSelector(state => state.chat);
   const { isDark } = useTheme();
   const dispatch = useDispatch();
 
@@ -166,7 +167,16 @@ const NotificationModal = ({ isOpen, onClose }) => {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-slate-800'}`}>Nhóm: {invite.groupName}</p>
-                          <p className={`text-[10px] font-bold uppercase tracking-tighter ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Từ: Người dùng #{invite.inviterId.substring(0, 8)}</p>
+                          <p className={`text-[10px] font-bold uppercase tracking-tighter ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                            Từ: {
+                              invite.inviterName || 
+                              invite.inviterFullName || 
+                              invite.inviter?.fullName || 
+                              invite.inviter?.name ||
+                              friends.find(f => String(f.userId || f.id) === String(invite.inviterId))?.fullName ||
+                              `Người dùng #${invite.inviterId.substring(0, 8)}`
+                            }
+                          </p>
                         </div>
                       </div>
 
