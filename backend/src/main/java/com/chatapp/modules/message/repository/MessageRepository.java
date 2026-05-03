@@ -41,10 +41,12 @@ public class MessageRepository {
 
         // Note: DynamoDB Query limit applies to scanned items, not filtered items.
         // For simplicity and correctness with FilterExpression, we fetch and then limit in Service.
-        // However, we can set a larger limit here to avoid scanning the entire table if possible.
-        if (limit != null && beforeCreatedAt == null) {
-             query.withLimit(limit * 2); // Heuristic
+        // We need to fetch more items since some will be filtered out (joinedAt, hiddenForUsers).
+        // If limit == -1, fetch all messages. Otherwise use multiplier to account for filtering.
+        if (limit != null && limit > 0 && beforeCreatedAt == null) {
+             query.withLimit(limit * 5); // Multiplier to account for filtering in service layer
         }
+        // If limit == -1 or null, will fetch all items (no withLimit call)
 
         return dynamoDBMapper.query(Message.class, query);
     }

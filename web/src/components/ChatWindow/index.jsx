@@ -26,6 +26,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
   const [showStrangerMenu, setShowStrangerMenu] = useState(false);
   const tagMenuRef = useRef(null);
   const strangerMenuRef = useRef(null);
+  const hasMoreHistoryRef = useRef(true);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -98,6 +99,19 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
   }, [replyingTo]);
   
   const localOnRefresh = onRefreshMessages || fetchConversations;
+
+  const handleLoadMore = async () => {
+    if (!conversationId || !hasMoreHistoryRef.current) {
+      return { hasMoreHistory: false };
+    }
+
+    const result = await fetchMessages(conversationId, true);
+    if (result && typeof result.hasMoreHistory === 'boolean') {
+      hasMoreHistoryRef.current = result.hasMoreHistory;
+    }
+
+    return result;
+  };
  
   useEffect(() => {
     fetchFriends();
@@ -139,6 +153,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
 
   useEffect(() => {
     if (conversationId) {
+      hasMoreHistoryRef.current = true;
       dispatch(setActiveConversation(conversationId));
       dispatch(resetUnreadCount(conversationId));
       
@@ -147,7 +162,11 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
       // Also try chatApi if it's the one responsible
       chatApi.markConversationAsRead?.(conversationId).catch(() => {});
 
-      fetchMessages(conversationId);
+      fetchMessages(conversationId).then((result) => {
+        if (result && typeof result.hasMoreHistory === 'boolean') {
+          hasMoreHistoryRef.current = result.hasMoreHistory;
+        }
+      });
       setShowPinsDropdown(false); 
 
       dispatch(setReplyingTo(null));
@@ -648,6 +667,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
           messages={messages[conversationId] || []}
           loading={messagesLoading}
           onRefresh={localOnRefresh}
+          onLoadMore={handleLoadMore}
           onReply={(msg) => dispatch(setReplyingTo(msg))}
           onScrollToMessage={scrollToMessage}
           onForward={(msg) => {
