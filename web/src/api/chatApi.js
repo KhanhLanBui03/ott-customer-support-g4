@@ -2,7 +2,17 @@ import axiosClient from './axiosClient';
 
 export const chatApi = {
   getConversations: () => axiosClient.get('/conversations'),
-  getMessages: (conversationId) => axiosClient.get(`/messages/${encodeURIComponent(conversationId)}`),
+  // getMessages accepts either (conversationId, paramsObject) or (conversationId, limitNumber)
+  // If called with a params object, we ensure a default limit of -1 (fetch all) when not provided.
+  getMessages: (conversationId, paramsOrLimit = {}) => {
+    let params = paramsOrLimit;
+    if (typeof paramsOrLimit === 'number') {
+      params = { limit: paramsOrLimit };
+    }
+    if (params == null) params = {};
+    if (params.limit == null) params.limit = -1;
+    return axiosClient.get(`/messages/${encodeURIComponent(conversationId)}`, { params });
+  },
   markConversationAsRead: (conversationId) => axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/read`),
   createConversation: (data) => axiosClient.post('/conversations', data),
   

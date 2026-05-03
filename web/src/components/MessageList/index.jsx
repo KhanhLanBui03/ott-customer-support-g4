@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   PhoneOff,
@@ -214,7 +214,7 @@ const getDocViewerUrl = (u, e) => {
   return `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
 };
 
-const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages }) => {
+const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages, onLoadMore }) => {
   const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
@@ -259,7 +259,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [reactionDetail, setReactionDetail] = useState(null);
   const [translatedMessages, setTranslatedMessages] = useState({}); // { messageId: text }
   const [translationLoading, setTranslationLoading] = useState({}); // { messageId: boolean }
-
+  const [isNearBottom, setIsNearBottom] = useState(true); // Track if user is near bottom of scroll
 
 
   const { sendRead } = useWebSocket();
@@ -429,6 +429,85 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     }
   };
 
+  const isLoadingMoreRef = useRef(false);
+  const lastLoadMoreTimeRef = useRef(0);
+  const loadMoreSnapshotRef = useRef(null);
+  const restoreAfterLoadMoreRef = useRef(false);
+  const previousMessagesMetaRef = useRef({ length: 0, firstId: null, lastId: null });
+
+  const handleScroll = (e) => {
+    const container = e.target;
+    // Detect scroll to top (scrollTop < 100px)
+    const paddingToTop = 100;
+    const isNearTop = container.scrollTop < paddingToTop;
+    
+    // Detect if user is near bottom (within 100px of bottom)
+    const paddingToBottom = 100;
+    const isNearBottomNow = container.scrollHeight - container.scrollTop - container.clientHeight < paddingToBottom;
+    setIsNearBottom(isNearBottomNow);
+    
+    const now = Date.now();
+    const minInterval = 500; // Minimum 500ms between load requests
+
+    if (isNearTop) {
+      const timeSinceLast = now - lastLoadMoreTimeRef.current;
+      console.log(`[MessageList] Scroll: top=${Math.round(container.scrollTop)}, loading=${isLoadingMoreRef.current}, timeSinceLast=${timeSinceLast}ms, ready=${timeSinceLast > minInterval}`);
+    }
+
+    if (isNearTop && !isLoadingMoreRef.current && (now - lastLoadMoreTimeRef.current) > minInterval && onLoadMore && messages.length > 0) {
+      console.log('[MessageList] 🔝 Near top detected, triggering onLoadMore');
+      // Snapshot scroll metrics so we can restore visible position after prepend
+      try {
+        loadMoreSnapshotRef.current = {
+          oldTop: container.scrollTop,
+          oldHeight: container.scrollHeight
+        };
+        restoreAfterLoadMoreRef.current = true;
+      } catch (e) {
+        loadMoreSnapshotRef.current = null;
+        restoreAfterLoadMoreRef.current = false;
+      }
+      isLoadingMoreRef.current = true;
+      lastLoadMoreTimeRef.current = now;
+      Promise.resolve(onLoadMore()).finally(() => {
+        // keep loading flag until we restore position after the DOM update
+      });
+    }
+  };
+
+  // After messages change, if we have a load-more snapshot, adjust scrollTop to keep visible position
+  useLayoutEffect(() => {
+    if (!loadMoreSnapshotRef.current) return;
+    const snap = loadMoreSnapshotRef.current;
+    const container = scrollRef.current;
+    if (!container) {
+      loadMoreSnapshotRef.current = null;
+      restoreAfterLoadMoreRef.current = false;
+      isLoadingMoreRef.current = false;
+      return;
+    }
+
+    const restore = () => {
+      const newHeight = container.scrollHeight;
+      const delta = newHeight - (snap.oldHeight || 0);
+      try {
+        container.scrollTop = (snap.oldTop || 0) + (delta || 0);
+      } catch (e) {
+        // ignore
+      }
+      loadMoreSnapshotRef.current = null;
+      restoreAfterLoadMoreRef.current = false;
+      isLoadingMoreRef.current = false;
+    };
+
+    const raf = window.requestAnimationFrame ? window.requestAnimationFrame(restore) : setTimeout(restore, 0);
+    return () => {
+      if (typeof window !== 'undefined' && window.cancelAnimationFrame && typeof raf === 'number') {
+        window.cancelAnimationFrame(raf);
+      }
+    };
+  }, [messages]);
+
   const getFileName = (url) => {
     try {
       const decoded = decodeURIComponent(url);
@@ -542,13 +621,38 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   };
 
   useEffect(() => {
-    scrollToBottom(true);
-    const timer = setTimeout(() => scrollToBottom(), 100);
-    const longTimer = setTimeout(() => scrollToBottom(), 500);
+    // Chỉ auto-scroll to bottom khi:
+    // 1. Lần đầu mở conversation, hoặc
+    // 2. Có tin nhắn mới được append ở cuối
+    const currentLength = Array.isArray(messages) ? messages.length : 0;
+    const currentFirstId = currentLength > 0 ? String(messages[0]?.messageId || messages[0]?.id || '') : null;
+    const currentLastId = currentLength > 0 ? String(messages[currentLength - 1]?.messageId || messages[currentLength - 1]?.id || '') : null;
+    const previousMeta = previousMessagesMetaRef.current;
+    const isFirstLoad = previousMeta.length === 0 && currentLength > 0;
+    const isAppendAtBottom = Boolean(
+      previousMeta.length > 0 &&
+      currentLength > previousMeta.length &&
+      previousMeta.firstId === currentFirstId &&
+      previousMeta.lastId !== currentLastId
+    );
 
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(longTimer);
+    if (isFirstLoad || isAppendAtBottom) {
+      scrollToBottom(true);
+      const timer = setTimeout(() => scrollToBottom(), 100);
+      const longTimer = setTimeout(() => scrollToBottom(), 500);
+
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(longTimer);
+      };
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    previousMessagesMetaRef.current = {
+      length: Array.isArray(messages) ? messages.length : 0,
+      firstId: Array.isArray(messages) && messages.length > 0 ? String(messages[0]?.messageId || messages[0]?.id || '') : null,
+      lastId: Array.isArray(messages) && messages.length > 0 ? String(messages[messages.length - 1]?.messageId || messages[messages.length - 1]?.id || '') : null,
     };
   }, [messages]);
 
@@ -720,7 +824,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   useEffect(() => {
     const activeTyping = typingUsers[conversationId]?.filter(u => u.userId !== meId);
-    if (activeTyping?.length > 0) {
+    if (activeTyping?.length > 0 && !loadMoreSnapshotRef.current && !restoreAfterLoadMoreRef.current) {
       scrollToBottom();
     }
   }, [typingUsers, conversationId, meId]);
@@ -754,12 +858,20 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
         <div
           ref={scrollRef}
+          onScroll={handleScroll}
+          style={{ overflowAnchor: 'none' }}
           className={cn(
             "absolute inset-0 overflow-y-auto p-4 sm:p-8 space-y-6 pb-32 transition-colors no-scrollbar z-10",
             !wallpaper ? "bg-background" : "bg-transparent"
           )}
         >
           <div className="flex flex-col p-4 space-y-6 min-h-full">
+              {(loading || isLoadingMoreRef.current) && messages.length > 0 && (
+              <div className="flex items-center justify-center py-4 gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-300 dark:border-slate-600 border-t-slate-600 dark:border-t-slate-300" />
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Đang tải tin nhắn cũ hơn...</span>
+              </div>
+            )}
             {messages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[40px] opacity-60">
                 <Shield size={32} className="text-slate-200 dark:text-slate-700 mb-4" />
@@ -1477,6 +1589,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           vote={selectedVote}
           members={currentConv?.members}
         />
+
+        {/* Jump to Latest Button */}
+        {!isNearBottom && (
+          <button
+            onClick={() => scrollToBottom(false)}
+            className="fixed bottom-32 right-8 z-40 p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-all hover:scale-110 active:scale-95 flex items-center justify-center"
+            title="Kéo về tin nhắn mới nhất"
+          >
+            <ArrowDownLeft size={20} />
+          </button>
+        )}
 
         {selectedFile && (
           <div className="fixed inset-0 z-[9999] bg-[#1a1a1a] flex flex-col animate-fade-in text-white">

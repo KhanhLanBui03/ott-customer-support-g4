@@ -449,6 +449,7 @@ public class MessageService {
 
     /**
      * Get conversation messages (paginated)
+     * Use limit = -1 to fetch all messages
      */
     public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId,
             String fromMessageId) {
@@ -466,20 +467,25 @@ public class MessageService {
 
         final Long finalFromCreatedAt = fromCreatedAt;
 
-        return messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, limit).stream()
-                .filter(m -> m.getCreatedAt() != null) // Skip messages with null timestamps
-                .filter(m -> m.getCreatedAt() >= joinedAt) // NEW: Filter messages before user joined/re-joined
-                .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter
-                                                                                                              // hidden
-                                                                                                              // messages
-                .sorted((m1, m2) -> Long.compare(
-                        m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L,
-                        m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L)) // newest first
-                .limit(limit)
-                .sorted((m1, m2) -> Long.compare(
-                        m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L,
-                        m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L)) // flip to chronological order
-                .collect(Collectors.toList());
+        var baseStream = messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, limit).stream()
+            .filter(m -> m.getCreatedAt() != null) // Skip messages with null timestamps
+            .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter hidden messages
+            .sorted((m1, m2) -> Long.compare(
+                m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L,
+                m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L)); // newest first
+
+        // Apply joinedAt filter only when limit > 0 (normal paginated fetch).
+        // If client requests limit == -1 we interpret as "fetch all" and skip joinedAt
+        var stream = baseStream;
+        if (limit > 0) {
+            stream = stream.filter(m -> m.getCreatedAt() >= joinedAt)
+                   .limit(limit);
+        }
+
+        return stream.sorted((m1, m2) -> Long.compare(
+                m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L,
+                m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L)) // flip to chronological order
+            .collect(Collectors.toList());
     }
 
     // Event publishing methods

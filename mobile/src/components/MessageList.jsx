@@ -5,6 +5,7 @@ import {
   Text,
   ActivityIndicator,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import ChatBubble from './ChatBubble';
 
@@ -24,6 +25,8 @@ const MessageList = React.forwardRef(({
   highlightedMessageId = null,
 }, ref) => {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = React.useState(false);
+  const [isNearBottom, setIsNearBottom] = React.useState(true); // Track if user is near bottom
   const readMessageIds = useRef(new Set());
 
   const normalizeReaderId = (reader) => {
@@ -65,6 +68,7 @@ const MessageList = React.forwardRef(({
   };
 
   const isAtBottom = useRef(true);
+  const isLoadingMore = useRef(false);
 
   const handleScroll = (event) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
@@ -72,6 +76,22 @@ const MessageList = React.forwardRef(({
     const paddingToBottom = 100;
     const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
     isAtBottom.current = isCloseToBottom;
+    setIsNearBottom(isCloseToBottom); // Update state for button visibility
+
+    // Kiểm tra nếu scroll gần đầu danh sách để load tin nhắn cũ hơn
+    // Trigger khi contentOffset.y < 100px (người dùng kéo lên)
+    const paddingToTop = 100;
+    const isNearTop = contentOffset.y < paddingToTop;
+    
+    console.log(`[MessageList] Scroll: y=${Math.round(contentOffset.y)}, nearTop=${isNearTop}, loading=${isLoadingMoreMessages}, hasCallback=${!!onLoadMore}`);
+    
+    if (isNearTop && !isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0) {
+      console.log('[MessageList] 🔝 Near top detected, triggering onLoadMore');
+      setIsLoadingMoreMessages(true);
+      onLoadMore().finally(() => {
+        setIsLoadingMoreMessages(false);
+      });
+    }
   };
 
   // Sử dụng Ref để lưu trữ props mới nhất cho callback ổn định
@@ -116,8 +136,11 @@ const MessageList = React.forwardRef(({
   }, [conversationId]);
 
   useEffect(() => {
-    if (messages.length > 0 && !isRefreshing) {
-      // Chỉ tự động cuộn xuống nếu đang ở đáy hoặc tin nhắn mới nhất là của mình
+    if (messages.length > 0 && !isRefreshing && !isLoadingMoreMessages) {
+      // Chỉ tự động cuộn xuống nếu:
+      // 1. Đang ở đáy (isAtBottom.current = true)
+      // 2. Hoặc tin nhắn mới nhất là của mình
+      // 3. Và KHÔNG phải đang load more messages
       const lastMessage = messages[messages.length - 1];
       const isMyMessage = String(lastMessage?.senderId) === String(currentUserId);
       
@@ -128,7 +151,7 @@ const MessageList = React.forwardRef(({
         }, 100);
       }
     }
-  }, [messages.length, typingUsers, isRefreshing]);
+  }, [messages.length, typingUsers, isRefreshing, isLoadingMoreMessages, currentUserId]);
 
   const onRefresh = async () => {
     if (onLoadMore && !isRefreshing) {
@@ -194,6 +217,16 @@ const MessageList = React.forwardRef(({
     );
   };
 
+  const renderLoadingMoreIndicator = () => {
+    if (!isLoadingMoreMessages || messages.length === 0) return null;
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color="#667eea" />
+        <Text style={styles.loadingMoreText}>Đang tải tin nhắn cũ hơn...</Text>
+      </View>
+    );
+  };
+
   if (isLoading && messages.length === 0) {
     return (
       <View style={styles.loadingContainer}>
@@ -210,22 +243,37 @@ const MessageList = React.forwardRef(({
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item, index) => item.messageId || item.id || String(item.createdAt) || index.toString()}
+        ListHeaderComponent={renderLoadingMoreIndicator}
         ListFooterComponent={renderTypingIndicator}
         contentContainerStyle={styles.listContent}
         onContentSizeChange={(w, h) => {
-          // Chỉ scroll xuống nếu đang ở đáy và không phải đang refresh
-          if (isAtBottom.current && !isRefreshing) {
+          // Chỉ scroll xuống nếu đang ở đáy và không phải đang refresh/load more
+          if (isAtBottom.current && !isRefreshing && !isLoadingMoreMessages) {
             const listRef = ref?.current || null;
             listRef?.scrollToEnd({ animated: true });
           }
         }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        refreshing={isRefreshing}
+        refreshing={false}
         onRefresh={onRefresh}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       />
+      
+      {/* Jump to Latest Button */}
+      {!isNearBottom && (
+        <TouchableOpacity 
+          style={styles.jumpToLatestButton}
+          onPress={() => {
+            const listRef = ref?.current || null;
+            listRef?.scrollToEnd({ animated: true });
+          }}
+        >
+          <Text style={styles.jumpToLatestIcon}>↓</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 });
@@ -238,6 +286,27 @@ const styles = StyleSheet.create({
   listContent: {
     paddingVertical: 16,
     paddingHorizontal: 8,
+  },
+  jumpToLatestButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#667eea',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  jumpToLatestIcon: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   loadingContainer: {
     flex: 1,
@@ -284,6 +353,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#6b7280',
+  },
+  loadingMoreContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '500',
   },
 });
 
