@@ -1,176 +1,235 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   addMessage,
+  fetchConversations,
   updateMessage,
-  removeMessage,
-  setTypingUser,
-  addReaction,
+  updateConversationWallpaper,
+  updateMemberInfo,
+  setTyping,
+  setMessageRead,
+  markConversationRead,
+  setUserStatus,
 } from '../store/chatSlice';
 import {
-  initializeSocket,
-  disconnectSocket,
   onMessageReceive,
   offMessageReceive,
-  onMessageEdit,
-  onMessageDelete,
-  onMessageRecall,
-  onReaction,
   onUserTyping,
   offUserTyping,
+  onUserStatusChange,
+  offUserStatusChange,
+  onMessageUpdate,
+  offMessageUpdate,
+  onMessageRead,
+  offMessageRead,
+  onMessageRecall,
+  offMessageRecall,
+  onMessageDelete,
+  offMessageDelete,
+  onWallpaperUpdated,
+  offWallpaperUpdated,
+  onUserUpdate,
+  offUserUpdate,
   emitSendMessage,
   emitTypingStart,
   emitTypingStop,
   emitReadReceipt,
+  emitRecallMessage,
 } from '../utils/socket';
-
-/**
- * Custom hook for WebSocket connection (React Native)
- * Same interface as Web version
- */
 
 export const useWebSocket = () => {
   const { accessToken, user } = useSelector((state) => state.auth);
-  const { currentConversationId } = useSelector((state) => state.chat);
+  const currentConversationId = useSelector((state) => state.chat.currentConversationId);
   const dispatch = useDispatch();
+  const [appState, setAppState] = useState(AppState.currentState);
+  const appStateRef = useRef(AppState.currentState);
 
-  // Initialize socket on mount or when token changes
   useEffect(() => {
-    if (accessToken && user) {
-      try {
-        initializeSocket(accessToken);
-        console.log('✓ WebSocket initialized');
-      } catch (error) {
-        console.error('Failed to initialize socket:', error);
-      }
-    }
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      setAppState(nextAppState);
+      appStateRef.current = nextAppState;
+    });
+    return () => subscription.remove();
+  }, []);
 
-    return () => {
-      // Cleanup on unmount (don't disconnect to keep persistent connection)
-    };
-  }, [accessToken, user]);
+  const activeConvIdRef = useRef(currentConversationId);
+  activeConvIdRef.current = currentConversationId; // Đồng bộ lập tức trong render
 
-  // Listen for incoming messages
+  const userRef = useRef(user);
   useEffect(() => {
-    const handleMessageReceive = (data) => {
-      if (data.conversationId === currentConversationId) {
-        dispatch(
-          addMessage({
-            conversationId: data.conversationId,
-            message: data,
-          })
-        );
+    userRef.current = user;
+  }, [user]);
+
+  // Socket đã được khởi tạo trong _layout.jsx với globalHandler
+  // KHÔNG gọi initializeSocket ở đây vì sẽ xóa globalHandler của _layout.jsx
+
+  // Nhận tin nhắn mới
+  useEffect(() => {
+    const handleMessageReceive = (message) => {
+      console.log('[WS] Mobile received message:', message.messageId);
+      const currentUser = userRef.current;
+      const currentUserId = userRef.current?.userId || userRef.current?.id || null;
+
+      dispatch(
+        addMessage({
+          conversationId: message.conversationId,
+          message: message,
+          currentUserId: currentUserId,
+        })
+      );
+
+      // Tự động gửi Read Receipt nếu đang mở hội thoại này VÀ app đang active
+      const activeConversationId = activeConvIdRef.current;
+      const currentAppState = appStateRef.current;
+
+      const isFromMe = currentUserId && String(message.senderId) === String(currentUserId);
+
+      if (activeConversationId &&
+        activeConversationId === message.conversationId &&
+        currentAppState === 'active' &&
+        !isFromMe &&
+        message.messageId && !message.messageId.startsWith('temp-')) {
+        console.log('[WS] ✅ Sending auto-read receipt for:', message.messageId);
+        emitReadReceipt(message.messageId, message.conversationId);
+        dispatch(markConversationRead(message.conversationId));
+      } else {
+        console.log('[WS] ⏭️ Skipping auto-read:', {
+          match: activeConversationId === message.conversationId,
+          isFromMe,
+          hasId: !!message.messageId
+        });
       }
+
+      // Khi có tin nhắn mới, Redux addMessage đã cập nhật lastMessage và unreadCount
+      // Không gọi fetchConversations ở đây để tránh ghi đè state local bằng data server cũ (race condition)
     };
 
     onMessageReceive(handleMessageReceive);
-
-    return () => {
-      offMessageReceive(handleMessageReceive);
-    };
-  }, [dispatch, currentConversationId]);
-
-  // Listen for message edits
-  useEffect(() => {
-    const handleMessageEdit = (data) => {
-      dispatch(
-        updateMessage({
-          conversationId: data.conversationId,
-          messageId: data.messageId,
-          updates: { content: data.content, editedAt: data.editedAt },
-        })
-      );
-    };
-
-    onMessageEdit(handleMessageEdit);
-
-    return () => {
-      // Socket.io cleanup
-    };
+    return () => offMessageReceive(handleMessageReceive);
   }, [dispatch]);
 
-  // Listen for message deletes
+  // Nhận cập nhật trạng thái online/offline
   useEffect(() => {
-    const handleMessageDelete = (data) => {
-      dispatch(
-        removeMessage({
-          conversationId: data.conversationId,
-          messageId: data.messageId,
-        })
-      );
+    const handleStatusChange = (statusData) => {
+      console.log('[WS] User status changed:', statusData.userId, statusData.status);
+      // Cập nhật trực tiếp member.status trong store để UI phản ánh ngay lập tức
+      dispatch(setUserStatus({
+        userId: statusData.userId,
+        status: statusData.status,
+        lastSeenAt: statusData.lastSeenAt,
+      }));
+    };
+
+    onUserStatusChange(handleStatusChange);
+    return () => offUserStatusChange(handleStatusChange);
+  }, [dispatch]);
+
+  // Nhận cập nhật tin nhắn (cập nhật reaction / edit / recalls / message status updates)
+  useEffect(() => {
+    const handleMessageUpdate = (message) => {
+      if (!message || !message.messageId) return;
+      console.log('[WS] Mobile received message update:', message.messageId);
+      dispatch(updateMessage({ conversationId: message.conversationId, message }));
+    };
+
+    onMessageUpdate(handleMessageUpdate);
+    return () => offMessageUpdate(handleMessageUpdate);
+  }, [dispatch]);
+
+  // Nhận sự kiện read receipt từ server
+  useEffect(() => {
+    const handleMessageRead = (payload) => {
+      if (!payload || !payload.messageId || !payload.conversationId) return;
+      console.log('[WS] Mobile received message read:', payload.messageId, payload.userId);
+      dispatch(setMessageRead({
+        conversationId: payload.conversationId,
+        messageId: payload.messageId,
+        userId: payload.userId,
+      }));
+    };
+
+    onMessageRead(handleMessageRead);
+    return () => offMessageRead(handleMessageRead);
+  }, [dispatch]);
+
+  // Nhận sự kiện thu hồi tin nhắn
+  useEffect(() => {
+    const handleMessageRecall = (payload) => {
+      if (!payload || !payload.messageId) return;
+      console.log('[WS] Mobile received recall:', payload.messageId);
+      dispatch(updateMessage({
+        conversationId: payload.conversationId,
+        message: {
+          ...payload,
+          status: 'RECALLED',
+          isRecalled: true,
+          content: 'Tin nhắn đã bị thu hồi'
+        }
+      }));
+    };
+
+    onMessageRecall(handleMessageRecall);
+    return () => offMessageRecall(handleMessageRecall);
+  }, [dispatch]);
+
+  // Nhận sự kiện xóa tin nhắn
+  useEffect(() => {
+    const handleMessageDelete = (payload) => {
+      if (!payload || !payload.messageId) return;
+      console.log('[WS] Mobile received delete:', payload.messageId);
+      // Ở đây có thể dispatch action xóa tin nhắn khỏi store nếu cần
     };
 
     onMessageDelete(handleMessageDelete);
-
-    return () => {
-      // Socket.io cleanup
-    };
+    return () => offMessageDelete(handleMessageDelete);
   }, [dispatch]);
 
-  // Listen for typing indicators
   useEffect(() => {
-    const handleUserTyping = (data) => {
-      if (data.conversationId === currentConversationId) {
-        dispatch(
-          setTypingUser({
-            conversationId: data.conversationId,
-            userId: data.userId,
-            isTyping: data.isTyping,
-          })
-        );
+    const handleWallpaperUpdate = (payload) => {
+      if (!payload || !payload.conversationId) return;
+      console.log('[WS] Mobile received wallpaper update:', payload.conversationId, payload.wallpaperUrl);
+      dispatch(updateConversationWallpaper({
+        conversationId: payload.conversationId,
+        wallpaperUrl: payload.wallpaperUrl ?? null,
+      }));
+    };
 
-        // Clear typing indicator after 3 seconds
-        if (data.isTyping) {
-          setTimeout(() => {
-            dispatch(
-              setTypingUser({
-                conversationId: data.conversationId,
-                userId: data.userId,
-                isTyping: false,
-              })
-            );
-          }, 3000);
-        }
-      }
+    onWallpaperUpdated(handleWallpaperUpdate);
+    return () => offWallpaperUpdated(handleWallpaperUpdate);
+  }, [dispatch]);
+
+  useEffect(() => {
+    const handleUserUpdate = (payload) => {
+      if (!payload || !payload.userId) return;
+      console.log('[WS] Mobile received user update:', payload.userId);
+      dispatch(updateMemberInfo(payload));
+    };
+
+    onUserUpdate(handleUserUpdate);
+    return () => offUserUpdate(handleUserUpdate);
+  }, [dispatch]);
+
+  // Nhận sự kiện typing
+  useEffect(() => {
+    const handleUserTyping = (payload) => {
+      if (!payload || !payload.userId || !payload.conversationId) return;
+      console.log('[WS] Mobile received typing:', payload.userId, payload.isTyping);
+      dispatch(setTyping({
+        conversationId: payload.conversationId,
+        userId: payload.userId,
+        isTyping: payload.isTyping
+      }));
     };
 
     onUserTyping(handleUserTyping);
+    return () => offUserTyping(handleUserTyping);
+  }, [dispatch]);
 
-    return () => {
-      offUserTyping(handleUserTyping);
-    };
-  }, [dispatch, currentConversationId]);
+  const sendMessageRealtime = useCallback((conversationId, messageData) => {
+    emitSendMessage(conversationId, messageData);
+  }, []);
 
-  // Listen for reactions
-  useEffect(() => {
-    const handleReaction = (data) => {
-      if (data.conversationId === currentConversationId) {
-        dispatch(
-          addReaction({
-            conversationId: data.conversationId,
-            messageId: data.messageId,
-            emoji: data.emoji,
-          })
-        );
-      }
-    };
-
-    onReaction(handleReaction);
-
-    return () => {
-      // Socket.io cleanup
-    };
-  }, [dispatch, currentConversationId]);
-
-  // Method to send message in real-time
-  const sendMessageRealtime = useCallback(
-    (conversationId, messageData) => {
-      emitSendMessage(conversationId, messageData);
-    },
-    []
-  );
-
-  // Method to emit typing indicator
   const sendTypingStart = useCallback((conversationId) => {
     emitTypingStart(conversationId);
   }, []);
@@ -179,14 +238,8 @@ export const useWebSocket = () => {
     emitTypingStop(conversationId);
   }, []);
 
-  // Method to mark message as read
-  const sendReadReceipt = useCallback((messageId) => {
-    emitReadReceipt(messageId);
-  }, []);
-
-  // Disconnect socket on logout
-  const disconnect = useCallback(() => {
-    disconnectSocket();
+  const sendReadReceipt = useCallback((messageId, conversationId) => {
+    emitReadReceipt(messageId, conversationId);
   }, []);
 
   return {
@@ -194,7 +247,7 @@ export const useWebSocket = () => {
     sendTypingStart,
     sendTypingStop,
     sendReadReceipt,
-    disconnect,
+    sendRecallMessage: emitRecallMessage,
   };
 };
 

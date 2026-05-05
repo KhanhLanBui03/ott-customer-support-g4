@@ -38,6 +38,34 @@ public class FriendshipController {
         return ResponseEntity.ok().build();
     }
 
+    @DeleteMapping("/cancel/{friendId}")
+    public ResponseEntity<Void> cancelRequest(@PathVariable String friendId) {
+        String userId = getCurrentUserId();
+        friendshipService.cancelFriendRequest(userId, friendId);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{friendId}")
+    public ResponseEntity<Void> deleteFriend(@PathVariable String friendId) {
+        String userId = getCurrentUserId();
+        friendshipService.deleteFriend(userId, friendId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/block/{friendId}")
+    public ResponseEntity<Void> blockUser(@PathVariable String friendId) {
+        String userId = getCurrentUserId();
+        friendshipService.blockUser(userId, friendId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/unblock/{friendId}")
+    public ResponseEntity<Void> unblockUser(@PathVariable String friendId) {
+        String userId = getCurrentUserId();
+        friendshipService.unblockUser(userId, friendId);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping
     public ResponseEntity<List<FriendshipResponse>> getFriends() {
         return ResponseEntity.ok(friendshipService.getFriends(getCurrentUserId()));

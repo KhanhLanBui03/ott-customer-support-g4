@@ -2,12 +2,12 @@ package com.chatapp.modules.message.repository;
 
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.chatapp.modules.message.domain.Message;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Repository
 @RequiredArgsConstructor
@@ -21,13 +21,40 @@ public class MessageRepository {
     }
 
     public List<Message> findByConversationId(String conversationId) {
+        return findPaginatedByConversationId(conversationId, null, null);
+    }
+
+    public List<Message> findPaginatedByConversationId(String conversationId, Long beforeCreatedAt, Integer limit) {
         Message partitionKey = new Message();
         partitionKey.setConversationId(conversationId);
 
         DynamoDBQueryExpression<Message> query = new DynamoDBQueryExpression<Message>()
-                .withHashKeyValues(partitionKey);
+                .withHashKeyValues(partitionKey)
+                .withScanIndexForward(false); // Newest first by default range key (but range key is UUID here)
+
+        if (beforeCreatedAt != null) {
+            Map<String, AttributeValue> eav = new HashMap<>();
+            eav.put(":val1", new AttributeValue().withN(beforeCreatedAt.toString()));
+            query.withFilterExpression("createdAt < :val1")
+                 .withExpressionAttributeValues(eav);
+        }
+
+        // Note: DynamoDB Query limit applies to scanned items, not filtered items.
+        // For simplicity and correctness with FilterExpression, we fetch and then limit in Service.
+        // We need to fetch more items since some will be filtered out (joinedAt, hiddenForUsers).
+        // If limit == -1, fetch all messages. Otherwise use multiplier to account for filtering.
+        if (limit != null && limit > 0 && beforeCreatedAt == null) {
+             query.withLimit(limit * 5); // Multiplier to account for filtering in service layer
+        }
+        // If limit == -1 or null, will fetch all items (no withLimit call)
 
         return dynamoDBMapper.query(Message.class, query);
+    }
+
+    public void saveAll(List<Message> messages) {
+        if (messages != null && !messages.isEmpty()) {
+            dynamoDBMapper.batchSave(messages);
+        }
     }
 
     public Optional<Message> findByConversationIdAndMessageId(String conversationId, String messageId) {

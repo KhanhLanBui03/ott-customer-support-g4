@@ -68,6 +68,33 @@ public class UserConversationRepository {
         return fullRecords;
     }
 
+    public List<UserConversation> findAllByIds(Iterable<String> userIds, String conversationId) {
+        if (userIds == null || !userIds.iterator().hasNext()) return new java.util.ArrayList<>();
+        
+        List<Object> toLoad = new java.util.ArrayList<>();
+        for (String userId : userIds) {
+            UserConversation key = new UserConversation();
+            key.setUserId(userId);
+            key.setConversationId(conversationId);
+            toLoad.add(key);
+        }
+        
+        Map<String, List<Object>> batchResults = dynamoDBMapper.batchLoad(toLoad);
+        List<UserConversation> results = new java.util.ArrayList<>();
+        if (batchResults != null) {
+            for (List<Object> list : batchResults.values()) {
+                if (list != null) {
+                    for (Object obj : list) {
+                        if (obj instanceof UserConversation) {
+                            results.add((UserConversation) obj);
+                        }
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
     public void delete(UserConversation userConversation) {
         dynamoDBMapper.delete(userConversation);
     }

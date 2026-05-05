@@ -28,15 +28,26 @@ axiosClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor cho Response: Xử lý lỗi 401 (Hết hạn Token)
+import { Alert } from 'react-native';
+
+let store;
+
+export const injectStore = (_store) => {
+  store = _store;
+};
+
+let isUnauthorizedAlertShowing = false;
+
+// Interceptor cho Response: Xử lý bóc tách dữ liệu và lỗi 401
 axiosClient.interceptors.response.use(
   (response) => {
-    // Nếu backend trả về bọc trong object data { code, message, data }
+    // Trả về response.data (chính là object ApiResponse { success, message, data })
     return response.data;
   },
   async (error) => {
     const originalRequest = error.config;
 
+    // Nếu lỗi 401 và chưa thử retry
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -63,8 +74,42 @@ axiosClient.interceptors.response.use(
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
         await SecureStore.deleteItemAsync('user');
+        
+        if (store && !isUnauthorizedAlertShowing) {
+          isUnauthorizedAlertShowing = true;
+          store.dispatch({ type: 'auth/sessionExpired' });
+          Alert.alert(
+            'Phiên đăng nhập hết hạn',
+            'Vui lòng đăng nhập lại để tiếp tục.',
+            [{ 
+              text: 'OK', 
+              onPress: () => { isUnauthorizedAlertShowing = false; } 
+            }]
+          );
+        }
+        
         return Promise.reject(refreshError);
       }
+    }
+
+    // Nếu lỗi 401 ngay cả khi đã retry hoặc không thể retry
+    if (error.response?.status === 401) {
+       await SecureStore.deleteItemAsync('accessToken');
+       await SecureStore.deleteItemAsync('refreshToken');
+       await SecureStore.deleteItemAsync('user');
+       
+       if (store && !isUnauthorizedAlertShowing) {
+         isUnauthorizedAlertShowing = true;
+         store.dispatch({ type: 'auth/sessionExpired' });
+         Alert.alert(
+           'Phiên đăng nhập hết hạn',
+           'Vui lòng đăng nhập lại để tiếp tục.',
+           [{ 
+             text: 'OK', 
+             onPress: () => { isUnauthorizedAlertShowing = false; } 
+           }]
+         );
+       }
     }
 
     return Promise.reject(error);

@@ -1,248 +1,421 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { chatApi, conversationApi } from '../api/chatApi';
+import { sendMessageViaSocket } from '../utils/socket';
 
-/**
- * Chat Slice - Redux state management for messages and conversations
- * Same implementation for Web and Mobile
- */
+// FIX: Logic lấy ID chuẩn - Ưu tiên ID từ Server
+export const getRealId = (state, id, currentUserId = null) => {
+  if (!id) return id;
+  const decodedId = decodeURIComponent(id);
+  
+  // 1. Nếu ID đã chứa '#', đó là ID chuẩn từ Database, dùng luôn.
+  if (decodedId.includes('#')) return decodedId;
 
-export const fetchConversations = createAsyncThunk(
-  'chat/fetchConversations',
-  async (params, { rejectWithValue }) => {
-    try {
-      const response = await conversationApi.getConversations(params);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch conversations');
-    }
+  // 2. Tìm trong danh sách hội thoại xem có cái nào khớp hoàn toàn không
+  const exactConv = (state.conversations || []).find(c => c.conversationId === decodedId);
+  if (exactConv) return exactConv.conversationId;
+
+  // 3. Nếu không tìm thấy, có thể đây là ID người dùng (UserId).
+  // Tìm hội thoại SINGLE chứa UserId này và UserId của mình.
+  const myId = String(currentUserId || state.currentUserId || '');
+  if (myId !== '') {
+    const singleConv = (state.conversations || []).find(c => {
+      if (c.type !== 'SINGLE') return false;
+      const parts = c.conversationId.split('#');
+      return parts.includes(decodedId) && parts.includes(myId);
+    });
+    if (singleConv) return singleConv.conversationId;
+
+    // 4. Nếu vẫn không thấy, tự tạo ID SINGLE chuẩn (ĐỒNG BỘ VỚI WEB)
+    const participants = [myId, decodedId].sort();
+    return `SINGLE#${participants[0]}#${participants[1]}`;
   }
-);
 
-export const fetchMessages = createAsyncThunk(
-  'chat/fetchMessages',
-  async ({ conversationId, params }, { rejectWithValue }) => {
-    try {
-      const response = await chatApi.getMessages(conversationId, params);
-      return { conversationId, messages: response.data.messages };
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch messages');
+  return decodedId;
+};
+
+export const fetchConversations = createAsyncThunk('chat/fetchConversations', async (params, { rejectWithValue }) => {
+  try {
+    const response = await conversationApi.getConversations(params);
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : (data.conversations || []);
+  } catch (error) { return rejectWithValue(error.response?.data?.message); }
+});
+
+export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, { rejectWithValue, getState }) => {
+  try {
+    const id = typeof arg === 'string' ? arg : arg.conversationId;
+    const isLoadMore = arg?.loadMore || false;
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, id, myId);
+    
+    const params = { ...arg?.params, limit: -1 };
+    if (isLoadMore && state.messages[realId]?.length > 0) {
+      params.fromMessageId = state.messages[realId][0].messageId;
     }
-  }
-);
 
-export const sendMessage = createAsyncThunk(
-  'chat/sendMessage',
-  async (messageData, { rejectWithValue }) => {
-    try {
-      const response = await chatApi.sendMessage(messageData);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to send message');
-    }
-  }
-);
+    const response = await chatApi.getMessages(realId, params);
+    const data = response.data.data || response.data;
+    const messages = Array.isArray(data) ? data : (data.messages || []);
 
-export const createConversation = createAsyncThunk(
-  'chat/createConversation',
-  async (conversationData, { rejectWithValue }) => {
-    try {
-      const response = await conversationApi.createConversation(conversationData);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create conversation');
-    }
-  }
-);
+    return { conversationId: realId, originalId: id, messages, isLoadMore };
+  } catch (error) { return rejectWithValue(error.response?.data?.message); }
+});
 
-export const markMessageAsRead = createAsyncThunk(
-  'chat/markMessageAsRead',
-  async (messageId, { rejectWithValue }) => {
-    try {
-      const response = await chatApi.markAsRead(messageId);
-      return { messageId, ...response.data };
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to mark as read');
-    }
+export const recallMessage = createAsyncThunk('chat/recallMessage', async ({ messageId, conversationId }, { rejectWithValue, getState }) => {
+  try {
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, conversationId, myId);
+    
+    const response = await chatApi.recallMessage(messageId, realId);
+    return { messageId, conversationId: realId };
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Không thể thu hồi tin nhắn');
   }
-);
+});
 
-const initialState = {
-  conversations: [],
-  currentConversation: null,
-  currentConversationId: null,
-  messages: {},
-  typingUsers: {},
-  loading: false,
-  error: null,
-  unreadCount: 0,
+export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageData, { rejectWithValue, getState }) => {
+  try {
+    const state = getState();
+    const myId = state.auth.user?.userId || state.auth.user?.id;
+    const realId = getRealId(state.chat, messageData.conversationId, myId);
+
+    // Chuẩn hóa content: Nếu là VOICE, content nên chứa URL để đồng bộ với Web
+    const finalContent = (messageData.type === 'VOICE' && !messageData.content && messageData.mediaUrls?.length > 0) 
+      ? messageData.mediaUrls[0] 
+      : messageData.content;
+
+    const payload = {
+      conversationId: realId,
+      content: finalContent || '',
+      type: messageData.type || 'TEXT',
+      senderId: myId,
+      replyToMessageId: messageData.replyToMessageId,
+      mediaUrls: messageData.mediaUrls || []
+    };
+
+    sendMessageViaSocket(payload);
+    return null; 
+  } catch (error) { return rejectWithValue(error.response?.data?.message); }
+});
+
+const isVoiceMessage = (message) => {
+  if (!message) return false;
+  if (message.type === 'VOICE') return true;
+  const content = message.content || '';
+  if (typeof content !== 'string') return false;
+  return content.includes('chat-media/') || 
+         content.includes('voice-messages/') || 
+         content.includes('s3.ap-southeast-1') ||
+         content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i);
 };
 
 const chatSlice = createSlice({
   name: 'chat',
-  initialState,
+  initialState: { conversations: [], messages: {}, typingUsers: {}, currentConversationId: null, currentUserId: null, loading: false, replyingTo: null },
   reducers: {
-    setCurrentConversation: (state, action) => {
-      state.currentConversationId = action.payload;
-      state.currentConversation = state.conversations.find(
-        (c) => c.conversationId === action.payload
-      );
-    },
-    addMessage: (state, action) => {
-      const { conversationId, message } = action.payload;
-      if (!state.messages[conversationId]) {
-        state.messages[conversationId] = [];
+    setCurrentConversation: (state, action) => { state.currentConversationId = action.payload; },
+    clearCurrentConversation: (state) => { state.currentConversationId = null; },
+    setCurrentUserId: (state, action) => { state.currentUserId = action.payload; },
+    setReplyingTo: (state, action) => { state.replyingTo = action.payload; },
+    clearReplyingTo: (state) => { state.replyingTo = null; },
+    setTyping: (state, action) => {
+      const { conversationId, userId, isTyping } = action.payload;
+      const realId = getRealId(state, conversationId, state.currentUserId);
+      
+      if (!state.typingUsers[realId]) {
+        state.typingUsers[realId] = [];
       }
-      state.messages[conversationId].push(message);
+
+      if (isTyping) {
+        // Tránh trùng lặp
+        if (!state.typingUsers[realId].some(u => String(u.userId) === String(userId))) {
+          // Tìm tên người dùng từ danh sách thành viên hội thoại
+          const conv = state.conversations.find(c => c.conversationId === realId);
+          const member = conv?.members?.find(m => String(m.userId || m.id) === String(userId));
+          const name = member?.fullName || member?.name || 'Ai đó';
+          
+          state.typingUsers[realId].push({ userId, name });
+        }
+      } else {
+        state.typingUsers[realId] = state.typingUsers[realId].filter(u => String(u.userId) !== String(userId));
+      }
     },
     updateMessage: (state, action) => {
-      const { conversationId, messageId, updates } = action.payload;
-      if (state.messages[conversationId]) {
-        const msgIndex = state.messages[conversationId].findIndex(
-          (m) => m.messageId === messageId
-        );
-        if (msgIndex !== -1) {
-          state.messages[conversationId][msgIndex] = {
-            ...state.messages[conversationId][msgIndex],
-            ...updates,
-          };
-        }
+      const { conversationId, message } = action.payload;
+      const realId = getRealId(state, conversationId, state.currentUserId);
+      if (!message || !message.messageId) return;
+
+      if (!state.messages[realId]) {
+        state.messages[realId] = [message];
+        return;
       }
-    },
-    removeMessage: (state, action) => {
-      const { conversationId, messageId } = action.payload;
-      if (state.messages[conversationId]) {
-        state.messages[conversationId] = state.messages[conversationId].filter(
-          (m) => m.messageId !== messageId
-        );
-      }
-    },
-    setTypingUser: (state, action) => {
-      const { conversationId, userId, isTyping } = action.payload;
-      if (!state.typingUsers[conversationId]) {
-        state.typingUsers[conversationId] = new Set();
-      }
-      if (isTyping) {
-        state.typingUsers[conversationId].add(userId);
+
+      const msgIdx = state.messages[realId].findIndex(m => m.messageId === message.messageId);
+      if (msgIdx === -1) {
+        state.messages[realId] = [...state.messages[realId], message];
       } else {
-        state.typingUsers[conversationId].delete(userId);
+        const existing = state.messages[realId][msgIdx];
+        const mergedMessage = { ...existing, ...message };
+        if (Array.isArray(existing.readBy) && Array.isArray(message.readBy)) {
+          mergedMessage.readBy = Array.from(new Set([...existing.readBy, ...message.readBy]));
+        }
+        state.messages[realId][msgIdx] = mergedMessage;
       }
     },
-    clearTypingUsers: (state, action) => {
-      const { conversationId } = action.payload;
-      if (state.typingUsers[conversationId]) {
-        state.typingUsers[conversationId].clear();
+    toggleMessageReaction: (state, action) => {
+      const { conversationId, messageId, emoji, userId } = action.payload;
+      const realId = getRealId(state, conversationId, state.currentUserId);
+      const messages = state.messages[realId];
+      if (!messages) return;
+
+      const msgIdx = messages.findIndex(m => m.messageId === messageId);
+      if (msgIdx === -1) return;
+
+      const message = messages[msgIdx];
+      const reactions = { ...(message.reactions || {}) };
+      const userIds = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : [];
+
+      const userIdStr = String(userId);
+      const index = userIds.findIndex(id => String(id) === userIdStr);
+
+      if (index !== -1) {
+        userIds.splice(index, 1);
+      } else {
+        userIds.push(userIdStr);
+      }
+
+      if (userIds.length === 0) {
+        delete reactions[emoji];
+      } else {
+        reactions[emoji] = userIds;
+      }
+
+      state.messages[realId][msgIdx] = {
+        ...message,
+        reactions
+      };
+    },
+    updateConversationWallpaper: (state, action) => {
+      const { conversationId, wallpaperUrl } = action.payload || {};
+      if (!conversationId) return;
+      const convIdx = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (convIdx !== -1) {
+        state.conversations[convIdx].wallpaperUrl = wallpaperUrl ?? null;
       }
     },
-    addReaction: (state, action) => {
-      const { conversationId, messageId, emoji } = action.payload;
-      if (state.messages[conversationId]) {
-        const msgIndex = state.messages[conversationId].findIndex(
-          (m) => m.messageId === messageId
-        );
-        if (msgIndex !== -1) {
-          const msg = state.messages[conversationId][msgIndex];
-          if (!msg.reactions) {
-            msg.reactions = {};
+    markConversationRead: (state, action) => {
+      const conversationId = action.payload;
+      const convIdx = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (convIdx !== -1) {
+        state.conversations[convIdx].isUnread = false;
+        state.conversations[convIdx].unreadCount = 0;
+      }
+    },
+    updateMemberInfo: (state, action) => {
+      const { userId, fullName, avatarUrl } = action.payload;
+      if (!userId) return;
+
+      state.conversations.forEach((conv, idx) => {
+        // 1. Update in members list
+        if (conv.members) {
+          const memberIdx = conv.members.findIndex(m => String(m.userId || m.id) === String(userId));
+          if (memberIdx !== -1) {
+            if (fullName) state.conversations[idx].members[memberIdx].fullName = fullName;
+            if (avatarUrl !== undefined) state.conversations[idx].members[memberIdx].avatarUrl = avatarUrl;
           }
-          if (!msg.reactions[emoji]) {
-            msg.reactions[emoji] = [];
+        }
+
+        // 2. If it's a SINGLE conversation, update the conversation's own name/avatar
+        if (conv.type === 'SINGLE') {
+          const parts = conv.conversationId.split('#');
+          const otherMemberId = parts.find(id => id !== 'SINGLE' && id !== String(state.currentUserId));
+          if (String(otherMemberId) === String(userId)) {
+            if (fullName) state.conversations[idx].name = fullName;
+            if (avatarUrl !== undefined) state.conversations[idx].avatarUrl = avatarUrl;
           }
-          msg.reactions[emoji].push(new Date().getTime());
+        }
+      });
+    },
+    addMessage: (state, action) => {
+      const { conversationId, message, currentUserId } = action.payload;
+      if (!message || (!message.content && !message.type)) return;
+
+      const myId = String(currentUserId || state.currentUserId || '');
+      const realId = getRealId(state, message.conversationId || conversationId, myId);
+
+      if (!state.messages[realId]) state.messages[realId] = [];
+      const isDuplicate = message.messageId
+        ? state.messages[realId].some(m => m.messageId === message.messageId)
+        : false;
+
+      if (!isDuplicate) {
+        state.messages[realId] = [...state.messages[realId], message];
+
+        // Cập nhật danh sách hội thoại
+        const convIdx = state.conversations.findIndex(c => c.conversationId === realId);
+        if (convIdx !== -1) {
+          const isOtherSender = String(message.senderId) !== myId;
+          const isOpenConversation = state.currentConversationId === realId;
+
+          let preview = message.content;
+          if (message.isRecalled) {
+            preview = "[Tin nhắn đã bị thu hồi]";
+          } else if (isVoiceMessage(message)) {
+            preview = "Tin nhắn thoại";
+          } else if (message.type === 'IMAGE') {
+            preview = "[Hình ảnh]";
+          } else if (message.type === 'VIDEO') {
+            preview = "[Video]";
+          } else if (message.type === 'FILE') {
+            preview = "[Tệp tin]";
+          } else if (message.type === 'VOTE') {
+            preview = "[Bình chọn]";
+          }
+
+          state.conversations[convIdx].lastMessage = preview;
+          state.conversations[convIdx].lastMessageSenderId = message.senderId;
+          state.conversations[convIdx].updatedAt = message.createdAt || new Date().toISOString();
+
+          if (isOtherSender) {
+            if (!isOpenConversation) {
+              state.conversations[convIdx].unreadCount = (state.conversations[convIdx].unreadCount || 0) + 1;
+              state.conversations[convIdx].isUnread = true;
+            }
+          }
         }
       }
     },
-    clearError: (state) => {
-      state.error = null;
+    setUserStatus: (state, action) => {
+      const { userId, status, lastSeenAt } = action.payload;
+      const statusUpper = String(status || '').toUpperCase();
+      const isOnline = statusUpper === 'ONLINE';
+
+      // Update member status in all conversations that include this user
+      state.conversations = state.conversations.map(conv => {
+        if (!conv.members) return conv;
+        
+        const memberIdx = conv.members.findIndex(m => String(m.userId || m.id) === String(userId));
+        if (memberIdx === -1) return conv;
+
+        const updatedMembers = [...conv.members];
+        updatedMembers[memberIdx] = {
+          ...updatedMembers[memberIdx],
+          status: statusUpper,
+          presence: statusUpper,
+          isOnline: isOnline,
+          lastSeenAt: lastSeenAt || updatedMembers[memberIdx].lastSeenAt
+        };
+
+        // Nếu là SINGLE chat, cập nhật luôn trạng thái của hội thoại
+        const isOtherMember = conv.type === 'SINGLE' && String(userId) !== String(state.currentUserId);
+        
+        return {
+          ...conv,
+          members: updatedMembers,
+          status: isOtherMember ? statusUpper : conv.status,
+          isOnline: isOtherMember ? isOnline : conv.isOnline
+        };
+      });
     },
+    setMessageRead: (state, action) => {
+      const { conversationId, messageId, userId } = action.payload;
+      const myId = String(state.currentUserId || '');
+      const userIdStr = String(userId);
+      const realId = getRealId(state, conversationId, myId);
+
+      const messages = state.messages[realId];
+      if (messages) {
+        const targetIdx = messages.findIndex(m => String(m.messageId) === String(messageId));
+        if (targetIdx !== -1) {
+          // Đánh dấu tin nhắn này và tất cả tin nhắn trước đó là đã đọc bởi userId này
+          for (let i = 0; i <= targetIdx; i++) {
+            if (!messages[i].readBy) messages[i].readBy = [];
+            if (!messages[i].readBy.some(id => String(id) === userIdStr)) {
+              messages[i].readBy.push(userIdStr);
+            }
+          }
+        }
+      }
+
+      // CHỈ reset unread count nếu người đọc là CHÍNH MÌNH
+      if (userIdStr === myId) {
+        const convIdx = state.conversations.findIndex(c => c.conversationId === realId);
+        if (convIdx !== -1) {
+          state.conversations[convIdx].isUnread = false;
+          state.conversations[convIdx].unreadCount = 0;
+        }
+      }
+    }
   },
   extraReducers: (builder) => {
-    // Fetch conversations
     builder
-      .addCase(fetchConversations.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
       .addCase(fetchConversations.fulfilled, (state, action) => {
-        state.loading = false;
-        state.conversations = action.payload.conversations || [];
-        state.unreadCount = action.payload.unreadCount || 0;
-      })
-      .addCase(fetchConversations.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      });
-
-    // Fetch messages
-    builder
-      .addCase(fetchMessages.pending, (state) => {
-        state.loading = true;
+        state.conversations = action.payload.map(conv => {
+          let lastMessage = conv.lastMessage;
+          // Check if lastMessage is a voice URL
+          if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
+            lastMessage = "Tin nhắn thoại";
+          }
+          
+          return {
+            ...conv,
+            lastMessage,
+            unreadCount: conv.unreadCount ?? 0,
+            isUnread: (conv.unreadCount ?? 0) > 0,
+            lastMessageSenderId: conv.lastMessageSenderId || conv.lastSenderId,
+          };
+        });
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
-        state.loading = false;
-        const { conversationId, messages } = action.payload;
-        state.messages[conversationId] = messages;
-      })
-      .addCase(fetchMessages.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      });
-
-    // Send message
-    builder
-      .addCase(sendMessage.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(sendMessage.fulfilled, (state, action) => {
-        state.loading = false;
-        const { conversationId, messageId } = action.payload;
-        if (!state.messages[conversationId]) {
-          state.messages[conversationId] = [];
+        const { conversationId, messages, isLoadMore } = action.payload;
+        if (isLoadMore) {
+          const existing = state.messages[conversationId] || [];
+          const filtered = messages.filter(nm => !existing.some(em => em.messageId === nm.messageId));
+          state.messages[conversationId] = [...filtered, ...existing];
+        } else {
+          state.messages[conversationId] = messages;
         }
-        state.messages[conversationId].push(action.payload);
       })
-      .addCase(sendMessage.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+      .addCase(recallMessage.fulfilled, (state, action) => {
+        const { messageId, conversationId } = action.payload;
+        const realId = getRealId(state, conversationId, state.currentUserId);
+        if (state.messages[realId]) {
+          const msgIdx = state.messages[realId].findIndex(m => String(m.messageId) === String(messageId));
+          if (msgIdx !== -1) {
+            state.messages[realId][msgIdx] = {
+              ...state.messages[realId][msgIdx],
+              status: 'RECALLED',
+              isRecalled: true,
+              content: 'Tin nhắn đã bị thu hồi'
+            };
+            
+            // Cập nhật cả lastMessage trong danh sách hội thoại
+            const convIdx = state.conversations.findIndex(c => c.conversationId === realId);
+            if (convIdx !== -1) {
+              state.conversations[convIdx].lastMessage = "[Tin nhắn đã bị thu hồi]";
+            }
+          }
+        }
       });
-
-    // Create conversation
-    builder
-      .addCase(createConversation.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(createConversation.fulfilled, (state, action) => {
-        state.loading = false;
-        state.conversations.unshift(action.payload);
-        state.currentConversationId = action.payload.conversationId;
-        state.currentConversation = action.payload;
-      })
-      .addCase(createConversation.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      });
-
-    // Mark message as read
-    builder.addCase(markMessageAsRead.fulfilled, (state, action) => {
-      const messageIndex = state.messages[state.currentConversationId]?.findIndex(
-        (m) => m.messageId === action.payload.messageId
-      );
-      if (messageIndex !== -1) {
-        state.messages[state.currentConversationId][messageIndex].read = true;
-      }
-    });
   },
 });
 
 export const {
-  setCurrentConversation,
   addMessage,
+  setCurrentConversation,
+  clearCurrentConversation,
+  setCurrentUserId,
+  setReplyingTo,
+  clearReplyingTo,
   updateMessage,
-  removeMessage,
-  setTypingUser,
-  clearTypingUsers,
-  addReaction,
-  clearError,
+  toggleMessageReaction,
+  updateConversationWallpaper,
+  markConversationRead,
+  updateMemberInfo,
+  setTyping,
+  setUserStatus,
+  setMessageRead
 } = chatSlice.actions;
-
 export default chatSlice.reducer;

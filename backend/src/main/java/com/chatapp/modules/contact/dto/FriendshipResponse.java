@@ -15,5 +15,8 @@ public class FriendshipResponse {
     private String phoneNumber;
     private String avatarUrl;
     private String status; // PENDING, ACCEPTED, etc.
+    private String userStatus; // ONLINE, OFFLINE
+    private Long lastSeenAt;
     private Boolean isRequester; // True if current user sent the request
+    private Long createdAt;
 }

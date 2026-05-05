@@ -115,6 +115,13 @@ public class AuthService {
         System.out.println("USER STATUS AT LOGIN: " + user.getStatus());
         System.out.println("=================================================");
 
+        // If account is LOCKED, stop login and notify user
+        if ("LOCKED".equals(user.getStatus())) {
+            log.info("Access denied for LOCKED user: {}", user.getUserId());
+            throw new com.chatapp.common.exception.LockedAccountException(
+                "Tài khoản của bạn đang trong trạng thái chờ xóa.", user.getUpdatedAt());
+        }
+
         // Update status to ONLINE
         user.updateStatus("ONLINE");
         userRepository.save(user);
@@ -329,11 +336,32 @@ public class AuthService {
         request.validatePasswordMatch();
 
         String email = validationUtil.cleanEmail(request.getEmail());
+<<<<<<< HEAD
+=======
+        String cleanPhone = validationUtil.cleanPhoneNumber(request.getPhoneNumber());
+
+        // Kiểm tra số điện thoại đã tồn tại chưa
+        userRepository.findByPhoneNumber(cleanPhone).ifPresent(existingUser -> {
+            String existingEmail = existingUser.getEmail();
+            // Nếu user đã verify và có email, nhưng email đó khác với email đang đăng ký -> SĐT đã bị chiếm dụng
+            if (Boolean.TRUE.equals(existingUser.getIsVerified()) && existingEmail != null && !existingEmail.equals(email)) {
+                throw new ConflictException("Số điện thoại này đã được sử dụng bởi một tài khoản khác.");
+            }
+            // Nếu user đã verify nhưng email bị null (trường hợp hiếm) -> Cũng báo lỗi để tránh NullPointer sau này
+            if (Boolean.TRUE.equals(existingUser.getIsVerified()) && existingEmail == null) {
+                throw new ConflictException("Số điện thoại này đã được xác thực bởi một tài khoản khác.");
+            }
+        });
+>>>>>>> a6150238e75af0c1e4f492602ac8dd78e0db5a4f
 
         User user = userRepository.findByEmail(email).orElse(null);
 
         if (user != null && Boolean.TRUE.equals(user.getIsVerified())) {
+<<<<<<< HEAD
             throw new ConflictException("Email already registered");
+=======
+            throw new ConflictException("Gmail này đã được đăng ký, vui lòng thử lại gmail khác!");
+>>>>>>> a6150238e75af0c1e4f492602ac8dd78e0db5a4f
         }
 
         if (!isRegistrationEmailVerified(email)) {
@@ -404,10 +432,21 @@ public class AuthService {
         validationUtil.validateEmail(email);
         String cleanEmail = validationUtil.cleanEmail(email);
 
+<<<<<<< HEAD
         // Optional: check user tồn tại
         // if (userRepository.findByEmail(cleanEmail).isEmpty()) {
         //     throw new ValidationException("User not found");
         // }
+=======
+        // Ràng buộc: Nếu là đăng ký, phải kiểm tra Gmail đã tồn tại chưa
+        if ("REGISTRATION".equals(purpose)) {
+            userRepository.findByEmail(cleanEmail).ifPresent(user -> {
+                if (Boolean.TRUE.equals(user.getIsVerified())) {
+                    throw new ConflictException("Gmail này đã được đăng ký, vui lòng thử lại gmail khác!");
+                }
+            });
+        }
+>>>>>>> a6150238e75af0c1e4f492602ac8dd78e0db5a4f
 
         return otpService.generateAndSendOtp(cleanEmail, purpose);
     }

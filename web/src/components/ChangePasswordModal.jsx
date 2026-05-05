@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { X, Lock, Save, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { authApi } from '../api/authApi';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 
 const ChangePasswordModal = ({ isOpen, onClose }) => {
   const { logout } = useAuth();
+  const { isDark } = useTheme();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -80,11 +82,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-cursor-cream/40 animate-fade-in">
-      <div className="bg-surface-200 w-full max-w-lg rounded-[40px] shadow-2xl border border-cursor-dark/5 relative overflow-hidden">
-        <div className="h-20 flex items-center justify-between px-10 border-b border-cursor-dark/5 sticky top-0 bg-surface-100/50 backdrop-blur-md">
-          <h2 className="font-serif italic font-black text-cursor-dark uppercase tracking-[0.2em] text-[12px]">Đổi mật khẩu</h2>
-          <button onClick={handleClose} className="p-2 hover:bg-black/5 rounded-xl text-cursor-dark/40 transition-colors">
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl animate-fade-in ${isDark ? 'bg-slate-950/40' : 'bg-slate-200/40'}`}>
+      <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden border ${isDark ? 'bg-surface-200 border-white/5' : 'bg-white border-slate-100'}`}>
+        <div className={`h-20 flex items-center justify-between px-10 border-b sticky top-0 backdrop-blur-md ${isDark ? 'bg-surface-100/50 border-white/5' : 'bg-white/50 border-slate-50'}`}>
+          <h2 className={`font-black uppercase tracking-[0.2em] text-[12px] ${isDark ? 'text-white' : 'text-slate-800'}`}>Đổi mật khẩu</h2>
+          <button onClick={handleClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'}`}>
             <X size={24} />
           </button>
         </div>
@@ -105,7 +107,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                     if(errorMsg.includes('mật khẩu cũ')) setErrorMsg('');
                   }}
                   placeholder="Nhập mật khẩu cũ..."
-                  className={`w-full px-5 py-3 bg-white border ${errorMsg.includes('mật khẩu cũ') ? 'border-red-500/50 focus:border-red-500' : 'border-cursor-dark/10 focus:border-cursor-dark'} rounded-2xl text-sm font-mono text-cursor-dark placeholder:text-cursor-dark/20 focus:outline-none transition-all`}
+                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                    errorMsg.includes('mật khẩu cũ') 
+                      ? 'border-red-500/50 focus:border-red-500' 
+                      : (isDark ? 'border-white/10 focus:border-indigo-500' : 'border-slate-200 focus:border-slate-400')
+                  } ${isDark ? 'bg-surface-100 text-white placeholder:text-white/20' : 'bg-slate-50 text-slate-800 placeholder:text-slate-400'}`}
                 />
                 {successMsg && (
                   <div className="absolute inset-y-0 right-4 flex items-center">
@@ -127,7 +133,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Nhập mật khẩu mới..."
-                className="w-full px-5 py-3 bg-white border border-cursor-dark/10 rounded-2xl text-sm font-mono text-cursor-dark placeholder:text-cursor-dark/20 focus:outline-none focus:border-cursor-dark transition-all"
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                  isDark 
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                }`}
               />
               
               {/* Password Requirements */}
@@ -165,7 +175,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Nhập lại mật khẩu mới..."
-                className="w-full px-5 py-3 bg-white border border-cursor-dark/10 rounded-2xl text-sm font-mono text-cursor-dark placeholder:text-cursor-dark/20 focus:outline-none focus:border-cursor-dark transition-all"
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                  isDark 
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                }`}
               />
                {confirmPassword && newPassword !== confirmPassword && (
                 <p className="text-[11px] text-red-500 font-mono font-bold px-1 mt-1">Mật khẩu xác nhận không khớp</p>
@@ -179,7 +193,9 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
             <button
               type="submit"
               disabled={loading || !isNewPasswordValid || !currentPassword || newPassword !== confirmPassword}
-              className="w-full py-4 mt-4 bg-cursor-dark text-cursor-cream rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center space-x-3"
+              className={`w-full py-4 mt-4 rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center space-x-3 ${
+                isDark ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'
+              }`}
             >
               <Save size={18} />
               <span>{loading ? 'Đang xử lý...' : 'Xác nhận thay đổi'}</span>

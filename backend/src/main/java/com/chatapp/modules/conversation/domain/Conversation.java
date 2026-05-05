@@ -28,6 +28,9 @@ public class Conversation {
     @DynamoDBAttribute(attributeName = "avatarUrl")
     private String avatarUrl;
 
+    @DynamoDBAttribute(attributeName = "wallpaperUrl")
+    private String wallpaperUrl;
+
     @DynamoDBAttribute(attributeName = "creatorId")
     private String creatorId;
 
@@ -48,4 +51,7 @@ public class Conversation {
 
     @DynamoDBAttribute(attributeName = "pinnedMessageIds")
     private Set<String> pinnedMessageIds;
+
+    @DynamoDBAttribute(attributeName = "onlyAdminsCanChat")
+    private Boolean onlyAdminsCanChat;
 }

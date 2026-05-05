@@ -63,12 +63,9 @@ const ChangePasswordScreen = () => {
         { text: 'OK', onPress: () => dispatch(logoutUser()) }
       ]);
     } catch (error) {
-      console.error('Change password error:', error);
-
-      if (error.response?.status === 400 || error.response?.status === 401) {
+      if (error.response?.status === 400) {
         const newCount = wrongCount + 1;
         setWrongCount(newCount);
-
         if (newCount >= 5) {
           Alert.alert('Cảnh báo', 'Bạn đã nhập sai mật khẩu cũ quá 5 lần. Ứng dụng sẽ tự động đăng xuất để bảo vệ tài khoản.', [
             { text: 'Đồng ý', onPress: () => dispatch(logoutUser()) }
@@ -76,7 +73,8 @@ const ChangePasswordScreen = () => {
         } else {
           Alert.alert('Thông báo', `Bạn đã nhập sai mật khẩu cũ. Số lần nhập sai: ${newCount}/5`);
         }
-      } else {
+      } else if (error.response?.status !== 401) {
+        console.warn('Change password error:', error.message);
         Alert.alert('Lỗi', 'Đã có lỗi xảy ra. Vui lòng thử lại sau.');
       }
     } finally {

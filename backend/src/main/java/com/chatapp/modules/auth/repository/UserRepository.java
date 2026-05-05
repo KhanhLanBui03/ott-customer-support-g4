@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -75,6 +76,22 @@ public class UserRepository {
 
     public boolean existsByPhoneNumber(String phoneNumber) {
         return findByPhoneNumber(phoneNumber).isPresent();
+    }
+
+    public List<User> findByPhoneNumberStartingWith(String prefix) {
+        if (prefix == null || prefix.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, com.amazonaws.services.dynamodbv2.model.AttributeValue> eav = new java.util.HashMap<>();
+        eav.put(":prefix", new com.amazonaws.services.dynamodbv2.model.AttributeValue().withS(prefix));
+        eav.put(":skValue", new com.amazonaws.services.dynamodbv2.model.AttributeValue().withS("profile"));
+
+        DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+                .withFilterExpression("begins_with(phoneNumber, :prefix) AND sk = :skValue")
+                .withExpressionAttributeValues(eav);
+
+        return dynamoDBMapper.scan(User.class, scanExpression);
     }
 
     public List<User> findAll() {

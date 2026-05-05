@@ -47,6 +47,15 @@ public class ConversationController {
         return ResponseEntity.ok(ApiResponse.success(res, "Conversations fetched successfully"));
     }
 
+    @PutMapping("/{conversationId}/read")
+    public ResponseEntity<ApiResponse<Void>> markAsRead(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        conversationService.markAsRead(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Conversation marked as read"));
+    }
+
     @GetMapping("/{conversationId}")
     public ResponseEntity<ApiResponse<ConversationResponse>> getConversationDetail(
             HttpServletRequest request,
@@ -74,6 +83,15 @@ public class ConversationController {
         String userId = getUserId(request);
         conversationService.acceptGroupInvitation(userId, invitationId);
         return ResponseEntity.ok(ApiResponse.success(null, "Invitation accepted"));
+    }
+
+    @PostMapping("/invitations/{invitationId}/reject")
+    public ResponseEntity<ApiResponse<Void>> rejectInvitation(
+            HttpServletRequest request,
+            @PathVariable String invitationId) {
+        String userId = getUserId(request);
+        conversationService.rejectGroupInvitation(userId, invitationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Invitation rejected"));
     }
 
     @GetMapping("/invitations/pending")
@@ -166,5 +184,67 @@ public class ConversationController {
         log.info("Toggle pin requested for conversation: {} by user: {}", conversationId, userId);
         conversationService.togglePin(userId, conversationId);
         return ResponseEntity.ok(ApiResponse.success(null, "Pin status toggled successfully"));
+    }
+
+    /**
+     * Update conversation wallpaper (background image)
+     * PUT /api/v1/conversations/{conversationId}/wallpaper
+     */
+    @PutMapping("/{conversationId}/wallpaper")
+    public ResponseEntity<ApiResponse<Void>> updateWallpaper(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String wallpaperUrl = body.get("wallpaperUrl");
+        log.info("Updating wallpaper for conversation: {} by user: {}", conversationId, userId);
+        conversationService.updateWallpaper(userId, conversationId, wallpaperUrl);
+        return ResponseEntity.ok(ApiResponse.success(null, "Wallpaper updated successfully"));
+    }
+
+    @PutMapping("/{conversationId}/name")
+    public ResponseEntity<ApiResponse<Void>> renameConversation(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String newName = body.get("name");
+        log.info("Renaming conversation: {} to: {} by user: {}", conversationId, newName, userId);
+        conversationService.renameConversation(userId, conversationId, newName);
+        return ResponseEntity.ok(ApiResponse.success(null, "Conversation renamed successfully"));
+    }
+
+    @PutMapping("/{conversationId}/tag")
+    public ResponseEntity<ApiResponse<Void>> updateTag(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String tag = body.get("tag");
+        log.info("Updating tag for conversation: {} to: {} by user: {}", conversationId, tag, userId);
+        conversationService.updateConversationTag(userId, conversationId, tag);
+        return ResponseEntity.ok(ApiResponse.success(null, "Tag updated successfully"));
+    }
+
+    @PostMapping("/{conversationId}/toggle-restriction")
+    public ResponseEntity<ApiResponse<Void>> toggleRestriction(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        log.info("Toggle restriction requested for conversation: {} by user: {}", conversationId, userId);
+        conversationService.toggleChatRestriction(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Chat restriction toggled successfully"));
+    }
+
+    @PutMapping("/{conversationId}/avatar")
+    public ResponseEntity<ApiResponse<Void>> updateAvatar(
+            HttpServletRequest request,
+            @PathVariable String conversationId,
+            @RequestBody java.util.Map<String, String> body) {
+        String userId = getUserId(request);
+        String avatarUrl = body.get("avatarUrl");
+        log.info("Updating avatar for conversation: {} by user: {}", conversationId, userId);
+        conversationService.updateConversationAvatar(userId, conversationId, avatarUrl);
+        return ResponseEntity.ok(ApiResponse.success(null, "Avatar updated successfully"));
     }
 }

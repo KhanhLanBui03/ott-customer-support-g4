@@ -10,12 +10,15 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.chatapp"
+      "package": "com.chatapp",
+      "usesCleartextTraffic": true
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-asset"
+      "expo-asset",
+      "expo-audio",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

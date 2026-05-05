@@ -160,6 +160,13 @@ const authSlice = createSlice({
       state.refreshToken = refreshToken;
       state.isAuthenticated = !!accessToken;
     },
+    sessionExpired: (state) => {
+      state.user = null;
+      state.accessToken = null;
+      state.refreshToken = null;
+      state.isAuthenticated = false;
+      state.error = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+    },
   },
   extraReducers: (builder) => {
     // Login user
@@ -171,8 +178,11 @@ const authSlice = createSlice({
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
-        // Backend returns a flat object, map it to state.user
-        const { userId, phoneNumber, firstName, lastName, avatarUrl, accessToken, refreshToken } = action.payload;
+
+        // Backend bọc dữ liệu trong ApiResponse: { success, message, data: { userId, ... } }
+        const responseData = action.payload.data || action.payload;
+
+        const { userId, phoneNumber, firstName, lastName, avatarUrl, accessToken, refreshToken } = responseData;
         state.user = { userId, phoneNumber, firstName, lastName, avatarUrl };
         state.accessToken = accessToken;
         state.refreshToken = refreshToken;
@@ -255,5 +265,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setOtpPhoneNumber, restoreState } = authSlice.actions;
+export const { clearError, setOtpPhoneNumber, restoreState, sessionExpired } = authSlice.actions;
 export default authSlice.reducer;

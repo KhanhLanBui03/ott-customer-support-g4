@@ -1,268 +1,238 @@
-import io from 'socket.io-client';
+import { Client } from '@stomp/stompjs';
 import CONFIG from '../config';
+import 'text-encoding';
 
-/**
- * WebSocket (Socket.io) configuration for React Native mobile app
- * Handles:
- * - Message events (send, receive, edit, delete, reactions)
- * - Typing indicators
- * - User presence (online/offline/typing)
- * - Read receipts
- */
+let stompClient = null;
+let messageHandlers = new Set();
+let typingHandlers = new Set();
+let editHandlers = new Set();
+let deleteHandlers = new Set();
+let recallHandlers = new Set();
+let reactionHandlers = new Set();
+let messageUpdateHandlers = new Set();
+let readHandlers = new Set();
+let statusHandlers = new Set();
+let userUpdateHandlers = new Set();
+let wallpaperUpdateHandlers = new Set();
+let globalHandlers = new Set();
 
-let socket = null;
+export const initializeSocket = (token, userId, globalHandler = null) => {
+  if (globalHandler) globalHandlers.add(globalHandler);
 
-const SOCKET_EVENTS = {
-  // Connection events
-  CONNECT: 'connect',
-  DISCONNECT: 'disconnect',
-  RECONNECT: 'reconnect',
-  RECONNECT_ATTEMPT: 'reconnect_attempt',
-
-  // Message events
-  MESSAGE_SEND: 'message:send',
-  MESSAGE_RECEIVE: 'message:receive',
-  MESSAGE_EDIT: 'message:edit',
-  MESSAGE_DELETE: 'message:delete',
-  MESSAGE_RECALL: 'message:recall',
-  MESSAGE_REACTION: 'message:reaction',
-
-  // Typing events
-  TYPING_START: 'typing:start',
-  TYPING_STOP: 'typing:stop',
-  USER_TYPING: 'user:typing',
-
-  // Read receipt events
-  READ_RECEIPT: 'message:read',
-  USER_READ: 'user:read',
-
-  // User presence events
-  USER_ONLINE: 'user:online',
-  USER_OFFLINE: 'user:offline',
-  USER_STATUS: 'user:status',
-
-  // Error events
-  ERROR: 'error',
-};
-
-/**
- * Initialize Socket.io connection with JWT token
- * Works on both Android and iOS
- * @param {string} token - JWT access token
- * @returns {object} socket instance
- */
-export const initializeSocket = (token) => {
-  if (socket?.connected) {
-    return socket;
+  if (stompClient) {
+    console.log('🔌 Deactivating old socket for fresh initialization...');
+    stompClient.deactivate();
   }
 
-  socket = io(CONFIG.SOCKET_URL, {
-    auth: {
-      token: `Bearer ${token}`,
+  const baseUrl = CONFIG.API_URL.split('/api')[0];
+  const socketUrl = baseUrl.replace('http', 'ws') + '/ws/mobile';
+
+  console.log('🔌 Mobile Connecting to:', socketUrl);
+
+  stompClient = new Client({
+    brokerURL: socketUrl,
+    connectHeaders: { Authorization: `Bearer ${token}` },
+    forceBinaryWSFrames: true,
+    appendMissingNULLonIncoming: true,
+    reconnectDelay: 5000,
+    heartbeatIncoming: 10000,
+    heartbeatOutgoing: 10000,
+    
+    debug: (str) => {
+      if (str.includes('MESSAGE') || str.includes('SUBSCRIBE')) {
+        console.log('[STOMP-DEBUG]', str);
+      }
     },
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    reconnectionAttempts: 5,
-    // For React Native, use websocket transport
-    transports: ['websocket'],
-    // Reduce polling to avoid battery drain
-    upgrade: false,
+
+    onConnect: (frame) => {
+      console.log('✅ Mobile STOMP Connected. User:', frame.headers['user-name']);
+      
+      // 1. Subscribe to presence (online/offline)
+      console.log('📡 Mobile Subscribing to /topic/presence...');
+      stompClient.subscribe('/topic/presence', (message) => {
+        try {
+          const payload = JSON.parse(message.body);
+          console.log('👤 Presence update:', payload.userId, payload.status);
+          statusHandlers.forEach(handler => handler(payload));
+        } catch (e) {
+          console.error('❌ Error parsing presence message:', e);
+        }
+      });
+
+      // 2. Subscribe to user-specific queues
+      console.log('📡 Mobile Subscribing to /user/queue/messages and /user/queue/conversations...');
+      
+      const handleEvent = (message) => {
+        try {
+          const event = JSON.parse(message.body);
+          console.log('📥 Mobile received event:', event.eventType, 'for conversation:', event.conversationId);
+
+          // Phát sự kiện toàn cục cho Layout xử lý thông báo
+          globalHandlers.forEach(handler => handler(event));
+
+          if (event.eventType === 'MESSAGE_SEND') {
+            const msg = event.payload;
+            console.log('💬 Processing MESSAGE_SEND:', msg.messageId);
+            messageHandlers.forEach(handler => handler(msg));
+          } else if (event.eventType === 'USER_TYPING') {
+            typingHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
+          } else if (event.eventType === 'MESSAGE_EDIT') {
+            editHandlers.forEach(handler => handler(event.payload));
+          } else if (event.eventType === 'MESSAGE_DELETE') {
+            deleteHandlers.forEach(handler => handler(event.payload));
+          } else if (event.eventType === 'MESSAGE_RECALL') {
+            recallHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
+          } else if (event.eventType === 'MESSAGE_REACTION') {
+            reactionHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
+          } else if (event.eventType === 'MESSAGE_STATUS_UPDATE' || event.eventType === 'MESSAGE_UPDATE') {
+            messageUpdateHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
+          } else if (event.eventType === 'MESSAGE_READ') {
+            readHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
+          } else if (event.eventType === 'WALLPAPER_UPDATED' || (event.eventType === 'CONVERSATION_UPDATE' && event.payload && Object.prototype.hasOwnProperty.call(event.payload, 'wallpaperUrl'))) {
+            const wallpaperPayload = {
+              conversationId: event.conversationId,
+              wallpaperUrl: event.payload?.wallpaperUrl ?? null,
+            };
+            wallpaperUpdateHandlers.forEach(handler => handler(wallpaperPayload));
+          } else if (event.eventType === 'USER_UPDATE') {
+            console.log('👤 User profile updated:', event.payload.userId);
+            userUpdateHandlers.forEach(handler => handler(event.payload));
+          } else if (event.eventType === 'USER_STATUS_CHANGED') {
+            console.log('👤 User status changed:', event.payload.userId, event.payload.status);
+            statusHandlers.forEach(handler => handler(event.payload));
+          }
+        } catch (e) {
+          console.error('❌ Error parsing STOMP message:', e);
+        }
+      };
+
+      stompClient.subscribe('/user/queue/messages', handleEvent);
+      stompClient.subscribe('/user/queue/conversations', handleEvent);
+    },
+    onStompError: (frame) => {
+      console.error('❌ STOMP error:', frame.headers['message']);
+      console.error('Details:', frame.body);
+    },
+    onWebSocketClose: () => {
+      console.log('🔌 Mobile WebSocket closed');
+    }
   });
 
-  // Connection success
-  socket.on(SOCKET_EVENTS.CONNECT, () => {
-    console.log('✓ WebSocket connected:', socket.id);
-  });
-
-  // Disconnection
-  socket.on(SOCKET_EVENTS.DISCONNECT, (reason) => {
-    console.warn('✗ WebSocket disconnected:', reason);
-  });
-
-  // Reconnection
-  socket.on(SOCKET_EVENTS.RECONNECT, (attemptNumber) => {
-    console.log('↺ WebSocket reconnected after', attemptNumber, 'attempts');
-  });
-
-  // Error handling
-  socket.on(SOCKET_EVENTS.ERROR, (error) => {
-    console.error('WebSocket error:', error);
-  });
-
-  return socket;
+  stompClient.activate();
+  return stompClient;
 };
 
-/**
- * Get socket instance (must be initialized first)
- */
-export const getSocket = () => {
-  if (!socket) {
-    throw new Error('Socket not initialized. Call initializeSocket first.');
+export const onMessageReceive = (handler) => {
+    messageHandlers.add(handler);
+    console.log('➕ Added message handler. Total:', messageHandlers.size);
+};
+export const offMessageReceive = (handler) => messageHandlers.delete(handler);
+
+export const onUserTyping = (handler) => typingHandlers.add(handler);
+export const offUserTyping = (handler) => typingHandlers.delete(handler);
+
+export const onMessageEdit = (handler) => editHandlers.add(handler);
+export const offMessageEdit = (handler) => editHandlers.delete(handler);
+export const onMessageDelete = (handler) => deleteHandlers.add(handler);
+export const offMessageDelete = (handler) => deleteHandlers.delete(handler);
+export const onMessageRecall = (handler) => recallHandlers.add(handler);
+export const offMessageRecall = (handler) => recallHandlers.delete(handler);
+export const onReaction = (handler) => reactionHandlers.add(handler);
+export const offReaction = (handler) => reactionHandlers.delete(handler);
+export const onMessageUpdate = (handler) => messageUpdateHandlers.add(handler);
+export const offMessageUpdate = (handler) => messageUpdateHandlers.delete(handler);
+export const onMessageRead = (handler) => readHandlers.add(handler);
+export const offMessageRead = (handler) => readHandlers.delete(handler);
+export const onWallpaperUpdated = (handler) => wallpaperUpdateHandlers.add(handler);
+export const offWallpaperUpdated = (handler) => wallpaperUpdateHandlers.delete(handler);
+export const onUserUpdate = (handler) => userUpdateHandlers.add(handler);
+export const offUserUpdate = (handler) => userUpdateHandlers.delete(handler);
+export const onUserStatusChange = (handler) => statusHandlers.add(handler);
+export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
+
+export const sendMessageViaSocket = (messageData) => {
+  if (stompClient?.connected) {
+    console.log('📤 Sending via socket:', messageData.content);
+    stompClient.publish({
+      destination: '/app/chat.send',
+      body: JSON.stringify(messageData),
+    });
+    return true;
   }
-  return socket;
+  console.warn('⚠️ Cannot send: STOMP not connected');
+  return false;
 };
 
-/**
- * Disconnect socket
- */
-export const disconnectSocket = () => {
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
-};
-
-/**
- * ==================== Message Events ====================
- */
-
-// Send message in real-time
 export const emitSendMessage = (conversationId, messageData) => {
-  getSocket().emit(SOCKET_EVENTS.MESSAGE_SEND, {
-    conversationId,
-    ...messageData,
-  });
+  return sendMessageViaSocket({ ...messageData, conversationId });
 };
 
-// Listen for message receive
-export const onMessageReceive = (callback) => {
-  getSocket().on(SOCKET_EVENTS.MESSAGE_RECEIVE, callback);
-};
-
-// Remove message receive listener
-export const offMessageReceive = (callback) => {
-  getSocket().off(SOCKET_EVENTS.MESSAGE_RECEIVE, callback);
-};
-
-// Edit message
-export const emitEditMessage = (messageId, content) => {
-  getSocket().emit(SOCKET_EVENTS.MESSAGE_EDIT, { messageId, content });
-};
-
-// Listen for message edit
-export const onMessageEdit = (callback) => {
-  getSocket().on(SOCKET_EVENTS.MESSAGE_EDIT, callback);
-};
-
-// Delete message
-export const emitDeleteMessage = (messageId) => {
-  getSocket().emit(SOCKET_EVENTS.MESSAGE_DELETE, { messageId });
-};
-
-// Listen for message delete
-export const onMessageDelete = (callback) => {
-  getSocket().on(SOCKET_EVENTS.MESSAGE_DELETE, callback);
-};
-
-// Recall message
-export const emitRecallMessage = (messageId) => {
-  getSocket().emit(SOCKET_EVENTS.MESSAGE_RECALL, { messageId });
-};
-
-// Listen for message recall
-export const onMessageRecall = (callback) => {
-  getSocket().on(SOCKET_EVENTS.MESSAGE_RECALL, callback);
-};
-
-// Add reaction
-export const emitReaction = (messageId, emoji) => {
-  getSocket().emit(SOCKET_EVENTS.MESSAGE_REACTION, { messageId, emoji });
-};
-
-// Listen for reaction
-export const onReaction = (callback) => {
-  getSocket().on(SOCKET_EVENTS.MESSAGE_REACTION, callback);
-};
-
-/**
- * ==================== Typing Events ====================
- */
-
-// Start typing
 export const emitTypingStart = (conversationId) => {
-  getSocket().emit(SOCKET_EVENTS.TYPING_START, { conversationId });
+  if (stompClient?.connected) {
+    stompClient.publish({
+      destination: '/app/chat.typing',
+      body: JSON.stringify({ conversationId, isTyping: true }),
+    });
+  }
 };
 
-// Stop typing
 export const emitTypingStop = (conversationId) => {
-  getSocket().emit(SOCKET_EVENTS.TYPING_STOP, { conversationId });
+  if (stompClient?.connected) {
+    stompClient.publish({
+      destination: '/app/chat.typing',
+      body: JSON.stringify({ conversationId, isTyping: false }),
+    });
+  }
 };
 
-// Listen for user typing
-export const onUserTyping = (callback) => {
-  getSocket().on(SOCKET_EVENTS.USER_TYPING, callback);
+export const emitReadReceipt = (messageId, conversationId) => {
+  if (stompClient?.connected) {
+    stompClient.publish({
+      destination: '/app/message.read',
+      body: JSON.stringify({ messageId, conversationId }),
+    });
+  }
 };
 
-// Remove user typing listener
-export const offUserTyping = (callback) => {
-  getSocket().off(SOCKET_EVENTS.USER_TYPING, callback);
+export const emitRecallMessage = (messageId, conversationId) => {
+  if (stompClient?.connected) {
+    stompClient.publish({
+      destination: '/app/message.recall',
+      body: JSON.stringify({ messageId, conversationId }),
+    });
+  }
 };
 
-/**
- * ==================== Read Receipt Events ====================
- */
-
-// Mark message as read
-export const emitReadReceipt = (messageId) => {
-  getSocket().emit(SOCKET_EVENTS.READ_RECEIPT, { messageId });
+export const disconnectSocket = () => {
+  if (stompClient) {
+    stompClient.deactivate();
+    stompClient = null;
+    console.log('🛑 Mobile socket deactivated');
+  }
 };
 
-// Listen for user read receipt
-export const onUserRead = (callback) => {
-  getSocket().on(SOCKET_EVENTS.USER_READ, callback);
-};
-
-// Remove user read listener
-export const offUserRead = (callback) => {
-  getSocket().off(SOCKET_EVENTS.USER_READ, callback);
-};
-
-/**
- * ==================== User Presence Events ====================
- */
-
-// Listen for user online
-export const onUserOnline = (callback) => {
-  getSocket().on(SOCKET_EVENTS.USER_ONLINE, callback);
-};
-
-// Listen for user offline
-export const onUserOffline = (callback) => {
-  getSocket().on(SOCKET_EVENTS.USER_OFFLINE, callback);
-};
-
-// Listen for user status change
-export const onUserStatus = (callback) => {
-  getSocket().on(SOCKET_EVENTS.USER_STATUS, callback);
-};
-
-export const SOCKET_EVENTS_EXPORT = SOCKET_EVENTS;
 export default {
   initializeSocket,
-  getSocket,
   disconnectSocket,
-  SOCKET_EVENTS,
-  // Message events
-  emitSendMessage,
   onMessageReceive,
-  emitEditMessage,
+  offMessageReceive,
+  onUserTyping,
+  offUserTyping,
+  onUserStatusChange,
+  offUserStatusChange,
   onMessageEdit,
-  emitDeleteMessage,
   onMessageDelete,
-  emitRecallMessage,
   onMessageRecall,
-  emitReaction,
   onReaction,
-  // Typing events
+  onMessageUpdate,
+  onMessageRead,
+  onWallpaperUpdated,
+  onUserUpdate,
+  offUserUpdate,
+  sendMessageViaSocket,
+  emitSendMessage,
   emitTypingStart,
   emitTypingStop,
-  onUserTyping,
-  // Read receipt events
   emitReadReceipt,
-  onUserRead,
-  // Presence events
-  onUserOnline,
-  onUserOffline,
-  onUserStatus,
+  emitRecallMessage,
 };

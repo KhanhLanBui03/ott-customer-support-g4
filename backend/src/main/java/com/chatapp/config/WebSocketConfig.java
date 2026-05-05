@@ -36,7 +36,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         log.info("Configuring message broker");
 
         // Enable in-memory message broker
-        config.enableSimpleBroker("/topic", "/queue", "/user");
+        config.enableSimpleBroker("/topic", "/queue");
         config.setApplicationDestinationPrefixes("/app");
         config.setUserDestinationPrefix("/user");
     }
@@ -45,9 +45,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         log.info("Registering STOMP endpoints");
 
+        // Endpoint cho Web (có SockJS)
         registry.addEndpoint("/ws/chat")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
+
+        // Endpoint thuần cho Mobile (không SockJS)
+        registry.addEndpoint("/ws/mobile")
+                .setAllowedOriginPatterns("*");
 
         registry.addEndpoint("/ws/notifications")
                 .setAllowedOriginPatterns("*")
@@ -59,24 +64,25 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.interceptors(new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
-                StompHeaderAccessor accessor =
-                        MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
                     String authHeader = accessor.getFirstNativeHeader("Authorization");
+                    log.info("[WS-AUTH] CONNECT attempt with header: {}", authHeader != null ? "Present" : "Missing");
+
                     if (authHeader != null && authHeader.startsWith("Bearer ")) {
                         String token = authHeader.substring(7);
                         if (jwtUtil.validateToken(token)) {
                             String userId = jwtUtil.extractUserId(token);
+                            log.info("[WS-AUTH] WebSocket authenticated for user: {}", userId);
+                            
                             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                                    userId, null, new ArrayList<>()
-                            );
+                                    userId, null, new ArrayList<>());
                             accessor.setUser(authentication);
-                            log.debug("WebSocket authenticated for user: {}", userId);
                         } else {
-                            log.warn("Invalid JWT token during WebSocket connection");
+                            log.warn("[WS-AUTH] Invalid JWT token");
                         }
                     } else {
-                        log.warn("WebSocket connected without Authorization header or Bearer prefix");
+                        log.warn("[WS-AUTH] Missing or invalid Authorization header");
                     }
                 }
                 return message;

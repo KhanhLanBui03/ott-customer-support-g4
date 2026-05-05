@@ -11,6 +11,7 @@ public class ConversationResponse {
     private String type;
     private String name;
     private String avatarUrl;
+    private String wallpaperUrl;
     private String lastMessage;
     private String lastMessageSenderId;
     private Long lastMessageTime;
@@ -19,6 +20,8 @@ public class ConversationResponse {
     private List<MemberInfo> members;
     private List<PinnedMessage> pinnedMessages;
     private Boolean isPinned;
+    private String tag;
+    private Boolean onlyAdminsCanChat;
 
     @Data
     @Builder
@@ -31,6 +34,7 @@ public class ConversationResponse {
         private Long lastSeenAt;
         private String role;
         private Long joinedAt;
+        private String friendshipStatus;
     }
 
     @Data

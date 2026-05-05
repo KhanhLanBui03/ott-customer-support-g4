@@ -6,7 +6,7 @@ const clearAuthStorage = () => {
 };
 
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8080/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -37,15 +37,18 @@ axiosClient.interceptors.request.use(
 axiosClient.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    const originalRequest = error.config;
     if (error.response?.status === 401) {
-      if (
-        error.config?.url?.includes('/auth/login') ||
-        error.config?.url?.includes('/auth/register') ||
-        error.config?.url?.includes('/auth/verify-otp') ||
-        error.config?.url?.includes('/auth/forgot-password') ||
-        error.config?.url?.includes('/auth/reset-password') ||
-        error.config?.url?.includes('/auth/change-password')
-      ) {
+      const isPublicEndpoint =
+        originalRequest?.url?.includes('/auth/login') ||
+        originalRequest?.url?.includes('/auth/register') ||
+        originalRequest?.url?.includes('/auth/verify-otp') ||
+        originalRequest?.url?.includes('/auth/check') ||
+        originalRequest?.url?.includes('/auth/send-otp') ||
+        originalRequest?.url?.includes('/auth/forgot-password') ||
+        originalRequest?.url?.includes('/auth/reset-password');
+
+      if (isPublicEndpoint) {
         return Promise.reject(error);
       }
       clearAuthStorage();

@@ -37,6 +37,7 @@ public class ConversationService {
 
     /**
      * Update denormalized last message fields across all user conversations
+     * If UserConversation record doesn't exist (e.g., user deleted conversation), recreate it
      */
     public void updateLastMessage(String conversationId, String content, Long timestamp, String senderId) {
         conversationRepository.findById(conversationId).ifPresent(conv -> {
@@ -46,12 +47,64 @@ public class ConversationService {
             conversationRepository.save(conv);
 
             for (String memberId : conv.getMemberIds()) {
-                userConversationRepository.findById(memberId, conversationId).ifPresent(uc -> {
-                    uc.setLastMessage(content);
-                    uc.setLastMessageSenderId(senderId);
-                    uc.setUpdatedAt(timestamp);
-                    userConversationRepository.save(uc);
-                });
+                userConversationRepository.findById(memberId, conversationId).ifPresentOrElse(
+                    uc -> {
+                        // Update existing UserConversation
+                        uc.setLastMessage(content);
+                        uc.setLastMessageSenderId(senderId);
+                        uc.setUpdatedAt(timestamp);
+                        
+                        // Increment unread count if sender is not this member
+                        if (!memberId.equals(senderId)) {
+                            int currentUnread = uc.getUnreadCount() != null ? uc.getUnreadCount() : 0;
+                            uc.setUnreadCount(currentUnread + 1);
+                        }
+                        
+                        userConversationRepository.save(uc);
+                    },
+                    () -> {
+                        // Recreate UserConversation if it was deleted (e.g., user deleted conversation)
+                        log.info("Recreating deleted UserConversation for user {} in conversation {}", memberId, conversationId);
+                        UserConversation newUc = UserConversation.builder()
+                                .userId(memberId)
+                                .conversationId(conversationId)
+                                .role("MEMBER")
+                                .joinedAt(timestamp)
+                                .type(conv.getType())
+                                .name(conv.getType().equals("GROUP") ? conv.getName() : null)
+                                .avatarUrl(conv.getType().equals("GROUP") ? conv.getAvatarUrl() : null)
+                                .lastMessage(content)
+                                .lastMessageSenderId(senderId)
+                                .updatedAt(timestamp)
+                                // Only set unread count if sender is not this member
+                                .unreadCount(memberId.equals(senderId) ? 0 : 1)
+                                .build();
+                        userConversationRepository.save(newUc);
+                        
+                        // Broadcast conversation recreate event to notify user immediately
+                        try {
+                            ConversationResponse recreatedConv = getConversationDetail(conversationId, memberId);
+                            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_RECREATED", conversationId, recreatedConv));
+                            log.info("Broadcasted CONVERSATION_RECREATED event for user {} in conversation {}", memberId, conversationId);
+                        } catch (Exception e) {
+                            log.warn("Failed to broadcast CONVERSATION_RECREATED event: {}", e.getMessage());
+                        }
+                    }
+                );
+            }
+            
+            // Broadcast update to all members to refresh their conversation list (including unread count)
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, Map.of()));
+        });
+    }
+
+    public void markAsRead(String userId, String conversationId) {
+        userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
+            if (uc.getUnreadCount() != null && uc.getUnreadCount() > 0) {
+                // Save the unread count before clearing it, so AI can know how many messages were missed
+                uc.setLastUnreadCount(uc.getUnreadCount());
+                uc.setUnreadCount(0);
+                userConversationRepository.save(uc);
             }
         });
     }
@@ -67,8 +120,20 @@ public class ConversationService {
                           Boolean.TRUE.equals(request.getIsGroup()) || 
                           (request.getName() != null && !request.getName().isEmpty()) ||
                           allMemberIds.size() > 2;
+                          
+        if (isGroup && allMemberIds.size() < 3) {
+            throw new ValidationException("Group must have at least 3 members (creator + 2 others)");
+        }
+
         long now = System.currentTimeMillis();
         String convId = isGroup ? UUID.randomUUID().toString() : generateSingleId(allMemberIds);
+
+        // Check if single conversation already exists to avoid overwriting and losing data (like lastMessage)
+        Optional<Conversation> existing = conversationRepository.findById(convId);
+        if (existing.isPresent()) {
+            log.info("Conversation {} already exists, skipping creation", convId);
+            return getConversationDetail(convId, currentUserId);
+        }
 
         Conversation conv = Conversation.builder()
                 .conversationId(convId)
@@ -111,6 +176,28 @@ public class ConversationService {
                     .updatedAt(now)
                     .build();
             userConversationRepository.save(uc);
+        }
+        
+        // Push a SYSTEM message that the group was created
+        if (isGroup) {
+            com.chatapp.modules.auth.domain.User creator = userRepository.findById(currentUserId).orElse(null);
+            String creatorName = creator != null ? creator.getFullName() : "Một người dùng";
+            
+            Message createMsg = Message.builder()
+                    .conversationId(conv.getConversationId())
+                    .messageId(java.util.UUID.randomUUID().toString())
+                    .senderId("SYSTEM")
+                    .senderName("Hệ thống")
+                    .content(creatorName + " đã tạo nhóm.")
+                    .type("SYSTEM")
+                    .status("SENT")
+                    .createdAt(now)
+                    .isRecalled(false)
+                    .isEncrypted(false)
+                    .build();
+            
+            messageRepository.save(createMsg);
+            updateLastMessage(conv.getConversationId(), createMsg.getContent(), createMsg.getCreatedAt(), "SYSTEM");
         }
 
         return getConversationDetail(conv.getConversationId(), currentUserId);
@@ -230,6 +317,18 @@ public class ConversationService {
             for (String mId : fullConv.getMemberIds()) {
                 userRepository.findById(mId).ifPresent(u -> {
                     UserConversation memberUc = userConversationRepository.findById(mId, convId).orElse(null);
+                    
+                    // Fetch friendship status
+                    String fStatus = "NONE";
+                    if (!mId.equals(userId)) {
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
+                        if (f1.isPresent()) fStatus = f1.get().getStatus();
+                        else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                    } else {
+                        fStatus = "SELF";
+                    }
+
                     members.add(ConversationResponse.MemberInfo.builder()
                             .userId(u.getUserId())
                             .status(u.getStatus())
@@ -239,6 +338,7 @@ public class ConversationService {
                             .nickname(memberUc != null ? memberUc.getNickname() : null)
                             .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                             .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
+                            .friendshipStatus(fStatus)
                             .build());
                 });
             }
@@ -249,6 +349,7 @@ public class ConversationService {
                     .type(type)
                     .name(finalName != null ? finalName : "Direct Message")
                     .avatarUrl(finalAvatar)
+                    .wallpaperUrl(fullConv != null ? fullConv.getWallpaperUrl() : null)
                     .lastMessage(uc.getLastMessage())
                     .lastMessageSenderId(uc.getLastMessageSenderId())
                     .lastMessageTime(uc.getUpdatedAt())
@@ -257,6 +358,8 @@ public class ConversationService {
                     .members(members)
                     .pinnedMessages(fullConv != null ? fetchPinnedMessages(fullConv) : new ArrayList<>())
                     .isPinned(uc.getIsPinned() != null && uc.getIsPinned())
+                    .tag(uc.getTag())
+                    .onlyAdminsCanChat(fullConv != null && Boolean.TRUE.equals(fullConv.getOnlyAdminsCanChat()))
                     .build();
         }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
     }
@@ -276,6 +379,18 @@ public class ConversationService {
         for (String mId : conv.getMemberIds()) {
             userRepository.findById(mId).ifPresent(u -> {
                 UserConversation memberUc = userConversationRepository.findById(mId, conversationId).orElse(null);
+                
+                // Fetch friendship status
+                String fStatus = "NONE";
+                if (!mId.equals(userId)) {
+                    Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
+                    Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
+                    if (f1.isPresent()) fStatus = f1.get().getStatus();
+                    else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                } else {
+                    fStatus = "SELF";
+                }
+
                 members.add(ConversationResponse.MemberInfo.builder()
                         .userId(u.getUserId())
                         .status(u.getStatus())
@@ -285,6 +400,7 @@ public class ConversationService {
                         .nickname(memberUc != null ? memberUc.getNickname() : null)
                         .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                         .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
+                        .friendshipStatus(fStatus)
                         .build());
             });
         }
@@ -294,12 +410,15 @@ public class ConversationService {
                 .type(conv.getType())
                 .name(conv.getName())
                 .avatarUrl(conv.getAvatarUrl())
+                .wallpaperUrl(conv.getWallpaperUrl())
                 .lastMessage(conv.getLastMessage())
                 .lastMessageTime(conv.getLastMessageTime())
                 .updatedAt(conv.getUpdatedAt())
                 .members(members)
                 .pinnedMessages(fetchPinnedMessages(conv))
                 .isPinned(userConv.getIsPinned() != null && userConv.getIsPinned())
+                .tag(userConv.getTag())
+                .onlyAdminsCanChat(conv.getOnlyAdminsCanChat() != null && Boolean.TRUE.equals(conv.getOnlyAdminsCanChat()))
                 .build();
     }
 
@@ -393,16 +512,30 @@ public class ConversationService {
                 .build();
         
         groupInvitationRepository.save(invitation);
+        
+        // Re-read from DB to get the auto-generated invitationId
+        log.info("Saved invitation, invitationId = {}", invitation.getInvitationId());
 
         // Notify the invitee via WebSocket
         try {
-            com.chatapp.modules.message.event.MessageEvent event = 
-                com.chatapp.modules.message.event.MessageEvent.of("GROUP_INVITE", "SYSTEM", invitation);
+            // Build a simple Map payload to ensure all fields are serialized properly
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("invitationId", invitation.getInvitationId());
+            payload.put("inviterId", inviterId);
+            payload.put("inviteeId", inviteeId);
+            payload.put("conversationId", conversationId);
+            payload.put("groupName", conv.getName());
+            payload.put("status", "PENDING");
+            payload.put("createdAt", invitation.getCreatedAt());
             
-            log.info("Direct-Broadcasting group invite to user: {}", inviteeId);
+            com.chatapp.modules.message.event.MessageEvent event = 
+                com.chatapp.modules.message.event.MessageEvent.of("GROUP_INVITE", "SYSTEM", payload);
+            
+            log.info("Direct-Broadcasting group invite to user: {} with invitationId: {}", inviteeId, invitation.getInvitationId());
             messagingTemplate.convertAndSendToUser(inviteeId, "/queue/messages", event);
+            log.info("WebSocket send completed for GROUP_INVITE to user: {}", inviteeId);
         } catch (Exception e) {
-            log.error("Failed to notify invitee via WebSocket", e);
+            log.error("Failed to notify invitee via WebSocket: {}", e.getMessage(), e);
         }
     }
 
@@ -425,10 +558,38 @@ public class ConversationService {
         addMemberToGroup(invite.getInviterId(), invite.getConversationId(), inviteeId);
     }
 
+    public void rejectGroupInvitation(String inviteeId, String invitationId) {
+        com.chatapp.modules.conversation.domain.GroupInvitation invite = groupInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Invitation not found"));
+
+        if (!invite.getInviteeId().equals(inviteeId)) {
+            throw new ValidationException("This invitation is not for you");
+        }
+
+        if (!"PENDING".equals(invite.getStatus())) {
+            throw new ValidationException("Invitation is already " + invite.getStatus());
+        }
+
+        invite.setStatus("REJECTED");
+        groupInvitationRepository.save(invite);
+    }
+
     public List<com.chatapp.modules.conversation.domain.GroupInvitation> getPendingInvitations(String userId) {
-        return groupInvitationRepository.findByInviteeId(userId).stream()
+        log.info("Fetching pending invitations for user: {}", userId);
+        List<com.chatapp.modules.conversation.domain.GroupInvitation> keysOnly = groupInvitationRepository.findByInviteeId(userId);
+        
+        // GSI usually projects KEYS_ONLY by default. We must fetch full items by their HashKeys.
+        List<com.chatapp.modules.conversation.domain.GroupInvitation> all = new java.util.ArrayList<>();
+        for (com.chatapp.modules.conversation.domain.GroupInvitation keyItem : keysOnly) {
+            groupInvitationRepository.findById(keyItem.getInvitationId()).ifPresent(all::add);
+        }
+        
+        log.info("Found {} full invitations for user: {}", all.size(), userId);
+        List<com.chatapp.modules.conversation.domain.GroupInvitation> pending = all.stream()
                 .filter(i -> "PENDING".equals(i.getStatus()))
                 .collect(java.util.stream.Collectors.toList());
+        log.info("Found {} pending invitations for user: {}", pending.size(), userId);
+        return pending;
     }
 
     private void addMemberToGroup(String adminId, String conversationId, String newMemberId) {
@@ -457,6 +618,31 @@ public class ConversationService {
                 com.chatapp.modules.message.event.MessageEvent.of("CONVERSATION_UPDATE", "SYSTEM", getConversationDetail(conversationId, newMemberId));
             
             messagingTemplate.convertAndSendToUser(newMemberId, "/queue/messages", event);
+            
+            // Create system message for the new member
+            com.chatapp.modules.auth.domain.User memberUser = userRepository.findById(newMemberId).orElse(null);
+            String memberName = memberUser != null ? memberUser.getFullName() : ((memberUser != null && memberUser.getFirstName() != null) ? memberUser.getFirstName() : "Một thành viên");
+            
+            Message sysMsg = Message.builder()
+                    .conversationId(conversationId)
+                    .messageId(java.util.UUID.randomUUID().toString())
+                    .senderId("SYSTEM")
+                    .senderName("Hệ thống")
+                    .content(memberName + " vừa tham gia nhóm.")
+                    .type("SYSTEM")
+                    .status("SENT")
+                    .createdAt(System.currentTimeMillis())
+                    .isRecalled(false)
+                    .isEncrypted(false)
+                    .build();
+            
+            messageRepository.save(sysMsg);
+            updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+            
+            // Broadcast the new system message to everyone
+            eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+            eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
+            
         } catch (Exception e) {
             log.error("Failed to notify new member via WebSocket", e);
         }
@@ -485,10 +671,97 @@ public class ConversationService {
             }
         }
 
+        // Special handling if the OWNER leaves
+        if (isSelf && isOwner) {
+            if (conv.getMemberIds().size() <= 1) {
+                // Last member leaving, disband the group
+                disbandGroup(adminId, conversationId);
+                return;
+            } else {
+                // Transfer ownership
+                String newOwnerId = null;
+                
+                // Fetch all remaining members in a single batch query
+                Set<String> remainingMembers = new HashSet<>(conv.getMemberIds());
+                remainingMembers.remove(adminId);
+                
+                List<UserConversation> remainingUcs = userConversationRepository.findAllByIds(remainingMembers, conversationId);
+                
+                // 1. Try to find an ADMIN
+                for (UserConversation uc : remainingUcs) {
+                    if ("ADMIN".equals(uc.getRole())) {
+                        newOwnerId = uc.getUserId();
+                        break;
+                    }
+                }
+                
+                // 2. If no ADMIN, pick the first available MEMBER
+                if (newOwnerId == null && !remainingMembers.isEmpty()) {
+                    newOwnerId = remainingMembers.iterator().next();
+                }
+                
+                // Assign new owner
+                if (newOwnerId != null) {
+                    final String targetNewOwnerId = newOwnerId;
+                    userConversationRepository.findById(newOwnerId, conversationId).ifPresent(uc -> {
+                        uc.setRole("OWNER");
+                        userConversationRepository.save(uc);
+                    });
+                    
+                    // Push a SYSTEM message about ownership transfer
+                    User newOwnerUser = userRepository.findById(newOwnerId).orElse(null);
+                    String newOwnerName = newOwnerUser != null ? newOwnerUser.getFullName() : "Một thành viên";
+                    
+                    Message transferMsg = Message.builder()
+                            .conversationId(conversationId)
+                            .messageId(java.util.UUID.randomUUID().toString())
+                            .senderId("SYSTEM")
+                            .senderName("Hệ thống")
+                            .content("Trưởng nhóm đã nhường quyền cho " + newOwnerName + ".")
+                            .type("SYSTEM")
+                            .status("SENT")
+                            .createdAt(System.currentTimeMillis())
+                            .isRecalled(false)
+                            .isEncrypted(false)
+                            .build();
+                    
+                    messageRepository.save(transferMsg);
+                    updateLastMessage(conversationId, transferMsg.getContent(), transferMsg.getCreatedAt(), "SYSTEM");
+                    eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, transferMsg));
+                }
+            }
+        }
+
         conv.getMemberIds().remove(memberId);
         conversationRepository.save(conv);
 
         userConversationRepository.findById(memberId, conversationId).ifPresent(userConversationRepository::delete);
+        
+        // Push SYSTEM message for removal
+        User adminUser = userRepository.findById(adminId).orElse(null);
+        User targetUser = userRepository.findById(memberId).orElse(null);
+        String adminName = adminUser != null ? adminUser.getFullName() : "Quản trị viên";
+        String targetName = targetUser != null ? targetUser.getFullName() : "một thành viên";
+        
+        String content = isSelf ? (adminName + " đã rời nhóm.") : (adminName + " đã xóa " + targetName + " khỏi nhóm.");
+        
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(content)
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+        
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
     }
 
     public void assignRole(String adminId, String conversationId, String memberId, String newRole) {
@@ -503,6 +776,33 @@ public class ConversationService {
             uc.setRole(newRole);
             userConversationRepository.save(uc);
         });
+        
+        // Push SYSTEM message for role assignment
+        User adminUser = userRepository.findById(adminId).orElse(null);
+        User targetUser = userRepository.findById(memberId).orElse(null);
+        String adminName = adminUser != null ? adminUser.getFullName() : "Trưởng nhóm";
+        String targetName = targetUser != null ? targetUser.getFullName() : "một thành viên";
+        
+        String roleLabel = "ADMIN".equals(newRole) ? "phó nhóm" : "thành viên";
+        String actionVerb = "ADMIN".equals(newRole) ? "bổ nhiệm" : "giáng cấp";
+        
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(adminName + " đã " + actionVerb + " " + targetName + " làm " + roleLabel + ".")
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+                
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
     }
 
     public void updateNickname(String userId, String conversationId, String memberId, String nickname) {
@@ -533,6 +833,8 @@ public class ConversationService {
     }
 
     public void deleteConversationForUser(String userId, String conversationId) {
+        // Simply delete the UserConversation record for this user
+        // This removes the conversation from the user's view without affecting the group or other members
         userConversationRepository.findById(userId, conversationId).ifPresent(userConversationRepository::delete);
     }
 
@@ -546,5 +848,215 @@ public class ConversationService {
         }, () -> {
             log.warn("UserConversation not found for pinning: user {}, conv {}", userId, conversationId);
         });
+    }
+
+    /**
+     * Update conversation wallpaper (background image)
+     * Broadcasts CONVERSATION_UPDATE event to all members
+     */
+    public void updateWallpaper(String userId, String conversationId, String wallpaperUrl) {
+        log.info("Updating wallpaper for conversation: {}", conversationId);
+
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        // Verify user is member of this conversation
+        userConversationRepository.findById(userId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+        // Update wallpaper
+        conv.setWallpaperUrl(wallpaperUrl);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        conversationRepository.save(conv);
+
+        log.info("Wallpaper updated for conversation: {}", conversationId);
+
+        // Broadcast update event to all members
+        ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+
+        // Notify via WebSocket to all members
+        for (String memberId : conv.getMemberIds()) {
+            try {
+                Map<String, Object> payload = new java.util.HashMap<>();
+                payload.put("wallpaperUrl", wallpaperUrl);
+                
+                messagingTemplate.convertAndSendToUser(
+                        memberId,
+                        "/queue/conversations",
+                        MessageEvent.of("WALLPAPER_UPDATED", conversationId, payload)
+                );
+            } catch (Exception e) {
+                log.warn("Failed to send wallpaper update to user {}: {}", memberId, e.getMessage());
+            }
+        }
+    }
+
+    public void renameConversation(String userId, String conversationId, String newName) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        UserConversation userUc = userConversationRepository.findById(userId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+        if (!"OWNER".equals(userUc.getRole()) && !"ADMIN".equals(userUc.getRole())) {
+            throw new ValidationException("Only admins or owner can rename the group");
+        }
+
+        String oldName = conv.getName();
+        conv.setName(newName);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        conversationRepository.save(conv);
+
+        // Update denormalized names in UserConversation
+        for (String memberId : conv.getMemberIds()) {
+            userConversationRepository.findById(memberId, conversationId).ifPresent(uc -> {
+                uc.setName(newName);
+                uc.setUpdatedAt(System.currentTimeMillis());
+                userConversationRepository.save(uc);
+            });
+        }
+
+        // Create system message
+        com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+        String userName = user != null ? user.getFullName() : "Một người dùng";
+        
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(userName + " đã đổi tên nhóm thành \"" + newName + "\".")
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+        
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        
+        // Broadcast updates
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+    }
+
+    public void updateConversationAvatar(String userId, String conversationId, String avatarUrl) {
+        log.info("Updating avatar for conversation: {}", conversationId);
+
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+        UserConversation userUc = userConversationRepository.findById(userId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+        if (!"OWNER".equals(userUc.getRole()) && !"ADMIN".equals(userUc.getRole())) {
+            throw new ValidationException("Only admins or owner can change group avatar");
+        }
+
+        conv.setAvatarUrl(avatarUrl);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        conversationRepository.save(conv);
+
+        // Update denormalized avatar in UserConversation
+        for (String memberId : conv.getMemberIds()) {
+            userConversationRepository.findById(memberId, conversationId).ifPresent(uc -> {
+                uc.setAvatarUrl(avatarUrl);
+                uc.setUpdatedAt(System.currentTimeMillis());
+                userConversationRepository.save(uc);
+            });
+        }
+
+        // Create system message
+        com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+        String userName = user != null ? user.getFullName() : "Một người dùng";
+
+        Message sysMsg = Message.builder()
+                .conversationId(conversationId)
+                .messageId(java.util.UUID.randomUUID().toString())
+                .senderId("SYSTEM")
+                .senderName("Hệ thống")
+                .content(userName + " đã thay đổi ảnh đại diện nhóm.")
+                .type("SYSTEM")
+                .status("SENT")
+                .createdAt(System.currentTimeMillis())
+                .isRecalled(false)
+                .isEncrypted(false)
+                .build();
+
+        messageRepository.save(sysMsg);
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+
+        // Broadcast update event
+        ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+    }
+
+    public void updateConversationTag(String userId, String conversationId, String tag) {
+        userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
+            uc.setTag(tag);
+            userConversationRepository.save(uc);
+            log.info("Tag updated for user {} and conversation {}: {}", userId, conversationId, tag);
+            
+            // Broadcast update
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+        });
+    }
+
+    public Conversation getConversationById(String conversationId) {
+        return conversationRepository.findById(conversationId).orElse(null);
+    }
+
+    public void toggleChatRestriction(String userId, String conversationId) {
+        try {
+            Conversation conv = conversationRepository.findById(conversationId)
+                    .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+            UserConversation userUc = userConversationRepository.findById(userId, conversationId)
+                    .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+            if (!"OWNER".equals(userUc.getRole()) && !"ADMIN".equals(userUc.getRole())) {
+                throw new ValidationException("Only admins or owner can change chat restrictions");
+            }
+
+            boolean current = conv.getOnlyAdminsCanChat() != null && conv.getOnlyAdminsCanChat();
+            boolean newVal = !current;
+            conv.setOnlyAdminsCanChat(newVal);
+            conv.setUpdatedAt(System.currentTimeMillis());
+            conversationRepository.save(conv);
+
+            // Create system message safely
+            try {
+                com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+                String userName = user != null ? user.getFullName() : "Quản trị viên";
+                String statusText = newVal ? "đã bật" : "đã tắt";
+                String content = userName + " " + statusText + " chế độ giới hạn người có thể chat.";
+                
+                Message sysMsg = Message.create(
+                        conversationId,
+                        java.util.UUID.randomUUID().toString(),
+                        "SYSTEM",
+                        "Hệ thống",
+                        content,
+                        "SYSTEM"
+                );
+                sysMsg.setStatus("SENT");
+                
+                messageRepository.save(sysMsg);
+                updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+                
+                // Broadcast updates
+                eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+            } catch (Exception e) {
+                log.error("Failed to send system message for chat restriction: {}", e.getMessage());
+            }
+            
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+        } catch (Exception e) {
+            log.error("Error in toggleChatRestriction: ", e);
+            throw new ValidationException("DEBUG ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+        }
     }
 }

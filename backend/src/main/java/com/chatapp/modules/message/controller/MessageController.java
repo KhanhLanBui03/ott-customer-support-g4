@@ -7,14 +7,19 @@ import com.chatapp.modules.auth.repository.UserRepository;
 import com.chatapp.modules.message.command.SendMessageCommand;
 import com.chatapp.modules.message.domain.Message;
 import com.chatapp.modules.message.dto.request.SendMessageRequest;
+import com.chatapp.modules.message.dto.CreateVoteRequest;
+import com.chatapp.modules.message.dto.SubmitVoteRequest;
 import com.chatapp.modules.message.dto.response.MessageResponse;
 import com.chatapp.modules.message.service.MessageService;
+
+import com.chatapp.modules.message.service.WhisperService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -26,13 +31,17 @@ public class MessageController {
 
     private final MessageService messageService;
     private final UserRepository userRepository;
+    private final WhisperService openAIWhisperService;
 
     @GetMapping("/{conversationId}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMessages(
             @PathVariable String conversationId,
-            @RequestParam(defaultValue = "20") int limit
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String fromMessageId,
+            Authentication authentication
     ) {
-        List<MessageResponse> messages = messageService.getConversationMessages(conversationId, limit)
+        String currentUserId = getAuthUserId(authentication);
+        List<MessageResponse> messages = messageService.getConversationMessages(conversationId, limit, currentUserId, fromMessageId)
                 .stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
@@ -63,6 +72,11 @@ public class MessageController {
                 .mediaUrls(request.getMediaUrls())
                 .replyToMessageId(request.getReplyToMessageId())
                 .isEncrypted(request.getIsEncrypted())
+                .forwardedFrom(request.getForwardedFrom() == null ? null : Message.ForwardInfo.builder()
+                        .messageId(request.getForwardedFrom().getMessageId())
+                        .conversationId(request.getForwardedFrom().getConversationId())
+                        .senderName(request.getForwardedFrom().getSenderName())
+                        .build())
                 .build();
 
         Message message = messageService.sendMessage(command);
@@ -133,6 +147,37 @@ public class MessageController {
         return ResponseEntity.ok(ApiResponse.success(null, "Message marked as read"));
     }
 
+    @PostMapping("/{conversationId}/vote")
+    public ResponseEntity<ApiResponse<MessageResponse>> createVote(
+            @PathVariable String conversationId,
+            @RequestBody CreateVoteRequest request,
+            Authentication authentication
+    ) {
+        Message message = messageService.createVoteMessage(conversationId, getAuthUserId(authentication), request);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote created successfully"));
+    }
+
+    @PutMapping("/{conversationId}/vote/{messageId}")
+    public ResponseEntity<ApiResponse<MessageResponse>> submitVote(
+            @PathVariable String conversationId,
+            @PathVariable String messageId,
+            @RequestBody SubmitVoteRequest request,
+            Authentication authentication
+    ) {
+        Message message = messageService.submitVote(conversationId, messageId, getAuthUserId(authentication), request);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote submitted successfully"));
+    }
+
+    @PutMapping("/{conversationId}/vote/{messageId}/close")
+    public ResponseEntity<ApiResponse<MessageResponse>> closeVote(
+            @PathVariable String conversationId,
+            @PathVariable String messageId,
+            Authentication authentication
+    ) {
+        Message message = messageService.closeVote(conversationId, messageId, getAuthUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote closed successfully"));
+    }
+
     private String getAuthUserId(Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             throw new ValidationException("Unauthorized");
@@ -167,6 +212,58 @@ public class MessageController {
                 .reactions(message.getReactions())
                 .createdAt(message.getCreatedAt())
                 .isEncrypted(message.getIsEncrypted())
+                .vote(message.getVote() == null ? null : MessageResponse.VoteInfoDTO.builder()
+                        .question(message.getVote().getQuestion())
+                        .allowMultiple(message.getVote().getAllowMultiple())
+                        .deadline(message.getVote().getDeadline())
+                        .isClosed(message.getVote().getIsClosed())
+                        .options(message.getVote().getOptions() == null ? null : message.getVote().getOptions().stream()
+                                .map(o -> MessageResponse.VoteOptionDTO.builder()
+                                        .optionId(o.getOptionId())
+                                        .text(o.getText())
+                                        .voterIds(o.getVoterIds())
+                                        .build())
+                                .collect(Collectors.toList()))
+                        .build())
+                .forwardedFrom(message.getForwardedFrom() == null ? null : MessageResponse.ForwardInfoDTO.builder()
+                        .messageId(message.getForwardedFrom().getMessageId())
+                        .conversationId(message.getForwardedFrom().getConversationId())
+                        .senderName(message.getForwardedFrom().getSenderName())
+                        .build())
+                .transcript(message.getTranscript())
                 .build();
+    }
+
+
+    @PostMapping("/speech-to-text")
+    public ResponseEntity<ApiResponse<Map<String, String>>> speechToText(@RequestParam("file") MultipartFile file) {
+        String transcript = openAIWhisperService.transcribe(file);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("transcript", transcript), "Speech-to-text success"));
+    }
+
+    @PostMapping("/speech-to-text-url")
+    public ResponseEntity<ApiResponse<Map<String, String>>> speechToTextFromUrl(@RequestParam("url") String url) {
+        try {
+            // 1. Download file from URL to temp file
+            java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("audio", ".webm");
+            try (java.io.InputStream in = new java.net.URL(url).openStream()) {
+                java.nio.file.Files.copy(in, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            // 2. Convert temp file to MultipartFile (Spring doesn't support direct, so use MockMultipartFile)
+            MultipartFile multipartFile =
+                new MockMultipartFile(
+                    tempFile.getFileName().toString(),
+                    tempFile.getFileName().toString(),
+                    "audio/webm",
+                    java.nio.file.Files.readAllBytes(tempFile)
+                );
+            // 3. Transcribe
+            String transcript = openAIWhisperService.transcribe(multipartFile);
+            // 4. Delete temp file
+            java.nio.file.Files.deleteIfExists(tempFile);
+            return ResponseEntity.ok(ApiResponse.success(Map.of("transcript", transcript), "Speech-to-text success"));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Speech-to-text failed: " + e.getMessage(), 500));
+        }
     }
 }

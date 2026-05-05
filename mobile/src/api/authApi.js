@@ -12,13 +12,13 @@ import axiosClient from './axiosClient';
  */
 
 export const authApi = {
-  // Register new user with phone number
+  // Register new user with email and phone
   register: (data) => {
-    // Expected: { phoneNumber, password, confirmPassword, fullName }
+    // Expected: { phoneNumber, email, firstName, lastName, password, confirmPassword }
     return axiosClient.post('/auth/register', data);
   },
 
-  // Login with phone number and password
+  // Login with email/phone and password
   login: (data) => {
     // Expected: { phoneNumber, password, deviceId, deviceName }
     return axiosClient.post('/auth/login', data);
@@ -26,8 +26,16 @@ export const authApi = {
 
   // Verify OTP (6-digit code)
   verifyOtp: (data) => {
-    // Expected: { phoneNumber, otpCode, purpose? }
+    // Expected: { email, otpCode, purpose }
     return axiosClient.post('/auth/verify-otp', data);
+  },
+
+  sendOtp: (email, purpose = 'REGISTRATION') => {
+    return axiosClient.post(`/auth/send-otp?email=${email}&purpose=${purpose}`);
+  },
+
+  checkUserStatus: (phoneNumber) => {
+    return axiosClient.post('/auth/check', { phoneNumber });
   },
 
   resendOtp: (data) => {
@@ -56,6 +64,12 @@ export const authApi = {
     // Expected: { currentPassword, newPassword }
     return axiosClient.post('/auth/change-password', data);
   },
+
+  // Restoration APIs
+  restoreVerifyPhone: (data) => axiosClient.post('/auth/restore/verify-phone', data),
+  restoreSendOtp: (email) => axiosClient.post('/auth/restore/send-otp', { email }),
+  restoreVerifyOtp: (data) => axiosClient.post('/auth/restore/verify-otp', data),
+  restoreResetPassword: (data) => axiosClient.post('/auth/restore/reset-password', data),
 };
 
 export default authApi;

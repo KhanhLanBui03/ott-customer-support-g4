@@ -8,8 +8,23 @@ export const useVideoCall = (conversationId) => {
   const { user } = useSelector((state) => state.auth);
   const [callStatus, setCallStatus] = useState('idle');
   const [incomingSignal, setIncomingSignal] = useState(null);
+  const [callerName, setCallerName] = useState('');
   const [error, setError] = useState(null);
   const [duration, setDuration] = useState(0);
+
+  // ✅ FIX: thêm state remoteStream
+  const [remoteStream, setRemoteStream] = useState(null);
+
+  const callStatusRef = useRef('idle');
+  const setStatus = useCallback((s) => {
+    callStatusRef.current = s;
+    setCallStatus(s);
+  }, []);
+
+  const myUserIdRef = useRef(null);
+  useEffect(() => {
+    myUserIdRef.current = user?.userId || user?.id;
+  }, [user]);
 
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -19,19 +34,15 @@ export const useVideoCall = (conversationId) => {
   const timerRef = useRef(null);
   const remoteTrackCallbackRef = useRef(null);
 
-  // Timer logic
+  // Timer
   useEffect(() => {
     if (callStatus === 'connected') {
       setDuration(0);
-      timerRef.current = setInterval(() => {
-        setDuration(prev => prev + 1);
-      }, 1000);
+      timerRef.current = setInterval(() => setDuration((p) => p + 1), 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callStatus]);
 
   const formatDuration = useCallback(() => {
@@ -40,224 +51,268 @@ export const useVideoCall = (conversationId) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, [duration]);
 
-  useEffect(() => {
-    if (callStatus === 'idle') {
-      activeCallConvIdRef.current = conversationId;
-    }
-  }, [conversationId, callStatus]);
+  const endCallRef = useRef(null);
 
   const ensurePeer = useCallback((onRemoteTrack) => {
     remoteTrackCallbackRef.current = onRemoteTrack;
     if (pcRef.current) return pcRef.current;
 
-    console.log('[WEBRTC] Creating new RTCPeerConnection');
     const pc = new RTCPeerConnection(STUN_CONFIG);
-    
+
     pc.onicecandidate = (event) => {
       if (!event.candidate || !activeCallConvIdRef.current) return;
       emitCallSignal(activeCallConvIdRef.current, {
         type: 'ICE_CANDIDATE',
-        payload: JSON.stringify(event.candidate)
+        payload: JSON.stringify(event.candidate),
       });
     };
 
     pc.ontrack = (event) => {
-      console.log('[WEBRTC] Remote track received');
-      if (!remoteStreamRef.current) {
-        remoteStreamRef.current = new MediaStream();
+      if (event.streams && event.streams[0]) {
+        remoteStreamRef.current = event.streams[0];
+      } else {
+        if (!remoteStreamRef.current) {
+          remoteStreamRef.current = new MediaStream();
+        }
+        const exists = remoteStreamRef.current.getTracks().find(t => t.id === event.track.id);
+        if (!exists) remoteStreamRef.current.addTrack(event.track);
       }
-      event.streams[0].getTracks().forEach((track) => remoteStreamRef.current.addTrack(track));
+
+      // ✅ FIX: sync ra React state
+      setRemoteStream(remoteStreamRef.current);
+
       remoteTrackCallbackRef.current?.(remoteStreamRef.current);
     };
 
     pc.onconnectionstatechange = () => {
-        console.log('[WEBRTC] Connection state:', pc.connectionState);
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        endCallRef.current?.(false);
+      }
     };
 
     pcRef.current = pc;
     return pc;
-  }, [conversationId]);
-
-  const getLocalStream = useCallback(async () => {
-    try {
-      if (localStreamRef.current) return localStreamRef.current;
-      localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      return localStreamRef.current;
-    } catch (e) {
-      console.error('[WEBRTC] Failed to get local stream:', e);
-      throw e;
-    }
   }, []);
 
-  const handleSignal = useCallback(async (msg, onRemoteTrack) => {
-    if (msg.senderId === user?.userId) return;
-    
-    // Check if the signal belongs to the active call (if we have one)
-    if (callStatus !== 'idle' && msg.conversationId && msg.conversationId !== activeCallConvIdRef.current) {
-        return; // Ignore signals from other conversations while in a call
-    }
-    
-    const signal = msg.signal;
-    if (!signal) return;
-    console.log(`[WEBRTC] Incoming signal: ${signal.type} from ${msg.senderId}`);
+  const getLocalStream = useCallback(async () => {
+    if (localStreamRef.current) return localStreamRef.current;
 
-    try {
-      if (signal.type === 'OFFER') {
-        if (callStatus !== 'idle' && callStatus !== 'ended') {
-            console.warn('[WEBRTC] Busy, ignoring OFFER');
-            return;
-        }
-        activeCallConvIdRef.current = msg.conversationId;
-        setIncomingSignal(msg);
-        setCallStatus('incoming');
-        return;
-      }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true,
+    });
 
-      const pc = pcRef.current;
+    // 🔥 WAIT TRACK READY
+    await Promise.all(
+        stream.getTracks().map(
+            (track) =>
+                new Promise((resolve) => {
+                  if (track.readyState === "live") return resolve();
+                  track.onunmute = () => resolve();
+                })
+        )
+    );
 
-      if (signal.type === 'ANSWER' && pc) {
-        console.log('[WEBRTC] Setting remote description (ANSWER)');
-        await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(signal.payload)));
-        for (const c of pendingIceRef.current) {
-          await pc.addIceCandidate(new RTCIceCandidate(c));
-        }
-        pendingIceRef.current = [];
-        setCallStatus('connected');
-      } else if (signal.type === 'ICE_CANDIDATE' && pc) {
-        const candidate = JSON.parse(signal.payload);
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } else {
-          pendingIceRef.current.push(candidate);
-        }
-      } else if (signal.type === 'HANGUP') {
-        console.log('[WEBRTC] Peer hung up');
-        endCall(false);
-      }
-    } catch (e) {
-      console.error('[WEBRTC] Signaling error:', e);
-      setError(e.message);
-    }
-  }, [user?.userId, callStatus]);
-
-  const handleSignalRef = useRef();
-  handleSignalRef.current = handleSignal;
-
-  const connect = useCallback((onRemoteTrack) => {
-    remoteTrackCallbackRef.current = onRemoteTrack;
-    const signalHandler = (data) => {
-       if (handleSignalRef.current) {
-          handleSignalRef.current(data, onRemoteTrack);
-       }
-    };
-    onCallSignal(signalHandler);
-    return () => {
-       offCallSignal(signalHandler);
-    };
+    localStreamRef.current = stream;
+    return stream;
   }, []);
 
   const endCall = useCallback((emit = true) => {
     const cid = activeCallConvIdRef.current || conversationId;
-    console.log('[WEBRTC] Ending call for', cid);
+
     if (emit) emitCallSignal(cid, { type: 'HANGUP' });
-    
+
+    // ❗ đóng peer
     if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
+      pcRef.current.close();
+      pcRef.current = null;
     }
+
+    // ❗ stop toàn bộ cam + mic
     if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-        localStreamRef.current = null;
+      localStreamRef.current.getTracks().forEach((t) => {
+        t.stop();
+      });
+      localStreamRef.current = null;
     }
+
+    // ❗ clear remote
     remoteStreamRef.current = null;
+    setRemoteStream(null);
+
     pendingIceRef.current = [];
     setIncomingSignal(null);
-    setCallStatus('ended');
+    setCallerName('');
+
+    setStatus('ended');
+
     setTimeout(() => {
-        setCallStatus('idle');
-        setDuration(0);
-    }, 1500);
+      setStatus('idle');
+      setDuration(0);
+    }, 1000);
   }, [conversationId]);
 
-  const startCall = useCallback(async (onLocalStream, onRemoteTrack) => {
+  endCallRef.current = endCall;
+
+  const connect = useCallback((onRemoteTrack) => {
+    remoteTrackCallbackRef.current = onRemoteTrack;
+
+    const handler = async (data) => {
+      const { signal, senderId, conversationId: cid } = data;
+
+      // ❗ FIX: ignore signal của chính mình
+      if (senderId === myUserIdRef.current) return;
+
+      if (!signal) return;
+
+      const type = signal.type;
+
+      // ❗ nhận OFFER → hiển thị incoming call
+      if (type === 'OFFER') {
+        activeCallConvIdRef.current = cid;
+
+        setIncomingSignal({
+          ...data,
+          signal,
+        });
+
+        setCallerName(data.senderName || senderId);
+        setStatus('incoming');
+      }
+
+      // ❗ nhận ANSWER → hoàn tất connect
+      if (type === 'ANSWER') {
+        const pc = pcRef.current;
+        if (!pc) return;
+
+        const answer = JSON.parse(signal.payload);
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+        // ✅ FIX: Flush pending ICE candidates ngay sau khi setRemoteDescription
+        if (pendingIceRef.current.length > 0) {
+          console.log('[WebRTC] Flushing', pendingIceRef.current.length, 'pending ICE candidates');
+          for (const candidate of pendingIceRef.current) {
+            try {
+              await pc.addIceCandidate(candidate);
+            } catch (e) {
+              console.warn('[WebRTC] Failed to add pending ICE:', e);
+            }
+          }
+          pendingIceRef.current = [];
+        }
+
+        setStatus('connected');
+      }
+
+      // ❗ nhận ICE
+      if (type === 'ICE_CANDIDATE') {
+        const pc = pcRef.current;
+        if (!pc) return;
+        const candidate = new RTCIceCandidate(JSON.parse(signal.payload));
+
+        if (pc.remoteDescription) {
+          await pc.addIceCandidate(candidate);
+        } else {
+          pendingIceRef.current.push(candidate);
+        }
+      }
+
+      // ❗ HANGUP
+      if (type === 'HANGUP') {
+        endCallRef.current?.(false);
+      }
+    };
+
+    onCallSignal(handler);
+    return () => offCallSignal(handler);
+  }, []);
+
+  const startCall = useCallback(async (onLocalStream) => {
     try {
-      setError(null);
       activeCallConvIdRef.current = conversationId;
+
       const stream = await getLocalStream();
+
+      // ✅ Stream đã READY — cập nhật local video
       onLocalStream?.(stream);
 
-      const pc = ensurePeer(onRemoteTrack);
-      const senders = pc.getSenders();
-      stream.getTracks().forEach((track) => {
-        if (!senders.some(s => s.track === track)) {
-            pc.addTrack(track, stream);
-        }
-      });
+      const pc = ensurePeer();
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      emitCallSignal(conversationId, { type: 'OFFER', payload: JSON.stringify(offer) });
-      setCallStatus('outgoing');
+
+      emitCallSignal(conversationId, {
+        type: 'OFFER',
+        payload: JSON.stringify(offer),
+      });
+
+      setStatus('outgoing');
+
     } catch (e) {
-      console.error('[WEBRTC] Start call failed:', e);
-      setError(e.message || 'Cannot start video call');
+      console.error('[WebRTC] startCall error:', e);
+      setError(e.message);
       endCall(false);
     }
-  }, [conversationId, ensurePeer, getLocalStream, endCall]);
+  }, [conversationId, ensurePeer, getLocalStream, endCall, setStatus]);
 
-  const acceptCall = useCallback(async (signalData, onLocalStream, onRemoteTrack) => {
-    console.log('[WEBRTC] Accepting call...', signalData?.conversationId);
+  const acceptCall = useCallback(async (signalData, onLocalStream) => {
     try {
-      if (!signalData?.signal) return;
-      setError(null);
-      const targetConvId = signalData.conversationId || conversationId;
-      activeCallConvIdRef.current = targetConvId;
-      
       const stream = await getLocalStream();
       onLocalStream?.(stream);
 
-      const pc = ensurePeer(onRemoteTrack);
-      const senders = pc.getSenders();
-      stream.getTracks().forEach((track) => {
-        if (!senders.some(s => s.track === track)) {
-            pc.addTrack(track, stream);
-        }
-      });
-      
+      const pc = ensurePeer();
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
       const offer = JSON.parse(signalData.signal.payload);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      
+
+      // ✅ FIX: Flush pending ICE candidates phía callee (bên nhận)
+      if (pendingIceRef.current.length > 0) {
+        console.log('[WebRTC] Callee flushing', pendingIceRef.current.length, 'pending ICE');
+        for (const candidate of pendingIceRef.current) {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch (e) {
+            console.warn('[WebRTC] Failed to add pending ICE:', e);
+          }
+        }
+        pendingIceRef.current = [];
+      }
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      emitCallSignal(targetConvId, { type: 'ANSWER', payload: JSON.stringify(answer) });
-      
-      setIncomingSignal(null);
-      setCallStatus('connected');
+
+      emitCallSignal(signalData.conversationId, {
+        type: 'ANSWER',
+        payload: JSON.stringify(answer),
+      });
+
+      setStatus('connected');
     } catch (e) {
-      console.error('[WEBRTC] Accept call failed:', e);
-      setError(e.message || 'Cannot accept call');
+      console.error('[WebRTC] acceptCall error:', e);
+      setError(e.message);
       endCall(false);
     }
-  }, [conversationId, ensurePeer, getLocalStream, endCall]);
+  }, [ensurePeer, getLocalStream, endCall]);
 
-  useEffect(() => {
-    return () => {
-      if (pcRef.current) pcRef.current.close();
-      if (localStreamRef.current) localStreamRef.current.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  return { 
-    callStatus, 
-    incomingSignal, 
-    error, 
-    duration, 
-    formatDuration, 
-    startCall, 
-    acceptCall, 
-    endCall, 
+  return {
+    callStatus,
+    incomingSignal,
+    callerName,
+    error,
+    duration,
+    formatDuration,
+    startCall,
+    acceptCall,
+    endCall,
     connect,
-    activeCallConvId: activeCallConvIdRef.current 
+    activeCallConvId: activeCallConvIdRef.current,
+
+    // ✅ FIX quan trọng
+    remoteStream,
   };
 };
 
