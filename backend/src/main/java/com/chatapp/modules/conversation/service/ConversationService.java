@@ -8,6 +8,7 @@ import com.chatapp.modules.conversation.domain.Conversation;
 import com.chatapp.modules.conversation.domain.UserConversation;
 import com.chatapp.modules.conversation.dto.ConversationResponse;
 import com.chatapp.modules.conversation.dto.CreateConversationRequest;
+import com.chatapp.modules.conversation.dto.GroupInvitationResponse;
 import com.chatapp.modules.conversation.repository.ConversationRepository;
 import com.chatapp.modules.conversation.repository.UserConversationRepository;
 import com.chatapp.modules.message.domain.Message;
@@ -518,20 +519,26 @@ public class ConversationService {
 
         // Notify the invitee via WebSocket
         try {
+            User inviter = userRepository.findById(inviterId).orElse(null);
+            String inviterName = inviter != null ? inviter.getFullName() : "Một người dùng";
+            
             // Build a simple Map payload to ensure all fields are serialized properly
             java.util.Map<String, Object> payload = new java.util.HashMap<>();
             payload.put("invitationId", invitation.getInvitationId());
             payload.put("inviterId", inviterId);
+            payload.put("inviterName", inviterName);
+            payload.put("inviterAvatar", inviter != null ? inviter.getAvatarUrl() : null);
             payload.put("inviteeId", inviteeId);
             payload.put("conversationId", conversationId);
             payload.put("groupName", conv.getName());
+            payload.put("groupAvatar", conv.getAvatarUrl());
             payload.put("status", "PENDING");
             payload.put("createdAt", invitation.getCreatedAt());
             
             com.chatapp.modules.message.event.MessageEvent event = 
                 com.chatapp.modules.message.event.MessageEvent.of("GROUP_INVITE", "SYSTEM", payload);
             
-            log.info("Direct-Broadcasting group invite to user: {} with invitationId: {}", inviteeId, invitation.getInvitationId());
+            log.info("Direct-Broadcasting group invite to user: {} from {} with invitationId: {}", inviteeId, inviterName, invitation.getInvitationId());
             messagingTemplate.convertAndSendToUser(inviteeId, "/queue/messages", event);
             log.info("WebSocket send completed for GROUP_INVITE to user: {}", inviteeId);
         } catch (Exception e) {
@@ -547,12 +554,36 @@ public class ConversationService {
             throw new ValidationException("This invitation is not for you");
         }
 
+        // Check if already a member
+        Conversation conv = conversationRepository.findById(invite.getConversationId()).orElse(null);
+        if (conv != null && conv.getMemberIds().contains(inviteeId)) {
+            // Already joined. Mark this invite as accepted for cleanup and throw exception for UI
+            invite.setStatus("ACCEPTED");
+            groupInvitationRepository.save(invite);
+            throw new ValidationException("Bạn đã là thành viên của nhóm này");
+        }
+
         if (!"PENDING".equals(invite.getStatus())) {
             throw new ValidationException("Invitation is already " + invite.getStatus());
         }
 
         invite.setStatus("ACCEPTED");
         groupInvitationRepository.save(invite);
+
+        // Mark all OTHER pending invitations for this same group as ACCEPTED
+        try {
+            List<GroupInvitationResponse> otherPending = getPendingInvitations(inviteeId);
+            for (GroupInvitationResponse other : otherPending) {
+                if (other.getConversationId().equals(invite.getConversationId()) && !other.getInvitationId().equals(invitationId)) {
+                    groupInvitationRepository.findById(other.getInvitationId()).ifPresent(i -> {
+                        i.setStatus("ACCEPTED");
+                        groupInvitationRepository.save(i);
+                    });
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to clear redundant group invitations", e);
+        }
 
         // Add to group
         addMemberToGroup(invite.getInviterId(), invite.getConversationId(), inviteeId);
@@ -574,22 +605,32 @@ public class ConversationService {
         groupInvitationRepository.save(invite);
     }
 
-    public List<com.chatapp.modules.conversation.domain.GroupInvitation> getPendingInvitations(String userId) {
+    public List<GroupInvitationResponse> getPendingInvitations(String userId) {
         log.info("Fetching pending invitations for user: {}", userId);
         List<com.chatapp.modules.conversation.domain.GroupInvitation> keysOnly = groupInvitationRepository.findByInviteeId(userId);
         
-        // GSI usually projects KEYS_ONLY by default. We must fetch full items by their HashKeys.
         List<com.chatapp.modules.conversation.domain.GroupInvitation> all = new java.util.ArrayList<>();
         for (com.chatapp.modules.conversation.domain.GroupInvitation keyItem : keysOnly) {
             groupInvitationRepository.findById(keyItem.getInvitationId()).ifPresent(all::add);
         }
         
-        log.info("Found {} full invitations for user: {}", all.size(), userId);
-        List<com.chatapp.modules.conversation.domain.GroupInvitation> pending = all.stream()
+        return all.stream()
                 .filter(i -> "PENDING".equals(i.getStatus()))
-                .collect(java.util.stream.Collectors.toList());
-        log.info("Found {} pending invitations for user: {}", pending.size(), userId);
-        return pending;
+                .map(i -> {
+                    User inviter = userRepository.findById(i.getInviterId()).orElse(null);
+                    return GroupInvitationResponse.builder()
+                            .invitationId(i.getInvitationId())
+                            .inviteeId(i.getInviteeId())
+                            .inviterId(i.getInviterId())
+                            .inviterName(inviter != null ? inviter.getFullName() : "Một người dùng")
+                            .inviterAvatar(inviter != null ? inviter.getAvatarUrl() : null)
+                            .conversationId(i.getConversationId())
+                            .groupName(i.getGroupName())
+                            .status(i.getStatus())
+                            .createdAt(i.getCreatedAt())
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
     private void addMemberToGroup(String adminId, String conversationId, String newMemberId) {
@@ -732,6 +773,8 @@ public class ConversationService {
             }
         }
 
+        Set<String> membersBefore = new HashSet<>(conv.getMemberIds());
+        
         conv.getMemberIds().remove(memberId);
         conversationRepository.save(conv);
 
@@ -760,8 +803,26 @@ public class ConversationService {
         
         messageRepository.save(sysMsg);
         updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
-        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
-        eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
+
+        // Broadcast to everyone who was in the group
+        for (String mId : membersBefore) {
+            try {
+                if (mId.equals(memberId)) {
+                    // Tell the removed/leaving user to delete the conversation from their UI
+                    com.chatapp.modules.message.event.MessageEvent delEvent = 
+                        com.chatapp.modules.message.event.MessageEvent.of("CONVERSATION_DELETE", conversationId, Map.of("conversationId", conversationId));
+                    messagingTemplate.convertAndSendToUser(mId, "/queue/messages", delEvent);
+                } else {
+                    // Notify remaining members
+                    messagingTemplate.convertAndSendToUser(mId, "/queue/messages", 
+                        com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+                    messagingTemplate.convertAndSendToUser(mId, "/queue/messages", 
+                        com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
+                }
+            } catch (Exception e) {
+                log.error("Failed to sync member removal for user {}", mId, e);
+            }
+        }
     }
 
     public void assignRole(String adminId, String conversationId, String memberId, String newRole) {
@@ -826,15 +887,41 @@ public class ConversationService {
             throw new ValidationException("Only group owner can disband group");
         }
 
-        for (String mId : conv.getMemberIds()) {
+        Set<String> memberIds = new HashSet<>(conv.getMemberIds());
+        
+        for (String mId : memberIds) {
             userConversationRepository.findById(mId, conversationId).ifPresent(userConversationRepository::delete);
         }
         conversationRepository.delete(conv);
+
+        // Broadcast CONVERSATION_DELETE to all members so their UI removes it immediately
+        for (String mId : memberIds) {
+            try {
+                com.chatapp.modules.message.event.MessageEvent event = 
+                    com.chatapp.modules.message.event.MessageEvent.of("CONVERSATION_DELETE", conversationId, Map.of("conversationId", conversationId));
+                messagingTemplate.convertAndSendToUser(mId, "/queue/messages", event);
+            } catch (Exception e) {
+                log.error("Failed to broadcast CONVERSATION_DELETE to user {}", mId, e);
+            }
+        }
     }
 
     public void deleteConversationForUser(String userId, String conversationId) {
-        // Simply delete the UserConversation record for this user
-        // This removes the conversation from the user's view without affecting the group or other members
+        log.info("Processing deleteConversationForUser: user {} in conversation {}", userId, conversationId);
+        
+        Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
+        if (convOpt.isPresent()) {
+            Conversation conv = convOpt.get();
+            if ("GROUP".equals(conv.getType())) {
+                log.info("Conversation is a GROUP, calling removeMemberFromGroup for user {}", userId);
+                // For groups, we must properly remove the member and notify others
+                removeMemberFromGroup(userId, conversationId, userId);
+                return;
+            }
+        }
+        
+        // For SINGLE chats or if conversation not found, simply delete the UserConversation record
+        // This removes the conversation from the user's view without affecting others
         userConversationRepository.findById(userId, conversationId).ifPresent(userConversationRepository::delete);
     }
 
@@ -845,6 +932,15 @@ public class ConversationService {
             uc.setIsPinned(!current);
             userConversationRepository.save(uc);
             log.info("Pin status updated for user {}: {} -> {}", userId, current, !current);
+            
+            // Broadcast update ONLY to this user (private update)
+            try {
+                ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
+                messagingTemplate.convertAndSendToUser(userId, "/queue/messages", 
+                    MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+            } catch (Exception e) {
+                log.error("Failed to sync pin update via WebSocket for user {}", userId, e);
+            }
         }, () -> {
             log.warn("UserConversation not found for pinning: user {}, conv {}", userId, conversationId);
         });
@@ -937,9 +1033,11 @@ public class ConversationService {
         messageRepository.save(sysMsg);
         updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
         
-        // Broadcast updates
-        eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
-        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+        // Broadcast updates - Omit private fields for global broadcast
+        ConversationResponse globalUpdate = getConversationDetail(conversationId, userId);
+        globalUpdate.setTag(null);
+        globalUpdate.setIsPinned(null);
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, globalUpdate));
     }
 
     public void updateConversationAvatar(String userId, String conversationId, String avatarUrl) {
@@ -989,9 +1087,11 @@ public class ConversationService {
         updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
         eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
 
-        // Broadcast update event
-        ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
-        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+        // Broadcast update event - Omit private fields for global broadcast
+        ConversationResponse globalUpdate = getConversationDetail(conversationId, userId);
+        globalUpdate.setTag(null);
+        globalUpdate.setIsPinned(null);
+        eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, globalUpdate));
     }
 
     public void updateConversationTag(String userId, String conversationId, String tag) {
@@ -1000,8 +1100,14 @@ public class ConversationService {
             userConversationRepository.save(uc);
             log.info("Tag updated for user {} and conversation {}: {}", userId, conversationId, tag);
             
-            // Broadcast update
-            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+            // Broadcast update ONLY to this user (private update)
+            try {
+                ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
+                messagingTemplate.convertAndSendToUser(userId, "/queue/messages", 
+                    MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+            } catch (Exception e) {
+                log.error("Failed to sync tag update via WebSocket for user {}", userId, e);
+            }
         });
     }
 

@@ -33,14 +33,18 @@ public class S3Service {
             metadata.setContentLength(file.getSize());
             metadata.setContentType(file.getContentType());
 
+            log.debug("Starting S3 putObject for: {}", fileName);
             amazonS3.putObject(new PutObjectRequest(bucketName, fileName, file.getInputStream(), metadata));
+            log.info("Successfully uploaded to S3: {}", fileName);
             
             // Generate public URL (assuming public read access or using a CloudFront/LB proxy)
             // For now, return standard S3 URL
-            return amazonS3.getUrl(bucketName, fileName).toString();
-        } catch (IOException e) {
-            log.error("Failed to upload file to S3: {}", fileName, e);
-            throw new RuntimeException("Could not upload file to S3", e);
+            String url = amazonS3.getUrl(bucketName, fileName).toString();
+            log.debug("Generated S3 URL: {}", url);
+            return url;
+        } catch (Exception e) {
+            log.error("CRITICAL: Failed to upload file to S3: {}. Error: {}", fileName, e.getMessage(), e);
+            throw new RuntimeException("Could not upload file to S3: " + e.getMessage(), e);
         }
     }
 

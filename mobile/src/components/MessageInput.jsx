@@ -8,6 +8,7 @@ import {
   Platform,
   ActivityIndicator,
   Image,
+  Alert,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -22,6 +23,7 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
   const [message, setMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [uploadType, setUploadType] = useState(null); // 'MEDIA' or 'FILE'
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
   const dispatch = useDispatch();
@@ -54,11 +56,36 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      // Explicit options for m4a (AAC)
+      const recordingOptions = {
+        android: {
+          extension: '.m4a',
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.m4a',
+          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+        },
+        web: {
+          mimeType: 'audio/webm',
+          bitsPerSecond: 128000,
+        },
+      };
+
+      const { recording } = await Audio.Recording.createAsync(recordingOptions);
       
       setRecording(recording);
       setIsRecording(true);
@@ -85,10 +112,11 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
       // Upload and send
       if (uri) {
         setIsUploading(true);
-        const fileName = `voice_${Date.now()}.m4a`;
+        const extension = uri.split('.').pop();
+        const fileName = `voice_${Date.now()}.${extension}`;
         const file = {
           uri,
-          type: 'audio/m4a',
+          type: extension === 'm4a' ? 'audio/mp4' : `audio/${extension}`,
           name: fileName,
         };
 
@@ -172,10 +200,15 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setIsUploading(true);
+        setUploadType('MEDIA');
         const uploadedUrls = [];
         let messageType = 'IMAGE';
+        let failCount = 0;
 
-        for (const asset of result.assets) {
+        for (let i = 0; i < result.assets.length; i++) {
+          const asset = result.assets[i];
+          setUploadProgress(`${i + 1}/${result.assets.length}`);
+
           let fileName = asset.fileName || (asset.type === 'video' ? 'video.mp4' : 'image.jpg');
           if (fileName.toLowerCase().endsWith('.heic')) {
             fileName = fileName.replace(/\.heic$/i, '.jpg');
@@ -189,20 +222,46 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
           
           if (asset.type === 'video') messageType = 'VIDEO';
 
-          try {
-            const response = await mediaApi.uploadFile(file);
-            const url = response.data?.data?.url || response.data?.url || response.url;
-            if (url) {
-              uploadedUrls.push(url);
+          // Retry logic: up to 3 attempts
+          let success = false;
+          let attempts = 0;
+          const maxAttempts = 3;
+
+          while (!success && attempts < maxAttempts) {
+            attempts++;
+            try {
+              const response = await mediaApi.uploadFile(file);
+              const url = response.data?.data?.url || response.data?.url || response.url;
+              if (url) {
+                uploadedUrls.push(url);
+                success = true;
+              } else {
+                console.warn(`[MessageInput] Upload attempt ${attempts} returned no URL`);
+              }
+            } catch (uploadErr) {
+              console.error(`[MessageInput] Upload attempt ${attempts} failed`, uploadErr);
+              if (attempts === maxAttempts) {
+                failCount++;
+              } else {
+                // Wait a bit before retrying (exponential backoff could be added but simple delay for now)
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+              }
             }
-          } catch (uploadErr) {
-            console.error('[MessageInput] Upload failed', uploadErr);
           }
         }
+
+        setIsUploading(false);
+        setUploadProgress(null);
 
         if (uploadedUrls.length > 0) {
           onSendMessage('', replyingTo?.messageId, messageType, uploadedUrls);
           dispatch(clearReplyingTo());
+          
+          if (failCount > 0) {
+            Alert.alert('Thông báo', `Đã gửi ${uploadedUrls.length} ảnh. Có ${failCount} ảnh bị lỗi không gửi được.`);
+          }
+        } else if (failCount > 0) {
+          Alert.alert('Lỗi', 'Không thể tải ảnh lên. Vui lòng kiểm tra kết nối mạng.');
         }
       }
     } catch (error) {
@@ -210,6 +269,8 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
       alert('Không thể tải tệp lên. Vui lòng thử lại.');
     } finally {
       setIsUploading(false);
+      setUploadType(null);
+      setUploadProgress(null);
     }
   };
 
@@ -222,30 +283,62 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setIsUploading(true);
+        setUploadType('FILE');
         const uploadedUrls = [];
+        let failCount = 0;
 
-        for (const asset of result.assets) {
+        for (let i = 0; i < result.assets.length; i++) {
+          const asset = result.assets[i];
+          setUploadProgress(`${i + 1}/${result.assets.length}`);
+
           const file = {
             uri: asset.uri,
             type: asset.mimeType || 'application/octet-stream',
             name: asset.name,
           };
 
-          const response = await mediaApi.uploadFile(file);
-          const url = response.data?.data?.url || response.data?.url || response.url;
-          if (url) uploadedUrls.push(url);
+          // Retry logic
+          let success = false;
+          let attempts = 0;
+          const maxAttempts = 3;
+
+          while (!success && attempts < maxAttempts) {
+            attempts++;
+            try {
+              const response = await mediaApi.uploadFile(file);
+              const url = response.data?.data?.url || response.data?.url || response.url;
+              if (url) {
+                uploadedUrls.push(url);
+                success = true;
+              }
+            } catch (uploadErr) {
+              console.error(`[MessageInput] File upload attempt ${attempts} failed`, uploadErr);
+              if (attempts === maxAttempts) {
+                failCount++;
+              } else {
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+              }
+            }
+          }
         }
 
         if (uploadedUrls.length > 0) {
           onSendMessage('', replyingTo?.messageId, 'FILE', uploadedUrls);
           dispatch(clearReplyingTo());
+          if (failCount > 0) {
+            Alert.alert('Thông báo', `Đã gửi ${uploadedUrls.length} tệp. Có ${failCount} tệp bị lỗi.`);
+          }
+        } else if (failCount > 0) {
+          Alert.alert('Lỗi', 'Không thể tải tệp lên. Vui lòng thử lại.');
         }
       }
     } catch (error) {
       console.error('Pick document error:', error);
-      alert('Không thể tải tài liệu lên. Vui lòng thử lại.');
+      Alert.alert('Lỗi', 'Không thể chọn tài liệu. Vui lòng thử lại.');
     } finally {
       setIsUploading(false);
+      setUploadType(null);
+      setUploadProgress(null);
     }
   };
 
@@ -348,7 +441,16 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
               onPress={pickMedia}
               disabled={isLoading || isUploading}
             >
-              <MaterialIcons name="image" size={24} color="#667eea" />
+              {isUploading && uploadType === 'MEDIA' ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#667eea" />
+                  {uploadProgress && (
+                    <Text style={{ fontSize: 10, color: '#667eea', marginLeft: 2, fontWeight: 'bold' }}>{uploadProgress}</Text>
+                  )}
+                </View>
+              ) : (
+                <MaterialIcons name="image" size={24} color="#667eea" />
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -356,8 +458,13 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
               onPress={pickDocument}
               disabled={isLoading || isUploading}
             >
-              {isUploading ? (
-                <ActivityIndicator size="small" color="#667eea" />
+              {isUploading && uploadType === 'FILE' ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#667eea" />
+                  {uploadProgress && (
+                    <Text style={{ fontSize: 10, color: '#667eea', marginLeft: 2, fontWeight: 'bold' }}>{uploadProgress}</Text>
+                  )}
+                </View>
               ) : (
                 <MaterialIcons name="description" size={24} color="#667eea" />
               )}

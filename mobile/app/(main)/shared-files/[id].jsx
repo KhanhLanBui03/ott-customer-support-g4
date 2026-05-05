@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -12,7 +12,7 @@ import { useSelector } from 'react-redux';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getRealId } from '../../../src/store/chatSlice';
-import { openFile } from '../../../src/utils/fileUtils';
+import FileViewerModal from '../../../src/components/FileViewerModal';
 import CONFIG from '../../../src/config';
 
 const SharedFilesScreen = () => {
@@ -20,6 +20,9 @@ const SharedFilesScreen = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
+  
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
   
   const messagesFromStore = useSelector((state) => state.chat.messages);
   const realId = useMemo(() => {
@@ -79,7 +82,8 @@ const SharedFilesScreen = () => {
         style={styles.fileItem}
         onPress={() => {
           const fullUrl = item.url.startsWith('http') ? item.url : `${BASE_URL}${item.url.startsWith('/') ? '' : '/'}${item.url}`;
-          openFile(fullUrl, fileName);
+          setSelectedFile({ url: fullUrl, name: decodeURIComponent(fileName) });
+          setViewerVisible(true);
         }}
       >
         <View style={[styles.iconContainer, { backgroundColor: config.color }]}>
@@ -127,6 +131,13 @@ const SharedFilesScreen = () => {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      <FileViewerModal
+        visible={viewerVisible}
+        onClose={() => setViewerVisible(false)}
+        fileUrl={selectedFile?.url}
+        fileName={selectedFile?.name}
+      />
     </View>
   );
 };

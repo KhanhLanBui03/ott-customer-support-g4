@@ -784,6 +784,8 @@ const Chat = () => {
                   conversation={activeConversation}
                   onClose={() => setIsInfoOpen(false)}
                   onClearHistory={() => handleDeleteConversation(activeConversationId)}
+                  openLightbox={openLightbox}
+                  allChatImages={allChatImages}
                 />
               </div>
             )}

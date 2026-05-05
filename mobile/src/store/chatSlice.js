@@ -75,6 +75,19 @@ export const recallMessage = createAsyncThunk('chat/recallMessage', async ({ mes
   }
 });
 
+export const deleteMessage = createAsyncThunk('chat/deleteMessage', async ({ messageId, conversationId }, { rejectWithValue, getState }) => {
+  try {
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, conversationId, myId);
+    
+    await chatApi.deleteMessage(messageId, realId);
+    return { messageId, conversationId: realId };
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Không thể xóa tin nhắn');
+  }
+});
+
 export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageData, { rejectWithValue, getState }) => {
   try {
     const state = getState();
@@ -105,8 +118,7 @@ const isVoiceMessage = (message) => {
   if (message.type === 'VOICE') return true;
   const content = message.content || '';
   if (typeof content !== 'string') return false;
-  return content.includes('chat-media/') || 
-         content.includes('voice-messages/') || 
+  return content.includes('voice-messages/') || 
          content.includes('s3.ap-southeast-1') ||
          content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i);
 };
@@ -253,7 +265,7 @@ const chatSlice = createSlice({
       if (!isDuplicate) {
         state.messages[realId] = [...state.messages[realId], message];
 
-        // Cập nhật danh sách hội thoại
+        // Cập nhật và đưa hội thoại lên đầu danh sách
         const convIdx = state.conversations.findIndex(c => c.conversationId === realId);
         if (convIdx !== -1) {
           const isOtherSender = String(message.senderId) !== myId;
@@ -274,16 +286,22 @@ const chatSlice = createSlice({
             preview = "[Bình chọn]";
           }
 
-          state.conversations[convIdx].lastMessage = preview;
-          state.conversations[convIdx].lastMessageSenderId = message.senderId;
-          state.conversations[convIdx].updatedAt = message.createdAt || new Date().toISOString();
+          // Cập nhật thông tin tin nhắn cuối
+          const updatedConv = {
+            ...state.conversations[convIdx],
+            lastMessage: preview,
+            lastMessageSenderId: message.senderId,
+            updatedAt: message.createdAt || new Date().toISOString()
+          };
 
-          if (isOtherSender) {
-            if (!isOpenConversation) {
-              state.conversations[convIdx].unreadCount = (state.conversations[convIdx].unreadCount || 0) + 1;
-              state.conversations[convIdx].isUnread = true;
-            }
+          if (isOtherSender && !isOpenConversation) {
+            updatedConv.unreadCount = (updatedConv.unreadCount || 0) + 1;
+            updatedConv.isUnread = true;
           }
+
+          // Đưa lên đầu danh sách
+          state.conversations.splice(convIdx, 1);
+          state.conversations.unshift(updatedConv);
         }
       }
     },
@@ -347,14 +365,55 @@ const chatSlice = createSlice({
           state.conversations[convIdx].unreadCount = 0;
         }
       }
-    }
+    },
+    updateConversation: (state, action) => {
+      const { conversationId, ...updates } = action.payload;
+      const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (idx !== -1) {
+        state.conversations[idx] = { ...state.conversations[idx], ...updates };
+      }
+    },
+    removeMemberLocal: (state, action) => {
+      const { conversationId, userId } = action.payload;
+      const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (idx !== -1 && state.conversations[idx].members) {
+        state.conversations[idx].members = state.conversations[idx].members.filter(
+          m => String(m.userId || m.id) !== String(userId)
+        );
+      }
+    },
+    updateMemberRoleLocal: (state, action) => {
+      const { conversationId, userId, role } = action.payload;
+      const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
+      if (idx !== -1 && state.conversations[idx].members) {
+        const memberIdx = state.conversations[idx].members.findIndex(
+          m => String(m.userId || m.id) !== String(userId)
+        );
+        if (memberIdx !== -1) {
+          state.conversations[idx].members[memberIdx].role = role;
+        }
+      }
+    },
+    removeMessage: (state, action) => {
+      const { conversationId, messageId } = action.payload;
+      const realId = getRealId(state, conversationId, state.currentUserId);
+      if (state.messages[realId]) {
+        state.messages[realId] = state.messages[realId].filter(
+          m => String(m.messageId) !== String(messageId)
+        );
+      }
+    },
+    removeConversationLocal: (state, action) => {
+      const { conversationId } = action.payload;
+      state.conversations = state.conversations.filter(c => c.conversationId !== conversationId);
+      delete state.messages[conversationId];
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchConversations.fulfilled, (state, action) => {
-        state.conversations = action.payload.map(conv => {
+        const sortedConvs = (action.payload || []).map(conv => {
           let lastMessage = conv.lastMessage;
-          // Check if lastMessage is a voice URL
           if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
             lastMessage = "Tin nhắn thoại";
           }
@@ -366,6 +425,13 @@ const chatSlice = createSlice({
             isUnread: (conv.unreadCount ?? 0) > 0,
             lastMessageSenderId: conv.lastMessageSenderId || conv.lastSenderId,
           };
+        });
+
+        // Sắp xếp theo updatedAt mới nhất lên đầu
+        state.conversations = sortedConvs.sort((a, b) => {
+          const dateA = new Date(a.updatedAt || 0);
+          const dateB = new Date(b.updatedAt || 0);
+          return dateB - dateA;
         });
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
@@ -398,6 +464,15 @@ const chatSlice = createSlice({
             }
           }
         }
+      })
+      .addCase(deleteMessage.fulfilled, (state, action) => {
+        const { messageId, conversationId } = action.payload;
+        const realId = getRealId(state, conversationId, state.currentUserId);
+        if (state.messages[realId]) {
+          state.messages[realId] = state.messages[realId].filter(
+            m => String(m.messageId) !== String(messageId)
+          );
+        }
       });
   },
 });
@@ -416,6 +491,11 @@ export const {
   updateMemberInfo,
   setTyping,
   setUserStatus,
-  setMessageRead
+  setMessageRead,
+  updateConversation,
+  removeMemberLocal,
+  updateMemberRoleLocal,
+  removeMessage,
+  removeConversationLocal
 } = chatSlice.actions;
 export default chatSlice.reducer;

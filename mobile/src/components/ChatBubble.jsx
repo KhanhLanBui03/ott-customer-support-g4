@@ -181,6 +181,12 @@ const ChatBubble = ({
     } catch (e) { return ''; }
   };
 
+  const mediaFiles = message.mediaUrls || message.media_urls || [];
+  const firstMedia = mediaFiles[0];
+  const isVoice = message.type === 'VOICE' || 
+                 (message.content && message.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ||
+                 (firstMedia && String(firstMedia).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+
   const reactionUserNamesFor = (emoji) => {
     if (!message.reactions || !message.reactions[emoji]) return [];
     return message.reactions[emoji].map(getReactionUserName);
@@ -286,6 +292,20 @@ const ChatBubble = ({
     );
   };
 
+  if (message.type === 'SYSTEM' || String(message.senderId) === 'SYSTEM') {
+    return (
+      <View style={styles.systemMessageContainer}>
+        <View style={styles.systemMessageWrapper}>
+          <View style={styles.systemDot} />
+          <Text style={styles.systemMessageText}>
+            {message.content?.toUpperCase() || 'THÔNG BÁO HỆ THỐNG'}
+          </Text>
+          <View style={styles.systemDot} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <Animated.View 
       {...panResponder.panHandlers}
@@ -320,15 +340,16 @@ const ChatBubble = ({
           <Animated.View style={[
             styles.bubble, 
             isOwn ? styles.ownBubble : styles.otherBubble, 
+            isVoice && { paddingVertical: 6, paddingHorizontal: 10 },
             { borderColor: highlightBorder, borderWidth: 2 }
           ]}>
             {message.replyTo && (() => {
               const r = message.replyTo;
-              console.log('[ReplyDebug] Original Message ReplyTo:', r);
               
               // Fallback: Nếu Server không trả về mediaUrls trong replyTo, hãy thử tìm trong store cục bộ
               let mediaUrls = r.mediaUrls || r.media_urls || [];
               let type = r.type || '';
+              let content = r.content || r.text || '';
               
               if (mediaUrls.length === 0 || !type) {
                 // Tìm tin nhắn gốc trong danh sách tin nhắn hiện tại
@@ -336,7 +357,7 @@ const ChatBubble = ({
                 if (originalMsg) {
                   if (mediaUrls.length === 0) mediaUrls = originalMsg.mediaUrls || originalMsg.media_urls || [];
                   if (!type) type = originalMsg.type || '';
-                  console.log('[ReplyDebug] Recovered from local store:', { type, mediaUrls });
+                  if (!content) content = originalMsg.content || '';
                 }
               }
               const senderId = r.senderId || r.sender_id || '';
@@ -349,14 +370,17 @@ const ChatBubble = ({
                 else type = 'FILE';
               }
 
-              const isVoiceReply = type === 'VOICE' || (r.content && (r.content.includes('chat-media/') || r.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
-              const isImageReply = type === 'IMAGE' || (type !== 'VIDEO' && type !== 'FILE' && type !== 'VOICE' && mediaUrls.length > 0);
+              const isVoiceReply = type === 'VOICE' || 
+                                   (content && (content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
+                                   (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+
+              const isImageReply = type === 'IMAGE' || (type !== 'VIDEO' && type !== 'FILE' && type !== 'VOICE' && mediaUrls.length > 0 && !isVoiceReply);
               const isVideoReply = type === 'VIDEO';
               const isFileReply = type === 'FILE';
               
               // Lấy cấu hình icon cho file trong reply
               const getFileConfig = (u) => {
-                const ext = u.split('.').pop().split('?')[0].toLowerCase();
+                const ext = String(u).split('.').pop().split('?')[0].toLowerCase();
                 if (ext === 'pdf') return { color: '#ef4444', icon: 'file-pdf-box' };
                 if (['doc', 'docx'].includes(ext)) return { color: '#3b82f6', icon: 'file-word-box' };
                 if (['xls', 'xlsx'].includes(ext)) return { color: '#10b981', icon: 'file-excel-box' };
@@ -377,7 +401,7 @@ const ChatBubble = ({
                 typeLabel = fileName ? decodeURIComponent(fileName) : '[Tệp tin]';
               }
 
-              const displayReplyText = isVoiceReply ? 'Tin nhắn thoại' : (r.content || typeLabel);
+              const displayReplyText = isVoiceReply ? 'Tin nhắn thoại' : (content.trim() || typeLabel);
 
               return (
                 <TouchableOpacity 
@@ -428,7 +452,7 @@ const ChatBubble = ({
             {/* Media Content - Grid Layout */}
             {!message.isRecalled && (() => {
               const mediaUrls = message.mediaUrls || message.media_urls || [];
-              if (mediaUrls.length === 0) return null;
+              if (mediaUrls.length === 0 || message.type === 'VOICE') return null;
 
               if (message.type === 'FILE') {
                 const url = mediaUrls[0];
@@ -548,12 +572,6 @@ const ChatBubble = ({
               </View>
             ) : (
               (() => {
-                const mediaFiles = message.mediaUrls || message.media_urls || [];
-                const firstMedia = mediaFiles[0];
-                const isVoice = message.type === 'VOICE' || 
-                               (message.content && message.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ||
-                               (firstMedia && String(firstMedia).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
-                
                 if (isVoice) {
                   const voiceUrl = firstMedia || message.content;
                   const fullVoiceUrl = getFullUrl(voiceUrl);
@@ -847,6 +865,36 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#10b981',
+  },
+  systemMessageContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginVertical: 12,
+    paddingHorizontal: 20,
+  },
+  systemMessageWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    gap: 8,
+  },
+  systemDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#6366f1',
+    opacity: 0.6,
+  },
+  systemMessageText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });
 

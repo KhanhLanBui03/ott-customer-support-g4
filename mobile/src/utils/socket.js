@@ -14,9 +14,30 @@ let readHandlers = new Set();
 let statusHandlers = new Set();
 let userUpdateHandlers = new Set();
 let wallpaperUpdateHandlers = new Set();
+let conversationUpdateHandlers = new Set();
 let globalHandlers = new Set();
 
+export const clearAllHandlers = () => {
+  messageHandlers.clear();
+  typingHandlers.clear();
+  editHandlers.clear();
+  deleteHandlers.clear();
+  recallHandlers.clear();
+  reactionHandlers.clear();
+  messageUpdateHandlers.clear();
+  readHandlers.clear();
+  statusHandlers.clear();
+  userUpdateHandlers.clear();
+  wallpaperUpdateHandlers.clear();
+  conversationUpdateHandlers.clear();
+  globalHandlers.clear();
+  console.log('🧹 All socket handlers cleared');
+};
+
 export const initializeSocket = (token, userId, globalHandler = null) => {
+  // Clear any existing handlers to prevent duplicates on re-initialization
+  clearAllHandlers();
+  
   if (globalHandler) globalHandlers.add(globalHandler);
 
   if (stompClient) {
@@ -70,9 +91,9 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
           // Phát sự kiện toàn cục cho Layout xử lý thông báo
           globalHandlers.forEach(handler => handler(event));
 
-          if (event.eventType === 'MESSAGE_SEND') {
+          if (event.eventType === 'MESSAGE_SEND' || event.eventType === 'MESSAGE_NEW') {
             const msg = event.payload;
-            console.log('💬 Processing MESSAGE_SEND:', msg.messageId);
+            console.log('💬 Processing NEW_MESSAGE:', msg.messageId);
             messageHandlers.forEach(handler => handler(msg));
           } else if (event.eventType === 'USER_TYPING') {
             typingHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
@@ -88,12 +109,19 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
             messageUpdateHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
           } else if (event.eventType === 'MESSAGE_READ') {
             readHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
-          } else if (event.eventType === 'WALLPAPER_UPDATED' || (event.eventType === 'CONVERSATION_UPDATE' && event.payload && Object.prototype.hasOwnProperty.call(event.payload, 'wallpaperUrl'))) {
+          } else if (event.eventType === 'WALLPAPER_UPDATED') {
             const wallpaperPayload = {
               conversationId: event.conversationId,
               wallpaperUrl: event.payload?.wallpaperUrl ?? null,
             };
             wallpaperUpdateHandlers.forEach(handler => handler(wallpaperPayload));
+          } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MEMBER_UPDATE' || event.eventType === 'CONVERSATION_RECREATED' || event.eventType === 'GROUP_INVITE') {
+            console.log('🔄 Conversation update event:', event.eventType);
+            conversationUpdateHandlers.forEach(handler => handler({
+              conversationId: event.conversationId,
+              eventType: event.eventType,
+              payload: event.payload
+            }));
           } else if (event.eventType === 'USER_UPDATE') {
             console.log('👤 User profile updated:', event.payload.userId);
             userUpdateHandlers.forEach(handler => handler(event.payload));
@@ -149,6 +177,8 @@ export const onUserUpdate = (handler) => userUpdateHandlers.add(handler);
 export const offUserUpdate = (handler) => userUpdateHandlers.delete(handler);
 export const onUserStatusChange = (handler) => statusHandlers.add(handler);
 export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
+export const onConversationUpdate = (handler) => conversationUpdateHandlers.add(handler);
+export const offConversationUpdate = (handler) => conversationUpdateHandlers.delete(handler);
 
 export const sendMessageViaSocket = (messageData) => {
   if (stompClient?.connected) {
@@ -209,6 +239,7 @@ export const disconnectSocket = () => {
     stompClient = null;
     console.log('🛑 Mobile socket deactivated');
   }
+  clearAllHandlers();
 };
 
 export default {
@@ -229,6 +260,8 @@ export default {
   onWallpaperUpdated,
   onUserUpdate,
   offUserUpdate,
+  onConversationUpdate,
+  offConversationUpdate,
   sendMessageViaSocket,
   emitSendMessage,
   emitTypingStart,

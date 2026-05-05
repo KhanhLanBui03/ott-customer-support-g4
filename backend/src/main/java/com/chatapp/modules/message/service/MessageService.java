@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import com.chatapp.modules.conversation.domain.UserConversation;
 import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.List;
@@ -452,9 +453,13 @@ public class MessageService {
      */
     public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId,
             String fromMessageId) {
-        Long joinedAt = userConversationRepository.findById(currentUserId, conversationId)
-                .map(uc -> uc.getJoinedAt())
-                .orElse(0L);
+        UserConversation userConv = userConversationRepository.findById(currentUserId, conversationId)
+                .orElse(null);
+        
+        Long joinedAt = (userConv != null && userConv.getJoinedAt() != null) ? userConv.getJoinedAt() : System.currentTimeMillis();
+        String type = (userConv != null) ? userConv.getType() : null;
+        
+        final Long finalJoinedAt = joinedAt;
 
         Long fromCreatedAt = null;
         if (fromMessageId != null && !fromMessageId.isBlank()) {
@@ -466,20 +471,25 @@ public class MessageService {
 
         final Long finalFromCreatedAt = fromCreatedAt;
 
-        return messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, limit).stream()
-                .filter(m -> m.getCreatedAt() != null) // Skip messages with null timestamps
-                .filter(m -> m.getCreatedAt() >= joinedAt) // NEW: Filter messages before user joined/re-joined
-                .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter
-                                                                                                              // hidden
-                                                                                                              // messages
-                .sorted((m1, m2) -> Long.compare(
-                        m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L,
-                        m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L)) // newest first
+        List<Message> allMessages = messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, 100);
+
+        List<Message> filtered = allMessages.stream()
+                .filter(m -> {
+                    boolean createdAtOk = m.getCreatedAt() != null;
+                    boolean joinedAtOk = m.getCreatedAt() >= finalJoinedAt;
+                    return createdAtOk && joinedAtOk;
+                })
+                .filter(m -> {
+                    List<String> hiddenFor = m.getHiddenForUsers();
+                    boolean hidden = hiddenFor != null && hiddenFor.contains(currentUserId);
+                    return !hidden;
+                })
+                .sorted((m1, m2) -> Long.compare(m2.getCreatedAt(), m1.getCreatedAt()))
                 .limit(limit)
-                .sorted((m1, m2) -> Long.compare(
-                        m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L,
-                        m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L)) // flip to chronological order
+                .sorted((m1, m2) -> Long.compare(m1.getCreatedAt(), m2.getCreatedAt()))
                 .collect(Collectors.toList());
+
+        return filtered;
     }
 
     // Event publishing methods

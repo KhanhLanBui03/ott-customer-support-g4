@@ -1,13 +1,54 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { notificationApi } from '../api/userApi';
+import { friendApi } from '../api/friendApi';
+import { conversationApi } from '../api/chatApi';
 
 export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
-  async (params, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await notificationApi.getNotifications(params);
-      return response.data.data || response.data || [];
+      // Fetch both friend requests and group invitations in parallel
+      const [friendRes, groupRes] = await Promise.all([
+        friendApi.getPendingRequests(),
+        conversationApi.getPendingInvitations()
+      ]);
+
+      const friendRequests = (friendRes.data || friendRes || []).map(fr => ({
+        id: `fr_${fr.userId}_${fr.createdAt}`,
+        notificationId: `fr_${fr.userId}`,
+        title: 'Lời mời kết bạn',
+        message: fr.fullName || fr.phoneNumber || 'Ai đó',
+        subMessage: 'muốn kết bạn với bạn',
+        type: 'FRIEND_REQUEST',
+        senderId: fr.userId,
+        avatarUrl: fr.avatarUrl,
+        fullName: fr.fullName,
+        createdAt: fr.createdAt,
+        isRead: false
+      }));
+
+      const groupInvites = (groupRes.data || groupRes || []).map(gi => ({
+        id: gi.invitationId,
+        notificationId: gi.invitationId,
+        invitationId: gi.invitationId,
+        title: 'Lời mời vào nhóm',
+        message: gi.groupName || 'Nhóm mới',
+        subMessage: `được mời bởi ${gi.inviterName || 'ai đó'}`,
+        type: 'GROUP_INVITE',
+        conversationId: gi.conversationId,
+        senderId: gi.inviterId,
+        avatarUrl: gi.groupAvatar || gi.inviterAvatar,
+        fullName: gi.groupName,
+        createdAt: gi.createdAt,
+        isRead: false
+      }));
+
+      // Combine and sort by date descending
+      const allNotifications = [...friendRequests, ...groupInvites].sort((a, b) => b.createdAt - a.createdAt);
+      
+      return allNotifications;
     } catch (error) {
+      console.error('Fetch notifications error:', error);
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch notifications');
     }
   }
@@ -32,6 +73,7 @@ const notificationSlice = createSlice({
     unreadCount: 0,
     loading: false,
     error: null,
+    inAppNotification: null,
   },
   reducers: {
     setUnreadCount: (state, action) => {
@@ -57,6 +99,12 @@ const notificationSlice = createSlice({
         }
         state.notifications.splice(index, 1);
       }
+    },
+    setInAppNotification: (state, action) => {
+      state.inAppNotification = action.payload;
+    },
+    clearInAppNotification: (state) => {
+      state.inAppNotification = null;
     },
   },
   extraReducers: (builder) => {
@@ -85,5 +133,12 @@ const notificationSlice = createSlice({
   },
 });
 
-export const { setUnreadCount, addNotification, clearNotifications, removeNotification } = notificationSlice.actions;
+export const { 
+  setUnreadCount, 
+  addNotification, 
+  clearNotifications, 
+  removeNotification,
+  setInAppNotification,
+  clearInAppNotification
+} = notificationSlice.actions;
 export default notificationSlice.reducer;

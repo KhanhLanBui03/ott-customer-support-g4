@@ -39,8 +39,8 @@ const ChangePasswordScreen = () => {
   };
 
   const isFormValid = oldPassword && validations.length && validations.lowercase &&
-                      validations.uppercase && validations.number && validations.special &&
-                      newPassword === confirmPassword;
+    validations.uppercase && validations.number && validations.special &&
+    newPassword === confirmPassword;
 
   const handleChangePassword = async () => {
     if (!isFormValid) {
@@ -98,7 +98,7 @@ const ChangePasswordScreen = () => {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>ĐỔI MẬT KHẨU</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
+          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.closeButton}>
             <Ionicons name="close" size={26} color="#64748b" />
           </TouchableOpacity>
         </View>

@@ -13,7 +13,9 @@ import {
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchNotifications, markAsRead, removeNotification } from '../../src/store/notificationSlice';
+import { fetchConversations } from '../../src/store/chatSlice';
 import { friendApi } from '../../src/api/friendApi';
+import { conversationApi } from '../../src/api/chatApi';
 import { Alert } from 'react-native';
 
 const formatDate = (date) => {
@@ -55,7 +57,7 @@ const NotificationsScreen = () => {
     // Handle navigation if needed
   };
 
-  const BASE_URL = useSelector(state => state.chat?.BASE_URL) || 'http://192.168.2.13:8080'; // Fallback if needed
+  const BASE_URL = useSelector(state => state.chat?.BASE_URL) || 'http://192.168.1.98:8080'; // Fallback if needed
 
   const getAvatarUrl = (url, name) => {
     if (!url) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=667eea&color=fff&size=128&bold=true`;
@@ -99,10 +101,39 @@ const NotificationsScreen = () => {
     );
   };
 
+  const handleAcceptGroupInvite = async (invitationId, notificationId) => {
+    try {
+      await conversationApi.acceptInvitation(invitationId);
+      Alert.alert('Thành công', 'Bạn đã tham gia nhóm!');
+      dispatch(markAsRead(notificationId));
+      onRefresh();
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || '';
+      if (errorMessage === 'Bạn đã là thành viên của nhóm này') {
+        Alert.alert('Thông báo', 'Bạn đã tham gia vào nhóm rồi.', [
+          { text: 'OK', onPress: () => dispatch(removeNotification(notificationId)) }
+        ]);
+      } else {
+        Alert.alert('Lỗi', 'Không thể tham gia nhóm lúc này.');
+      }
+    }
+  };
+
+  const handleRejectGroupInvite = async (invitationId, notificationId) => {
+    try {
+      await conversationApi.rejectInvitation(invitationId);
+      Alert.alert('Thông báo', 'Đã từ chối lời mời vào nhóm.');
+      dispatch(removeNotification(notificationId));
+      onRefresh();
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể từ chối lời mời lúc này.');
+    }
+  };
+
   const renderNotificationItem = ({ item }) => {
     const isUnread = !(item.isRead || item.read);
     const date = item.createdAt ? new Date(item.createdAt) : new Date();
-    const isFriendRequest = item.type === 'FRIEND_REQUEST' || item.type === 'FRIEND_ACCEPT';
+    const isActionable = item.type === 'FRIEND_REQUEST' || item.type === 'GROUP_INVITE';
 
     return (
       <View style={[styles.notificationItem, isUnread && styles.unreadItem]}>
@@ -132,7 +163,7 @@ const NotificationsScreen = () => {
               {item.subMessage ? ` ${item.subMessage}` : ''}
             </Text>
             
-            {!isFriendRequest && <Text style={styles.dateText}>{formatFullDate(date)}</Text>}
+            {!(isActionable && isUnread) && <Text style={styles.dateText}>{formatFullDate(date)}</Text>}
             
             {item.type === 'FRIEND_REQUEST' && isUnread && (
               <View style={styles.actionRow}>
@@ -147,6 +178,23 @@ const NotificationsScreen = () => {
                   onPress={() => handleRejectFriendRequest(item.senderId, item.id || item.notificationId, item.fullName)}
                 >
                   <Text style={styles.rejectButtonText}>HỦY</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {item.type === 'GROUP_INVITE' && isUnread && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity 
+                  style={styles.acceptButton}
+                  onPress={() => handleAcceptGroupInvite(item.invitationId || item.id, item.id || item.notificationId)}
+                >
+                  <Text style={styles.acceptButtonText}>THAM GIA</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.rejectButton}
+                  onPress={() => handleRejectGroupInvite(item.invitationId || item.id, item.id || item.notificationId)}
+                >
+                  <Text style={styles.rejectButtonText}>TỪ CHỐI</Text>
                 </TouchableOpacity>
               </View>
             )}

@@ -18,6 +18,7 @@ import {
   Lock,
   Unlock,
   Info,
+  Mic,
   BarChart2,
   X,
   ChevronRight,
@@ -212,6 +213,15 @@ const getDocViewerUrl = (u, e) => {
     return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(u)}`;
   }
   return `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
+};
+
+const getFullUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  const trimmedUrl = url.trim();
+  if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('blob:') || trimmedUrl.startsWith('data:')) return trimmedUrl;
+  
+  const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').split('/api')[0] || `http://${window.location.hostname}:8080`;
+  return `${baseUrl}${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`;
 };
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages }) => {
@@ -420,6 +430,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const selectedDetailUserIds = selectedDetailMessage && detailEmoji ? getReactionUsers(selectedDetailMessage, detailEmoji) : [];
   const selectedDetailNames = selectedDetailUserIds.map(getReactionUserName);
 
+  const isAtBottom = useRef(true);
+
+  const handleScroll = () => {
+    if (scrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      // Nếu cách đáy dưới 100px thì coi như đang ở đáy
+      const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+      isAtBottom.current = atBottom;
+    }
+  };
+
   const scrollToBottom = (instant = false) => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({
@@ -542,15 +563,21 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   };
 
   useEffect(() => {
-    scrollToBottom(true);
-    const timer = setTimeout(() => scrollToBottom(), 100);
-    const longTimer = setTimeout(() => scrollToBottom(), 500);
+    const lastMsg = messages[messages.length - 1];
+    const isFromMe = lastMsg && String(lastMsg.senderId) === String(meId);
 
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(longTimer);
-    };
-  }, [messages]);
+    // Chỉ tự động cuộn xuống nếu đang ở đáy hoặc chính mình gửi tin
+    if (isAtBottom.current || isFromMe) {
+      scrollToBottom(true);
+      const timer = setTimeout(() => scrollToBottom(), 100);
+      const longTimer = setTimeout(() => scrollToBottom(), 500);
+
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(longTimer);
+      };
+    }
+  }, [messages, meId]);
 
   const handleAction = async (action, messageId) => {
     try {
@@ -720,7 +747,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   useEffect(() => {
     const activeTyping = typingUsers[conversationId]?.filter(u => u.userId !== meId);
-    if (activeTyping?.length > 0) {
+    if (activeTyping?.length > 0 && isAtBottom.current) {
       scrollToBottom();
     }
   }, [typingUsers, conversationId, meId]);
@@ -754,6 +781,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
         <div
           ref={scrollRef}
+          onScroll={handleScroll}
           className={cn(
             "absolute inset-0 overflow-y-auto p-4 sm:p-8 space-y-6 pb-32 transition-colors no-scrollbar z-10",
             !wallpaper ? "bg-background" : "bg-transparent"
@@ -890,6 +918,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             <img src={originalMsg.mediaUrls?.[0]} className="h-9 w-9 rounded-md object-cover border border-slate-200 dark:border-white/5 shadow-sm" alt="image" />
                                           ) : originalMsg.type === 'STICKER' ? (
                                             <img src={originalMsg.content} className="h-9 w-9 rounded-md object-contain drop-shadow-md" alt="sticker" />
+                                          ) : originalMsg.type === 'VOICE' || (originalMsg.content && originalMsg.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ? (
+                                            <div className="h-9 w-9 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100 dark:bg-indigo-500/10 dark:border-indigo-500/20"><Mic size={16} /></div>
                                           ) : (
                                             <div className="h-9 w-9 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100 dark:bg-indigo-500/10 dark:border-indigo-500/20"><FileText size={16} /></div>
                                           )}
@@ -899,17 +929,22 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                         <p className={cn("text-[13px] font-bold truncate leading-tight mb-0.5", isDark ? 'text-gray-100' : 'text-slate-800')}>{msg.replyTo.senderName}</p>
                                         <p className={cn("text-[12px] truncate leading-tight", isDark ? 'text-gray-400' : 'text-slate-500')}>
                                           {(() => {
-                                            const isVoice = msg.replyTo.type === 'VOICE' || 
-                                                           (msg.replyTo.content && (msg.replyTo.content.includes('chat-media/') || msg.replyTo.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
+                                            const r = msg.replyTo;
+                                            const originalMsg = messages.find(m => m.messageId === r.messageId);
+                                            const content = r.content || r.text || '';
+                                            const mediaUrls = originalMsg?.mediaUrls || originalMsg?.media_urls || [];
+                                            
+                                            const isVoice = r.type === 'VOICE' || 
+                                                           (content && (content.includes('chat-media/') || content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
+                                                           (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
                                             
                                             if (isVoice) return 'Tin nhắn thoại';
-                                            if (msg.replyTo.content && msg.replyTo.content !== '[Attachment]') return msg.replyTo.content;
+                                            if (content && content !== '[Attachment]' && !content.startsWith('http')) return content;
                                             
                                             if (originalMsg) {
                                               if (originalMsg.type === 'IMAGE') return '[Hình ảnh]';
                                               if (originalMsg.type === 'VIDEO') return '[Video]';
                                               if (originalMsg.type === 'STICKER') return '[Nhãn dán]';
-                                              if (originalMsg.type === 'VOICE') return 'Tin nhắn thoại';
                                               if (originalMsg.type === 'FILE' && originalMsg.mediaUrls?.length > 0) {
                                                 try {
                                                   const url = originalMsg.mediaUrls[0];
@@ -923,7 +958,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                 }
                                               }
                                             }
-                                            return msg.replyTo.content || '[Tệp đính kèm]';
+                                            return content || '[Tệp đính kèm]';
                                           })()}
                                         </p>
                                       </div>
@@ -1188,11 +1223,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       
                                       // 1. Render Voice Player
                                       if (isVoiceType) {
-                                        let fullUrl = voiceUrl;
-                                        if (fullUrl && !fullUrl.startsWith('http') && !fullUrl.startsWith('blob:')) {
-                                          const baseUrl = (window.CONFIG?.API_URL || '').split('/api')[0];
-                                          fullUrl = `${baseUrl}${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`;
-                                        }
+                                        const fullUrl = getFullUrl(voiceUrl);
                                         return (
                                           <div className="p-2 min-w-[260px]">
                                             {fullUrl ? <VoicePlayer url={fullUrl} /> : <div className="p-3 text-xs opacity-50 italic text-center">Âm thanh lỗi...</div>}
@@ -1212,7 +1243,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       // 3. Render Default (Images, Videos, Files, or Text)
                                       return null;
                                     })() || (
-                                      <div className={cn("flex flex-col max-w-full", msg.mediaUrls?.length > 0 ? "min-w-[140px]" : "min-w-0")}>
+                                      <div className={cn("flex flex-col max-w-full", msg.mediaUrls?.length > 1 ? "min-w-[240px] sm:min-w-[320px]" : msg.mediaUrls?.length > 0 ? "min-w-[140px]" : "min-w-0")}>
                                         {msg.mediaUrls && msg.mediaUrls.length > 0 && (
                                           <div className="bg-black/5 dark:bg-black/40 backdrop-blur-sm">
                                             {(() => {
@@ -1220,32 +1251,43 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               const count = urls.length;
 
                                               const renderMediaItem = (url, idx, isSmall = true) => {
-                                                const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
-                                                const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
+                                                const fullUrl = getFullUrl(url);
+                                                const isImage = fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'IMAGE') || msg.type === 'IMAGE';
+                                                const isVideo = fullUrl.match(/\.(mp4|webm|ogg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'VIDEO') || msg.type === 'VIDEO';
 
                                                 if (isImage) {
                                                   return (
                                                     <div key={idx} className={cn("overflow-hidden cursor-pointer group/img relative bg-surface-100 dark:bg-surface-200", isSmall ? "aspect-square" : "aspect-video")} onClick={() => {
-                                                      const idxInAll = allChatImages.findIndex(img => img.url === url);
-                                                      openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                      if (Array.isArray(allChatImages)) {
+                                                        const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                        openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                      }
                                                     }}>
-                                                      <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" alt="" />
+                                                      <img src={fullUrl} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" alt="" />
                                                       <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/5 transition-colors" />
                                                     </div>
                                                   );
                                                 }
                                                 if (isVideo) {
                                                   return (
-                                                    <div key={idx} className={cn("overflow-hidden bg-black", isSmall ? "aspect-square" : "aspect-video")}>
-                                                      <video controls className="w-full h-full object-cover">
-                                                        <source src={url} />
+                                                    <div key={idx} className={cn("overflow-hidden bg-black cursor-pointer group/vid relative", isSmall ? "aspect-square" : "aspect-video")} onClick={() => {
+                                                      if (Array.isArray(allChatImages)) {
+                                                        const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                        openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                      }
+                                                    }}>
+                                                      <video className="w-full h-full object-cover">
+                                                        <source src={fullUrl} />
                                                       </video>
+                                                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/vid:bg-black/40 transition-colors">
+                                                         <Play size={isSmall ? 24 : 48} fill="white" className="text-white drop-shadow-2xl" />
+                                                      </div>
                                                     </div>
                                                   );
                                                 }
                                                 return (
                                                   <div key={idx} className="flex flex-col max-w-full p-2">
-                                                    <FilePreview url={url} />
+                                                    <FilePreview url={fullUrl} />
                                                     <div className="relative group/file">
                                                       <div
                                                         onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
@@ -1265,14 +1307,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
                                               if (count === 1) {
                                                 const url = urls[0];
-                                                const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
+                                                const fullUrl = getFullUrl(url);
+                                                 const isImage = fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'IMAGE') || msg.type === 'IMAGE';
                                                 if (isImage) {
                                                   return (
                                                     <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => {
-                                                      const idxInAll = allChatImages.findIndex(img => img.url === url);
-                                                      openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                      if (Array.isArray(allChatImages)) {
+                                                        const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                        openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                      }
                                                     }}>
-                                                      <img src={url} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
+                                                      <img src={fullUrl} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
                                                     </div>
                                                   );
                                                 }
