@@ -7,16 +7,20 @@ import {
   ScrollView,
   Alert,
   Platform,
+  TouchableOpacity,
   Pressable,
+  Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { getRealId, updateConversationWallpaper } from '../../../src/store/chatSlice';
+import { getRealId, updateConversationWallpaper, updateConversation, removeMemberLocal, updateMemberRoleLocal } from '../../../src/store/chatSlice';
 import { conversationApi } from '../../../src/api/chatApi';
 import { mediaApi } from '../../../src/api/mediaApi';
+import InviteMemberModal from '../../../src/components/chat/InviteMemberModal';
 
 const ChatInfoScreen = () => {
   const insets = useSafeAreaInsets();
@@ -34,6 +38,8 @@ const ChatInfoScreen = () => {
 
   const conversation = (chatState.conversations || []).find(c => c.conversationId === realId);
   const [isWallpaperLoading, setIsWallpaperLoading] = useState(false);
+  const [isAvatarLoading, setIsAvatarLoading] = useState(false);
+  const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
   const wallpaperUrl = conversation?.wallpaperUrl || null;
 
   const otherParticipant = useMemo(() => {
@@ -41,9 +47,10 @@ const ChatInfoScreen = () => {
     return conversation.members.find(p => p.userId !== (currentUser?.userId || currentUser?.id));
   }, [conversation, currentUser]);
 
-  const displayName = otherParticipant?.fullName || otherParticipant?.name || conversation?.name || 'Thông tin hội thoại';
-  const avatarUrl = otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic || conversation?.avatarUrl || conversation?.avatar;
-  const isOnline = otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true;
+  const isGroup = conversation?.type === 'GROUP';
+  const displayName = isGroup ? (conversation?.name || 'Nhóm chat') : (otherParticipant?.fullName || otherParticipant?.name || 'Thông tin hội thoại');
+  const avatarUrl = isGroup ? conversation?.avatarUrl : (otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic);
+  const isOnline = !isGroup && (otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true);
 
   const handleWallpaperChange = async () => {
     try {
@@ -85,10 +92,8 @@ const ChatInfoScreen = () => {
       await conversationApi.updateConversationWallpaper(targetId, uploadedUrl);
       dispatch(updateConversationWallpaper({ conversationId: targetId, wallpaperUrl: uploadedUrl }));
 
-      console.log('✅ [WALLPAPER] Updated successfully');
       Alert.alert('Thành công', 'Đã cập nhật ảnh nền.');
     } catch (error) {
-      console.error('❌ [WALLPAPER] Update Error:', error);
       Alert.alert('Lỗi', 'Không thể cập nhật ảnh nền.');
     } finally {
       setIsWallpaperLoading(false);
@@ -101,7 +106,6 @@ const ChatInfoScreen = () => {
     try {
       await conversationApi.updateConversationWallpaper(targetId, null);
       dispatch(updateConversationWallpaper({ conversationId: targetId, wallpaperUrl: null }));
-      console.log('✅ [WALLPAPER] Cleared successfully');
       Alert.alert('Thành công', 'Đã xóa ảnh nền.');
     } catch (error) {
       Alert.alert('Lỗi', 'Không thể xóa ảnh nền.');
@@ -110,16 +114,217 @@ const ChatInfoScreen = () => {
     }
   };
 
-  const InfoItem = ({ icon, label, onPress, color = '#fff', showArrow = true }) => (
+  const handleAvatarChange = async () => {
+    if (!isGroup || !isAdmin) return;
+    
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Quyền truy cập bị từ chối', 'Vui lòng cấp quyền truy cập ảnh.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setIsAvatarLoading(true);
+      const localUri = result.assets[0].uri;
+      const fileName = localUri.split('/').pop();
+      const match = /\.([a-zA-Z0-9]+)$/.exec(fileName || '');
+      const fileType = match ? `image/${match[1].toLowerCase()}` : 'image/jpeg';
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri: Platform.OS === 'ios' ? localUri.replace('file://', '') : localUri,
+        name: fileName || 'avatar.jpg',
+        type: fileType,
+      });
+
+      const uploadRes = await mediaApi.uploadMedia(formData, 'conversation-avatars');
+      const uploadedUrl = uploadRes?.data?.data?.mediaUrl || uploadRes?.data?.mediaUrl || uploadRes?.mediaUrl || uploadRes?.url || uploadRes?.data?.url;
+
+      if (!uploadedUrl) throw new Error('No URL');
+
+      await conversationApi.updateAvatar(realId, uploadedUrl);
+      
+      // Cập nhật local store
+      dispatch(updateConversation({ 
+        conversationId: realId, 
+        avatarUrl: uploadedUrl 
+      }));
+
+      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện nhóm.');
+    } catch (error) {
+      console.error('[AvatarChangeError]', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật ảnh đại diện nhóm.');
+    } finally {
+      setIsAvatarLoading(false);
+    }
+  };
+
+  const handleLeaveGroup = () => {
+    Alert.alert(
+      'Xác nhận',
+      'Bạn có chắc chắn muốn rời khỏi nhóm này?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Rời nhóm', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await conversationApi.deleteConversationForMe(realId);
+              router.replace('/(main)');
+            } catch (err) {
+              Alert.alert('Lỗi', 'Không thể rời nhóm lúc này.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDisbandGroup = () => {
+    Alert.alert(
+      'Giải tán nhóm',
+      'Bạn có chắc chắn muốn giải tán nhóm này? Toàn bộ tin nhắn và thành viên sẽ bị xóa.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Giải tán', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await conversationApi.disbandGroup(realId);
+              router.replace('/(main)');
+            } catch (err) {
+              Alert.alert('Lỗi', 'Không thể giải tán nhóm lúc này.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleToggleChatRestriction = async () => {
+    try {
+      const newValue = !conversation?.onlyAdminsCanChat;
+      await conversationApi.toggleChatRestriction(realId);
+      
+      // Cập nhật state local ngay lập tức
+      dispatch(updateConversation({ 
+        conversationId: realId, 
+        onlyAdminsCanChat: newValue 
+      }));
+      
+      Alert.alert('Thành công', `Đã ${newValue ? 'bật' : 'tắt'} quyền giới hạn gửi tin nhắn.`);
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể thay đổi quyền gửi tin nhắn.');
+    }
+  };
+
+  const handleMemberAction = (member) => {
+    const memberId = String(member.userId || member.id);
+    const isMemberAdmin = member.role === 'ADMIN';
+    const isMemberOwner = member.role === 'OWNER';
+
+    if (isMemberOwner) return; // Không thể thao tác với chủ nhóm
+
+    const actions = [];
+
+    // Nếu tôi là OWNER
+    if (isOwner) {
+      if (isMemberAdmin) {
+        actions.push({
+          text: 'Gỡ chức phó nhóm',
+          onPress: () => updateMemberRole(memberId, 'MEMBER')
+        });
+      } else {
+        actions.push({
+          text: 'Bổ nhiệm phó nhóm',
+          onPress: () => updateMemberRole(memberId, 'ADMIN')
+        });
+      }
+      actions.push({
+        text: 'Xóa khỏi nhóm',
+        style: 'destructive',
+        onPress: () => removeFromGroup(memberId, member.fullName)
+      });
+    } 
+    // Nếu tôi là ADMIN (phó nhóm)
+    else if (myRole === 'ADMIN' && !isMemberAdmin) {
+      actions.push({
+        text: 'Xóa khỏi nhóm',
+        style: 'destructive',
+        onPress: () => removeFromGroup(memberId, member.fullName)
+      });
+    }
+
+    if (actions.length > 0) {
+      Alert.alert(
+        member.fullName,
+        'Chọn hành động quản lý thành viên',
+        [...actions, { text: 'Đóng', style: 'cancel' }]
+      );
+    }
+  };
+
+  const updateMemberRole = async (userId, role) => {
+    try {
+      await conversationApi.assignRole(realId, userId, role);
+      dispatch(updateMemberRoleLocal({ conversationId: realId, userId, role }));
+      Alert.alert('Thành công', `Đã ${role === 'ADMIN' ? 'bổ nhiệm' : 'gỡ chức'} phó nhóm.`);
+    } catch (err) {
+      Alert.alert('Lỗi', 'Không thể cập nhật quyền thành viên.');
+    }
+  };
+
+  const removeFromGroup = async (userId, name) => {
+    Alert.alert(
+      'Xác nhận',
+      `Bạn có chắc chắn muốn xóa ${name} ra khỏi nhóm?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Xóa', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await conversationApi.removeMember(realId, userId);
+              dispatch(removeMemberLocal({ conversationId: realId, userId }));
+              Alert.alert('Thành công', 'Đã xóa thành viên.');
+            } catch (err) {
+              Alert.alert('Lỗi', 'Không thể xóa thành viên.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const InfoItem = ({ icon, label, description, onPress, color = '#fff', showArrow = true, rightElement, disabled }) => (
     <Pressable
-      style={({ pressed }) => [styles.infoItem, { opacity: pressed ? 0.6 : 1 }]}
-      onPress={onPress}
+      style={({ pressed }) => [
+        styles.infoItem, 
+        disabled && styles.disabledOpacity,
+        { opacity: (pressed && !disabled) ? 0.6 : 1 }
+      ]}
+      onPress={!disabled ? onPress : null}
     >
       <View style={styles.infoItemLeft}>
         <View style={styles.iconContainer}>{icon}</View>
-        <Text style={[styles.infoItemLabel, { color }]}>{label}</Text>
+        <View style={styles.privacyTextContainer}>
+          <Text style={[styles.infoItemLabel, { color: disabled ? "#4b5563" : color, marginLeft: 0 }]}>{label}</Text>
+          {description && <Text style={styles.disabledText}>{description}</Text>}
+        </View>
       </View>
-      {showArrow && <MaterialIcons name="chevron-right" size={24} color="#4b5563" />}
+      {rightElement ? rightElement : (showArrow && <MaterialIcons name="chevron-right" size={24} color={disabled ? "#374151" : (color !== '#fff' ? color : "#4b5563")} />)}
     </Pressable>
   );
 
@@ -131,6 +336,11 @@ const ChatInfoScreen = () => {
 
   const finalAvatarUrl = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=256&bold=true`;
 
+  const myId = String(currentUser?.userId || currentUser?.id || '');
+  const myRole = conversation?.members?.find(m => String(m.userId || m.id) === myId)?.role || 'MEMBER';
+  const isOwner = myRole === 'OWNER';
+  const isAdmin = myRole === 'ADMIN' || isOwner;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -138,24 +348,80 @@ const ChatInfoScreen = () => {
         <Pressable onPress={() => router.replace(`/chat/${encodeURIComponent(realId)}`)} style={styles.backButton}>
           <Ionicons name="close" size={28} color="#fff" />
         </Pressable>
-        <Text style={styles.headerTitle}>Thông tin hội thoại</Text>
+        <Text style={styles.headerTitle}>Thông tin {isGroup ? 'nhóm' : 'hội thoại'}</Text>
         <View style={{ width: 48 }} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarWrapper}>
-            <Image source={{ uri: finalAvatarUrl }} style={styles.avatar} />
+          <TouchableOpacity 
+            style={styles.avatarWrapper}
+            onPress={handleAvatarChange}
+            disabled={!isGroup || !isAdmin || isAvatarLoading}
+          >
+            <Image source={{ uri: finalAvatarUrl }} style={[styles.avatar, isAvatarLoading && { opacity: 0.5 }]} />
             {isOnline && <View style={styles.onlineBadge} />}
-          </View>
+            {isGroup && isAdmin && (
+              <View style={styles.avatarEditBadge}>
+                <MaterialIcons name="camera-alt" size={16} color="#fff" />
+              </View>
+            )}
+            {isAvatarLoading && (
+              <View style={styles.avatarLoadingOverlay}>
+                <ActivityIndicator color="#fff" size="small" />
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={styles.userName}>{displayName}</Text>
-          <View style={[styles.statusBadge, isOnline ? styles.statusActive : styles.statusInactive]}>
-            <Text style={styles.statusText}>{isOnline ? 'ĐANG HOẠT ĐỘNG' : 'NGOẠI TUYẾN'}</Text>
-          </View>
+          {isGroup ? (
+            <Text style={styles.memberCountText}>{conversation?.members?.length || 0} thành viên</Text>
+          ) : (
+            <View style={[styles.statusBadge, isOnline ? styles.statusActive : styles.statusInactive]}>
+              <Text style={styles.statusText}>{isOnline ? 'ĐANG HOẠT ĐỘNG' : 'NGOẠI TUYẾN'}</Text>
+            </View>
+          )}
         </View>
 
+        {/* Members Section for Group */}
+        {isGroup && (
+          <>
+            <SectionHeader title="THÀNH VIÊN NHÓM" />
+            <View style={styles.section}>
+              {isAdmin && (
+                <InfoItem
+                  icon={<MaterialIcons name="person-add" size={22} color="#667eea" />}
+                  label="Thêm thành viên"
+                  color="#667eea"
+                  onPress={() => setIsInviteModalVisible(true)}
+                />
+              )}
+              {conversation?.members?.map((member, idx) => (
+                <View key={member.userId || idx} style={styles.memberItem}>
+                  <Image 
+                    source={{ uri: member.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.fullName || 'U')}&background=667eea&color=fff&size=128&bold=true` }} 
+                    style={styles.memberAvatar} 
+                  />
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>{member.fullName}</Text>
+                    <View style={styles.roleContainer}>
+                      {member.role === 'OWNER' && <Text style={styles.roleBadgeOwner}>Trưởng nhóm</Text>}
+                      {member.role === 'ADMIN' && <Text style={styles.roleBadgeAdmin}>Phó nhóm</Text>}
+                    </View>
+                  </View>
+                  {isAdmin && String(member.userId || member.id) !== myId && (
+                    <TouchableOpacity onPress={() => handleMemberAction(member)}>
+                      <MaterialIcons name="more-vert" size={24} color="#94a3b8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
         {/* Media & Files */}
+        <SectionHeader title="DỮ LIỆU CHIA SẺ" />
         <View style={styles.section}>
           <InfoItem
             icon={<MaterialIcons name="image" size={22} color="#94a3b8" />}
@@ -221,20 +487,63 @@ const ChatInfoScreen = () => {
           </Pressable>
         </View>
 
-        {/* Privacy */}
-        <SectionHeader title="QUYỀN RIÊNG TƯ" />
+        {/* Privacy & Danger Zone */}
+        <SectionHeader title="QUYỀN RIÊNG TƯ & QUẢN LÝ" />
         <View style={styles.section}>
-          <InfoItem
-            icon={<MaterialIcons name="history" size={22} color="#ef4444" />}
-            label="Xóa lịch sử trò chuyện"
-            color="#ef4444"
-            onPress={() => {}}
-            showArrow={false}
-          />
+          {isGroup ? (
+            <>
+              {/* Rời nhóm - Ai cũng thấy */}
+              <InfoItem
+                icon={<MaterialIcons name="exit-to-app" size={22} color="#ef4444" />}
+                label="Rời khỏi nhóm"
+                color="#ef4444"
+                onPress={handleLeaveGroup}
+                showArrow={false}
+              />
+
+              {/* Giải tán nhóm - Chỉ Chủ nhóm (Owner) thấy */}
+              <InfoItem
+                icon={<MaterialIcons name="delete-forever" size={22} color={isOwner ? "#ef4444" : "#4b5563"} />}
+                label="Giải tán nhóm"
+                description={!isOwner ? "Chỉ trưởng nhóm mới có quyền" : "Xóa toàn bộ tin nhắn và thành viên"}
+                color={isOwner ? "#ef4444" : "#4b5563"}
+                onPress={handleDisbandGroup}
+                disabled={!isOwner}
+                showArrow={isOwner}
+              />
+
+              {/* Chỉ Admin có thể chat - Chủ nhóm và Phó nhóm thấy */}
+              <InfoItem
+                icon={<MaterialIcons name="chat-bubble-outline" size={22} color={isAdmin ? "#fff" : "#4b5563"} />}
+                label="Chỉ Admin mới có thể chat"
+                description={isAdmin ? 'Cho phép Trưởng/ Phó nhóm gửi tin nhắn' : 'Chỉ quản trị viên mới có quyền'}
+                disabled={!isAdmin}
+                showArrow={false}
+                rightElement={
+                  <View style={styles.switchContainer}>
+                    <Switch 
+                      value={conversation?.onlyAdminsCanChat} 
+                      onValueChange={handleToggleChatRestriction}
+                      disabled={!isAdmin}
+                      trackColor={{ false: '#334155', true: '#4f46e5' }}
+                      thumbColor={Platform.OS === 'ios' ? '#fff' : (conversation?.onlyAdminsCanChat ? '#818cf8' : '#94a3b8')}
+                    />
+                  </View>
+                }
+              />
+            </>
+          ) : null}
         </View>
 
         <View style={{ height: 40 + insets.bottom }} />
       </ScrollView>
+
+      <InviteMemberModal
+        visible={isInviteModalVisible}
+        onClose={() => setIsInviteModalVisible(false)}
+        conversationId={realId}
+        existingMemberIds={conversation?.members?.map(m => String(m.userId || m.id)) || []}
+      />
     </View>
   );
 };
@@ -267,7 +576,28 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#0f172a',
   },
+  avatarEditBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#0f172a',
+  },
+  avatarLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   userName: { fontSize: 24, fontWeight: '800', color: '#fff', marginBottom: 12 },
+  memberCountText: { fontSize: 14, color: '#94a3b8', fontWeight: '600' },
   statusBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
   statusActive: { backgroundColor: 'rgba(16, 185, 129, 0.1)' },
   statusInactive: { backgroundColor: 'rgba(148, 163, 184, 0.1)' },
@@ -280,12 +610,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 16,
+    paddingHorizontal: 12, // Thêm padding để không bị sát mép
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
+    backgroundColor: 'rgba(30, 41, 59, 0.5)', // Thêm nền nhẹ để phân biệt
+    borderRadius: 16,
+    marginBottom: 8,
   },
   infoItemLeft: { flexDirection: 'row', alignItems: 'center' },
   iconContainer: { width: 32, alignItems: 'center' },
   infoItemLabel: { fontSize: 15, fontWeight: '600', marginLeft: 12 },
+
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  memberAvatar: { width: 44, height: 44, borderRadius: 22, marginRight: 12 },
+  memberInfo: { flex: 1 },
+  memberName: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  roleContainer: { flexDirection: 'row', marginTop: 2 },
+  roleBadgeOwner: { fontSize: 10, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, fontWeight: '700', overflow: 'hidden' },
+  roleBadgeAdmin: { fontSize: 10, color: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, fontWeight: '700', overflow: 'hidden' },
 
   previewContainer: { paddingHorizontal: 16, marginBottom: 16 },
   wallpaperPreviewCard: { borderRadius: 20, overflow: 'hidden', height: 160, position: 'relative', borderWidth: 1, borderColor: '#1e293b' },
@@ -318,6 +666,33 @@ const styles = StyleSheet.create({
   deleteActionContent: { flex: 1, marginLeft: 16 },
   deleteActionTitle: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
   deleteActionSub: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  
+  privacyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  disabledOpacity: {
+    opacity: 0.5,
+  },
+  disabledText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  privacyTextContainer: {
+    marginLeft: 12,
+    flexShrink: 1, // Để chữ tự co giãn thay vì đẩy hết cỡ
+    paddingRight: 8,
+  },
+  switchContainer: {
+    paddingRight: 4,
+    marginLeft: 8,
+  },
 });
 
 export default ChatInfoScreen;

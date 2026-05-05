@@ -37,6 +37,11 @@ export const friendApi = {
   // Unblock user
   unblockUser: (friendId) => {
     return axiosClient.post(`/friends/unblock/${friendId}`);
+  },
+
+  // Unfriend
+  unfriend: (friendId) => {
+    return axiosClient.delete(`/friends/${friendId}`);
   }
 };
 

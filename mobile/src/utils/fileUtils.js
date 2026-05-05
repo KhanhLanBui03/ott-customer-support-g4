@@ -58,3 +58,26 @@ const getUTI = (fileName) => {
     default: return undefined;
   }
 };
+export const downloadFile = async (url, fileName) => {
+  try {
+    const fileUri = FileSystem.cacheDirectory + fileName;
+    
+    // Download to cache if not exists
+    const fileInfo = await FileSystem.getInfoAsync(fileUri);
+    if (!fileInfo.exists) {
+      const res = await FileSystem.downloadAsync(url, fileUri);
+      if (res.status !== 200) throw new Error('Download failed');
+    }
+
+    // Trigger system sharing to allow "Save to Files"
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (isAvailable) {
+      await Sharing.shareAsync(fileUri);
+    } else {
+      Alert.alert('Lỗi', 'Thiết bị không hỗ trợ lưu tệp tin.');
+    }
+  } catch (error) {
+    console.error('[FileUtil] Download error:', error);
+    Alert.alert('Lỗi', 'Không thể tải tệp tin.');
+  }
+};

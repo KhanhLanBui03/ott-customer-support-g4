@@ -6,6 +6,8 @@ import * as SecureStore from 'expo-secure-store';
 import store from '../src/store/store';
 import { restoreState, sessionExpired } from '../src/store/authSlice';
 import { Alert } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import InAppNotification from '../src/components/common/InAppNotification';
 
 // Keep splash screen visible while we fetch auth state
 SplashScreen.preventAutoHideAsync();
@@ -64,10 +66,13 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(main)" options={{ headerShown: false }} />
-    </Stack>
+    <SafeAreaProvider>
+      <InAppNotification />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(main)" options={{ headerShown: false }} />
+      </Stack>
+    </SafeAreaProvider>
   );
 }
 

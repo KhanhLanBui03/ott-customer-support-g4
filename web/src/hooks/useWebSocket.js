@@ -188,7 +188,7 @@ export const useWebSocket = () => {
                 // Fetch conversations to add it back to the list
                 console.log('[STOMP] Conversation recreated:', event.conversationId);
                 dispatch(fetchConversations());
-            } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN' || event.eventType === 'MEMBER_UPDATE') {
+            } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN' || event.eventType === 'MEMBER_UPDATE' || event.eventType === 'CONVERSATION_DELETE') {
                 dispatch(fetchConversations());
             } else if (event.eventType === 'USER_UPDATE') {
                 dispatch(updateMemberInfo(event.payload));

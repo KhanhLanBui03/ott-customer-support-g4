@@ -41,3 +41,33 @@ export const formatLastSeen = (status, lastSeenAt) => {
     return 'Ngoại tuyến';
   }
 };
+/**
+ * Formats the date for the message list separators.
+ * @param {number|string|Date} timestamp
+ * @returns {string} - 'HÔM NAY', 'HÔM QUA', or 'MON DD, YYYY'
+ */
+export const formatMessageDateSeparator = (timestamp) => {
+  if (!timestamp) return '';
+  
+  try {
+    const date = new Date(timestamp);
+    const now = new Date();
+    
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (msgDate.getTime() === today.getTime()) {
+      return 'HÔM NAY';
+    } else if (msgDate.getTime() === yesterday.getTime()) {
+      return 'HÔM QUA';
+    } else {
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+    }
+  } catch (e) {
+    return '';
+  }
+};

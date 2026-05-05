@@ -18,6 +18,7 @@ import {
   Lock,
   Unlock,
   Info,
+  Mic,
   BarChart2,
   X,
   ChevronRight,
@@ -214,7 +215,17 @@ const getDocViewerUrl = (u, e) => {
   return `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
 };
 
+const getFullUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  const trimmedUrl = url.trim();
+  if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('blob:') || trimmedUrl.startsWith('data:')) return trimmedUrl;
+
+  const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').split('/api')[0] || `http://${window.location.hostname}:8080`;
+  return `${baseUrl}${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`;
+};
+
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages, onLoadMore }) => {
+
   const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
@@ -420,12 +431,19 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const selectedDetailUserIds = selectedDetailMessage && detailEmoji ? getReactionUsers(selectedDetailMessage, detailEmoji) : [];
   const selectedDetailNames = selectedDetailUserIds.map(getReactionUserName);
 
+  const isAtBottom = useRef(true);
+
   const scrollToBottom = (instant = false) => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
+      const container = scrollRef.current;
+      container.scrollTo({
+        top: container.scrollHeight,
         behavior: instant ? 'instant' : 'smooth'
       });
+      // Force instant scroll to avoid laggy feeling if requested
+      if (instant) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
   };
 
@@ -440,12 +458,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     // Detect scroll to top (scrollTop < 100px)
     const paddingToTop = 100;
     const isNearTop = container.scrollTop < paddingToTop;
-    
+
     // Detect if user is near bottom (within 100px of bottom)
     const paddingToBottom = 100;
     const isNearBottomNow = container.scrollHeight - container.scrollTop - container.clientHeight < paddingToBottom;
     setIsNearBottom(isNearBottomNow);
-    
+    isAtBottom.current = isNearBottomNow;
+
     const now = Date.now();
     const minInterval = 500; // Minimum 500ms between load requests
 
@@ -628,7 +647,10 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     const currentFirstId = currentLength > 0 ? String(messages[0]?.messageId || messages[0]?.id || '') : null;
     const currentLastId = currentLength > 0 ? String(messages[currentLength - 1]?.messageId || messages[currentLength - 1]?.id || '') : null;
     const previousMeta = previousMessagesMetaRef.current;
-    const isFirstLoad = previousMeta.length === 0 && currentLength > 0;
+
+    // Detect if we just switched conversations
+    const isNewConversation = previousMeta.conversationId !== conversationId;
+    const isFirstLoad = (previousMeta.length === 0 && currentLength > 0) || isNewConversation;
     const isAppendAtBottom = Boolean(
       previousMeta.length > 0 &&
       currentLength > previousMeta.length &&
@@ -636,7 +658,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       previousMeta.lastId !== currentLastId
     );
 
-    if (isFirstLoad || isAppendAtBottom) {
+    if (isFirstLoad || isAppendAtBottom || (currentLength > 0 && messages[currentLength - 1].senderId === meId)) {
       scrollToBottom(true);
       const timer = setTimeout(() => scrollToBottom(), 100);
       const longTimer = setTimeout(() => scrollToBottom(), 500);
@@ -646,15 +668,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         clearTimeout(longTimer);
       };
     }
-  }, [messages]);
+  }, [messages, meId, conversationId]);
 
   useEffect(() => {
     previousMessagesMetaRef.current = {
+      conversationId,
       length: Array.isArray(messages) ? messages.length : 0,
       firstId: Array.isArray(messages) && messages.length > 0 ? String(messages[0]?.messageId || messages[0]?.id || '') : null,
       lastId: Array.isArray(messages) && messages.length > 0 ? String(messages[messages.length - 1]?.messageId || messages[messages.length - 1]?.id || '') : null,
     };
-  }, [messages]);
+  }, [messages, conversationId]);
+
 
   const handleAction = async (action, messageId) => {
     try {
@@ -824,9 +848,10 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   useEffect(() => {
     const activeTyping = typingUsers[conversationId]?.filter(u => u.userId !== meId);
-    if (activeTyping?.length > 0 && !loadMoreSnapshotRef.current && !restoreAfterLoadMoreRef.current) {
+    if (activeTyping?.length > 0 && !loadMoreSnapshotRef.current && !restoreAfterLoadMoreRef.current && isNearBottom) {
       scrollToBottom();
     }
+
   }, [typingUsers, conversationId, meId]);
 
   if (loading && messages.length === 0) {
@@ -860,13 +885,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           ref={scrollRef}
           onScroll={handleScroll}
           style={{ overflowAnchor: 'none' }}
+
           className={cn(
             "absolute inset-0 overflow-y-auto p-4 sm:p-8 space-y-6 pb-32 transition-colors no-scrollbar z-10",
             !wallpaper ? "bg-background" : "bg-transparent"
           )}
         >
           <div className="flex flex-col p-4 space-y-6 min-h-full">
-              {(loading || isLoadingMoreRef.current) && messages.length > 0 && (
+            {(loading || isLoadingMoreRef.current) && messages.length > 0 && (
               <div className="flex items-center justify-center py-4 gap-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-300 dark:border-slate-600 border-t-slate-600 dark:border-t-slate-300" />
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Đang tải tin nhắn cũ hơn...</span>
@@ -919,8 +945,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                       <div className="flex justify-center my-6 group relative">
                         <div className="flex items-center space-x-2">
                           <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
-                          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/30' : 'text-slate-500'
-                            }`}>
+                          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/30' : 'text-slate-500'}`}>
                             {msg.content}
                           </span>
                           <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
@@ -1002,6 +1027,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             <img src={originalMsg.mediaUrls?.[0]} className="h-9 w-9 rounded-md object-cover border border-slate-200 dark:border-white/5 shadow-sm" alt="image" />
                                           ) : originalMsg.type === 'STICKER' ? (
                                             <img src={originalMsg.content} className="h-9 w-9 rounded-md object-contain drop-shadow-md" alt="sticker" />
+                                          ) : originalMsg.type === 'VOICE' || (originalMsg.content && originalMsg.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ? (
+                                            <div className="h-9 w-9 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100 dark:bg-indigo-500/10 dark:border-indigo-500/20"><Mic size={16} /></div>
                                           ) : (
                                             <div className="h-9 w-9 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100 dark:bg-indigo-500/10 dark:border-indigo-500/20"><FileText size={16} /></div>
                                           )}
@@ -1011,17 +1038,22 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                         <p className={cn("text-[13px] font-bold truncate leading-tight mb-0.5", isDark ? 'text-gray-100' : 'text-slate-800')}>{msg.replyTo.senderName}</p>
                                         <p className={cn("text-[12px] truncate leading-tight", isDark ? 'text-gray-400' : 'text-slate-500')}>
                                           {(() => {
-                                            const isVoice = msg.replyTo.type === 'VOICE' || 
-                                                           (msg.replyTo.content && (msg.replyTo.content.includes('chat-media/') || msg.replyTo.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
-                                            
+                                            const r = msg.replyTo;
+                                            const originalMsg = messages.find(m => m.messageId === r.messageId);
+                                            const content = r.content || r.text || '';
+                                            const mediaUrls = originalMsg?.mediaUrls || originalMsg?.media_urls || [];
+
+                                            const isVoice = r.type === 'VOICE' ||
+                                              (content && (content.includes('chat-media/') || content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
+                                              (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+
                                             if (isVoice) return 'Tin nhắn thoại';
-                                            if (msg.replyTo.content && msg.replyTo.content !== '[Attachment]') return msg.replyTo.content;
-                                            
+                                            if (content && content !== '[Attachment]' && !content.startsWith('http')) return content;
+
                                             if (originalMsg) {
                                               if (originalMsg.type === 'IMAGE') return '[Hình ảnh]';
                                               if (originalMsg.type === 'VIDEO') return '[Video]';
                                               if (originalMsg.type === 'STICKER') return '[Nhãn dán]';
-                                              if (originalMsg.type === 'VOICE') return 'Tin nhắn thoại';
                                               if (originalMsg.type === 'FILE' && originalMsg.mediaUrls?.length > 0) {
                                                 try {
                                                   const url = originalMsg.mediaUrls[0];
@@ -1035,7 +1067,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                 }
                                               }
                                             }
-                                            return msg.replyTo.content || '[Tệp đính kèm]';
+                                            return content || '[Tệp đính kèm]';
                                           })()}
                                         </p>
                                       </div>
@@ -1148,7 +1180,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     isDark ? "text-white" : "text-slate-900"
                                   )}>{msg.vote.question}</h4>
                                 </div>
-                                
+
                                 <div className={cn(
                                   "p-4 space-y-2.5",
                                   isDark ? "bg-black/20" : "bg-slate-50/50"
@@ -1158,32 +1190,32 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     const totalVotes = msg.vote.options.reduce((s, o) => s + (o.voterIds?.length || 0), 0);
                                     const percent = totalVotes > 0 ? (voterIds.length / totalVotes) * 100 : 0;
                                     const isSelected = voterIds.includes(meId);
-                                    
+
                                     return (
-                                      <button 
-                                        key={opt.optionId} 
+                                      <button
+                                        key={opt.optionId}
                                         disabled={msg.vote.isClosed}
                                         onClick={() => handleVote(msg.messageId, opt.optionId, msg.vote.allowMultiple, msg.vote.options.filter(o => o.voterIds?.includes(meId)).map(o => o.optionId))}
                                         className={cn(
                                           "w-full relative h-14 rounded-2xl border transition-all overflow-hidden group/opt",
-                                          isSelected 
-                                            ? (isDark ? "border-indigo-500/50 bg-indigo-500/10" : "border-indigo-500 bg-indigo-50") 
+                                          isSelected
+                                            ? (isDark ? "border-indigo-500/50 bg-indigo-500/10" : "border-indigo-500 bg-indigo-50")
                                             : (isDark ? "border-white/5 bg-white/5 hover:bg-white/10" : "border-slate-200 bg-white hover:bg-slate-50")
                                         )}
                                       >
-                                        <div 
+                                        <div
                                           className={cn(
                                             "absolute inset-y-0 left-0 transition-all duration-1000",
                                             isDark ? "bg-indigo-500/20" : "bg-indigo-500/10"
-                                          )} 
-                                          style={{ width: `${percent}%` }} 
+                                          )}
+                                          style={{ width: `${percent}%` }}
                                         />
                                         <div className="relative flex items-center justify-between px-4 h-full z-10">
                                           <div className="flex items-center space-x-3">
                                             <div className={cn(
                                               "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                              isSelected 
-                                                ? "bg-indigo-500 border-indigo-500" 
+                                              isSelected
+                                                ? "bg-indigo-500 border-indigo-500"
                                                 : (isDark ? "border-white/20 group-hover/opt:border-white/40" : "border-slate-300 group-hover/opt:border-slate-400")
                                             )}>
                                               {isSelected && <Check size={12} className="text-white" />}
@@ -1210,12 +1242,12 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     );
                                   })}
                                 </div>
-                                
+
                                 <div className={cn(
                                   "px-5 py-4 border-t flex items-center justify-between",
                                   isDark ? "bg-black/40 border-white/5" : "bg-white border-slate-100"
                                 )}>
-                                  <button 
+                                  <button
                                     onClick={() => { setSelectedVote(msg.vote); setIsVoteDetailsOpen(true); }}
                                     className={cn(
                                       "text-[12px] font-bold transition-colors flex items-center space-x-1.5 group/details",
@@ -1225,14 +1257,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     <span>Xem chi tiết</span>
                                     <ChevronRight size={14} className="group-hover/details:translate-x-1 transition-transform" />
                                   </button>
-                                  
+
                                   {(isMe || isAdmin) && !msg.vote.isClosed && (
-                                    <button 
+                                    <button
                                       onClick={() => handleCloseVote(msg.messageId)}
                                       className={cn(
                                         "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
-                                        isDark 
-                                          ? "bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20" 
+                                        isDark
+                                          ? "bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20"
                                           : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100"
                                       )}
                                     >
@@ -1295,16 +1327,12 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     {(() => {
                                       const mediaFiles = msg.mediaUrls || msg.media_urls || [];
                                       const voiceUrl = mediaFiles[0] || (msg.content && msg.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i) ? msg.content : null);
-                                      const isVoiceType = msg.type === 'VOICE' || 
-                                                         (voiceUrl && String(voiceUrl).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
-                                      
+                                      const isVoiceType = msg.type === 'VOICE' ||
+                                        (voiceUrl && String(voiceUrl).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+
                                       // 1. Render Voice Player
                                       if (isVoiceType) {
-                                        let fullUrl = voiceUrl;
-                                        if (fullUrl && !fullUrl.startsWith('http') && !fullUrl.startsWith('blob:')) {
-                                          const baseUrl = (window.CONFIG?.API_URL || '').split('/api')[0];
-                                          fullUrl = `${baseUrl}${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`;
-                                        }
+                                        const fullUrl = getFullUrl(voiceUrl);
                                         return (
                                           <div className="p-2 min-w-[260px]">
                                             {fullUrl ? <VoicePlayer url={fullUrl} /> : <div className="p-3 text-xs opacity-50 italic text-center">Âm thanh lỗi...</div>}
@@ -1324,141 +1352,155 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       // 3. Render Default (Images, Videos, Files, or Text)
                                       return null;
                                     })() || (
-                                      <div className={cn("flex flex-col max-w-full", msg.mediaUrls?.length > 0 ? "min-w-[140px]" : "min-w-0")}>
-                                        {msg.mediaUrls && msg.mediaUrls.length > 0 && (
-                                          <div className="bg-black/5 dark:bg-black/40 backdrop-blur-sm">
-                                            {(() => {
-                                              const urls = msg.mediaUrls;
-                                              const count = urls.length;
+                                        <div className={cn("flex flex-col max-w-full", msg.mediaUrls?.length > 1 ? "min-w-[240px] sm:min-w-[320px]" : msg.mediaUrls?.length > 0 ? "min-w-[140px]" : "min-w-0")}>
+                                          {msg.mediaUrls && msg.mediaUrls.length > 0 && (
+                                            <div className="bg-black/5 dark:bg-black/40 backdrop-blur-sm">
+                                              {(() => {
+                                                const urls = msg.mediaUrls;
+                                                const count = urls.length;
 
-                                              const renderMediaItem = (url, idx, isSmall = true) => {
-                                                const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
-                                                const isVideo = url.match(/\.(mp4|webm|ogg)/i) || (url.startsWith('blob:') && msg.type === 'VIDEO');
+                                                const renderMediaItem = (url, idx, isSmall = true) => {
+                                                  const fullUrl = getFullUrl(url);
+                                                  const isImage = fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'IMAGE') || msg.type === 'IMAGE';
+                                                  const isVideo = fullUrl.match(/\.(mp4|webm|ogg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'VIDEO') || msg.type === 'VIDEO';
 
-                                                if (isImage) {
+                                                  if (isImage) {
+                                                    return (
+                                                      <div key={idx} className={cn("overflow-hidden cursor-pointer group/img relative bg-surface-100 dark:bg-surface-200", isSmall ? "aspect-square" : "aspect-video")} onClick={() => {
+                                                        if (Array.isArray(allChatImages)) {
+                                                          const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                          openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                        }
+                                                      }}>
+                                                        <img src={fullUrl} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" alt="" />
+                                                        <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/5 transition-colors" />
+                                                      </div>
+                                                    );
+                                                  }
+                                                  if (isVideo) {
+                                                    return (
+                                                      <div key={idx} className={cn("overflow-hidden bg-black cursor-pointer group/vid relative", isSmall ? "aspect-square" : "aspect-video")} onClick={() => {
+                                                        if (Array.isArray(allChatImages)) {
+                                                          const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                          openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                        }
+                                                      }}>
+                                                        <video className="w-full h-full object-cover">
+                                                          <source src={fullUrl} />
+                                                        </video>
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/vid:bg-black/40 transition-colors">
+                                                          <Play size={isSmall ? 24 : 48} fill="white" className="text-white drop-shadow-2xl" />
+                                                        </div>
+                                                      </div>
+                                                    );
+                                                  }
                                                   return (
-                                                    <div key={idx} className={cn("overflow-hidden cursor-pointer group/img relative bg-surface-100 dark:bg-surface-200", isSmall ? "aspect-square" : "aspect-video")} onClick={() => {
-                                                      const idxInAll = allChatImages.findIndex(img => img.url === url);
-                                                      openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
-                                                    }}>
-                                                      <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-700" alt="" />
-                                                      <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/5 transition-colors" />
-                                                    </div>
-                                                  );
-                                                }
-                                                if (isVideo) {
-                                                  return (
-                                                    <div key={idx} className={cn("overflow-hidden bg-black", isSmall ? "aspect-square" : "aspect-video")}>
-                                                      <video controls className="w-full h-full object-cover">
-                                                        <source src={url} />
-                                                      </video>
-                                                    </div>
-                                                  );
-                                                }
-                                                return (
-                                                  <div key={idx} className="flex flex-col max-w-full p-2">
-                                                    <FilePreview url={url} />
-                                                    <div className="relative group/file">
-                                                      <div
-                                                        onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
-                                                        className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[260px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
-                                                      >
-                                                        {getFileIcon(url)}
-                                                        <div className="flex-1 min-w-0 pt-0.5">
-                                                          <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
-                                                            {getFileName(url)}
-                                                          </p>
+                                                    <div key={idx} className="flex flex-col max-w-full p-2">
+                                                      <FilePreview url={fullUrl} />
+                                                      <div className="relative group/file">
+                                                        <div
+                                                          onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
+                                                          className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[260px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
+                                                        >
+                                                          {getFileIcon(url)}
+                                                          <div className="flex-1 min-w-0 pt-0.5">
+                                                            <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
+                                                              {getFileName(url)}
+                                                            </p>
+                                                          </div>
                                                         </div>
                                                       </div>
                                                     </div>
-                                                  </div>
-                                                );
-                                              };
-
-                                              if (count === 1) {
-                                                const url = urls[0];
-                                                const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || (url.startsWith('blob:') && msg.type === 'IMAGE');
-                                                if (isImage) {
-                                                  return (
-                                                    <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => {
-                                                      const idxInAll = allChatImages.findIndex(img => img.url === url);
-                                                      openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
-                                                    }}>
-                                                      <img src={url} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
-                                                    </div>
                                                   );
-                                                }
-                                                return renderMediaItem(url, 0, false);
-                                              }
+                                                };
 
-                                              const getRows = (c) => {
-                                                if (c <= 5) return [c];
-                                                if (c === 6) return [3, 3];
-                                                if (c === 7) return [4, 3];
-                                                if (c === 8) return [4, 4];
-                                                const rows = [];
-                                                let rem = c;
-                                                while (rem > 0) {
-                                                  if (rem >= 5) { rows.push(5); rem -= 5; }
-                                                  else { rows.push(rem); rem = 0; }
-                                                }
-                                                return rows;
-                                              };
-
-                                              const rows = getRows(count);
-                                              let currentIndex = 0;
-
-                                              return (
-                                                <div className="flex flex-col gap-[2px]">
-                                                  {rows.map((rowSize, rowIndex) => {
-                                                    const gridColsClass = {
-                                                      1: 'grid-cols-1',
-                                                      2: 'grid-cols-2',
-                                                      3: 'grid-cols-3',
-                                                      4: 'grid-cols-4',
-                                                      5: 'grid-cols-5'
-                                                    }[rowSize] || 'grid-cols-5';
-                                                    const rowUrls = urls.slice(currentIndex, currentIndex + rowSize);
-                                                    currentIndex += rowSize;
+                                                if (count === 1) {
+                                                  const url = urls[0];
+                                                  const fullUrl = getFullUrl(url);
+                                                  const isImage = fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'IMAGE') || msg.type === 'IMAGE';
+                                                  if (isImage) {
                                                     return (
-                                                      <div key={rowIndex} className={cn("grid gap-[2px]", gridColsClass)}>
-                                                        {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
+                                                      <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => {
+                                                        if (Array.isArray(allChatImages)) {
+                                                          const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                          openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                        }
+                                                      }}>
+                                                        <img src={fullUrl} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
                                                       </div>
                                                     );
-                                                  })}
-                                                </div>
-                                              );
-                                            })()}
-                                          </div>
-                                        )}
-                                        {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+                                                  }
+                                                  return renderMediaItem(url, 0, false);
+                                                }
 
-                                        {/* Translation Display */}
-                                        {translationLoading[msg.messageId] && (
-                                          <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
-                                            <Loader2 size={12} className="animate-spin" />
-                                            <span>AI đang dịch...</span>
-                                          </div>
-                                        )}
-                                        {translatedMessages[msg.messageId] && (
-                                          <div className={cn(
-                                            "mt-1 mx-2 mb-2 p-3 rounded-xl border flex flex-col",
-                                            isMe ? "bg-white/10 border-white/10" : "bg-indigo-500/5 border-indigo-500/10"
-                                          )}>
-                                            <div className="flex items-center space-x-1.5 mb-1 opacity-60">
-                                              <SparklesIcon size={10} className="text-indigo-400" />
-                                              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Bản dịch AI</span>
+                                                const getRows = (c) => {
+                                                  if (c <= 5) return [c];
+                                                  if (c === 6) return [3, 3];
+                                                  if (c === 7) return [4, 3];
+                                                  if (c === 8) return [4, 4];
+                                                  const rows = [];
+                                                  let rem = c;
+                                                  while (rem > 0) {
+                                                    if (rem >= 5) { rows.push(5); rem -= 5; }
+                                                    else { rows.push(rem); rem = 0; }
+                                                  }
+                                                  return rows;
+                                                };
+
+                                                const rows = getRows(count);
+                                                let currentIndex = 0;
+
+                                                return (
+                                                  <div className="flex flex-col gap-[2px]">
+                                                    {rows.map((rowSize, rowIndex) => {
+                                                      const gridColsClass = {
+                                                        1: 'grid-cols-1',
+                                                        2: 'grid-cols-2',
+                                                        3: 'grid-cols-3',
+                                                        4: 'grid-cols-4',
+                                                        5: 'grid-cols-5'
+                                                      }[rowSize] || 'grid-cols-5';
+                                                      const rowUrls = urls.slice(currentIndex, currentIndex + rowSize);
+                                                      currentIndex += rowSize;
+                                                      return (
+                                                        <div key={rowIndex} className={cn("grid gap-[2px]", gridColsClass)}>
+                                                          {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                );
+                                              })()}
                                             </div>
-                                            <p className="text-[13px] leading-relaxed italic">{translatedMessages[msg.messageId]}</p>
+                                          )}
+                                          {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+
+                                          {/* Translation Display */}
+                                          {translationLoading[msg.messageId] && (
+                                            <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
+                                              <Loader2 size={12} className="animate-spin" />
+                                              <span>AI đang dịch...</span>
+                                            </div>
+                                          )}
+                                          {translatedMessages[msg.messageId] && (
+                                            <div className={cn(
+                                              "mt-1 mx-2 mb-2 p-3 rounded-xl border flex flex-col",
+                                              isMe ? "bg-white/10 border-white/10" : "bg-indigo-500/5 border-indigo-500/10"
+                                            )}>
+                                              <div className="flex items-center space-x-1.5 mb-1 opacity-60">
+                                                <SparklesIcon size={10} className="text-indigo-400" />
+                                                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Bản dịch AI</span>
+                                              </div>
+                                              <p className="text-[13px] leading-relaxed italic">{translatedMessages[msg.messageId]}</p>
+                                            </div>
+                                          )}
+                                          <div className={cn("flex justify-end px-3 pb-2", (msg.content || msg.mediaUrls?.length > 0) ? "mt-1" : "mt-1")}>
+                                            <span className={`text-[9px] font-black opacity-70 tabular-nums uppercase tracking-widest ${isMe ? 'text-white' : 'text-foreground'}`}>
+                                              {formatMessageTime(msg.createdAt)}
+                                            </span>
                                           </div>
-                                        )}
-                                        <div className={cn("flex justify-end px-3 pb-2", (msg.content || msg.mediaUrls?.length > 0) ? "mt-1" : "mt-1")}>
-                                          <span className={`text-[9px] font-black opacity-70 tabular-nums uppercase tracking-widest ${isMe ? 'text-white' : 'text-foreground'}`}>
-                                            {formatMessageTime(msg.createdAt)}
-                                          </span>
                                         </div>
-                                      </div>
-                                    )}
+                                      )}
                                   </div>
                                   {/* Reactions Badge - Positioned absolute relative to the w-fit bubble wrapper */}
                                   {msg.type !== 'VOTE' && renderReactions(msg.messageId, msg.reactions, isMe)}
@@ -1593,7 +1635,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         {/* Jump to Latest Button */}
         {!isNearBottom && (
           <button
-            onClick={() => scrollToBottom(false)}
+            onClick={() => scrollToBottom(true)}
             className="fixed bottom-32 right-8 z-40 p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-all hover:scale-110 active:scale-95 flex items-center justify-center"
             title="Kéo về tin nhắn mới nhất"
           >

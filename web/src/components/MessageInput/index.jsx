@@ -534,9 +534,14 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
               </p>
               <p className="text-[13px] text-foreground/60 truncate font-semibold">
                 {(() => {
-                  const isVoice = replyingTo.type === 'VOICE' || (replyingTo.content && (replyingTo.content.includes('chat-media/') || replyingTo.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
+                  const content = replyingTo.content || replyingTo.text || '';
+                  const mediaUrls = replyingTo.mediaUrls || replyingTo.media_urls || [];
+                  const isVoice = replyingTo.type === 'VOICE' || 
+                                 (content && (content.includes('chat-media/') || content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
+                                 (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+                  
                   if (isVoice) return 'Tin nhắn thoại';
-                  if (replyingTo.content && replyingTo.type !== 'STICKER') return replyingTo.content;
+                  if (content && replyingTo.type !== 'STICKER' && !content.startsWith('http')) return content;
                   if (replyingTo.type === 'IMAGE') return 'Hình ảnh';
                   if (replyingTo.type === 'VIDEO') return 'Video';
                   if (replyingTo.type === 'STICKER') return 'Nhãn dán';

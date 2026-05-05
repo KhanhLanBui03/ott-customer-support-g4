@@ -80,12 +80,17 @@ const VoicePlayer = ({ url, isOwn }) => {
       console.error('Error playing sound detailed:', error);
       setIsLoading(false);
       
-      // Nếu lỗi là do định dạng webm trên iOS, không hiện Alert làm phiền mà cập nhật state error
-      if (Platform.OS === 'ios' && url.includes('.webm')) {
-        setError('Định dạng WebM không hỗ trợ trên iOS');
-      } else {
-        setError('Không thể phát âm thanh này');
+      let errorMsg = 'Không thể phát âm thanh này';
+      if (Platform.OS === 'ios' && url.toLowerCase().endsWith('.webm')) {
+        errorMsg = 'Định dạng WebM không hỗ trợ trên iOS';
+      } else if (error.message) {
+        if (error.message.includes('code -11828')) {
+          errorMsg = 'Định dạng tệp không được hỗ trợ';
+        } else if (error.message.includes('code -1003')) {
+          errorMsg = 'Lỗi kết nối máy chủ';
+        }
       }
+      setError(errorMsg);
     }
   };
 
@@ -140,9 +145,9 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 16,
-    minWidth: 220,
+    paddingVertical: 4,
+    paddingHorizontal: 0,
+    minWidth: 180,
   },
   ownContainer: {
     alignSelf: 'flex-end',
@@ -151,33 +156,32 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   playButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   otherPlayButton: {
-    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    backgroundColor: 'rgba(102, 126, 234, 0.12)',
   },
   ownPlayButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   progressSection: {
     flex: 1,
     marginLeft: 12,
   },
   track: {
-    height: 4,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 2,
+    height: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    borderRadius: 1.5,
     overflow: 'hidden',
     marginBottom: 4,
   },
   progress: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 1.5,
   },
   ownProgress: {
     backgroundColor: '#fff',
@@ -191,10 +195,11 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   ownTimeText: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   otherTimeText: {
     color: '#64748b',

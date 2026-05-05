@@ -11,7 +11,12 @@ import {
   setMessageRead,
   markConversationRead,
   setUserStatus,
+  updateConversation,
+  removeMemberLocal,
+  updateMemberRoleLocal,
+  fetchMessages,
 } from '../store/chatSlice';
+import { setInAppNotification } from '../store/notificationSlice';
 import {
   onMessageReceive,
   offMessageReceive,
@@ -31,6 +36,8 @@ import {
   offWallpaperUpdated,
   onUserUpdate,
   offUserUpdate,
+  onConversationUpdate,
+  offConversationUpdate,
   emitSendMessage,
   emitTypingStart,
   emitTypingStop,
@@ -41,6 +48,7 @@ import {
 export const useWebSocket = () => {
   const { accessToken, user } = useSelector((state) => state.auth);
   const currentConversationId = useSelector((state) => state.chat.currentConversationId);
+  const conversations = useSelector((state) => state.chat.conversations || []);
   const dispatch = useDispatch();
   const [appState, setAppState] = useState(AppState.currentState);
   const appStateRef = useRef(AppState.currentState);
@@ -60,6 +68,11 @@ export const useWebSocket = () => {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+  
+  const conversationsRef = useRef(conversations);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   // Socket đã được khởi tạo trong _layout.jsx với globalHandler
   // KHÔNG gọi initializeSocket ở đây vì sẽ xóa globalHandler của _layout.jsx
@@ -93,12 +106,18 @@ export const useWebSocket = () => {
         console.log('[WS] ✅ Sending auto-read receipt for:', message.messageId);
         emitReadReceipt(message.messageId, message.conversationId);
         dispatch(markConversationRead(message.conversationId));
-      } else {
-        console.log('[WS] ⏭️ Skipping auto-read:', {
-          match: activeConversationId === message.conversationId,
-          isFromMe,
-          hasId: !!message.messageId
-        });
+      } else if (!isFromMe && activeConversationId !== message.conversationId) {
+        // THÔNG BÁO TRONG APP (NHƯ WEB)
+        // Nếu nhận tin nhắn từ hội thoại KHÁC hội thoại đang mở
+        const conversations = conversationsRef.current;
+        const conv = conversations.find(c => c.conversationId === message.conversationId);
+        
+        dispatch(setInAppNotification({
+          conversationId: message.conversationId,
+          title: conv?.name || message.senderName || message.fullName || "Tin nhắn mới",
+          message: message.content || "Đã gửi một tệp đính kèm",
+          avatarUrl: conv?.avatarUrl || message.avatarUrl || null,
+        }));
       }
 
       // Khi có tin nhắn mới, Redux addMessage đã cập nhật lastMessage và unreadCount
@@ -208,6 +227,39 @@ export const useWebSocket = () => {
 
     onUserUpdate(handleUserUpdate);
     return () => offUserUpdate(handleUserUpdate);
+  }, [dispatch]);
+
+  // Nhận cập nhật hội thoại (Tên, Ảnh, Quyền admin, Member)
+  useEffect(() => {
+    const handleConversationUpdate = (payload) => {
+      if (!payload || !payload.conversationId) return;
+      console.log('[WS] Mobile received conversation update:', payload.eventType);
+      
+      const { conversationId, eventType, payload: data } = payload;
+      
+      if (eventType === 'CONVERSATION_RECREATED' || eventType === 'GROUP_INVITE') {
+        dispatch(fetchConversations());
+      } else if (eventType === 'CONVERSATION_UPDATE') {
+        dispatch(updateConversation({
+          conversationId,
+          ...data
+        }));
+      } else if (eventType === 'MEMBER_UPDATE') {
+        // Cập nhật role hoặc info thành viên
+        if (data.userId && data.role) {
+          dispatch(updateMemberRoleLocal({
+            conversationId,
+            userId: data.userId,
+            role: data.role
+          }));
+        }
+        // Thường thì nên fetch lại để chắc chắn
+        dispatch(fetchConversations());
+      }
+    };
+
+    onConversationUpdate(handleConversationUpdate);
+    return () => offConversationUpdate(handleConversationUpdate);
   }, [dispatch]);
 
   // Nhận sự kiện typing

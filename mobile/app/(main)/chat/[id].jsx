@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
 import MessageModal from '../../../src/components/MessageModal';
-import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage } from '../../../src/store/chatSlice';
+import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi } from '../../../src/api/chatApi';
 import { formatLastSeen } from '../../../src/utils/dateUtils';
@@ -38,6 +38,13 @@ const ChatDetailScreen = () => {
   const conversation = conversations.find(c => c.conversationId === realId);
   const wallpaperUrl = conversation?.wallpaperUrl || null;
   const isLoading = chatState.loading;
+  
+  const myRole = useMemo(() => 
+    conversation?.members?.find(m => String(m.userId || m.id) === String(currentUser?.userId || currentUser?.id))?.role || 'MEMBER',
+    [conversation, currentUser]
+  );
+  const isAdmin = myRole === 'OWNER' || myRole === 'ADMIN';
+  const isRestricted = conversation?.onlyAdminsCanChat && !isAdmin;
 
   // Ref để truy cập messages mới nhất bên trong useFocusEffect mà không cần thêm deps
   const messagesRef = React.useRef(messages);
@@ -274,9 +281,16 @@ const ChatDetailScreen = () => {
       case 'delete':
         Alert.alert('Xác nhận', 'Bạn có muốn xóa tin nhắn này ở phía bạn?', [
           { text: 'Hủy', style: 'cancel' },
-          { text: 'Xóa', onPress: () => {
-            // Implement delete local logic if needed
-          }} 
+          { 
+            text: 'Xóa', 
+            style: 'destructive',
+            onPress: () => {
+              dispatch(deleteMessage({ 
+                messageId: message.messageId, 
+                conversationId: realId 
+              }));
+            } 
+          } 
         ]);
         break;
       case 'recall':
@@ -337,7 +351,13 @@ const ChatDetailScreen = () => {
                 )}
               </View>
               <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : styles.statusOffline]} numberOfLines={1}>
-                {otherMember ? formatLastSeen(otherMember.status || otherMember.presence, otherMember.lastSeenAt || otherMember.last_seen_at) : (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')}
+                {otherMember 
+                  ? formatLastSeen(otherMember.status || otherMember.presence, otherMember.lastSeenAt || otherMember.last_seen_at) 
+                  : (conversation?.type === 'GROUP' 
+                      ? `${conversation?.members?.length || 0} thành viên` 
+                      : (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')
+                    )
+                }
               </Text>
             </View>
           </TouchableOpacity>
@@ -407,16 +427,23 @@ const ChatDetailScreen = () => {
         </View>
 
         <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: '#fff' }}>
-          <MessageInput 
-            onSendMessage={handleSendMessage} 
-            onTypingChange={(isTyping) => {
-              if (isTyping) {
-                sendTypingStart(realId);
-              } else {
-                sendTypingStop(realId);
-              }
-            }}
-          />
+          {isRestricted ? (
+            <View style={styles.restrictedContainer}>
+              <MaterialIcons name="lock-outline" size={20} color="#64748b" />
+              <Text style={styles.restrictedText}>Chỉ quản trị viên mới có thể gửi tin nhắn</Text>
+            </View>
+          ) : (
+            <MessageInput 
+              onSendMessage={handleSendMessage} 
+              onTypingChange={(isTyping) => {
+                if (isTyping) {
+                  sendTypingStart(realId);
+                } else {
+                  sendTypingStop(realId);
+                }
+              }}
+            />
+          )}
         </View>
 
         <MessageModal
@@ -489,6 +516,21 @@ const styles = StyleSheet.create({
   },
   headerActionButton: {
     padding: 8,
+  },
+  restrictedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    gap: 8,
+  },
+  restrictedText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

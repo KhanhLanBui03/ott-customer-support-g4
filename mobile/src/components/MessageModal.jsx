@@ -57,7 +57,13 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) =
             <View style={styles.modalContent}>
               {/* Message Focus Area */}
               <View style={[styles.focusContainer, isOwn ? styles.ownFocus : styles.otherFocus]}>
-                <View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble, (message.type === 'IMAGE' || message.type === 'VIDEO') && styles.mediaBubble]}>
+                <View style={[
+                  styles.bubble, 
+                  isOwn ? styles.ownBubble : styles.otherBubble, 
+                  (message.type === 'IMAGE' || message.type === 'VIDEO') && styles.mediaBubble,
+                  message.type === 'FILE' && styles.fileBubbleModal
+                ]}>
+                  {/* Image/Video Preview */}
                   {message.type === 'IMAGE' && message.mediaUrls?.[0] && (
                     <Image 
                       source={{ uri: message.mediaUrls[0].startsWith('http') ? message.mediaUrls[0] : `${BASE_URL}${message.mediaUrls[0].startsWith('/') ? '' : '/'}${message.mediaUrls[0]}` }} 
@@ -70,8 +76,44 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) =
                       <Ionicons name="play-circle" size={48} color="#fff" />
                     </View>
                   )}
-                  {message.content ? (
-                    <Text style={[styles.messageText, isOwn ? styles.ownText : styles.otherText, (message.type === 'IMAGE' || message.type === 'VIDEO') && { marginTop: 8 }]}>
+
+                  {/* File Preview */}
+                  {message.type === 'FILE' && (
+                    <View style={styles.fileRow}>
+                      <View style={[styles.fileIcon, { backgroundColor: '#6366f1' }]}>
+                        <MaterialIcons name="insert-drive-file" size={24} color="#fff" />
+                      </View>
+                      <View style={styles.fileInfo}>
+                        <Text style={[styles.fileName, { color: isOwn ? '#fff' : '#1e293b' }]} numberOfLines={1}>
+                          {(message.mediaUrls?.[0] || 'file').split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '')}
+                        </Text>
+                        <Text style={[styles.fileSize, { color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748b' }]}>
+                          FILE • 22 KB
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Voice Preview */}
+                  {message.type === 'VOICE' && (
+                    <View style={styles.voiceRow}>
+                      <MaterialIcons name="mic" size={24} color={isOwn ? '#fff' : '#6366f1'} />
+                      <View style={styles.voiceWaves}>
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <View key={i} style={[styles.voiceWave, { height: 10 + Math.random() * 15, backgroundColor: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(99, 102, 241, 0.3)' }]} />
+                        ))}
+                      </View>
+                      <Text style={[styles.voiceDuration, { color: isOwn ? '#fff' : '#64748b' }]}>0:05</Text>
+                    </View>
+                  )}
+
+                  {/* Text Content - Hidden for VOICE to avoid showing raw URLs */}
+                  {message.content && message.type !== 'VOICE' ? (
+                    <Text style={[
+                      styles.messageText, 
+                      isOwn ? styles.ownText : styles.otherText, 
+                      (message.type === 'IMAGE' || message.type === 'VIDEO' || message.type === 'FILE') && { marginTop: 8 }
+                    ]}>
                       {message.content}
                     </Text>
                   ) : null}
@@ -112,7 +154,7 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) =
                   {isOwn && (
                     <MenuButton icon="history" label="Thu hồi" type="recall" color="#ef4444" />
                   )}
-                  <MenuButton icon="delete" label={isOwn ? "Xóa ở tôi" : "Xóa"} type="delete" color="#ef4444" />
+                  <MenuButton icon="delete" label="Xóa ở tôi" type="delete" color="#ef4444" />
                   <MenuButton icon="g-translate" label="Dịch" type="translate" color="#10b981" />
                   <MenuButton icon="check-box" label="Chọn nhiều" type="select" color="#8b5cf6" />
                 </View>
@@ -247,6 +289,55 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  fileBubbleModal: {
+    minWidth: 240,
+    padding: 12,
+  },
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fileIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  fileInfo: {
+    flex: 1,
+  },
+  fileName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  fileSize: {
+    fontSize: 12,
+  },
+  voiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 200,
+    height: 40,
+  },
+  voiceWaves: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    marginHorizontal: 12,
+  },
+  voiceWave: {
+    width: 3,
+    borderRadius: 1.5,
+  },
+  voiceDuration: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

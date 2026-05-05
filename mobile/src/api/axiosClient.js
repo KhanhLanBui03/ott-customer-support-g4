@@ -9,7 +9,7 @@ const axiosClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 60000, // Tăng lên 60s để hỗ trợ upload nhiều ảnh/file lớn
 });
 
 // Interceptor cho Request: Luôn đính kèm Token mới nhất

@@ -9,13 +9,18 @@ import {
   ActivityIndicator
 } from 'react-native';
 import WebView from 'react-native-webview';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { downloadFile } from '../utils/fileUtils';
 
 const FileViewerModal = ({ visible, onClose, fileUrl, fileName }) => {
   if (!fileUrl) return null;
 
   // Sử dụng Google Docs Viewer để xem tài liệu trực tuyến
   const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+
+  const handleDownload = () => {
+    downloadFile(fileUrl, fileName);
+  };
 
   return (
     <Modal 
@@ -31,7 +36,9 @@ const FileViewerModal = ({ visible, onClose, fileUrl, fileName }) => {
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle} numberOfLines={1}>{fileName}</Text>
           </View>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity style={styles.downloadButton} onPress={handleDownload}>
+            <MaterialIcons name="file-download" size={26} color="#6366f1" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>
@@ -70,6 +77,13 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  downloadButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   headerTitleContainer: {
     flex: 1,

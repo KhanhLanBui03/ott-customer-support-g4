@@ -38,65 +38,122 @@ const initialState = {
 
 const isAudioUrl = (value) => {
   if (typeof value !== 'string') return false;
-  return /\.(mp3|m4a|webm|wav|ogg|opus|aac)(\?|$)/i.test(value) || 
-         value.includes('chat-media/') || 
-         value.includes('voice-messages/');
+  return /\.(mp3|m4a|webm|wav|ogg|opus|aac|amr)(\?|$)/i.test(value) || 
+         value.includes('voice-messages/') ||
+         value.includes('audio/');
 };
 
-const urlRegex = /(https?:\/\/[^\s"'<>]+\.(?:mp3|m4a|webm|wav|ogg|opus|aac|mp4|jpg|jpeg|png|gif|svg)(?:\?[^\s"'<>]*)?)/gi;
+const urlRegex = /(https?:\/\/[^\s"'<>]+\.[a-z0-9]{2,}(?:\?[^\s"'<>]*)?)/gi;
 
 const extractCandidateUrls = (source) => {
+  if (!source || typeof source !== 'object') return [];
   const candidates = [];
 
   const pushCandidate = (value) => {
     if (!value) return;
     if (Array.isArray(value)) {
       value.forEach(pushCandidate);
-      return;
-    }
-    if (typeof value === 'string') {
-      candidates.push(value);
-      return;
-    }
-    if (typeof value === 'object') {
-      ['url', 'fileUrl', 'mediaUrl', 'voiceUrl', 'audioUrl', 'attachmentUrl', 'src'].forEach((key) => {
+    } else if (typeof value === 'string') {
+      if (value.startsWith('http') || value.startsWith('blob:') || value.startsWith('data:')) {
+        candidates.push(value);
+      }
+    } else if (typeof value === 'object') {
+      ['url', 'fileUrl', 'mediaUrl', 'mediaUrls', 'media_urls', 'voiceUrl', 'audioUrl', 'attachmentUrl', 'src'].forEach((key) => {
         if (value[key]) pushCandidate(value[key]);
       });
     }
   };
 
-  if (!source || typeof source !== 'object') return candidates;
-
+  // Extract from known fields
+  ['fileUrl', 'mediaUrl', 'mediaUrls', 'media_urls', 'voiceUrl', 'audioUrl', 'attachmentUrl', 'url', 'src', 'payload'].forEach((key) => {
+    if (source[key]) pushCandidate(source[key]);
+  });
+  
   if (Array.isArray(source.attachments)) source.attachments.forEach(pushCandidate);
   if (Array.isArray(source.files)) source.files.forEach(pushCandidate);
 
-  ['fileUrl', 'mediaUrl', 'voiceUrl', 'audioUrl', 'attachmentUrl', 'url', 'src'].forEach((key) => {
-    if (source[key]) pushCandidate(source[key]);
-  });
-
-  if (source.payload) pushCandidate(source.payload);
-
+  // Extract from content text via regex (only for text field)
   const text = String(source.content || '');
   const matches = text.match(urlRegex);
-  if (matches && matches.length > 0) candidates.push(...matches);
-
-  const serialized = JSON.stringify(source);
-  const deepMatches = serialized.match(urlRegex);
-  if (deepMatches && deepMatches.length > 0) candidates.push(...deepMatches);
+  if (matches) candidates.push(...matches);
 
   return Array.from(new Set(candidates.filter(Boolean)));
 };
 
 const normalizeMessage = (message) => {
+  if (!message) return message;
   const msg = { ...message };
+  
+  // Combine all possible media fields
+  const rawMedia = [
+    ...(Array.isArray(msg.mediaUrls) ? msg.mediaUrls : []),
+    ...(Array.isArray(msg.media_urls) ? msg.media_urls : []),
+    ...(msg.mediaUrl ? [msg.mediaUrl] : []),
+    ...(msg.fileUrl ? [msg.fileUrl] : [])
+  ].filter(url => typeof url === 'string' && url.trim().length > 0);
+  
+  // 1. Initial de-duplication
+  let uniqueMedia = Array.from(new Set(rawMedia));
+
+  // 2. Smart filtering: Remove truncated ghost URLs
+  // Sort by length descending so we compare longer URLs first
+  uniqueMedia.sort((a, b) => b.length - a.length);
+  uniqueMedia = uniqueMedia.filter((url, index) => {
+    // Keep the URL only if it's not a substring of any longer URL already in the list
+    // This catches "https://s3...image.jpg" vs "https://s3...imag"
+    const isTruncatedVersion = uniqueMedia.slice(0, index).some(longerUrl => longerUrl.includes(url));
+    return !isTruncatedVersion;
+  });
+
+  // If we have explicit media and the type is already correct, trust it and return
+  const isMediaType = ['IMAGE', 'VIDEO', 'FILE', 'VOICE'].includes(msg.type);
+  if (isMediaType && uniqueMedia.length > 0) {
+    msg.mediaUrls = uniqueMedia;
+    return msg;
+  }
+
+  // Fallback to extraction for TEXT or missing types
   const candidates = extractCandidateUrls(msg);
+  
+  let finalMedia = uniqueMedia.length > 0 ? uniqueMedia : candidates;
+  
+  // Apply smart filtering to candidates too if needed
+  if (finalMedia.length > 1) {
+    finalMedia.sort((a, b) => b.length - a.length);
+    finalMedia = finalMedia.filter((url, index) => !finalMedia.slice(0, index).some(longerUrl => longerUrl.includes(url)));
+  }
 
-  if (candidates.length > 0) {
-    msg.mediaUrls = msg.mediaUrls && msg.mediaUrls.length > 0 ? msg.mediaUrls : candidates;
+  msg.mediaUrls = finalMedia;
 
-    const firstMediaUrl = msg.mediaUrls[0];
+  // Determine type based on media if currently TEXT or missing
+  if (!msg.type || msg.type === 'TEXT') {
+    const mediaToUse = msg.mediaUrls || [];
+    if (mediaToUse.length > 0) {
+      const firstUrl = mediaToUse[0];
+      if (isAudioUrl(firstUrl)) {
+        msg.type = 'VOICE';
+      } else if (/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i.test(firstUrl)) {
+        msg.type = 'IMAGE';
+      } else if (/\.(mp4|webm|ogg)(\?|$)/i.test(firstUrl)) {
+        msg.type = 'VIDEO';
+      } else {
+        msg.type = 'FILE';
+      }
+    }
+  }
+
+  // Determine type based on content/urls IF type is currently TEXT or missing
+  if (!msg.type || msg.type === 'TEXT') {
+    const firstMediaUrl = (msg.mediaUrls && msg.mediaUrls.length > 0) ? msg.mediaUrls[0] : '';
+    
     if (isAudioUrl(firstMediaUrl) || isAudioUrl(msg.content)) {
       msg.type = 'VOICE';
+    } else if (candidates.length > 0) {
+      // Check for images
+      const isImage = (url) => /\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i.test(url);
+      if (candidates.some(isImage)) {
+        msg.type = 'IMAGE';
+      }
     }
   }
 

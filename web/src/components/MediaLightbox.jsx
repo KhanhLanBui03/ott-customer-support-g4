@@ -116,17 +116,30 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
             </button>
           )}
 
-          {/* Image Canvas */}
+          {/* Image/Video Canvas */}
           <div className="relative w-full h-full flex items-center justify-center transition-all duration-500">
-             <img 
-               src={currentImage.url} 
-               alt="" 
-               className="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-300"
-               style={{ 
-                 transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                 filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.5))'
-               }}
-             />
+             {currentImage.type === 'VIDEO' ? (
+               <video 
+                 src={currentImage.url} 
+                 controls 
+                 autoPlay
+                 className="max-w-full max-h-full shadow-2xl"
+                 style={{ 
+                   transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                   filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.5))'
+                 }}
+               />
+             ) : (
+               <img 
+                 src={currentImage.url} 
+                 alt="" 
+                 className="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-300"
+                 style={{ 
+                   transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                   filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.5))'
+                 }}
+               />
+             )}
           </div>
 
           {/* Footer Info Overlay */}
@@ -158,7 +171,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
         {showSidebar && (
           <div className="w-80 border-l border-white/10 bg-black/40 backdrop-blur-xl flex flex-col animate-in slide-in-from-right duration-500">
             <div className="p-6 border-b border-white/5">
-              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white/30">Bộ sưu tập ảnh</h4>
+              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white/30">Bộ sưu tập media</h4>
               <p className="text-[10px] font-bold text-indigo-500 mt-1 uppercase">Toàn bộ kho lưu trữ hội thoại</p>
             </div>
             <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-3 no-scrollbar content-start">
@@ -171,7 +184,13 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
                     ${currentIndex === idx ? 'ring-4 ring-indigo-500 scale-95 shadow-lg' : 'opacity-40 hover:opacity-100 hover:scale-[1.02]'}
                   `}
                 >
-                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  {img.type === 'VIDEO' ? (
+                    <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                      <PlayCircle size={32} className="text-white/50 group-hover:text-white transition-colors" />
+                    </div>
+                  ) : (
+                    <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  )}
                   {currentIndex === idx && (
                     <div className="absolute inset-0 bg-indigo-500/10 flex items-center justify-center">
                        <Maximize2 size={20} className="text-white animate-pulse" />

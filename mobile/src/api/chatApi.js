@@ -97,6 +97,11 @@ export const conversationApi = {
     return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}`, data);
   },
 
+  // Update conversation avatar
+  updateAvatar: (conversationId, avatarUrl) => {
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/avatar`, { avatarUrl });
+  },
+
   // Update conversation wallpaper
   updateConversationWallpaper: (conversationId, wallpaperUrl) => {
     return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/wallpaper`, { wallpaperUrl });
@@ -111,6 +116,57 @@ export const conversationApi = {
   // Mark all messages in conversation as read
   markAsRead: (conversationId) => {
     return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/read`);
+  },
+
+  // Invite member to group
+  inviteMember: (conversationId, userId) => {
+    return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/invite`, { userId });
+  },
+
+  // Get pending group invitations
+  getPendingInvitations: () => {
+    return axiosClient.get('/conversations/invitations/pending');
+  },
+
+  // Accept group invitation
+  acceptInvitation: (invitationId) => {
+    return axiosClient.post(`/conversations/invitations/${encodeURIComponent(invitationId)}/accept`);
+  },
+
+  // Reject group invitation
+  rejectInvitation: (invitationId) => {
+    return axiosClient.post(`/conversations/invitations/${encodeURIComponent(invitationId)}/reject`);
+  },
+
+  // Remove member from group (Admin/Owner only)
+  removeMember: (conversationId, userId) => {
+    return axiosClient.delete(`/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}`);
+  },
+
+  // Assign role to member (Owner only)
+  assignRole: (conversationId, userId, role) => {
+    // role: MEMBER, ADMIN
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}/role`, { role });
+  },
+
+  // Disband group (Owner only)
+  disbandGroup: (conversationId) => {
+    return axiosClient.delete(`/conversations/${encodeURIComponent(conversationId)}`);
+  },
+
+  // Leave group/conversation
+  deleteConversationForMe: (conversationId) => {
+    return axiosClient.delete(`/conversations/${encodeURIComponent(conversationId)}/me`);
+  },
+
+  // Rename conversation
+  renameConversation: (conversationId, name) => {
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/name`, { name });
+  },
+
+  // Update conversation tag
+  updateTag: (conversationId, tag) => {
+    return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/tag`, { tag });
   },
 };
 

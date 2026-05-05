@@ -95,11 +95,11 @@ public class ConversationController {
     }
 
     @GetMapping("/invitations/pending")
-    public ResponseEntity<ApiResponse<List<com.chatapp.modules.conversation.domain.GroupInvitation>>> getPendingInvitations(
+    public ResponseEntity<ApiResponse<List<com.chatapp.modules.conversation.dto.GroupInvitationResponse>>> getPendingInvitations(
             HttpServletRequest request) {
         String userId = getUserId(request);
         log.info("Fetching pending invitations for user: {}", userId);
-        List<com.chatapp.modules.conversation.domain.GroupInvitation> res = conversationService.getPendingInvitations(userId);
+        List<com.chatapp.modules.conversation.dto.GroupInvitationResponse> res = conversationService.getPendingInvitations(userId);
         log.info("Found {} pending invitations for user: {}", res.size(), userId);
         return ResponseEntity.ok(ApiResponse.success(res, "Pending invitations fetched successfully"));
     }
