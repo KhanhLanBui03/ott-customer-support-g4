@@ -49,7 +49,7 @@ export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, 
     const myId = getState().auth.user?.userId || getState().auth.user?.id;
     const realId = getRealId(state, id, myId);
     
-    const params = { ...arg?.params, limit: 50 };
+    const params = { ...arg?.params, limit: -1 };
     if (isLoadMore && state.messages[realId]?.length > 0) {
       params.fromMessageId = state.messages[realId][0].messageId;
     }

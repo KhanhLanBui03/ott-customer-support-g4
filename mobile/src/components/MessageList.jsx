@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import ChatBubble from './ChatBubble';
 import { formatMessageDateSeparator } from '../utils/dateUtils';
@@ -26,8 +27,10 @@ const MessageList = React.forwardRef(({
   highlightedMessageId = null,
 }, ref) => {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = React.useState(false);
+  const [isNearBottom, setIsNearBottom] = React.useState(true); // Track if user is near bottom
   const readMessageIds = useRef(new Set());
-  
+
   // Đảo ngược danh sách tin nhắn để dùng với inverted FlatList
   // Tin nhắn mới nhất sẽ ở index 0 (đáy màn hình)
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
@@ -43,7 +46,7 @@ const MessageList = React.forwardRef(({
     // Nhưng ở đây ta dùng messages để check cho chuẩn
     const originalIndex = messages.findIndex(m => m.messageId === message.messageId);
     if (originalIndex === -1) return false;
-    
+
     return !messages.slice(originalIndex + 1).some((nextMessage) => {
       return Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) === readerId);
     });
@@ -75,6 +78,34 @@ const MessageList = React.forwardRef(({
     onPressMessage(item);
   };
 
+  const isAtBottom = useRef(true);
+  const isLoadingMore = useRef(false);
+
+  const handleScroll = (event) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    // Kiểm tra xem có đang ở gần cuối danh sách không (cách đáy 100px để trừ hao)
+    const paddingToBottom = 100;
+    const isCloseToBottom = contentOffset.y <= paddingToBottom;
+    isAtBottom.current = isCloseToBottom;
+    setIsNearBottom(isCloseToBottom);
+
+    // Kiểm tra nếu scroll gần đầu danh sách để load tin nhắn cũ hơn
+    // Trigger khi contentOffset.y < 100px (người dùng kéo lên)
+    const paddingToTop = 100;
+    const isNearTop = contentOffset.y < paddingToTop;
+
+    console.log(`[MessageList] Scroll: y=${Math.round(contentOffset.y)}, nearTop=${isNearTop}, loading=${isLoadingMoreMessages}, hasCallback=${!!onLoadMore}`);
+
+    if (isNearTop && !isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0) {
+      console.log('[MessageList] 🔝 Near top detected, triggering onLoadMore');
+      setIsLoadingMoreMessages(true);
+      onLoadMore().finally(() => {
+        setIsLoadingMoreMessages(false);
+      });
+    }
+  };
+
+
   // Sử dụng Ref để lưu trữ props mới nhất cho callback ổn định
   const propsRef = useRef({ conversationId, sendReadReceipt, currentUserId });
   useEffect(() => {
@@ -84,7 +115,7 @@ const MessageList = React.forwardRef(({
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     viewableItems.forEach(({ item }) => {
       const { conversationId: cId, sendReadReceipt: sRR, currentUserId: uId } = propsRef.current;
-      
+
       if (!item || !cId || !sRR) return;
 
       const messageId = item.messageId || item.id;
@@ -112,6 +143,24 @@ const MessageList = React.forwardRef(({
     readMessageIds.current.clear();
   }, [conversationId]);
 
+  useEffect(() => {
+    if (messages.length > 0 && !isRefreshing && !isLoadingMoreMessages) {
+      // Chỉ tự động cuộn xuống nếu:
+      // 1. Đang ở đáy (isAtBottom.current = true)
+      // 2. Hoặc tin nhắn mới nhất là của mình
+      // 3. Và KHÔNG phải đang load more messages
+      const lastMessage = messages[messages.length - 1];
+      const isMyMessage = String(lastMessage?.senderId) === String(currentUserId);
+
+      if (isAtBottom.current || isMyMessage) {
+        setTimeout(() => {
+          const listRef = ref?.current || null;
+          listRef?.scrollToOffset({ offset: 0, animated: true });
+        }, 100);
+      }
+    }
+  }, [messages.length, typingUsers, isRefreshing, isLoadingMoreMessages, currentUserId]);
+
   const onRefresh = async () => {
     if (onLoadMore && !isRefreshing) {
       setIsRefreshing(true);
@@ -123,7 +172,7 @@ const MessageList = React.forwardRef(({
   const renderMessage = ({ item, index }) => {
     const otherOnline = onlineUsers.some(id => String(id) !== String(currentUserId || ''));
     const latestReadBy = getLatestReadBy(item);
-    
+
     // Logic hiển thị trạng thái "Đã gửi/Đã nhận"
     const originalIndex = messages.findIndex(m => m.messageId === item.messageId);
     const shouldShowStatus = !latestReadBy.length && !messages.slice(originalIndex + 1).some((nextMessage) => {
@@ -136,7 +185,7 @@ const MessageList = React.forwardRef(({
     const olderMsgDate = index < reversedMessages.length - 1 && reversedMessages[index + 1].createdAt
       ? new Date(reversedMessages[index + 1].createdAt).toDateString()
       : null;
-    
+
     const showSeparator = currentMsgDate !== olderMsgDate;
 
     return (
@@ -175,7 +224,7 @@ const MessageList = React.forwardRef(({
     if (activeTyping.length === 0) return null;
 
     const firstTypingUser = activeTyping[0];
-    const typingText = activeTyping.length > 1 
+    const typingText = activeTyping.length > 1
       ? `${activeTyping.length} người đang soạn tin...`
       : `${firstTypingUser.name} đang soạn tin...`;
 
@@ -189,6 +238,16 @@ const MessageList = React.forwardRef(({
           </View>
           <Text style={styles.typingText}>{typingText}</Text>
         </View>
+      </View>
+    );
+  };
+
+  const renderLoadingMoreIndicator = () => {
+    if (!isLoadingMoreMessages || messages.length === 0) return null;
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color="#667eea" />
+        <Text style={styles.loadingMoreText}>Đang tải tin nhắn cũ hơn...</Text>
       </View>
     );
   };
@@ -210,11 +269,19 @@ const MessageList = React.forwardRef(({
         data={reversedMessages}
         renderItem={renderMessage}
         keyExtractor={(item, index) => item.messageId || item.id || String(item.createdAt) || index.toString()}
-        // Với inverted, Header sẽ nằm ở đáy màn hình
+        // Với inverted: Header ở Đáy, Footer ở Đỉnh
         ListHeaderComponent={renderTypingIndicator}
+        ListFooterComponent={renderLoadingMoreIndicator}
         contentContainerStyle={styles.listContent}
+        onContentSizeChange={(w, h) => {
+          if (isAtBottom.current && !isRefreshing && !isLoadingMoreMessages) {
+            const listRef = ref?.current || null;
+            listRef?.scrollToOffset({ offset: 0, animated: true });
+          }
+        }}
+        onScroll={handleScroll}
         scrollEventThrottle={16}
-        refreshing={isRefreshing}
+        refreshing={false}
         onRefresh={onRefresh}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
@@ -223,7 +290,10 @@ const MessageList = React.forwardRef(({
         initialNumToRender={15}
         maxToRenderPerBatch={10}
         windowSize={10}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+
       />
+
     </View>
   );
 });
@@ -300,6 +370,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  loadingMoreContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '500',
   },
 });
 

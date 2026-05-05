@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { chatApi } from '../api/chatApi';
 import { setConversations, setActiveConversation, setMessages, addMessage, fetchConversations, fetchFriends, resetUnreadCount } from '../store/chatSlice';
@@ -7,6 +7,13 @@ export const useChat = () => {
   const dispatch = useDispatch();
   const { conversations, activeConversationId, messages, friends, loading } = useSelector(state => state.chat);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const messagesRef = useRef(messages);
+  const DEFAULT_MESSAGE_PAGE_SIZE = 30;
+
+  // Keep messagesRef in sync with Redux state
+  React.useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const fetchConversationsAction = useCallback(async () => {
     return dispatch(fetchConversations());
@@ -16,11 +23,22 @@ export const useChat = () => {
     dispatch(fetchFriends());
   }, [dispatch]);
 
-  const fetchMessages = useCallback(async (conversationId) => {
+  const fetchMessages = useCallback(async (conversationId, loadMore = false) => {
     if (!conversationId) return;
     setMessagesLoading(true);
     try {
-      const data = await chatApi.getMessages(conversationId);
+      const params = {};
+      params.limit = DEFAULT_MESSAGE_PAGE_SIZE;
+      
+      // Support for pagination: if loadMore, get the first message's ID to load older messages
+      if (loadMore && messagesRef.current[conversationId]?.length > 0) {
+        const firstMsg = messagesRef.current[conversationId][0];
+        if (firstMsg?.messageId) {
+          params.fromMessageId = firstMsg.messageId;
+        }
+      }
+
+      const data = await chatApi.getMessages(conversationId, params);
       // Debug log to inspect server payload for messages (temporary)
       try {
         console.debug('[useChat] fetchMessages payload for', conversationId, data);
@@ -99,9 +117,21 @@ export const useChat = () => {
 
       try { console.debug('[useChat] normalized messages for', conversationId, messagesList); } catch(e){}
 
+      // If loadMore, prepend new messages to existing ones
+      if (loadMore && messagesRef.current[conversationId]?.length > 0) {
+        const existingMsgs = messagesRef.current[conversationId];
+        // Filter out duplicates
+        const filtered = messagesList.filter(nm => !existingMsgs.some(em => em.messageId === nm.messageId));
+        messagesList = [...filtered, ...existingMsgs];
+      }
+
       dispatch(setMessages({ conversationId, messages: messagesList }));
+
+      const hasMoreHistory = Array.isArray(messagesList) && messagesList.length >= DEFAULT_MESSAGE_PAGE_SIZE;
+      return { messages: messagesList, hasMoreHistory };
     } catch (err) {
       console.error("Failed to fetch messages", err);
+      return { messages: [], hasMoreHistory: false };
     } finally {
       setMessagesLoading(false);
     }

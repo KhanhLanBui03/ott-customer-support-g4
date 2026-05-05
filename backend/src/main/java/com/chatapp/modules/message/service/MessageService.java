@@ -63,18 +63,18 @@ public class MessageService {
                 }
             } else {
                 // Group chat restriction check
-                com.chatapp.modules.conversation.domain.Conversation conv = 
-                    conversationService.getConversationById(command.getConversationId());
-                
+                com.chatapp.modules.conversation.domain.Conversation conv = conversationService
+                        .getConversationById(command.getConversationId());
+
                 if (conv != null && Boolean.TRUE.equals(conv.getOnlyAdminsCanChat())) {
-                    com.chatapp.modules.conversation.domain.UserConversation uc = 
-                        userConversationRepository.findById(command.getSenderId(), command.getConversationId()).orElse(null);
-                    
+                    com.chatapp.modules.conversation.domain.UserConversation uc = userConversationRepository
+                            .findById(command.getSenderId(), command.getConversationId()).orElse(null);
+
                     if (uc == null || (!"OWNER".equals(uc.getRole()) && !"ADMIN".equals(uc.getRole()))) {
-                        log.warn("Unauthorized chat attempt in restricted group: user {} in conv {}", 
-                            command.getSenderId(), command.getConversationId());
+                        log.warn("Unauthorized chat attempt in restricted group: user {} in conv {}",
+                                command.getSenderId(), command.getConversationId());
                         throw new com.chatapp.common.exception.ValidationException(
-                            "Chỉ quản trị viên mới có quyền gửi tin nhắn trong nhóm này.");
+                                "Chỉ quản trị viên mới có quyền gửi tin nhắn trong nhóm này.");
                     }
                 }
             }
@@ -94,13 +94,11 @@ public class MessageService {
                     senderName,
                     command.getContent(),
                     type);
-            
+
             // Fix: Set media URLs from command
             if (command.getMediaUrls() != null && !command.getMediaUrls().isEmpty()) {
                 message.setMediaUrls(command.getMediaUrls());
             }
-
-
 
             if (command.getReplyToMessageId() != null) {
                 log.debug("Adding reply info for message: {}", command.getReplyToMessageId());
@@ -116,13 +114,15 @@ public class MessageService {
                         .type(repliedMessage.getType())
                         .mediaUrls(repliedMessage.getMediaUrls())
                         .build());
-                
-                System.out.println("DEBUG: Created ReplyInfo - Type: " + message.getReplyTo().getType() 
-                    + ", MediaCount: " + (message.getReplyTo().getMediaUrls() != null ? message.getReplyTo().getMediaUrls().size() : 0));
-                
-                log.info("Populated reply info: type={}, mediaCount={}", 
-                    message.getReplyTo().getType(), 
-                    message.getReplyTo().getMediaUrls() != null ? message.getReplyTo().getMediaUrls().size() : 0);
+
+                System.out.println("DEBUG: Created ReplyInfo - Type: " + message.getReplyTo().getType()
+                        + ", MediaCount: "
+                        + (message.getReplyTo().getMediaUrls() != null ? message.getReplyTo().getMediaUrls().size()
+                                : 0));
+
+                log.info("Populated reply info: type={}, mediaCount={}",
+                        message.getReplyTo().getType(),
+                        message.getReplyTo().getMediaUrls() != null ? message.getReplyTo().getMediaUrls().size() : 0);
             }
 
             if (command.getForwardedFrom() != null) {
@@ -221,7 +221,8 @@ public class MessageService {
         try {
             conversationService.markAsRead(userId, conversationId);
         } catch (Exception e) {
-            log.warn("Failed to reset unread count for user {} in conversation {}: {}", userId, conversationId, e.getMessage());
+            log.warn("Failed to reset unread count for user {} in conversation {}: {}", userId, conversationId,
+                    e.getMessage());
         }
 
         // Publish read receipt event (we can still use the single messageId for the
@@ -450,15 +451,17 @@ public class MessageService {
 
     /**
      * Get conversation messages (paginated)
+     * Use limit = -1 to fetch all messages
      */
     public java.util.List<Message> getConversationMessages(String conversationId, int limit, String currentUserId,
             String fromMessageId) {
         UserConversation userConv = userConversationRepository.findById(currentUserId, conversationId)
                 .orElse(null);
-        
-        Long joinedAt = (userConv != null && userConv.getJoinedAt() != null) ? userConv.getJoinedAt() : System.currentTimeMillis();
+
+        Long joinedAt = (userConv != null && userConv.getJoinedAt() != null) ? userConv.getJoinedAt()
+                : System.currentTimeMillis();
         String type = (userConv != null) ? userConv.getType() : null;
-        
+
         final Long finalJoinedAt = joinedAt;
 
         Long fromCreatedAt = null;
@@ -471,25 +474,28 @@ public class MessageService {
 
         final Long finalFromCreatedAt = fromCreatedAt;
 
-        List<Message> allMessages = messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, 100);
+        var baseStream = messageRepository.findPaginatedByConversationId(conversationId, finalFromCreatedAt, limit)
+                .stream()
+                .filter(m -> m.getCreatedAt() != null) // Skip messages with null timestamps
+                .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(currentUserId)) // Filter
+                                                                                                              // hidden
+                                                                                                              // messages
+                .sorted((m1, m2) -> Long.compare(
+                        m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L,
+                        m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L)); // newest first
 
-        List<Message> filtered = allMessages.stream()
-                .filter(m -> {
-                    boolean createdAtOk = m.getCreatedAt() != null;
-                    boolean joinedAtOk = m.getCreatedAt() >= finalJoinedAt;
-                    return createdAtOk && joinedAtOk;
-                })
-                .filter(m -> {
-                    List<String> hiddenFor = m.getHiddenForUsers();
-                    boolean hidden = hiddenFor != null && hiddenFor.contains(currentUserId);
-                    return !hidden;
-                })
-                .sorted((m1, m2) -> Long.compare(m2.getCreatedAt(), m1.getCreatedAt()))
-                .limit(limit)
-                .sorted((m1, m2) -> Long.compare(m1.getCreatedAt(), m2.getCreatedAt()))
+        // Apply joinedAt filter only when limit > 0 (normal paginated fetch).
+        // If client requests limit == -1 we interpret as "fetch all" and skip joinedAt
+        var stream = baseStream;
+        if (limit > 0) {
+            stream = stream.filter(m -> m.getCreatedAt() >= finalJoinedAt)
+                    .limit(limit);
+        }
+
+        return stream.sorted((m1, m2) -> Long.compare(
+                m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L,
+                m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L)) // flip to chronological order
                 .collect(Collectors.toList());
-
-        return filtered;
     }
 
     // Event publishing methods
