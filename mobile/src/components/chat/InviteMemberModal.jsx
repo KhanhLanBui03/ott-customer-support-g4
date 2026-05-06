@@ -27,6 +27,7 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
   // Load friends on mount
   useEffect(() => {
     if (visible) {
+      setInvitingIds(new Set());
       loadFriends();
     }
   }, [visible]);

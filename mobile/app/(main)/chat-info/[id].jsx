@@ -213,19 +213,27 @@ const ChatInfoScreen = () => {
   };
 
   const handleToggleChatRestriction = async () => {
+    const originalValue = conversation?.onlyAdminsCanChat;
+    const newValue = !originalValue;
+
     try {
-      const newValue = !conversation?.onlyAdminsCanChat;
-      await conversationApi.toggleChatRestriction(realId);
-      
-      // Cập nhật state local ngay lập tức
+      // 1. Cập nhật UI ngay lập tức (Optimistic Update)
       dispatch(updateConversation({ 
         conversationId: realId, 
         onlyAdminsCanChat: newValue 
       }));
+
+      // 2. Gọi API chạy ngầm
+      await conversationApi.toggleChatRestriction(realId);
       
-      Alert.alert('Thành công', `Đã ${newValue ? 'bật' : 'tắt'} quyền giới hạn gửi tin nhắn.`);
+      // Thành công thì không cần làm gì thêm vì UI đã cập nhật rồi
     } catch (err) {
-      Alert.alert('Lỗi', 'Không thể thay đổi quyền gửi tin nhắn.');
+      // 3. Nếu lỗi, hoàn tác lại trạng thái cũ
+      dispatch(updateConversation({ 
+        conversationId: realId, 
+        onlyAdminsCanChat: originalValue 
+      }));
+      Alert.alert('Lỗi', 'Không thể thay đổi quyền gửi tin nhắn. Vui lòng thử lại.');
     }
   };
 
