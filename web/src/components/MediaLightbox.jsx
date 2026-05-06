@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Download, Share2, RotateCw, ZoomIn, ZoomOut, 
-  ChevronLeft, ChevronRight, Maximize2, User, Clock
+  ChevronLeft, ChevronRight, Maximize2, User, Clock,
+  PlayCircle
 } from 'lucide-react';
+
+const getFullUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  const trimmedUrl = url.trim();
+  if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('blob:') || trimmedUrl.startsWith('data:')) return trimmedUrl;
+
+  const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').split('/api')[0] || `http://${window.location.hostname}:8080`;
+  return `${baseUrl}${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`;
+};
 
 const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndexChange }) => {
   const [zoom, setZoom] = useState(1);
@@ -83,7 +93,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
           </button>
           <div className="h-6 w-px bg-white/10 mx-2" />
           <button 
-            onClick={() => window.open(currentImage.url, '_blank')}
+            onClick={() => window.open(getFullUrl(currentImage.url), '_blank')}
             className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-indigo-600 rounded-xl transition-all font-bold text-xs"
           >
             <Download size={16} />
@@ -120,7 +130,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
           <div className="relative w-full h-full flex items-center justify-center transition-all duration-500">
              {currentImage.type === 'VIDEO' ? (
                <video 
-                 src={currentImage.url} 
+                 src={getFullUrl(currentImage.url)} 
                  controls 
                  autoPlay
                  className="max-w-full max-h-full shadow-2xl"
@@ -131,7 +141,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
                />
              ) : (
                <img 
-                 src={currentImage.url} 
+                 src={getFullUrl(currentImage.url)} 
                  alt="" 
                  className="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-300"
                  style={{ 
@@ -174,34 +184,37 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
               <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white/30">Bộ sưu tập media</h4>
               <p className="text-[10px] font-bold text-indigo-500 mt-1 uppercase">Toàn bộ kho lưu trữ hội thoại</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-3 no-scrollbar content-start">
-              {images.map((img, idx) => (
-                <div 
-                  key={idx}
-                  onClick={() => onIndexChange(idx)}
-                  className={`
-                    aspect-square rounded-2xl overflow-hidden cursor-pointer transition-all relative group
-                    ${currentIndex === idx ? 'ring-4 ring-indigo-500 scale-95 shadow-lg' : 'opacity-40 hover:opacity-100 hover:scale-[1.02]'}
-                  `}
-                >
-                  {img.type === 'VIDEO' ? (
-                    <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                      <PlayCircle size={32} className="text-white/50 group-hover:text-white transition-colors" />
-                    </div>
-                  ) : (
-                    <img src={img.url} alt="" className="w-full h-full object-cover" />
-                  )}
-                  {currentIndex === idx && (
-                    <div className="absolute inset-0 bg-indigo-500/10 flex items-center justify-center">
-                       <Maximize2 size={20} className="text-white animate-pulse" />
-                    </div>
-                  )}
-                </div>
-              ))}
+            <div className="flex-1 overflow-y-auto no-scrollbar">
+              <div className="p-4 grid grid-cols-2 gap-3 content-start">
+                {images.map((img, idx) => (
+                  <div 
+                    key={idx}
+                    onClick={() => onIndexChange(idx)}
+                    className={`
+                      aspect-square rounded-2xl overflow-hidden cursor-pointer transition-all relative group
+                      ${currentIndex === idx ? 'ring-4 ring-indigo-500 scale-95 shadow-lg opacity-100' : 'opacity-40 hover:opacity-100 hover:scale-[1.02]'}
+                    `}
+                    style={{ aspectRatio: '1/1' }}
+                  >
+                    {img.type === 'VIDEO' ? (
+                      <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                        <PlayCircle size={32} className="text-white/50 group-hover:text-white transition-colors" />
+                      </div>
+                    ) : (
+                      <img src={getFullUrl(img.url)} alt="" className="w-full h-full object-cover block" />
+                    )}
+                    {currentIndex === idx && (
+                      <div className="absolute inset-0 bg-indigo-500/10 flex items-center justify-center">
+                         <Maximize2 size={20} className="text-white animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="p-6 border-t border-white/5 bg-black/20">
                <button 
-                 onClick={() => window.open(currentImage.url, '_blank')}
+                 onClick={() => window.open(getFullUrl(currentImage.url), '_blank')}
                  className="w-full py-4 bg-white text-black rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95"
                >
                  Tải ảnh chất lượng cao

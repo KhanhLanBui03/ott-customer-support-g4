@@ -7,6 +7,7 @@ import {
 import { friendApi } from '../api/friendApi';
 import { userApi } from '../api/userApi';
 import { useChat } from '../hooks/useChat';
+import { useAuth } from '../hooks/useAuth';
 import { fetchFriends, fetchConversations } from '../store/chatSlice';
 import { removePendingFriend, setPendingRequests } from '../store/notificationSlice';
 import { useTheme } from '../hooks/useTheme';
@@ -19,6 +20,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
   const { pendingFriends } = useSelector(state => state.notification);
   const { isDark } = useTheme();
   const { create, selectConversation } = useChat();
+  const { user: currentUser } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [view, setView] = useState(initialView); // 'list' or 'requests' or 'search'
@@ -145,14 +147,12 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-slate-950/40 animate-fade-in">
-      <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col h-[600px] border ${
-        isDark ? 'bg-[#1a1e26] border-white/5' : 'bg-white border-slate-100'
-      }`}>
-        
-        {/* Header */}
-        <div className={`h-24 flex items-center justify-between px-10 border-b backdrop-blur-md shrink-0 ${
-          isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50/50 border-slate-50'
+      <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col h-[600px] border ${isDark ? 'bg-[#1a1e26] border-white/5' : 'bg-white border-slate-100'
         }`}>
+
+        {/* Header */}
+        <div className={`h-24 flex items-center justify-between px-10 border-b backdrop-blur-md shrink-0 ${isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50/50 border-slate-50'
+          }`}>
           <div className="flex items-center space-x-4">
             <h2 className={`text-xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-800'}`}>
               {view === 'list' ? 'Danh sách bạn bè' : view === 'requests' ? 'Lời mời kết bạn' : 'Tìm kiếm bạn bè'}
@@ -172,9 +172,8 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
               </button>
             )}
           </div>
-          <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${
-            isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'
-          }`}>
+          <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'
+            }`}>
             <X size={24} />
           </button>
         </div>
@@ -185,19 +184,17 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
             <div className="space-y-6">
               {/* Search Bar */}
               <div className="relative group">
-                <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
-                  isDark ? 'text-white/20 group-focus-within:text-indigo-500' : 'text-slate-300 group-focus-within:text-indigo-500'
-                }`} size={18} />
+                <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-white/20 group-focus-within:text-indigo-500' : 'text-slate-300 group-focus-within:text-indigo-500'
+                  }`} size={18} />
                 <input
                   type="text"
                   placeholder="Tìm kiếm bạn bè trong danh sách..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${
-                    isDark 
-                      ? 'bg-white/5 border-white/5 text-white placeholder:text-white/20' 
-                      : 'bg-slate-50 border-slate-100 text-slate-800 placeholder:text-slate-400'
-                  }`}
+                  className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${isDark
+                    ? 'bg-white/5 border-white/5 text-white placeholder:text-white/20'
+                    : 'bg-slate-50 border-slate-100 text-slate-800 placeholder:text-slate-400'
+                    }`}
                 />
               </div>
 
@@ -210,15 +207,13 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                   </div>
                 ) : (
                   filteredFriends.map((friend) => (
-                    <div key={friend.userId} className={`p-4 rounded-2xl transition-all group flex items-center justify-between border ${
-                      isDark 
-                        ? 'bg-white/5 border-white/5 hover:bg-white/10' 
-                        : 'bg-white border-slate-100 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-500/5'
-                    }`}>
+                    <div key={friend.userId} className={`p-4 rounded-2xl transition-all group flex items-center justify-between border ${isDark
+                      ? 'bg-white/5 border-white/5 hover:bg-white/10'
+                      : 'bg-white border-slate-100 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-500/5'
+                      }`}>
                       <div className="flex items-center space-x-4">
-                        <div className={`w-12 h-12 rounded-2xl overflow-hidden border ${
-                          isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
-                        }`}>
+                        <div className={`w-12 h-12 rounded-2xl overflow-hidden border ${isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                          }`}>
                           {friend.avatarUrl ? (
                             <img src={friend.avatarUrl} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -231,17 +226,16 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
+                        <button
                           onClick={() => handleStartChat(friend)}
                           className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
                         >
                           <MessageSquare size={18} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleUnfriend(friend.userId)}
-                          className={`p-2.5 rounded-xl transition-all ${
-                            isDark ? 'bg-white/5 text-white/40 hover:text-red-500 hover:bg-red-500/10' : 'bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50'
-                          }`}
+                          className={`p-2.5 rounded-xl transition-all ${isDark ? 'bg-white/5 text-white/40 hover:text-red-500 hover:bg-red-500/10' : 'bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50'
+                            }`}
                         >
                           <UserMinus size={18} />
                         </button>
@@ -285,9 +279,8 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                         </button>
                         <button
                           onClick={() => handleRejectRequest(req.userId)}
-                          className={`px-6 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all active:scale-95 border ${
-                            isDark ? 'bg-white/5 text-white/40 hover:bg-white/10 border-white/5' : 'bg-white text-slate-400 hover:bg-slate-50 border-slate-100'
-                          }`}
+                          className={`px-6 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all active:scale-95 border ${isDark ? 'bg-white/5 text-white/40 hover:bg-white/10 border-white/5' : 'bg-white text-slate-400 hover:bg-slate-50 border-slate-100'
+                            }`}
                         >
                           Từ chối
                         </button>
@@ -305,22 +298,20 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                 <p className={`text-[11px] font-black uppercase tracking-[0.2em] italic text-center ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
                   Tìm kiếm bạn bè qua số điện thoại
                 </p>
-                
+
                 <form onSubmit={handleSearchUser} className="flex space-x-3">
                   <div className="relative flex-1 group">
-                    <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
-                      isDark ? 'text-white/20 group-focus-within:text-indigo-500' : 'text-slate-300 group-focus-within:text-indigo-500'
-                    }`} size={18} />
+                    <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-white/20 group-focus-within:text-indigo-500' : 'text-slate-300 group-focus-within:text-indigo-500'
+                      }`} size={18} />
                     <input
                       type="text"
                       placeholder="Nhập số điện thoại..."
                       value={searchPhone}
                       onChange={(e) => setSearchPhone(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${
-                        isDark 
-                          ? 'bg-white/5 border-white/5 text-white placeholder:text-white/20' 
-                          : 'bg-slate-50 border-slate-100 text-slate-800 placeholder:text-slate-400'
-                      }`}
+                      className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${isDark
+                        ? 'bg-white/5 border-white/5 text-white placeholder:text-white/20'
+                        : 'bg-slate-50 border-slate-100 text-slate-800 placeholder:text-slate-400'
+                        }`}
                     />
                   </div>
                   <button
@@ -340,13 +331,11 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                 )}
 
                 {foundUser && (
-                  <div className={`p-8 border rounded-[40px] space-y-8 animate-slide-up shadow-xl ${
-                    isDark ? 'bg-white/5 border-white/5' : 'bg-white border-slate-100'
-                  }`}>
+                  <div className={`p-8 border rounded-[40px] space-y-8 animate-slide-up shadow-xl ${isDark ? 'bg-white/5 border-white/5' : 'bg-white border-slate-100'
+                    }`}>
                     <div className="flex flex-col items-center text-center space-y-6">
-                      <div className={`w-24 h-24 rounded-[32px] border flex items-center justify-center overflow-hidden ${
-                        isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
-                      }`}>
+                      <div className={`w-24 h-24 rounded-[32px] border flex items-center justify-center overflow-hidden ${isDark ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                        }`}>
                         {foundUser.avatarUrl ? (
                           <img src={foundUser.avatarUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
@@ -359,46 +348,49 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-3">
-                      <button
-                        onClick={() => handleStartChat(foundUser)}
-                        className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
-                      >
-                        <MessageSquare size={18} />
-                        <span>Nhắn tin</span>
-                      </button>
-
-                      {foundUser.friendshipStatus === 'ACCEPTED' ? (
-                        <div className="w-full py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
-                          <Check size={18} />
-                          <span>Bạn bè</span>
-                        </div>
-                      ) : foundUser.friendshipStatus === 'PENDING' ? (
-                        <div className="w-full py-4 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
-                          <Check size={18} />
-                          <span>Đã gửi lời mời</span>
-                        </div>
-                      ) : (
+                    {(foundUser?.friendshipStatus !== 'SELF' &&
+                      foundUser?.userId !== (currentUser?.userId || currentUser?.id) &&
+                      foundUser?.phoneNumber !== currentUser?.phoneNumber) && (
+                      <div className="flex flex-col gap-3">
                         <button
-                          onClick={handleAddFriendFromSearch}
-                          className={`w-full py-4 border rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all flex items-center justify-center space-x-3 ${
-                            isDark ? 'bg-white/5 text-white border-white/10 hover:bg-white/10' : 'bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100'
-                          }`}
+                          onClick={() => handleStartChat(foundUser)}
+                          className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
                         >
-                          <UserPlus size={18} />
-                          <span>Kết bạn</span>
+                          <MessageSquare size={18} />
+                          <span>Nhắn tin</span>
                         </button>
-                      )}
-                    </div>
+
+                        {foundUser.friendshipStatus === 'ACCEPTED' ? (
+                          <div className="w-full py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
+                            <Check size={18} />
+                            <span>Bạn bè</span>
+                          </div>
+                        ) : foundUser.friendshipStatus === 'PENDING' ? (
+                          <div className="w-full py-4 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
+                            <Check size={18} />
+                            <span>Đã gửi lời mời</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={handleAddFriendFromSearch}
+                            className={`w-full py-4 border rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all flex items-center justify-center space-x-3 ${isDark ? 'bg-white/5 text-white border-white/10 hover:bg-white/10' : 'bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100'
+                              }`}
+                          >
+                            <UserPlus size={18} />
+                            <span>Kết bạn</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                   </div>
                 )}
               </div>
             </div>
           )}
         </div>
-
       </div>
-    </div>
+    </div >
   );
 };
 
