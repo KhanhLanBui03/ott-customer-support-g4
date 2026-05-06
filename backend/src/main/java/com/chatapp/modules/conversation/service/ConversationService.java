@@ -41,6 +41,10 @@ public class ConversationService {
      * If UserConversation record doesn't exist (e.g., user deleted conversation), recreate it
      */
     public void updateLastMessage(String conversationId, String content, Long timestamp, String senderId) {
+        updateLastMessage(conversationId, content, timestamp, senderId, null);
+    }
+
+    public void updateLastMessage(String conversationId, String content, Long timestamp, String senderId, String excludeUserId) {
         conversationRepository.findById(conversationId).ifPresent(conv -> {
             conv.setLastMessage(content);
             conv.setLastMessageTime(timestamp);
@@ -55,8 +59,13 @@ public class ConversationService {
                         uc.setLastMessageSenderId(senderId);
                         uc.setUpdatedAt(timestamp);
                         
-                        // Increment unread count if sender is not this member
-                        if (!memberId.equals(senderId)) {
+                        // Increment unread count if:
+                        // 1. Sender is not this member
+                        // 2. AND this member is not the one we want to exclude (the actor)
+                        boolean isSender = memberId.equals(senderId);
+                        boolean isActor = memberId.equals(excludeUserId);
+                        
+                        if (!isSender && !isActor) {
                             int currentUnread = uc.getUnreadCount() != null ? uc.getUnreadCount() : 0;
                             uc.setUnreadCount(currentUnread + 1);
                         }
@@ -198,7 +207,7 @@ public class ConversationService {
                     .build();
             
             messageRepository.save(createMsg);
-            updateLastMessage(conv.getConversationId(), createMsg.getContent(), createMsg.getCreatedAt(), "SYSTEM");
+            updateLastMessage(conv.getConversationId(), createMsg.getContent(), createMsg.getCreatedAt(), "SYSTEM", currentUserId);
         }
 
         return getConversationDetail(conv.getConversationId(), currentUserId);
@@ -678,7 +687,7 @@ public class ConversationService {
                     .build();
             
             messageRepository.save(sysMsg);
-            updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+            updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM", newMemberId);
             
             // Broadcast the new system message to everyone
             eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
@@ -802,7 +811,7 @@ public class ConversationService {
                 .build();
         
         messageRepository.save(sysMsg);
-        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM", adminId);
 
         // Broadcast to everyone who was in the group
         for (String mId : membersBefore) {
@@ -861,7 +870,7 @@ public class ConversationService {
                 .build();
                 
         messageRepository.save(sysMsg);
-        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM", adminId);
         eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
         eventPublisher.publishEvent(com.chatapp.modules.message.event.MessageEvent.of("MEMBER_UPDATE", conversationId, Map.of()));
     }
@@ -1031,7 +1040,7 @@ public class ConversationService {
                 .build();
         
         messageRepository.save(sysMsg);
-        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM", userId);
         
         // Broadcast updates - Omit private fields for global broadcast
         ConversationResponse globalUpdate = getConversationDetail(conversationId, userId);
@@ -1084,7 +1093,7 @@ public class ConversationService {
                 .build();
 
         messageRepository.save(sysMsg);
-        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+        updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM", userId);
         eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
 
         // Broadcast update event - Omit private fields for global broadcast
@@ -1151,7 +1160,7 @@ public class ConversationService {
                 sysMsg.setStatus("SENT");
                 
                 messageRepository.save(sysMsg);
-                updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM");
+                updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM", userId);
                 
                 // Broadcast updates
                 eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));

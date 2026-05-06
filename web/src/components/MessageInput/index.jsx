@@ -265,7 +265,13 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
 
   // Check for blocks or restrictions
   const renderInputArea = () => {
-    const currentConv = conversations.find(c => c.conversationId === conversationId);
+    const currentConv = conversations.find(c => c.conversationId === conversationId) || (
+      conversationId?.includes('shop-expert-ai-bot') ? {
+        conversationId: conversationId,
+        type: 'SINGLE',
+        isAI: true
+      } : null
+    );
     if (!currentConv) return null;
 
     // 1. Single chat block check

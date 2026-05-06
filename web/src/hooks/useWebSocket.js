@@ -51,6 +51,14 @@ export const useWebSocket = () => {
 
             if (event.eventType === 'MESSAGE_SEND' || event.eventType === 'MESSAGE_NEW') {
                 const msg = event.payload;
+
+                // If we receive a message for a conversation we don't have yet (e.g. new group), fetch all
+                const existing = (conversationsRef.current || []).find(c => c.conversationId === event.conversationId);
+                if (!existing) {
+                    console.log(`[STOMP] Received message for unknown conversation ${event.conversationId}, fetching...`);
+                    dispatch(fetchConversations());
+                }
+
                 try { console.debug('[useWebSocket] incoming MESSAGE_SEND payload', event.conversationId, msg); } catch(e){}
                 dispatch(addMessage({
                     conversationId: event.conversationId,
@@ -176,10 +184,16 @@ export const useWebSocket = () => {
                 const conversationId = event.conversationId || payload.conversationId || payload.id;
                 
                 if (conversationId) {
-                    dispatch(updateConversation({
-                        conversationId,
-                        ...payload
-                    }));
+                    const existing = (conversationsRef.current || []).find(c => c.conversationId === conversationId);
+                    if (existing) {
+                        dispatch(updateConversation({
+                            conversationId,
+                            ...payload
+                        }));
+                    } else {
+                        // New conversation for us (e.g. added to group)
+                        dispatch(fetchConversations());
+                    }
                 } else {
                     dispatch(fetchConversations());
                 }

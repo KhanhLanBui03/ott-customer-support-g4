@@ -458,8 +458,10 @@ public class MessageService {
         UserConversation userConv = userConversationRepository.findById(currentUserId, conversationId)
                 .orElse(null);
 
+        // For AI bot conversations, we allow seeing all messages (no join date restriction)
+        boolean isAIBot = conversationId.contains(AI_BOT_ID);
         Long joinedAt = (userConv != null && userConv.getJoinedAt() != null) ? userConv.getJoinedAt()
-                : System.currentTimeMillis();
+                : (isAIBot ? 0L : System.currentTimeMillis());
         String type = (userConv != null) ? userConv.getType() : null;
 
         final Long finalJoinedAt = joinedAt;
