@@ -155,26 +155,26 @@ const Chat = () => {
     // 1. Nếu có callerId, nghĩa là mình đang NHẬN cuộc gọi (Incoming)
     if (callerId) {
       const callConv = conversations.find(c => c.conversationId === incomingSignal?.conversationId);
-      
+
       // Nếu là cuộc gọi Nhóm, hiển thị Tên và Avatar của Nhóm
       if (callConv?.type === 'GROUP' || incomingSignal?.signal?.conversationType === 'GROUP') {
-        return { 
-          name: callConv?.name || incomingSignal?.signal?.conversationName || 'Nhóm trò chuyện', 
-          avatar: callConv?.avatar || incomingSignal?.signal?.conversationAvatar || null 
+        return {
+          name: callConv?.name || incomingSignal?.signal?.conversationName || 'Nhóm trò chuyện',
+          avatar: callConv?.avatar || incomingSignal?.signal?.conversationAvatar || null
         };
       }
-      
+
       // Nếu là cuộc gọi Cá nhân (SINGLE), hiển thị người gọi
       let avatar = incomingSignal?.signal?.senderAvatar || null;
       let name = callerName;
-      
+
       // Tìm trong cuộc hội thoại 1-1 trước
       if (callConv) {
         const found = callConv.members?.find(m => String(m.userId) === String(callerId));
-        if (found) { 
-          avatar = found.avatar || found.avatarUrl || avatar; 
+        if (found) {
+          avatar = found.avatar || found.avatarUrl || avatar;
           if (found.fullName || found.name) {
-              name = found.fullName || found.name;
+            name = found.fullName || found.name;
           }
         }
       }
@@ -186,7 +186,7 @@ const Chat = () => {
           if (found) {
             avatar = found.avatar || found.avatarUrl || avatar;
             if (found.fullName || found.name) {
-                name = found.fullName || found.name;
+              name = found.fullName || found.name;
             }
             if (avatar) break; // Dừng khi tìm thấy avatar
           }
@@ -195,15 +195,15 @@ const Chat = () => {
 
       return { name, avatar };
     }
-    
+
     // 2. Nếu không có callerId, nghĩa là mình đang GỌI ĐI (Outgoing)
     if (!activeConversation) return { name: 'Người dùng', avatar: null };
 
     // Nếu là cuộc gọi Nhóm
     if (activeConversation.type === 'GROUP') {
-      return { 
-        name: activeConversation.name || 'Nhóm trò chuyện', 
-        avatar: activeConversation.avatar || null 
+      return {
+        name: activeConversation.name || 'Nhóm trò chuyện',
+        avatar: activeConversation.avatar || null
       };
     }
 
@@ -218,11 +218,11 @@ const Chat = () => {
   // ─── Danh sách Remote Streams cho Group Call ─────────────────────────────
   const remoteStreams = React.useMemo(() => {
     if (!remoteUsers || remoteUsers.length === 0) return [];
-    
+
     return remoteUsers.map(user => {
       let memberName = 'Người dùng';
       let memberAvatar = null;
-      
+
       // Tìm thông tin user trong tất cả các cuộc hội thoại
       for (const conv of conversations) {
         const found = conv.members?.find(m => String(m.userId) === String(user.uid));
@@ -232,7 +232,7 @@ const Chat = () => {
           break;
         }
       }
-      
+
       return {
         uid: user.uid,
         videoTrack: user.videoTrack,
@@ -255,9 +255,9 @@ const Chat = () => {
           const isImg = cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)/i);
           const isVid = cleanUrl.match(/\.(mp4|webm|ogg)/i);
           if (isImg || isVid) {
-            images.push({ 
-              url, 
-              type: isImg ? 'IMAGE' : 'VIDEO', 
+            images.push({
+              url,
+              type: isImg ? 'IMAGE' : 'VIDEO',
               createdAt: msg.createdAt,
               senderName: msg.senderName,
               messageId: msg.messageId
@@ -403,27 +403,24 @@ const Chat = () => {
                   <div className={`px-5 py-3 border-b mb-2 ${isDark ? 'border-white/10' : 'border-slate-50'}`}>
                     <h3 className={`font-bold truncate text-base ${isDark ? 'text-white' : 'text-slate-800'}`}>{user?.fullName || 'Người dùng'}</h3>
                   </div>
-                  <button 
-                    onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }} 
-                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${
-                      isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
-                    }`}
+                  <button
+                    onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }}
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+                      }`}
                   >
                     Hồ sơ của bạn
                   </button>
-                  <button 
-                    onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }} 
-                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${
-                      isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
-                    }`}
+                  <button
+                    onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }}
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+                      }`}
                   >
                     Đổi mật khẩu
                   </button>
-                  <button 
-                    onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }} 
-                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors border-t font-medium ${
-                      isDark ? 'text-red-400 hover:bg-red-400/10 border-white/10' : 'text-red-500 hover:bg-red-50 border-slate-50'
-                    }`}
+                  <button
+                    onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }}
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors border-t font-medium ${isDark ? 'text-red-400 hover:bg-red-400/10 border-white/10' : 'text-red-500 hover:bg-red-50 border-slate-50'
+                      }`}
                   >
                     Xóa tài khoản
                   </button>
@@ -504,6 +501,19 @@ const Chat = () => {
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
             </div>
+
+            {/* Mobile Logout Icon */}
+            {isMobile && (
+              <div className="relative group">
+                <button
+                  onClick={logout}
+                  className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-[22px] transition-all group active:scale-95"
+                  title="Đăng xuất"
+                >
+                  <LogOut size={22} />
+                </button>
+              </div>
+            )}
           </nav>
 
           {!isMobile && (
@@ -660,11 +670,11 @@ const Chat = () => {
                     </button>
 
                     <div className="h-px bg-border dark:bg-white/5 my-2" />
-                    
+
                     <div className="px-4 py-1.5 mb-1 flex items-center justify-between">
                       <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>Theo thẻ phân loại</p>
                       {selectedTags.length > 0 && (
-                        <button 
+                        <button
                           onClick={() => setSelectedTags([])}
                           className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase"
                         >
@@ -678,9 +688,9 @@ const Chat = () => {
                         <button
                           key={tag.key}
                           onClick={() => {
-                            setSelectedTags(prev => 
-                              prev.includes(tag.key) 
-                                ? prev.filter(k => k !== tag.key) 
+                            setSelectedTags(prev =>
+                              prev.includes(tag.key)
+                                ? prev.filter(k => k !== tag.key)
                                 : [...prev, tag.key]
                             );
                           }}
@@ -726,13 +736,13 @@ const Chat = () => {
                 onDelete={handleDeleteConversation}
                 activeId={activeConversationId}
                 onUpdateTag={async (id, tag) => {
-                    try {
-                      await chatApi.updateConversationTag(id, tag);
-                      fetchConversations();
-                    } catch (err) {
-                      console.error("Failed to update tag", err);
-                    }
-                 }}
+                  try {
+                    await chatApi.updateConversationTag(id, tag);
+                    fetchConversations();
+                  } catch (err) {
+                    console.error("Failed to update tag", err);
+                  }
+                }}
               />
             )}
           </div>
@@ -757,8 +767,8 @@ const Chat = () => {
                   allChatImages={allChatImages}
                 />
               ) : !isMobile ? (
-                <WelcomeCarousel 
-                  user={user} 
+                <WelcomeCarousel
+                  user={user}
                   onAction={(type) => {
                     if (type === 'createGroup') setIsGroupModalOpen(true);
                     if (type === 'addFriend') setIsSearchOpen(true);
@@ -890,7 +900,7 @@ const Chat = () => {
         initialView={friendsInitialView}
       />
 
-      <MediaLightbox 
+      <MediaLightbox
         isOpen={lightboxData.isOpen}
         onClose={() => setLightboxData(prev => ({ ...prev, isOpen: false }))}
         images={lightboxData.images}

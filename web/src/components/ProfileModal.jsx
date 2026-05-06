@@ -114,8 +114,8 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
             </label>
           </div>
           <div className="text-center">
-            <h3 className="font-serif italic font-bold text-cursor-dark text-lg">{user?.fullName || "Người dùng"}</h3>
-            <p className="text-[10px] font-mono font-black text-cursor-dark/30 uppercase tracking-[0.2em]">{user?.phoneNumber || "Chưa có số điện thoại"}</p>
+            <h3 className={`font-serif italic font-bold text-lg ${isDark ? 'text-white' : 'text-cursor-dark'}`}>{user?.fullName || "Người dùng"}</h3>
+            <p className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/30' : 'text-cursor-dark/30'}`}>{user?.phoneNumber || "Chưa có số điện thoại"}</p>
           </div>
           {uploading && <p className="text-[10px] text-cursor-accent font-mono font-black animate-pulse tracking-widest uppercase">Đang tải ảnh lên...</p>}
         </div>
@@ -123,7 +123,7 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1">Họ</label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}>Họ</label>
               <input
                 type="text"
                 value={lastName}
@@ -137,7 +137,7 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1">Tên</label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}>Tên</label>
               <input
                 type="text"
                 value={firstName}
@@ -153,17 +153,17 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1 flex items-center space-x-2"><Mail size={12} /><span>Email</span></label>
+            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}><Mail size={12} /><span>Email</span></label>
             <input
               type="text"
               value={user?.email || 'Chưa cập nhật email'}
               disabled
-              className="w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono text-cursor-dark/50 cursor-not-allowed transition-all"
+              className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono cursor-not-allowed transition-all ${isDark ? 'text-white/50' : 'text-cursor-dark/50'}`}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1">Tiểu sử</label>
+            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}>Tiểu sử</label>
             <textarea
               rows={3}
               value={bio}
@@ -179,21 +179,21 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
 
           <div className="grid grid-cols-2 gap-4">
              <div className="space-y-2">
-              <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1 flex items-center space-x-2"><Phone size={12} /><span>Số điện thoại</span></label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}><Phone size={12} /><span>Số điện thoại</span></label>
               <input
                 type="text"
                 value={user?.phoneNumber || 'Chưa cập nhật'}
                 disabled
-                className="w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono text-cursor-dark/50 cursor-not-allowed transition-all"
+                className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono cursor-not-allowed transition-all ${isDark ? 'text-white/50' : 'text-cursor-dark/50'}`}
               />
             </div>
              <div className="space-y-2">
-              <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1 flex items-center space-x-2"><Hash size={12} /><span>ID Người dùng</span></label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}><Hash size={12} /><span>ID Người dùng</span></label>
               <input
                 type="text"
                 value={user?.userId || user?.id || ''}
                 disabled
-                className="w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-[10px] font-mono text-cursor-dark/50 cursor-not-allowed transition-all truncate"
+                className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-[10px] font-mono cursor-not-allowed transition-all truncate ${isDark ? 'text-white/50' : 'text-cursor-dark/50'}`}
               />
             </div>
           </div>
