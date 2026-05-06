@@ -168,6 +168,11 @@ export const conversationApi = {
   updateTag: (conversationId, tag) => {
     return axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/tag`, { tag });
   },
+
+  // Toggle chat restriction (Admin/Owner only)
+  toggleChatRestriction: (conversationId) => {
+    return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`);
+  },
 };
 
 export const mediaApi = {

@@ -387,7 +387,7 @@ const chatSlice = createSlice({
       const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
       if (idx !== -1 && state.conversations[idx].members) {
         const memberIdx = state.conversations[idx].members.findIndex(
-          m => String(m.userId || m.id) !== String(userId)
+          m => String(m.userId || m.id) === String(userId)
         );
         if (memberIdx !== -1) {
           state.conversations[idx].members[memberIdx].role = role;
