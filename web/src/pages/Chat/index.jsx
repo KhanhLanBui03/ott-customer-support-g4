@@ -110,6 +110,8 @@ const Chat = () => {
     remoteUsers,
     toggleMic,
     toggleCamera,
+    audioBlocked,
+    resumeAudio,
   } = useAgoraCall(activeConversationId, activeConversation);
 
 
@@ -145,7 +147,12 @@ const Chat = () => {
 
   const handleAcceptCall = () => acceptCall(incomingSignal);
 
-  const handleHangup = () => endCall();
+  const handleHangup = () => {
+    let reason = 'ENDED';
+    if (callStatus === 'incoming') reason = 'REJECTED';
+    else if (callStatus === 'outgoing') reason = 'MISSED';
+    endCall(true, reason);
+  };
 
 
   // ─── Thông tin người nghe/gọi (phải đặt SAU activeConversation) ──────────
@@ -223,13 +230,27 @@ const Chat = () => {
       let memberName = 'Người dùng';
       let memberAvatar = null;
       
-      // Tìm thông tin user trong tất cả các cuộc hội thoại
-      for (const conv of conversations) {
-        const found = conv.members?.find(m => String(m.userId) === String(user.uid));
-        if (found) {
-          memberName = found.fullName || found.name || memberName;
-          memberAvatar = found.avatar || found.avatarUrl || memberAvatar;
-          break;
+      // 1. Trường hợp cuộc gọi 1-1 (SINGLE): Chắc chắn là người kia
+      if (activeConversation?.type === 'SINGLE') {
+        const other = activeConversation.members?.find(m => String(m.userId) !== String(myId));
+        if (other) {
+          memberName = other.fullName || other.name || memberName;
+          memberAvatar = other.avatar || other.avatarUrl || memberAvatar;
+        }
+      } else {
+        // 2. Trường hợp cuộc gọi nhóm: Tìm theo UID (cần logic mapping hoặc tìm gần đúng)
+        for (const conv of conversations) {
+          const found = conv.members?.find(m => {
+            const mId = String(m.userId);
+            // So sánh trực tiếp hoặc so sánh qua hash nếu cần
+            return mId === String(user.uid) || 
+                   (0 | (mId.split('-').reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0))) === Math.abs(user.uid);
+          });
+          if (found) {
+            memberName = found.fullName || found.name || memberName;
+            memberAvatar = found.avatar || found.avatarUrl || memberAvatar;
+            break;
+          }
         }
       }
       
@@ -912,6 +933,8 @@ const Chat = () => {
         onAccept={handleAcceptCall}
         onToggleMic={toggleMic}
         onToggleCamera={toggleCamera}
+        audioBlocked={audioBlocked}
+        onResumeAudio={resumeAudio}
       />
     </div >
   );

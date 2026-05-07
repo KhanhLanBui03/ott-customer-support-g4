@@ -212,20 +212,40 @@ const ChatInfoScreen = () => {
     );
   };
 
+  // Local state cho Switch để mượt mà 100%
+  const [isRestrictedLocal, setIsRestrictedLocal] = useState(conversation?.onlyAdminsCanChat || false);
+
+  // Đồng bộ local state khi conversation từ Redux thay đổi (ví dụ do WebSocket hoặc API khác)
+  React.useEffect(() => {
+    if (conversation?.onlyAdminsCanChat !== undefined) {
+      setIsRestrictedLocal(conversation.onlyAdminsCanChat);
+    }
+  }, [conversation?.onlyAdminsCanChat]);
+
   const handleToggleChatRestriction = async () => {
+    const originalValue = isRestrictedLocal;
+    const newValue = !originalValue;
+    
+    // 1. Cập nhật UI ngay lập tức qua local state
+    setIsRestrictedLocal(newValue);
+
+    // 2. Cập nhật Redux ngay lập tức (Optimistic Update)
+    dispatch(updateConversation({ 
+      conversationId: realId, 
+      onlyAdminsCanChat: newValue 
+    }));
+
     try {
-      const newValue = !conversation?.onlyAdminsCanChat;
+      // 3. Gọi API trong background
       await conversationApi.toggleChatRestriction(realId);
-      
-      // Cập nhật state local ngay lập tức
+    } catch (err) {
+      // 4. Rollback nếu lỗi
+      setIsRestrictedLocal(originalValue);
       dispatch(updateConversation({ 
         conversationId: realId, 
-        onlyAdminsCanChat: newValue 
+        onlyAdminsCanChat: originalValue 
       }));
-      
-      Alert.alert('Thành công', `Đã ${newValue ? 'bật' : 'tắt'} quyền giới hạn gửi tin nhắn.`);
-    } catch (err) {
-      Alert.alert('Lỗi', 'Không thể thay đổi quyền gửi tin nhắn.');
+      Alert.alert('Lỗi', 'Không thể thay đổi quyền gửi tin nhắn. Vui lòng thử lại.');
     }
   };
 
@@ -522,11 +542,11 @@ const ChatInfoScreen = () => {
                 rightElement={
                   <View style={styles.switchContainer}>
                     <Switch 
-                      value={conversation?.onlyAdminsCanChat} 
+                      value={isRestrictedLocal} 
                       onValueChange={handleToggleChatRestriction}
                       disabled={!isAdmin}
                       trackColor={{ false: '#334155', true: '#4f46e5' }}
-                      thumbColor={Platform.OS === 'ios' ? '#fff' : (conversation?.onlyAdminsCanChat ? '#818cf8' : '#94a3b8')}
+                      thumbColor={Platform.OS === 'ios' ? '#fff' : (isRestrictedLocal ? '#818cf8' : '#94a3b8')}
                     />
                   </View>
                 }

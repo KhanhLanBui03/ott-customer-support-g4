@@ -28,7 +28,17 @@ const Avatar = ({ size = 'w-28 h-28', ring = true, pulse = false, url, nameIniti
         )}
         <div className={`${size} rounded-full overflow-hidden ${ring ? 'ring-4 ring-white/30 shadow-2xl' : ''} relative z-10`}>
             {url ? (
-                <img src={url} alt="" className="w-full h-full object-cover" />
+                <img 
+                    src={url} 
+                    alt="" 
+                    className="w-full h-full object-cover" 
+                    style={{ 
+                        imageRendering: 'high-quality', 
+                        WebkitImageRendering: 'optimize-contrast',
+                        objectFit: 'cover',
+                        backfaceVisibility: 'hidden' 
+                    }} 
+                />
             ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-4xl">
                     {nameInitial}
@@ -38,8 +48,27 @@ const Avatar = ({ size = 'w-28 h-28', ring = true, pulse = false, url, nameIniti
     </div>
 );
 
+// ─── Unlock Audio Overlay ────────────────────────────────────────────────
+const AudioUnlockOverlay = ({ onUnlock }) => (
+    <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white/10 p-8 rounded-3xl border border-white/20 items-center flex flex-col">
+            <div className="w-20 h-20 bg-indigo-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
+                <Mic className="text-white w-10 h-10" />
+            </div>
+            <h3 className="text-white text-xl font-bold mb-2">Âm thanh đã sẵn sàng</h3>
+            <p className="text-white/60 mb-6 text-center max-w-[200px]">Nhấn vào nút bên dưới để bắt đầu nghe</p>
+            <button 
+                onClick={onUnlock}
+                className="bg-indigo-500 hover:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold transition-all transform active:scale-95"
+            >
+                Bật âm thanh
+            </button>
+        </div>
+    </div>
+);
+
 // ─── Remote Video Player Component ───────────────────────────────────────
-const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false }) => {
+const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false, status }) => {
     const ref = useRef(null);
     
     // Chỉ chạy play một lần khi videoTrack thay đổi
@@ -61,9 +90,11 @@ const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false }) => {
                     {fullscreen && (
                         <>
                             <h2 className="mt-5 text-2xl font-bold text-white">{stream.name || 'Người dùng'}</h2>
-                            <p className="text-white/40 text-sm mt-2 animate-pulse">
-                                {isAudioCall ? 'Đang gọi thoại...' : 'Đang kết nối video...'}
-                            </p>
+                            {status !== 'connected' && (
+                                <p className="text-white/40 text-sm mt-2 animate-pulse">
+                                    {isAudioCall ? 'Đang gọi thoại...' : 'Đang kết nối video...'}
+                                </p>
+                            )}
                         </>
                     )}
                 </div>
@@ -89,6 +120,8 @@ const VideoCall = ({
     onToggleCamera,
     callType = 'video',
     cameraError = null,
+    audioBlocked = false,
+    onResumeAudio,
 }) => {
     const localRef  = useRef(null);
     const remoteRef = useRef(null);
@@ -280,15 +313,17 @@ const VideoCall = ({
                     ) : (
                         <div className="absolute inset-0 bg-[#111] z-0">
                             {remoteStreams.length === 1 ? (
-                                <RemoteVideoPlayer stream={remoteStreams[0]} isAudioCall={callType === 'audio'} fullscreen={true} />
+                                <RemoteVideoPlayer stream={remoteStreams[0]} isAudioCall={callType === 'audio'} fullscreen={true} status={status} />
                             ) : (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center"
                                     style={{ background: 'linear-gradient(135deg, #0f0c29, #302b63)' }}>
                                     <Avatar size="w-28 h-28" pulse={false} url={displayAvatar} nameInitial={initial} />
                                     <h2 className="mt-5 text-2xl font-bold text-white">{displayName || 'Đang đợi mọi người...'}</h2>
-                                    <p className="text-white/40 text-sm mt-2 animate-pulse">
-                                        Đang kết nối...
-                                    </p>
+                                    {status !== 'connected' && (
+                                        <p className="text-white/40 text-sm mt-2 animate-pulse">
+                                            Đang kết nối...
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -306,7 +341,12 @@ const VideoCall = ({
                     <div className="relative z-10 flex items-center gap-3 px-5 pt-6 pb-2">
                         <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/20 flex-shrink-0">
                             {displayAvatar ? (
-                                <img src={displayAvatar} alt="" className="w-full h-full object-cover" />
+                                <img 
+                                    src={displayAvatar} 
+                                    alt="" 
+                                    className="w-full h-full object-cover" 
+                                    style={{ imageRendering: '-webkit-optimize-contrast', backfaceVisibility: 'hidden' }}
+                                />
                             ) : (
                                 <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
                                     {initial}

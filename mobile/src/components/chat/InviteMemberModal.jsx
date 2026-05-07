@@ -27,6 +27,8 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
   // Load friends on mount
   useEffect(() => {
     if (visible) {
+      setInvitingIds(new Set()); // Reset trạng thái "đã mời" khi mở lại modal
+      setSearchQuery(''); // Xóa nội dung tìm kiếm cũ
       loadFriends();
     }
   }, [visible]);

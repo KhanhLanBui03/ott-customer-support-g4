@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './authSlice';
 import chatReducer from './chatSlice';
 import notificationReducer from './notificationSlice';
+import callReducer from './callSlice';
 import { injectStore } from '../api/axiosClient';
 
 /**
@@ -14,6 +15,7 @@ const store = configureStore({
     auth: authReducer,
     chat: chatReducer,
     notifications: notificationReducer,
+    call: callReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

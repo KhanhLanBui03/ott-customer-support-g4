@@ -1,288 +1,78 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSelector } from 'react-redux';
+import { Audio } from 'expo-av';
+import { useEffect, useCallback, useRef } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { PermissionsAndroid, Platform } from 'react-native';
-import { createAgoraRtcEngine, ChannelProfileType, ClientRoleType } from 'react-native-agora';
 import { onCallSignal, offCallSignal, emitCallSignal } from '../utils/socket';
-import { callApi } from '../api/callApi'; // Make sure mobile has api/callApi.js
+import { callApi } from '../api/callApi';
+import { chatApi } from '../api/chatApi';
+import { addMessage } from '../store/chatSlice';
+import { 
+    setCallStatus, setCallType, setCallerInfo, setIncomingSignal, 
+    setAgoraConfig, setRemoteUsers, setDuration, setCamOn, setMicOn, resetCall 
+} from '../store/callSlice';
 
-let agoraEngine = null;
+const sanitizeChannelId = (id) => (id || '').replace(/#/g, '-').slice(0, 64);
 
-const sanitizeChannelId = (id) => {
-    if (!id) return '';
-    return id.replace(/[^a-zA-Z0-9]/g, '');
-};
-
-export const useAgoraCall = (activeConversationId, activeConversation) => {
+export const useAgoraCall = (activeConversationId = null, activeConversation = null, isListener = true) => {
     const user = useSelector(state => state.auth.user);
-    
-    const [callStatus, setCallStatus] = useState('idle');
-    const [callType, setCallType] = useState('video');
-    
-    // Remote Info
-    const [remoteUsers, setRemoteUsers] = useState([]);
-    const [incomingSignal, setIncomingSignal] = useState(null);
-    const [callerName, setCallerName] = useState('');
-    const [callerId, setCallerId] = useState(null);
-    
-    // Media State
-    const [camOn, setCamOn] = useState(true);
-    const [micOn, setMicOn] = useState(true);
-    const [error, setError] = useState(null);
-    
-    // Timer
-    const [duration, setDuration] = useState(0);
+    const callState = useSelector(state => state.call);
+    const dispatch = useDispatch();
+
+    const { 
+        callStatus, callType, callerName, callerInfo, incomingSignal, 
+        duration, camOn, micOn, remoteUsers, agoraConfig 
+    } = callState;
+
     const timerRef = useRef(null);
-    const startTimeRef = useRef(null);
-    
-    const activeChannelRef = useRef(null);
     const endCallRef = useRef(null);
+    const startTimeRef = useRef(null);
+    const ringTimerRef = useRef(null);
+    const joiningRef = useRef(false);
+    const logSentRef = useRef(false);
+    const activeChannelRef = useRef(null);
 
-    // Xin quyền
     const getPermissions = async () => {
-        if (Platform.OS === 'android') {
-            await PermissionsAndroid.requestMultiple([
-                PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-                PermissionsAndroid.PERMISSIONS.CAMERA,
-            ]);
-        }
-    };
-
-    // Khởi tạo Agora Engine
-    const setupVideoSDKEngine = async () => {
         try {
-            if (!agoraEngine) {
-                agoraEngine = createAgoraRtcEngine();
-                // Tạm thời lấy appId từ .env hoặc backend, ở đây backend trả về lúc lấy token
-                // Nếu backend trả appId lúc get token thì khởi tạo lúc get token.
-                // Để an toàn, chúng ta sẽ khởi tạo engine SAU KHI lấy được token và appId từ backend.
+            const { status: audioStatus } = await Audio.requestPermissionsAsync();
+            console.log('🎙️ [useAgoraCall] Audio Permission:', audioStatus);
+            
+            if (audioStatus !== 'granted') {
+                Alert.alert('Quyền truy cập', 'Bạn cần cấp quyền Micro để thực hiện cuộc gọi');
+                return false;
             }
+            
+            if (Platform.OS === 'android') {
+                await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+            }
+            return true;
         } catch (e) {
-            console.log(e);
+            console.error('⚠️ [useAgoraCall] Permission Error:', e);
+            return false;
         }
     };
-
-    useEffect(() => {
-        setupVideoSDKEngine();
-        return () => {
-            if (agoraEngine) {
-                agoraEngine.release();
-                agoraEngine = null;
-            }
-        };
-    }, []);
-
-    const connect = useCallback(() => {
-        const handler = (data) => {
-            const { conversationId: cid, signal, senderId, senderName } = data;
-            const myId = user?.userId || user?.id;
-            
-            if (senderId === myId) return;
-            if (!signal) return;
-
-            const type = signal.type;
-
-            if (type === 'CALL_INVITE') {
-                activeChannelRef.current = cid;
-                setIncomingSignal({ ...data, signal });
-                setCallerName(senderName || senderId);
-                setCallerId(senderId);
-                setCallType(signal.callType || 'video');
-                setCallStatus('incoming');
-            } else if (type === 'CALL_ACCEPTED') {
-                if (signal.startTime) {
-                    startTimeRef.current = signal.startTime;
-                }
-            } else if (type === 'HANGUP') {
-                endCallRef.current?.(false);
-            }
-        };
-
-        onCallSignal(handler);
-        return () => offCallSignal(handler);
-    }, [user]);
 
     useEffect(() => {
         if (callStatus === 'connected') {
-            if (!startTimeRef.current) startTimeRef.current = Date.now();
-            setDuration(0);
+            if (!startTimeRef.current) {
+                startTimeRef.current = Date.now();
+                console.log('⏰ [useAgoraCall] Timer started at:', startTimeRef.current);
+            }
             timerRef.current = setInterval(() => {
-                setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+                const now = Date.now();
+                const diff = Math.floor((now - startTimeRef.current) / 1000);
+                dispatch(setDuration(diff));
             }, 1000);
         } else {
             if (timerRef.current) clearInterval(timerRef.current);
             if (callStatus === 'idle' || callStatus === 'ended') {
                 startTimeRef.current = null;
+                dispatch(setDuration(0));
             }
         }
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [callStatus]);
-
-    // ─── START CALL ──────────────────────────────────────────────────────────
-    const startCall = useCallback(async (type = 'video') => {
-        try {
-            await getPermissions();
-            setCallType(type);
-            setCallStatus('outgoing');
-            setRemoteUsers([]);
-            const channelId = activeConversationId;
-            if (!channelId) throw new Error('Không có conversationId');
-            
-            activeChannelRef.current = channelId;
-            const safeChannelId = sanitizeChannelId(channelId);
-            
-            const res = await callApi.getAgoraToken(safeChannelId);
-            const { token, appId, uid } = res;
-
-            if (!agoraEngine) agoraEngine = createAgoraRtcEngine();
-            agoraEngine.initialize({ appId });
-            
-            agoraEngine.registerEventHandler({
-                onJoinChannelSuccess: (_connection, elapsed) => {
-                    console.log('Join channel success', elapsed);
-                },
-                onUserJoined: (_connection, remoteUid, elapsed) => {
-                    console.log('User joined', remoteUid);
-                    setCallStatus('connected');
-                    setRemoteUsers(prev => {
-                        if (prev.find(u => u.uid === remoteUid)) return prev;
-                        return [...prev, { uid: remoteUid, name: 'Người dùng', status: 'connected' }];
-                    });
-                },
-                onUserOffline: (_connection, remoteUid, _reason) => {
-                    console.log('User offline', remoteUid);
-                    setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUid));
-                }
-            });
-
-            agoraEngine.enableVideo();
-            agoraEngine.startPreview();
-
-            agoraEngine.joinChannel(token, safeChannelId, uid, {
-                channelProfile: ChannelProfileType.ChannelProfileCommunication,
-                clientRoleType: ClientRoleType.ClientRoleBroadcaster,
-                publishMicrophoneTrack: true,
-                publishCameraTrack: type === 'video',
-                autoSubscribeAudio: true,
-                autoSubscribeVideo: true,
-            });
-
-            const currentUserName = user?.fullName || user?.name || user?.username || 'Người dùng';
-            emitCallSignal(channelId, { 
-                type: 'CALL_INVITE', 
-                callType: type,
-                conversationType: activeConversation?.type,
-                conversationName: activeConversation?.name,
-                conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
-                senderAvatar: user?.avatar || user?.avatarUrl
-            }, currentUserName);
-
-        } catch (e) {
-            setError(e.message);
-            endCallRef.current?.(false);
-        }
-    }, [activeConversationId, user, activeConversation]);
-
-    // ─── ACCEPT CALL ─────────────────────────────────────────────────────────
-    const acceptCall = useCallback(async (signalData) => {
-        try {
-            await getPermissions();
-            const channelId = signalData?.conversationId;
-            activeChannelRef.current = channelId;
-            const safeChannelId = sanitizeChannelId(channelId);
-
-            const currentUserName = user?.fullName || user?.name || user?.username || 'Người dùng';
-            const acceptedTime = Date.now();
-            emitCallSignal(channelId, { type: 'CALL_ACCEPTED', startTime: acceptedTime }, currentUserName);
-            startTimeRef.current = acceptedTime;
-
-            setCallStatus('connected');
-            
-            const res = await callApi.getAgoraToken(safeChannelId);
-            const { token, appId, uid } = res;
-
-            if (!agoraEngine) agoraEngine = createAgoraRtcEngine();
-            agoraEngine.initialize({ appId });
-
-            agoraEngine.registerEventHandler({
-                onJoinChannelSuccess: () => console.log('Accept join success'),
-                onUserJoined: (_connection, remoteUid) => {
-                    setRemoteUsers(prev => {
-                        if (prev.find(u => u.uid === remoteUid)) return prev;
-                        return [...prev, { uid: remoteUid, name: 'Người dùng', status: 'connected' }];
-                    });
-                },
-                onUserOffline: (_connection, remoteUid) => {
-                    setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUid));
-                }
-            });
-
-            agoraEngine.enableVideo();
-            agoraEngine.startPreview();
-
-            const actualCallType = signalData?.signal?.callType || callType;
-            setCallType(actualCallType);
-
-            agoraEngine.joinChannel(token, safeChannelId, uid, {
-                channelProfile: ChannelProfileType.ChannelProfileCommunication,
-                clientRoleType: ClientRoleType.ClientRoleBroadcaster,
-                publishMicrophoneTrack: true,
-                publishCameraTrack: actualCallType === 'video',
-                autoSubscribeAudio: true,
-                autoSubscribeVideo: true,
-            });
-
-        } catch (e) {
-            setError(e.message);
-            endCallRef.current?.(false);
-        }
-    }, [user, callType]);
-
-    // ─── END CALL ────────────────────────────────────────────────────────────
-    const endCall = useCallback(async (sendSignal = true) => {
-        const channelId = activeChannelRef.current || activeConversationId;
-        if (sendSignal && channelId) {
-            const currentUserName = user?.fullName || user?.name || user?.username || 'Người dùng';
-            emitCallSignal(channelId, { type: 'HANGUP' }, currentUserName);
-        }
-
-        try {
-            if (agoraEngine) {
-                agoraEngine.leaveChannel();
-                agoraEngine.stopPreview();
-                agoraEngine.removeAllListeners();
-            }
-        } catch (e) {}
-
-        setCallStatus('ended');
-        setRemoteUsers([]);
-        setIncomingSignal(null);
-        setCallerName('');
-        setCallerId(null);
-        activeChannelRef.current = null;
-        startTimeRef.current = null;
-        
-        setTimeout(() => {
-            setCallStatus(prev => prev === 'ended' ? 'idle' : prev);
-        }, 1500);
-    }, [activeConversationId, user]);
-
-    endCallRef.current = endCall;
-
-    const toggleMic = () => {
-        if (agoraEngine) {
-            agoraEngine.enableLocalAudio(!micOn);
-            setMicOn(!micOn);
-        }
-    };
-
-    const toggleCamera = () => {
-        if (agoraEngine) {
-            agoraEngine.enableLocalVideo(!camOn);
-            setCamOn(!camOn);
-        }
-    };
+    }, [callStatus, dispatch]);
 
     const formatDuration = useCallback(() => {
         const m = Math.floor(duration / 60);
@@ -290,24 +80,169 @@ export const useAgoraCall = (activeConversationId, activeConversation) => {
         return `${m}:${s.toString().padStart(2, '0')}`;
     }, [duration]);
 
+    const endCall = useCallback(async (sendSignal = true, reason = 'ENDED') => {
+        const cid = activeChannelRef.current || incomingSignal?.conversationId || activeConversationId;
+        let callDuration = 0;
+        if (startTimeRef.current) callDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+
+        if (sendSignal && cid) {
+            console.log('📤 [useAgoraCall] Sending HANGUP signal to:', cid);
+            emitCallSignal(cid, { type: 'HANGUP', reason });
+        } else {
+            console.log('⚠️ [useAgoraCall] Cannot send HANGUP: cid is', cid);
+        }
+
+        // CHỈ NGƯỜI CHỦ ĐỘNG TẮT mới được quyền gửi CALL_LOG để tránh trùng lặp
+        // Và để đảm bảo tin nhắn call xuất hiện bên phía người tắt (theo yêu cầu)
+        const isCaller = !incomingSignal;
+        const isManual = sendSignal; // Manual hangup will have sendSignal = true
+        const shouldLog = isManual || (isCaller && (reason === 'MISSED' || reason === 'REJECTED' || reason === 'UNREACHABLE'));
+
+        if (cid && shouldLog && !logSentRef.current && (callStatus === 'connected' || callStatus === 'outgoing' || callStatus === 'incoming' || callStatus === 'ringing')) {
+            logSentRef.current = true;
+            try {
+                let statusStr = 'SUCCESS';
+                if (callDuration === 0 || callStatus !== 'connected') {
+                    statusStr = reason === 'MISSED' ? 'MISSED' : (reason === 'REJECTED' ? 'REJECTED' : 'MISSED');
+                }
+                
+                const content = JSON.stringify({ 
+                    callType: callType || 'audio', 
+                    duration: callDuration, 
+                    status: statusStr 
+                });
+
+                chatApi.sendMessage({ conversationId: cid, content, type: 'CALL_LOG' });
+            } catch (err) {
+                console.error('[useAgoraCall] Failed to send call log:', err);
+            }
+        }
+
+        dispatch(setCallStatus('ended'));
+        setTimeout(() => { 
+            dispatch(resetCall()); 
+            startTimeRef.current = null;
+            logSentRef.current = false; 
+            activeChannelRef.current = null;
+        }, 1500);
+    }, [activeConversationId, callStatus, callType, dispatch, incomingSignal]);
+
+    endCallRef.current = endCall;
+
+    useEffect(() => {
+        if (!isListener) return;
+        const handler = (data) => {
+            // Chuẩn hóa dữ liệu: Backend bọc trong 'payload'
+            const actualData = data?.payload || data;
+            const { signal, senderId, senderName } = actualData || {};
+            const signalConvId = data?.conversationId || actualData?.conversationId;
+
+            console.log('📞 [useAgoraCall] Signal Received:', signal?.type, 'from:', senderName);
+            
+            if (!signal) return;
+            // Chỉ bỏ qua nếu là tín hiệu INVITE từ chính mình (tránh lặp)
+            if (signal.type === 'CALL_INVITE' && String(senderId) === String(user?.userId || user?.id)) return;
+            
+            if (signal.type === 'CALL_INVITE') {
+                console.log('🚀 [useAgoraCall] Incoming INVITE. Raw Data:', JSON.stringify(actualData));
+                
+                // Quét mọi ngách để tìm Avatar
+                const avatar = signal.senderAvatar || 
+                               actualData.senderAvatar || 
+                               signal.conversationAvatar || 
+                               actualData.senderInfo?.avatarUrl;
+                
+                const name = senderName || signal.senderName || actualData.senderName || 'Người dùng';
+
+                console.log('👤 [useAgoraCall] Resolved Caller:', name, 'Avatar:', avatar);
+
+                dispatch(setCallerInfo({ 
+                    name: name, 
+                    avatar: avatar 
+                }));
+                
+                dispatch(setIncomingSignal({ ...actualData, conversationId: signalConvId }));
+                dispatch(setCallType(signal.callType || 'video'));
+                if (signal.agoraConfig) {
+                    dispatch(setAgoraConfig(signal.agoraConfig));
+                }
+                if (signalConvId) {
+                    activeChannelRef.current = signalConvId;
+                }
+                dispatch(setCallStatus('incoming'));
+            } else if (signal.type === 'CALL_ACCEPTED') {
+                console.log('✅ [useAgoraCall] Call ACCEPTED. Switching to connected...');
+                if (signal.agoraConfig) {
+                    dispatch(setAgoraConfig(signal.agoraConfig));
+                }
+                dispatch(setCallStatus('connected'));
+            } else if (signal.type === 'HANGUP') {
+                const reason = signal.reason || actualData.reason || 'ENDED';
+                console.log('🛑 [useAgoraCall] HANGUP received. Reason:', reason);
+                endCallRef.current?.(false, reason);
+            }
+        };
+        onCallSignal(handler);
+        return () => offCallSignal(handler);
+    }, [user, dispatch, isListener]);
+
+    const startCall = useCallback(async (type = 'video', receiverInfo = null, targetCid = null) => {
+        const cid = targetCid || receiverInfo?.conversationId || activeConversationId;
+        if (!cid || joiningRef.current) return;
+        try {
+            joiningRef.current = true;
+            logSentRef.current = false; // Reset log flag
+            await getPermissions();
+            
+            // Ưu tiên receiverInfo truyền vào (từ UI), sau đó mới đến activeConversation
+            const finalName = receiverInfo?.name || activeConversation?.name || 'Người dùng';
+            const finalAvatar = receiverInfo?.avatar || activeConversation?.avatar || activeConversation?.avatarUrl;
+
+            dispatch(setCallerInfo({
+                name: finalName,
+                avatar: finalAvatar
+            }));
+
+            dispatch(setCallType(type));
+            activeChannelRef.current = cid;
+            dispatch(setCallStatus('outgoing'));
+            const safeChannelId = sanitizeChannelId(cid);
+            const res = await callApi.getAgoraToken(safeChannelId);
+            const config = { ...res, channel: safeChannelId };
+            dispatch(setAgoraConfig(config));
+            
+            emitCallSignal(cid, { 
+                type: 'CALL_INVITE', 
+                callType: type, 
+                agoraConfig: config,
+                senderAvatar: user?.avatar || user?.avatarUrl // Gửi kèm avatar của mình cho đầu kia
+            }, user?.fullName || 'Người dùng');
+        } catch (e) { endCallRef.current?.(false); } finally { joiningRef.current = false; }
+    }, [activeConversationId, activeConversation, user, dispatch]);
+
+    const acceptCall = useCallback(async (signalData) => {
+        if (joiningRef.current) return;
+        try {
+            joiningRef.current = true;
+            logSentRef.current = false; // Reset log flag
+            await getPermissions();
+            const cid = signalData?.conversationId;
+            activeChannelRef.current = cid;
+            const safeChannelId = sanitizeChannelId(cid);
+            const res = await callApi.getAgoraToken(safeChannelId);
+            dispatch(setAgoraConfig({ ...res, channel: safeChannelId }));
+            
+            emitCallSignal(cid, { type: 'CALL_ACCEPTED' }, user?.fullName || 'Người dùng');
+            dispatch(setCallStatus('connected'));
+        } catch (e) { endCallRef.current?.(false); } finally { joiningRef.current = false; }
+    }, [user, dispatch]);
+
     return {
-        callStatus,
-        callType,
-        callerId,
-        callerName,
-        incomingSignal,
-        duration,
-        formatDuration,
-        camOn,
-        micOn,
-        remoteUsers,
-        error,
-        startCall,
-        acceptCall,
-        endCall,
-        connect,
-        toggleMic,
-        toggleCamera,
-        myUid: 0 // Local uid in Agora SDK is often 0
+        callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
+        camOn, micOn, remoteUsers, startCall, acceptCall, endCall, 
+        toggleMic: () => dispatch(setMicOn(!micOn)),
+        toggleCamera: () => dispatch(setCamOn(!camOn)),
+        agoraConfig, connect: () => { return () => {}; }, // Stub for layout
+        setRemoteUsers: (u) => dispatch(setRemoteUsers(u))
     };
 };

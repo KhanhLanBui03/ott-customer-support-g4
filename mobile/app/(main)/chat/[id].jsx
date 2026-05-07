@@ -11,6 +11,7 @@ import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConvers
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi } from '../../../src/api/chatApi';
 import { formatLastSeen } from '../../../src/utils/dateUtils';
+import { useAgoraCall } from '../../../src/hooks/useAgoraCall';
 
 const ChatDetailScreen = () => {
   const insets = useSafeAreaInsets();
@@ -36,6 +37,7 @@ const ChatDetailScreen = () => {
   const realId = useMemo(() => getRealId(chatState, conversationId, currentUser?.userId || currentUser?.id), [chatState, conversationId, currentUser]);
   const messages = chatState.messages[realId] || [];
   const conversation = conversations.find(c => c.conversationId === realId);
+
   const wallpaperUrl = conversation?.wallpaperUrl || null;
   const isLoading = chatState.loading;
   
@@ -109,6 +111,13 @@ const ChatDetailScreen = () => {
     }, [dispatch, realId, sendReadReceipt, currentUser?.userId, currentUser?.id])
   );
 
+  // Call Actions
+  const { startCall } = useAgoraCall(realId, conversation, false);
+  const handleStartCall = (type) => startCall(type, { 
+    name: conversation?.name, 
+    avatar: conversation?.avatar || conversation?.avatarUrl 
+  });
+
   // Wrap sendReadReceipt - chỉ gửi khi screen đang focused
   const guardedSendReadReceipt = useCallback((messageId, convId) => {
     if (!isFocusedRef.current) {
@@ -130,15 +139,20 @@ const ChatDetailScreen = () => {
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
 
   const handleScrollToMessage = (messageId) => {
-    const index = messages.findIndex(m => m.messageId === messageId);
+    // Với danh sách inverted, index của reversedMessages chính là vị trí ta cần
+    const index = [...messages].reverse().findIndex(m => m.messageId === messageId);
     if (index !== -1 && flatListRef.current) {
-      flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-      setHighlightedMessageId(messageId);
-      setTimeout(() => setHighlightedMessageId(null), 2000);
+      try {
+        flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+        setHighlightedMessageId(messageId);
+        setTimeout(() => setHighlightedMessageId(null), 2000);
+      } catch (err) {
+        console.warn('Scroll to index failed, trying offset fallback');
+      }
     }
   };
 
-  const handleSendMessage = (content, replyToMessageId, type = 'TEXT', mediaUrls = []) => {
+  const handleSendMessage = useCallback((content, replyToMessageId, type = 'TEXT', mediaUrls = []) => {
     const isMedia = mediaUrls.length > 0;
     if ((!content.trim() && !isMedia) || !realId) return;
 
@@ -149,10 +163,18 @@ const ChatDetailScreen = () => {
       replyToMessageId,
       mediaUrls
     }));
-  };
+  }, [dispatch, realId]);
 
   const handlePressMessage = (message) => {
-    if (!message || !realId || !message.messageId) return;
+    if (!message || !realId) return;
+
+    // Xử lý nút "Gọi lại" từ CALL_LOG
+    if (message.action === 'CALL_BACK') {
+      handleStartCall(message.callType || 'audio');
+      return;
+    }
+
+    if (!message.messageId) return;
     if (String(message.senderId) === String(currentUser?.userId || currentUser?.id)) return;
 
     // Chỉ gửi read receipt khi người dùng thật sự click vào tin nhắn trong màn chat
@@ -363,10 +385,10 @@ const ChatDetailScreen = () => {
           </TouchableOpacity>
 
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerActionButton}>
+            <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('audio')}>
               <MaterialIcons name="call" size={24} color="#6366f1" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerActionButton}>
+            <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('video')}>
               <MaterialIcons name="videocam" size={24} color="#6366f1" />
             </TouchableOpacity>
             <TouchableOpacity 
