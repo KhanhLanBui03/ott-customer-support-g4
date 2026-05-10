@@ -110,6 +110,11 @@ const Chat = () => {
     remoteUsers,
     toggleMic,
     toggleCamera,
+    audioBlocked,
+    resumeAudio,
+    endCallReason,
+    micOn,
+    camOn,
   } = useAgoraCall(activeConversationId, activeConversation);
 
 
@@ -145,7 +150,12 @@ const Chat = () => {
 
   const handleAcceptCall = () => acceptCall(incomingSignal);
 
-  const handleHangup = () => endCall();
+  const handleHangup = () => {
+    let reason = 'ENDED';
+    if (callStatus === 'incoming') reason = 'REJECTED';
+    else if (callStatus === 'outgoing') reason = 'MISSED';
+    endCall(true, reason);
+  };
 
 
   // ─── Thông tin người nghe/gọi (phải đặt SAU activeConversation) ──────────
@@ -219,31 +229,59 @@ const Chat = () => {
   const remoteStreams = React.useMemo(() => {
     if (!remoteUsers || remoteUsers.length === 0) return [];
 
-    return remoteUsers.map(user => {
+    return remoteUsers.map(u => {
       let memberName = 'Người dùng';
       let memberAvatar = null;
 
-      // Tìm thông tin user trong tất cả các cuộc hội thoại
-      for (const conv of conversations) {
-        const found = conv.members?.find(m => String(m.userId) === String(user.uid));
-        if (found) {
-          memberName = found.fullName || found.name || memberName;
-          memberAvatar = found.avatar || found.avatarUrl || memberAvatar;
-          break;
+      // Logic tìm kiếm thông tin người dùng dựa trên UID
+      // 1. Kiểm tra nếu là cuộc gọi 1-1 và UID khớp với remoteInfo đã tìm thấy
+      const currentRemoteUid = Math.abs(u.uid % 1000000); // Lấy phần base UID
+
+      // Tìm trong danh sách hội thoại hiện tại (SINGLE)
+      if (activeConversation?.type === 'SINGLE') {
+        const other = activeConversation.members?.find(m => String(m.userId) !== String(myId));
+        if (other) {
+          memberName = other.fullName || other.name || memberName;
+          memberAvatar = other.avatar || other.avatarUrl || memberAvatar;
+        }
+      } else {
+        // Tìm trong TOÀN BỘ các cuộc hội thoại để map UID -> Name/Avatar
+        for (const conv of conversations) {
+          const found = conv.members?.find(m => {
+            const mId = String(m.userId);
+            // Hash UID giống logic toNumericUid của useAgoraCall
+            let hash = 0;
+            for (let i = 0; i < mId.length; i++) {
+              hash = ((hash << 5) - hash + mId.charCodeAt(i)) | 0;
+            }
+            return Math.abs(hash % 1000000) === currentRemoteUid || mId === String(u.uid);
+          });
+
+          if (found) {
+            memberName = found.fullName || found.name || memberName;
+            memberAvatar = found.avatar || found.avatarUrl || memberAvatar;
+            break;
+          }
         }
       }
 
+      // Nếu vẫn chưa tìm thấy, dùng thông tin từ remoteInfo (cho trường hợp cuộc gọi 1-1)
+      if (memberName === 'Người dùng' && activeConversation?.type !== 'GROUP') {
+        memberName = remoteInfo.name || memberName;
+        memberAvatar = remoteInfo.avatar || memberAvatar;
+      }
+
       return {
-        uid: user.uid,
-        videoTrack: user.videoTrack,
-        audioTrack: user.audioTrack,
-        hasVideo: user.hasVideo,
-        hasAudio: user.hasAudio,
+        uid: u.uid,
+        videoTrack: u.videoTrack,
+        audioTrack: u.audioTrack,
+        hasVideo: u.hasVideo,
+        hasAudio: u.hasAudio,
         name: memberName,
         avatar: memberAvatar,
       };
     });
-  }, [remoteUsers, conversations]);
+  }, [remoteUsers, conversations, activeConversation, myId, remoteInfo]);
 
   const allChatImages = React.useMemo(() => {
     const images = [];
@@ -922,6 +960,11 @@ const Chat = () => {
         onAccept={handleAcceptCall}
         onToggleMic={toggleMic}
         onToggleCamera={toggleCamera}
+        micOn={micOn}
+        camOn={camOn}
+        audioBlocked={audioBlocked}
+        onResumeAudio={resumeAudio}
+        endCallReason={endCallReason}
       />
     </div >
   );

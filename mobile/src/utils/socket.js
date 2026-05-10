@@ -16,6 +16,7 @@ let userUpdateHandlers = new Set();
 let wallpaperUpdateHandlers = new Set();
 let conversationUpdateHandlers = new Set();
 let globalHandlers = new Set();
+let callHandlers = new Set(); // Thêm cho Calling
 
 export const clearAllHandlers = () => {
   messageHandlers.clear();
@@ -31,11 +32,11 @@ export const clearAllHandlers = () => {
   wallpaperUpdateHandlers.clear();
   conversationUpdateHandlers.clear();
   globalHandlers.clear();
+  callHandlers.clear(); // Thêm cho Calling
   console.log('🧹 All socket handlers cleared');
 };
 
 export const initializeSocket = (token, userId, globalHandler = null) => {
-  // Clear any existing handlers to prevent duplicates on re-initialization
   clearAllHandlers();
   
   if (globalHandler) globalHandlers.add(globalHandler);
@@ -69,11 +70,9 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
       console.log('✅ Mobile STOMP Connected. User:', frame.headers['user-name']);
       
       // 1. Subscribe to presence (online/offline)
-      console.log('📡 Mobile Subscribing to /topic/presence...');
       stompClient.subscribe('/topic/presence', (message) => {
         try {
           const payload = JSON.parse(message.body);
-          console.log('👤 Presence update:', payload.userId, payload.status);
           statusHandlers.forEach(handler => handler(payload));
         } catch (e) {
           console.error('❌ Error parsing presence message:', e);
@@ -81,19 +80,13 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
       });
 
       // 2. Subscribe to user-specific queues
-      console.log('📡 Mobile Subscribing to /user/queue/messages and /user/queue/conversations...');
-      
       const handleEvent = (message) => {
         try {
           const event = JSON.parse(message.body);
-          console.log('📥 Mobile received event:', event.eventType, 'for conversation:', event.conversationId);
-
-          // Phát sự kiện toàn cục cho Layout xử lý thông báo
           globalHandlers.forEach(handler => handler(event));
 
           if (event.eventType === 'MESSAGE_SEND' || event.eventType === 'MESSAGE_NEW') {
             const msg = event.payload;
-            console.log('💬 Processing NEW_MESSAGE:', msg.messageId);
             messageHandlers.forEach(handler => handler(msg));
           } else if (event.eventType === 'USER_TYPING') {
             typingHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
@@ -110,23 +103,17 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
           } else if (event.eventType === 'MESSAGE_READ') {
             readHandlers.forEach(handler => handler({ ...event.payload, conversationId: event.conversationId }));
           } else if (event.eventType === 'WALLPAPER_UPDATED') {
-            const wallpaperPayload = {
-              conversationId: event.conversationId,
-              wallpaperUrl: event.payload?.wallpaperUrl ?? null,
-            };
+            const wallpaperPayload = { conversationId: event.conversationId, wallpaperUrl: event.payload?.wallpaperUrl ?? null };
             wallpaperUpdateHandlers.forEach(handler => handler(wallpaperPayload));
           } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MEMBER_UPDATE' || event.eventType === 'CONVERSATION_RECREATED' || event.eventType === 'GROUP_INVITE') {
-            console.log('🔄 Conversation update event:', event.eventType);
             conversationUpdateHandlers.forEach(handler => handler({
               conversationId: event.conversationId,
               eventType: event.eventType,
               payload: event.payload
             }));
           } else if (event.eventType === 'USER_UPDATE') {
-            console.log('👤 User profile updated:', event.payload.userId);
             userUpdateHandlers.forEach(handler => handler(event.payload));
           } else if (event.eventType === 'USER_STATUS_CHANGED') {
-            console.log('👤 User status changed:', event.payload.userId, event.payload.status);
             statusHandlers.forEach(handler => handler(event.payload));
           }
         } catch (e) {
@@ -136,28 +123,40 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
 
       stompClient.subscribe('/user/queue/messages', handleEvent);
       stompClient.subscribe('/user/queue/conversations', handleEvent);
+
+      // 3. Subscribe to calls (Tích hợp thêm)
+      if (userId) {
+        console.log(`📡 Mobile Subscribing to /topic/calls.${userId}`);
+        stompClient.subscribe(`/topic/calls.${userId}`, (message) => {
+          try {
+            const data = JSON.parse(message.body);
+            console.log('📞 [Socket] Call signal received:', data?.signal?.type);
+            callHandlers.forEach(handler => handler(data));
+          } catch (e) {
+            console.error('❌ Error parsing call signal:', e);
+          }
+        });
+      }
     },
-    onStompError: (frame) => {
-      console.error('❌ STOMP error:', frame.headers['message']);
-      console.error('Details:', frame.body);
-    },
-    onWebSocketClose: () => {
-      console.log('🔌 Mobile WebSocket closed');
-    }
+    onStompError: (frame) => console.error('❌ STOMP error:', frame.headers['message']),
+    onWebSocketClose: () => console.log('🔌 Mobile WebSocket closed')
   });
 
   stompClient.activate();
   return stompClient;
 };
 
-export const onMessageReceive = (handler) => {
-    messageHandlers.add(handler);
-    console.log('➕ Added message handler. Total:', messageHandlers.size);
-};
+// --- Handlers ---
+export const onMessageReceive = (handler) => messageHandlers.add(handler);
 export const offMessageReceive = (handler) => messageHandlers.delete(handler);
-
 export const onUserTyping = (handler) => typingHandlers.add(handler);
 export const offUserTyping = (handler) => typingHandlers.delete(handler);
+export const onUserStatusChange = (handler) => statusHandlers.add(handler);
+export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
+export const onConversationUpdate = (handler) => conversationUpdateHandlers.add(handler);
+export const offConversationUpdate = (handler) => conversationUpdateHandlers.delete(handler);
+export const onCallSignal = (handler) => callHandlers.add(handler);
+export const offCallSignal = (handler) => callHandlers.delete(handler);
 
 export const onMessageEdit = (handler) => editHandlers.add(handler);
 export const offMessageEdit = (handler) => editHandlers.delete(handler);
@@ -175,21 +174,18 @@ export const onWallpaperUpdated = (handler) => wallpaperUpdateHandlers.add(handl
 export const offWallpaperUpdated = (handler) => wallpaperUpdateHandlers.delete(handler);
 export const onUserUpdate = (handler) => userUpdateHandlers.add(handler);
 export const offUserUpdate = (handler) => userUpdateHandlers.delete(handler);
-export const onUserStatusChange = (handler) => statusHandlers.add(handler);
-export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
-export const onConversationUpdate = (handler) => conversationUpdateHandlers.add(handler);
-export const offConversationUpdate = (handler) => conversationUpdateHandlers.delete(handler);
+export const onStatusUpdate = onUserStatusChange;
+export const offStatusUpdate = offUserStatusChange;
 
+// --- Emitters ---
 export const sendMessageViaSocket = (messageData) => {
   if (stompClient?.connected) {
-    console.log('📤 Sending via socket:', messageData.content);
     stompClient.publish({
       destination: '/app/chat.send',
       body: JSON.stringify(messageData),
     });
     return true;
   }
-  console.warn('⚠️ Cannot send: STOMP not connected');
   return false;
 };
 
@@ -197,39 +193,36 @@ export const emitSendMessage = (conversationId, messageData) => {
   return sendMessageViaSocket({ ...messageData, conversationId });
 };
 
-export const emitTypingStart = (conversationId) => {
+export const emitCallSignal = (conversationId, signal, senderName = 'Người dùng') => {
   if (stompClient?.connected) {
     stompClient.publish({
-      destination: '/app/chat.typing',
-      body: JSON.stringify({ conversationId, isTyping: true }),
+      destination: '/app/call.signal',
+      body: JSON.stringify({ conversationId, signal, senderName }),
     });
+  }
+};
+
+export const emitTypingStart = (conversationId) => {
+  if (stompClient?.connected) {
+    stompClient.publish({ destination: '/app/chat.typing', body: JSON.stringify({ conversationId, isTyping: true }) });
   }
 };
 
 export const emitTypingStop = (conversationId) => {
   if (stompClient?.connected) {
-    stompClient.publish({
-      destination: '/app/chat.typing',
-      body: JSON.stringify({ conversationId, isTyping: false }),
-    });
+    stompClient.publish({ destination: '/app/chat.typing', body: JSON.stringify({ conversationId, isTyping: false }) });
   }
 };
 
 export const emitReadReceipt = (messageId, conversationId) => {
   if (stompClient?.connected) {
-    stompClient.publish({
-      destination: '/app/message.read',
-      body: JSON.stringify({ messageId, conversationId }),
-    });
+    stompClient.publish({ destination: '/app/message.read', body: JSON.stringify({ messageId, conversationId }) });
   }
 };
 
 export const emitRecallMessage = (messageId, conversationId) => {
   if (stompClient?.connected) {
-    stompClient.publish({
-      destination: '/app/message.recall',
-      body: JSON.stringify({ messageId, conversationId }),
-    });
+    stompClient.publish({ destination: '/app/message.recall', body: JSON.stringify({ messageId, conversationId }) });
   }
 };
 
@@ -243,29 +236,15 @@ export const disconnectSocket = () => {
 };
 
 export default {
-  initializeSocket,
-  disconnectSocket,
-  onMessageReceive,
-  offMessageReceive,
-  onUserTyping,
-  offUserTyping,
-  onUserStatusChange,
-  offUserStatusChange,
-  onMessageEdit,
-  onMessageDelete,
-  onMessageRecall,
-  onReaction,
-  onMessageUpdate,
-  onMessageRead,
-  onWallpaperUpdated,
-  onUserUpdate,
-  offUserUpdate,
-  onConversationUpdate,
-  offConversationUpdate,
-  sendMessageViaSocket,
-  emitSendMessage,
-  emitTypingStart,
-  emitTypingStop,
-  emitReadReceipt,
-  emitRecallMessage,
+  initializeSocket, disconnectSocket, 
+  onMessageReceive, offMessageReceive, 
+  onUserTyping, offUserTyping, 
+  onUserStatusChange, offUserStatusChange,
+  onConversationUpdate, offConversationUpdate,
+  onCallSignal, offCallSignal,
+  onMessageEdit, offMessageEdit, onMessageDelete, offMessageDelete, onMessageRecall, offMessageRecall,
+  onReaction, offReaction, onMessageUpdate, offMessageUpdate, onMessageRead, offMessageRead,
+  onWallpaperUpdated, offWallpaperUpdated, onUserUpdate, offUserUpdate, onStatusUpdate, offStatusUpdate,
+  sendMessageViaSocket, emitSendMessage, emitCallSignal,
+  emitTypingStart, emitTypingStop, emitReadReceipt, emitRecallMessage,
 };

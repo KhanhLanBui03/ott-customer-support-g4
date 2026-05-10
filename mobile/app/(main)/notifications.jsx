@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   markAllBtn: { padding: 5 },
   markAllText: { fontSize: 13, color: '#667eea', fontWeight: '600' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { paddingBottom: 20 },
+  listContent: { paddingBottom: 120 },
   notificationItem: {
     flexDirection: 'row',
     padding: 16,

@@ -210,7 +210,7 @@ public class AuthController {
         String otp = authService.sendOtp(email, purpose);
 
         return ResponseEntity.ok(
-                ApiResponse.success("OTP sent successfully", otp) // ⚠ dev only
+                ApiResponse.success(otp, "OTP sent successfully") // ⚠ dev only
         );
     }
 }

@@ -1098,33 +1098,33 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               let ArrowIcon = null;
                               let iconColor = 'text-slate-400';
 
-                              if (cStatus === 'MISSED' || cStatus === 'REJECTED') {
-                                isMissed = true;
-                                if (isMe) {
-                                  title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
-                                  subtitle = 'Cuộc gọi không được trả lời';
-                                  ArrowIcon = ArrowUpRight;
-                                  iconColor = 'text-red-500';
-                                } else {
-                                  title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
-                                  subtitle = 'Bấm để gọi lại';
-                                  ArrowIcon = ArrowDownLeft;
-                                  iconColor = 'text-red-500';
-                                }
-                              } else {
-                                if (isMe) {
-                                  title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
-                                  ArrowIcon = ArrowUpRight;
+                              if (isMe) {
+                                title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
+                                ArrowIcon = ArrowUpRight;
+                                if (cStatus === 'SUCCESS') {
+                                  const mins = Math.floor(duration / 60);
+                                  const secs = duration % 60;
+                                  subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                                   iconColor = 'text-blue-400';
                                 } else {
-                                  title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
-                                  ArrowIcon = ArrowDownLeft;
-                                  iconColor = 'text-emerald-500';
+                                  subtitle = cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi không được trả lời';
+                                  iconColor = 'text-red-400';
+                                  isMissed = true;
                                 }
-
-                                const mins = Math.floor(duration / 60);
-                                const secs = duration % 60;
-                                subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                              } else {
+                                ArrowIcon = ArrowDownLeft;
+                                if (cStatus === 'SUCCESS') {
+                                  title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
+                                  const mins = Math.floor(duration / 60);
+                                  const secs = duration % 60;
+                                  subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                                  iconColor = 'text-emerald-500';
+                                } else {
+                                  title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+                                  subtitle = cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
+                                  iconColor = 'text-red-500';
+                                  isMissed = true;
+                                }
                               }
 
                               const MainIcon = cType === 'video' ? VideoIcon : Phone;

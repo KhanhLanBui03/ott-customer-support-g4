@@ -46,9 +46,8 @@ public class CallSignalController {
         Map<String, Object> signal = (Map<String, Object>) payload.get("signal");
         String signalType = signal != null ? (String) signal.get("type") : "UNKNOWN";
 
-        // ✅ Với Agora: chỉ cần forward CALL_INVITE và HANGUP
-        // OFFER / ANSWER / ICE_CANDIDATE không còn cần thiết nữa
-        if (!"CALL_INVITE".equals(signalType) && !"HANGUP".equals(signalType)) {
+        // ✅ Với Agora: forward CALL_INVITE, CALL_ACCEPTED và HANGUP
+        if (!"CALL_INVITE".equals(signalType) && !"HANGUP".equals(signalType) && !"CALL_ACCEPTED".equals(signalType)) {
             log.debug("[Call] Ignoring signal type {} (Agora handles WebRTC internally)", signalType);
             return;
         }

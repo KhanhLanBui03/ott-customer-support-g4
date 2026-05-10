@@ -82,27 +82,14 @@ const MessageList = React.forwardRef(({
   const isLoadingMore = useRef(false);
 
   const handleScroll = (event) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    // Kiểm tra xem có đang ở gần cuối danh sách không (cách đáy 100px để trừ hao)
-    const paddingToBottom = 100;
-    const isCloseToBottom = contentOffset.y <= paddingToBottom;
-    isAtBottom.current = isCloseToBottom;
-    setIsNearBottom(isCloseToBottom);
-
-    // Kiểm tra nếu scroll gần đầu danh sách để load tin nhắn cũ hơn
-    // Trigger khi contentOffset.y < 100px (người dùng kéo lên)
-    const paddingToTop = 100;
-    const isNearTop = contentOffset.y < paddingToTop;
-
-    console.log(`[MessageList] Scroll: y=${Math.round(contentOffset.y)}, nearTop=${isNearTop}, loading=${isLoadingMoreMessages}, hasCallback=${!!onLoadMore}`);
-
-    if (isNearTop && !isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0) {
-      console.log('[MessageList] 🔝 Near top detected, triggering onLoadMore');
-      setIsLoadingMoreMessages(true);
-      onLoadMore().finally(() => {
-        setIsLoadingMoreMessages(false);
-      });
-    }
+    const { contentOffset } = event.nativeEvent;
+    // Trong danh sách INVERTED: y = 0 là ĐÁY (tin nhắn mới nhất)
+    // Khi cuộn LÊN (xem tin nhắn cũ), y sẽ TĂNG LÊN.
+    const paddingToBottom = 50;
+    const isAtTheBottom = contentOffset.y <= paddingToBottom;
+    
+    isAtBottom.current = isAtTheBottom;
+    setIsNearBottom(isAtTheBottom);
   };
 
 
@@ -144,14 +131,13 @@ const MessageList = React.forwardRef(({
   }, [conversationId]);
 
   useEffect(() => {
-    if (messages.length > 0 && !isRefreshing && !isLoadingMoreMessages) {
-      // Chỉ tự động cuộn xuống nếu:
-      // 1. Đang ở đáy (isAtBottom.current = true)
-      // 2. Hoặc tin nhắn mới nhất là của mình
-      // 3. Và KHÔNG phải đang load more messages
+    // Chỉ tự động cuộn xuống khi messages.length thay đổi (có tin nhắn mới/cũ)
+    // Và KHÔNG thực hiện nếu đang trong chế độ highlight tin nhắn reply
+    if (messages.length > 0 && !isRefreshing && !isLoadingMoreMessages && !highlightedMessageId) {
       const lastMessage = messages[messages.length - 1];
       const isMyMessage = String(lastMessage?.senderId) === String(currentUserId);
 
+      // Nếu đang ở đáy HOẶC vừa gửi tin nhắn mới, thì mới cuộn xuống đáy
       if (isAtBottom.current || isMyMessage) {
         setTimeout(() => {
           const listRef = ref?.current || null;
@@ -159,7 +145,7 @@ const MessageList = React.forwardRef(({
         }, 100);
       }
     }
-  }, [messages.length, typingUsers, isRefreshing, isLoadingMoreMessages, currentUserId]);
+  }, [messages.length, isRefreshing, isLoadingMoreMessages, currentUserId, highlightedMessageId]);
 
   const onRefresh = async () => {
     if (onLoadMore && !isRefreshing) {
@@ -207,8 +193,14 @@ const MessageList = React.forwardRef(({
           showReadStatus={shouldShowStatus}
           onReact={onReact}
           onLongPress={() => onLongPress(item)}
-          onPressMessage={(msgId) => {
-            onPressReply?.(msgId);
+          onPressMessage={(data) => {
+            if (data && typeof data === 'object') {
+              // Nếu là object (VOTE, CALL_BACK...) thì gọi onPressMessage
+              onPressMessage?.(data);
+            } else {
+              // Nếu là string (messageId) thì gọi onPressReply (để scroll tới tin nhắn đó)
+              onPressReply?.(data);
+            }
           }}
           isHighlighted={highlightedMessageId === (item.messageId || item.id)}
           allMessages={messages}
@@ -274,7 +266,7 @@ const MessageList = React.forwardRef(({
         ListFooterComponent={renderLoadingMoreIndicator}
         contentContainerStyle={styles.listContent}
         onContentSizeChange={(w, h) => {
-          if (isAtBottom.current && !isRefreshing && !isLoadingMoreMessages) {
+          if (isAtBottom.current && !isRefreshing && !isLoadingMoreMessages && !highlightedMessageId && reversedMessages.length > 0) {
             const listRef = ref?.current || null;
             listRef?.scrollToOffset({ offset: 0, animated: true });
           }
@@ -285,6 +277,27 @@ const MessageList = React.forwardRef(({
         onRefresh={onRefresh}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        onEndReached={() => {
+          if (!isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0) {
+            setIsLoadingMoreMessages(true);
+            onLoadMore().finally(() => {
+              setIsLoadingMoreMessages(false);
+            });
+          }
+        }}
+        onEndReachedThreshold={0.5}
+        onScrollToIndexFailed={(info) => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500));
+          wait.then(() => {
+            if (ref?.current && reversedMessages.length > info.index) {
+              try {
+                ref.current.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+              } catch (e) {
+                console.warn('Scroll to index failed after retry:', e);
+              }
+            }
+          });
+        }}
         // Tối ưu hiệu năng cuộn
         removeClippedSubviews={Platform.OS === 'android'}
         initialNumToRender={15}

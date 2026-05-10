@@ -70,6 +70,11 @@ export const authApi = {
   restoreSendOtp: (email) => axiosClient.post('/auth/restore/send-otp', { email }),
   restoreVerifyOtp: (data) => axiosClient.post('/auth/restore/verify-otp', data),
   restoreResetPassword: (data) => axiosClient.post('/auth/restore/reset-password', data),
+
+  // Forgot Password APIs
+  forgotPassword: (email) => axiosClient.post('/auth/forgot-password', { email }),
+  resetPassword: (data) => axiosClient.post('/auth/reset-password', data),
 };
+
 
 export default authApi;
