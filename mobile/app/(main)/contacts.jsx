@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1e293b',
   },
-  listContent: { padding: 16 },
+  listContent: { padding: 16, paddingBottom: 120 },
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',

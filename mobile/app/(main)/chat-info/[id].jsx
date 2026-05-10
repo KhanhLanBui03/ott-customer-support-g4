@@ -27,7 +27,7 @@ const ChatInfoScreen = () => {
   const router = useRouter();
   const { id: encodedId } = useLocalSearchParams();
   const conversationId = decodeURIComponent(encodedId || '');
-  
+
   const chatState = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
   const dispatch = useDispatch();
@@ -116,7 +116,7 @@ const ChatInfoScreen = () => {
 
   const handleAvatarChange = async () => {
     if (!isGroup || !isAdmin) return;
-    
+
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
@@ -152,11 +152,11 @@ const ChatInfoScreen = () => {
       if (!uploadedUrl) throw new Error('No URL');
 
       await conversationApi.updateAvatar(realId, uploadedUrl);
-      
+
       // Cập nhật local store
-      dispatch(updateConversation({ 
-        conversationId: realId, 
-        avatarUrl: uploadedUrl 
+      dispatch(updateConversation({
+        conversationId: realId,
+        avatarUrl: uploadedUrl
       }));
 
       Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện nhóm.');
@@ -174,8 +174,8 @@ const ChatInfoScreen = () => {
       'Bạn có chắc chắn muốn rời khỏi nhóm này?',
       [
         { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Rời nhóm', 
+        {
+          text: 'Rời nhóm',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -196,8 +196,8 @@ const ChatInfoScreen = () => {
       'Bạn có chắc chắn muốn giải tán nhóm này? Toàn bộ tin nhắn và thành viên sẽ bị xóa.',
       [
         { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Giải tán', 
+        {
+          text: 'Giải tán',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -225,14 +225,14 @@ const ChatInfoScreen = () => {
   const handleToggleChatRestriction = async () => {
     const originalValue = isRestrictedLocal;
     const newValue = !originalValue;
-    
+
     // 1. Cập nhật UI ngay lập tức qua local state
     setIsRestrictedLocal(newValue);
 
     // 2. Cập nhật Redux ngay lập tức (Optimistic Update)
-    dispatch(updateConversation({ 
-      conversationId: realId, 
-      onlyAdminsCanChat: newValue 
+    dispatch(updateConversation({
+      conversationId: realId,
+      onlyAdminsCanChat: newValue
     }));
 
     try {
@@ -241,9 +241,9 @@ const ChatInfoScreen = () => {
     } catch (err) {
       // 4. Rollback nếu lỗi
       setIsRestrictedLocal(originalValue);
-      dispatch(updateConversation({ 
-        conversationId: realId, 
-        onlyAdminsCanChat: originalValue 
+      dispatch(updateConversation({
+        conversationId: realId,
+        onlyAdminsCanChat: originalValue
       }));
       Alert.alert('Lỗi', 'Không thể thay đổi quyền gửi tin nhắn. Vui lòng thử lại.');
     }
@@ -276,7 +276,7 @@ const ChatInfoScreen = () => {
         style: 'destructive',
         onPress: () => removeFromGroup(memberId, member.fullName)
       });
-    } 
+    }
     // Nếu tôi là ADMIN (phó nhóm)
     else if (myRole === 'ADMIN' && !isMemberAdmin) {
       actions.push({
@@ -311,9 +311,9 @@ const ChatInfoScreen = () => {
       `Bạn có chắc chắn muốn xóa ${name} ra khỏi nhóm?`,
       [
         { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Xóa', 
-          style: 'destructive', 
+        {
+          text: 'Xóa',
+          style: 'destructive',
           onPress: async () => {
             try {
               await conversationApi.removeMember(realId, userId);
@@ -331,7 +331,7 @@ const ChatInfoScreen = () => {
   const InfoItem = ({ icon, label, description, onPress, color = '#fff', showArrow = true, rightElement, disabled }) => (
     <Pressable
       style={({ pressed }) => [
-        styles.infoItem, 
+        styles.infoItem,
         disabled && styles.disabledOpacity,
         { opacity: (pressed && !disabled) ? 0.6 : 1 }
       ]}
@@ -375,7 +375,7 @@ const ChatInfoScreen = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.avatarWrapper}
             onPress={handleAvatarChange}
             disabled={!isGroup || !isAdmin || isAvatarLoading}
@@ -418,9 +418,9 @@ const ChatInfoScreen = () => {
               )}
               {conversation?.members?.map((member, idx) => (
                 <View key={member.userId || idx} style={styles.memberItem}>
-                  <Image 
-                    source={{ uri: member.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.fullName || 'U')}&background=667eea&color=fff&size=128&bold=true` }} 
-                    style={styles.memberAvatar} 
+                  <Image
+                    source={{ uri: member.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.fullName || 'U')}&background=667eea&color=fff&size=128&bold=true` }}
+                    style={styles.memberAvatar}
                   />
                   <View style={styles.memberInfo}>
                     <Text style={styles.memberName}>{member.fullName}</Text>
@@ -541,8 +541,8 @@ const ChatInfoScreen = () => {
                 showArrow={false}
                 rightElement={
                   <View style={styles.switchContainer}>
-                    <Switch 
-                      value={isRestrictedLocal} 
+                    <Switch
+                      value={isRestrictedLocal}
                       onValueChange={handleToggleChatRestriction}
                       disabled={!isAdmin}
                       trackColor={{ false: '#334155', true: '#4f46e5' }}
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
   deleteActionContent: { flex: 1, marginLeft: 16 },
   deleteActionTitle: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
   deleteActionSub: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
-  
+
   privacyItem: {
     flexDirection: 'row',
     alignItems: 'center',

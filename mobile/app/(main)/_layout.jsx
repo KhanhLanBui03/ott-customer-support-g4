@@ -50,7 +50,7 @@ export default function MainLayout() {
   const {
     callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
     camOn, micOn, remoteUsers, setRemoteUsers, acceptCall, endCall, connect: connectCall,
-    toggleMic, toggleCamera, agoraConfig
+    toggleMic, toggleCamera, agoraConfig, endCallReason
   } = useAgoraCall(null, null);
 
   useEffect(() => {

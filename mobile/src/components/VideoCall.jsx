@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Dimensions, Image, Platform } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { setRemoteUsers, resetCall as resetCallAction } from '../store/callSlice';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { getAgoraHTML } from '../utils/agora-web-template';
@@ -7,17 +9,30 @@ import { getAgoraHTML } from '../utils/agora-web-template';
 const { width, height } = Dimensions.get('window');
 
 const VideoCall = ({
-  callStatus, callType, callerName, duration, formatDuration, camOn, micOn,
-  remoteUsers, setRemoteUsers, onAccept, onHangup, onToggleMic, onToggleCamera,
-  callerInfo, agoraConfig
+  callerName, duration, formatDuration,
+  onAccept, onHangup, onToggleMic, onToggleCamera,
+  callerInfo
 }) => {
   const webViewRef = useRef(null);
+  const dispatch = useDispatch();
+
+  const { 
+    callStatus, callType, agoraConfig, incomingSignal, 
+    remoteUsers, camOn, micOn, endCallReason
+  } = useSelector(state => state.call);
+
+  // ✅ QUAN TRỌNG: Dùng useMemo để HTML không bị tạo lại, tránh WebView bị reload
+  const agoraHTML = React.useMemo(() => {
+    if (!agoraConfig) return null;
+    const isCaller = !incomingSignal; // Nếu không có tín hiệu đến thì là người gọi
+    return getAgoraHTML(agoraConfig, callType, isCaller);
+  }, [agoraConfig?.channel, agoraConfig?.token, callType, !!incomingSignal]);
 
   useEffect(() => {
     if (callStatus !== 'idle') {
-      console.log('📞 [VideoCall] Status:', callStatus, 'Name:', callerName, 'Avatar:', callerInfo?.avatar);
+      console.log('📞 [VideoCall] Status:', callStatus, 'Name:', callerName);
     }
-  }, [callStatus, callerName, callerInfo]);
+  }, [callStatus, callerName]);
 
   // Đồng bộ trạng thái Mic/Cam vào WebView
   useEffect(() => {
@@ -39,14 +54,31 @@ const VideoCall = ({
   const handleWebViewMessage = (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'user-joined') {
-        if (!remoteUsers.find(u => u.uid === data.uid)) {
-          setRemoteUsers([...remoteUsers, { uid: data.uid }]);
+      if (data.type === 'user-published') {
+        const existing = remoteUsers.find(u => u.uid === data.uid);
+        let newUsers;
+        if (existing) {
+          newUsers = remoteUsers.map(u => 
+            u.uid === data.uid ? { ...u, hasVideo: data.mediaType === 'video' || u.hasVideo } : u
+          );
+        } else {
+          newUsers = [...remoteUsers, { uid: data.uid, hasVideo: data.mediaType === 'video' }];
+        }
+        dispatch(setRemoteUsers(newUsers));
+      } else if (data.type === 'user-unpublished') {
+        if (data.mediaType === 'video') {
+          const newUsers = remoteUsers.map(u => 
+            u.uid === data.uid ? { ...u, hasVideo: false } : u
+          );
+          dispatch(setRemoteUsers(newUsers));
         }
       } else if (data.type === 'user-left') {
-        setRemoteUsers(remoteUsers.filter(u => u.uid !== data.uid));
-        // Nếu đối phương rời đi, tự động kết thúc cuộc gọi
-        onHangup?.(false);
+        const newUsers = remoteUsers.filter(u => u.uid !== data.uid);
+        dispatch(setRemoteUsers(newUsers));
+        if (newUsers.length === 0 && callStatus === 'connected') {
+           console.log('🚪 [VideoCall] Last remote user left, auto-hanging up...');
+           onHangup(false); // Kết thúc cuộc gọi cục bộ, không gửi signal ngược lại
+        }
       } else if (data.type === 'log') {
         console.log('🌐 [WebView-Agora]', data.message);
       }
@@ -54,26 +86,42 @@ const VideoCall = ({
   };
 
   return (
-    <Modal visible={callStatus !== 'idle'} animationType="slide" transparent={false}>
+    <Modal 
+      visible={callStatus !== 'idle'} 
+      animationType="slide" 
+      transparent={false}
+      onRequestClose={() => dispatch(resetCallAction())}
+    >
       <View style={styles.container}>
-        {callStatus === 'connected' && agoraConfig && (
-          <WebView
-            ref={webViewRef}
-            key={agoraConfig.token}
-            originWhitelist={['*']}
-            source={{ html: getAgoraHTML(agoraConfig, callType), baseUrl: 'https://localhost' }}
-            style={[styles.webView, callType === 'audio' && { opacity: 0, position: 'absolute', width: 1, height: 1 }]}
-            javaScriptEnabled={true}
-            scrollEnabled={false}
-            domStorageEnabled={true}
-            mediaPlaybackRequiresUserAction={false}
-            allowsInlineMediaPlayback={true}
-            originWhitelist={['*']}
-            onMessage={handleWebViewMessage}
-            onPermissionRequest={(event) => {
-              event.grant();
-            }}
-          />
+        {/* WebView - CHỈ HIỆN KHI ĐÃ KẾT NỐI ĐỂ TRÁNH RELOAD NHIỀU LẦN */}
+        {callStatus === 'connected' && agoraConfig ? (
+          <View style={styles.webViewContainer}>
+            <WebView
+              key={agoraConfig.sessionId || agoraConfig.channel}
+              ref={webViewRef}
+              source={{ html: agoraHTML, baseUrl: 'https://localhost' }}
+              style={styles.webView}
+              originWhitelist={['*']}
+              javaScriptEnabled={true}
+              scrollEnabled={false}
+              domStorageEnabled={true}
+              mediaPlaybackRequiresUserAction={false}
+              allowsInlineMediaPlayback={true}
+              onMessage={handleWebViewMessage}
+              onPermissionRequest={(event) => {
+                event.grant();
+              }}
+            />
+          </View>
+        ) : (
+          <View style={styles.loadingContainer}>
+             <Text style={{ color: 'white' }}>{callStatus === 'connected' ? 'Đang khởi tạo cuộc gọi...' : 'Đang kết nối...'}</Text>
+          </View>
+        )}
+
+        {/* Background cho cuộc gọi Audio (hiện khi không có ai bật video) */}
+        {(callStatus === 'connected' && !remoteUsers.some(u => u.hasVideo) && !camOn) && (
+          <View style={styles.audioOnlyBg} pointerEvents="none" />
         )}
 
         {/* Overlay UI */}
@@ -92,7 +140,8 @@ const VideoCall = ({
             </View>
 
             {/* Center Info (Always visible for Audio, or during connection for Video) */}
-            {(callStatus === 'outgoing' || callStatus === 'incoming' || callType === 'audio' || (callStatus === 'connected' && remoteUsers.length === 0)) && (
+            {/* Ẩn avatar nếu đã có remote video để tránh vướng màn hình */}
+            {(callStatus === 'outgoing' || callStatus === 'incoming' || callStatus === 'ended' || (callStatus === 'connected' && !remoteUsers.some(u => u.hasVideo))) && (
               <View style={styles.centerInfo}>
                 <View style={styles.avatarContainer}>
                   {callerInfo?.avatar ? (
@@ -110,17 +159,20 @@ const VideoCall = ({
                   )}
                   <View style={styles.pulseRing} />
                 </View>
-                <Text style={styles.callerName}>{callerName}</Text>
-                <Text style={styles.statusText}>
-                  {callStatus === 'outgoing' ? 'Đang gọi...' : callStatus === 'incoming' ? 'Cuộc gọi đến...' : (callType === 'audio' ? 'Đang trong cuộc gọi' : 'Đang kết nối...')}
-                </Text>
+                <Text style={styles.callerName}>{callerName || callerInfo?.name || 'Người dùng'}</Text>
+                
+                {callStatus === 'ended' ? (
+                  <View style={styles.endCallPill}>
+                    <Text style={styles.endCallText}>{endCallReason || 'Cuộc gọi đã kết thúc'}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.statusText}>
+                    {callStatus === 'outgoing' ? 'Đang gọi...' : callStatus === 'incoming' ? 'Cuộc gọi đến...' : (remoteUsers.some(u => u.hasVideo) ? 'Đang trong cuộc gọi' : 'Đang kết nối...')}
+                  </Text>
+                )}
               </View>
             )}
 
-            {/* Small Local Preview Placeholder (The actual video is in WebView) */}
-            {callType === 'video' && callStatus === 'connected' && (
-               <View style={styles.localContainerPlaceholder} />
-            )}
 
             {/* Controls */}
             <View style={styles.controlsContainer}>
@@ -134,25 +186,28 @@ const VideoCall = ({
                       <Ionicons name="call" size={32} color="white" />
                     </TouchableOpacity>
                   </View>
+                ) : callStatus === 'ended' ? (
+                  <View style={styles.endedButtons}>
+                    <TouchableOpacity 
+                      style={[styles.btn, styles.btnHangup, { width: '60%', height: 48, borderRadius: 24 }]}
+                      onPress={() => dispatch(resetCallAction())}
+                    >
+                      <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>CUỘC GỌI KẾT THÚC</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   <View style={styles.activeButtons}>
                     <TouchableOpacity onPress={onToggleMic} style={[styles.btnAction, !micOn && styles.btnOff]}>
                       <Ionicons name={micOn ? "mic" : "mic-off"} size={24} color="white" />
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity onPress={onHangup} style={[styles.btnAction, styles.btnHangup, styles.btnLarge]}>
                       <Ionicons name="call-outline" size={32} color="white" style={{ transform: [{ rotate: '135deg' }] }} />
                     </TouchableOpacity>
 
-                    {callType === 'video' ? (
-                      <TouchableOpacity onPress={onToggleCamera} style={[styles.btnAction, !camOn && styles.btnOff]}>
-                        <Ionicons name={camOn ? "videocam" : "videocam-off"} size={24} color="white" />
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity style={[styles.btnAction, styles.btnDisabled]}>
-                        <Ionicons name="volume-high" size={24} color="rgba(255,255,255,0.3)" />
-                      </TouchableOpacity>
-                    )}
+                    <TouchableOpacity onPress={onToggleCamera} style={[styles.btnAction, !camOn && styles.btnOff]}>
+                      <Ionicons name={camOn ? "videocam" : "videocam-off"} size={24} color="white" />
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -166,8 +221,11 @@ const VideoCall = ({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
+  webViewContainer: { flex: 1, backgroundColor: '#0f172a' },
+  loadingContainer: { flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center' },
   webView: { flex: 1, backgroundColor: 'transparent' },
-  overlayContainer: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.9)' },
+  audioOnlyBg: { ...StyleSheet.absoluteFillObject, backgroundColor: '#0f172a', zIndex: 1 },
+  overlayContainer: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.9)', zIndex: 2 },
   overlay: { flex: 1, justifyContent: 'space-between', paddingVertical: 50, paddingHorizontal: 25 },
   header: { alignItems: 'center' },
   headerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(99, 102, 241, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6 },
@@ -181,7 +239,7 @@ const styles = StyleSheet.create({
   pulseRing: { position: 'absolute', width: 210, height: 210, borderRadius: 105, borderWidth: 1, borderColor: 'rgba(99, 102, 241, 0.4)', zIndex: -1 },
   callerName: { color: 'white', fontSize: 34, fontWeight: 'bold', textAlign: 'center', letterSpacing: 0.5 },
   statusText: { color: '#94a3b8', fontSize: 18, marginTop: 10, opacity: 0.9 },
-  localContainerPlaceholder: { position: 'absolute', width: 110, height: 160, bottom: 250, right: 20, borderRadius: 20, borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', pointerEvents: 'none' },
+  localContainerPlaceholder: { position: 'absolute', width: 110, height: 160, top: 80, right: 20, borderRadius: 20, borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', pointerEvents: 'none' },
   controlsContainer: { alignItems: 'center', marginBottom: 20 },
   controlsGlass: { backgroundColor: 'rgba(15, 23, 42, 0.75)', padding: 25, borderRadius: 45, width: '100%', maxWidth: 320, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 15 },
   incomingButtons: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', gap: 30 },
@@ -193,6 +251,30 @@ const styles = StyleSheet.create({
   btnHangup: { backgroundColor: '#ef4444' },
   btnOff: { backgroundColor: '#ef4444' },
   btnDisabled: { opacity: 0.5 },
+  endedButtons: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+  endCallPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 35,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    marginTop: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8
+  },
+  endCallText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
 });
 
 export default VideoCall;

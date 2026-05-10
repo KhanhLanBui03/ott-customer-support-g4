@@ -56,7 +56,8 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const filteredFriends = friends.filter(f => 
-    f.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
+    f.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    f.phoneNumber?.includes(searchTerm)
   );
 
   return (

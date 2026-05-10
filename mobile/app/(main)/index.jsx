@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchConversations, setCurrentUserId, updateConversation, removeConversationLocal } from '../../src/store/chatSlice';
+import { fetchConversations, setCurrentUserId, updateConversation, removeConversationLocal, pinConversation, unpinConversation } from '../../src/store/chatSlice';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import CONFIG from '../../src/config';
@@ -25,6 +25,7 @@ const HomeScreen = () => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [filterVisible, setFilterVisible] = useState(false);
   const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [actionModalType, setActionModalType] = useState('menu'); // 'menu' or 'tags'
   const [selectedConv, setSelectedConv] = useState(null);
 
   // Refs để quản lý các item đang mở swipe
@@ -51,19 +52,32 @@ const HomeScreen = () => {
     return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
-  // Logic lọc danh sách
-  const filteredConversations = useMemo(() => {
-    return conversations.filter(conv => {
-      // 1. Lọc theo trạng thái chưa đọc
+  // Logic lọc danh sách và phân đoạn Ghim
+  const displayConversations = useMemo(() => {
+    let filtered = conversations.filter(conv => {
       if (filterType === 'unread' && (conv.unreadCount || 0) === 0) return false;
-      
-      // 2. Lọc theo các nhãn đã chọn
       if (selectedTags.length > 0) {
         if (!conv.tag || !selectedTags.includes(conv.tag)) return false;
       }
-      
       return true;
     });
+
+    const pinned = filtered.filter(c => c.isPinned);
+    const regular = filtered.filter(c => !c.isPinned);
+
+    const result = [];
+    if (pinned.length > 0) {
+      result.push({ isHeader: true, title: 'Hội thoại được ghim' });
+      result.push(...pinned);
+      if (regular.length > 0) {
+        result.push({ isHeader: true, title: 'Tất cả tin nhắn' });
+        result.push(...regular);
+      }
+    } else {
+      result.push(...regular);
+    }
+    
+    return result;
   }, [conversations, filterType, selectedTags]);
 
   const handleUpdateTag = async (conversationId, tagKey) => {
@@ -71,8 +85,22 @@ const HomeScreen = () => {
       await conversationApi.updateTag(conversationId, tagKey);
       dispatch(updateConversation({ conversationId, tag: tagKey }));
       setActionModalVisible(false);
+      setActionModalType('menu');
     } catch (err) {
       console.error('Update tag error:', err);
+    }
+  };
+
+  const handleTogglePin = async (conv) => {
+    try {
+      if (conv.isPinned) {
+        await dispatch(unpinConversation(conv.conversationId));
+      } else {
+        await dispatch(pinConversation(conv.conversationId));
+      }
+      setActionModalVisible(false);
+    } catch (err) {
+      console.error('Toggle pin error:', err);
     }
   };
 
@@ -123,6 +151,14 @@ const HomeScreen = () => {
   };
 
   const renderConversationItem = ({ item }) => {
+    if (item.isHeader) {
+      return (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderText}>{item.title}</Text>
+        </View>
+      );
+    }
+
     const currentUserId = String(currentUser?.userId || currentUser?.id || '');
     const members = item.members || item.participants || [];
     const otherMember = item.type === 'SINGLE'
@@ -164,10 +200,15 @@ const HomeScreen = () => {
         rightThreshold={40}
       >
         <TouchableOpacity
-          style={[styles.conversationItem, isUnread && styles.conversationItemUnread]}
+          style={[
+            styles.conversationItem, 
+            isUnread && styles.conversationItemUnread,
+            item.isPinned && styles.conversationItemPinned
+          ]}
           onPress={() => router.push(`/chat/${encodeURIComponent(item.conversationId)}`)}
           onLongPress={() => {
             setSelectedConv(item);
+            setActionModalType('menu');
             setActionModalVisible(true);
           }}
           activeOpacity={0.7}
@@ -175,6 +216,11 @@ const HomeScreen = () => {
           <View style={styles.avatarContainer}>
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
             {isOnline && <View style={styles.onlineBadge} />}
+            {item.isPinned && (
+              <View style={styles.pinBadge}>
+                <MaterialCommunityIcons name="pin" size={10} color="#fff" style={styles.pinIconTiny} />
+              </View>
+            )}
           </View>
           <View style={styles.conversationInfo}>
             <View style={styles.conversationHeader}>
@@ -185,19 +231,23 @@ const HomeScreen = () => {
                 )}
               </View>
               <View style={styles.rightLabel}>
-                {unreadCount > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadBadgeText}>{unreadText}</Text>
-                  </View>
-                )}
                 <Text style={styles.conversationTime}>
                   {item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </Text>
               </View>
             </View>
-            <Text style={[styles.lastMessage, isUnread && styles.lastMessageUnread]} numberOfLines={1}>
-              {previewText}
-            </Text>
+            <View style={styles.lastMessageRow}>
+              <Text style={[styles.lastMessage, isUnread && styles.lastMessageUnread]} numberOfLines={1}>
+                {previewText}
+              </Text>
+              <View style={styles.rightActionsRow}>
+                {unreadCount > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{unreadText}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
           </View>
         </TouchableOpacity>
       </Swipeable>
@@ -248,9 +298,9 @@ const HomeScreen = () => {
           </View>
         ) : (
           <FlatList
-            data={filteredConversations}
+            data={displayConversations}
             renderItem={renderConversationItem}
-            keyExtractor={(item) => item.conversationId}
+            keyExtractor={(item, index) => item.conversationId || `header-${index}`}
             contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListEmptyComponent={
@@ -340,34 +390,66 @@ const HomeScreen = () => {
               <TouchableWithoutFeedback>
                 <View style={styles.actionSheet}>
                   <View style={styles.sheetHeader}>
-                    <Text style={styles.sheetTitle}>Phân loại hội thoại</Text>
+                    <Text style={styles.sheetTitle}>
+                      {actionModalType === 'menu' ? 'Tác vụ hội thoại' : 'Phân loại hội thoại'}
+                    </Text>
                     <View style={styles.sheetHandle} />
                   </View>
                   
-                  <ScrollView contentContainerStyle={styles.actionGrid}>
-                    <TouchableOpacity 
-                      style={styles.actionGridItem} 
-                      onPress={() => handleUpdateTag(selectedConv.conversationId, null)}
-                    >
-                      <View style={[styles.actionIcon, { backgroundColor: '#f3f4f6' }]}>
-                        <MaterialCommunityIcons name="tag-off" size={24} color="#64748b" />
-                      </View>
-                      <Text style={styles.actionLabel}>Bỏ nhãn</Text>
-                    </TouchableOpacity>
-
-                    {TAGS.map(tag => (
+                  {actionModalType === 'menu' ? (
+                    <View style={styles.actionList}>
                       <TouchableOpacity 
-                        key={tag.key} 
-                        style={styles.actionGridItem}
-                        onPress={() => handleUpdateTag(selectedConv.conversationId, tag.key)}
+                        style={styles.actionListItem} 
+                        onPress={() => handleTogglePin(selectedConv)}
                       >
-                        <View style={[styles.actionIcon, { backgroundColor: tag.color + '20' }]}>
-                          <MaterialCommunityIcons name="tag" size={24} color={tag.color} />
+                        <View style={[styles.actionListIcon, { backgroundColor: '#e0e7ff' }]}>
+                          <MaterialCommunityIcons 
+                            name={selectedConv?.isPinned ? "pin-off" : "pin"} 
+                            size={24} 
+                            color="#6366f1" 
+                          />
                         </View>
-                        <Text style={styles.actionLabel}>{tag.label}</Text>
+                        <Text style={styles.actionListLabel}>
+                          {selectedConv?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}
+                        </Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+
+                      <TouchableOpacity 
+                        style={styles.actionListItem} 
+                        onPress={() => setActionModalType('tags')}
+                      >
+                        <View style={[styles.actionListIcon, { backgroundColor: '#fef3c7' }]}>
+                          <MaterialCommunityIcons name="tag-plus-outline" size={24} color="#d97706" />
+                        </View>
+                        <Text style={styles.actionListLabel}>Phân loại</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <ScrollView contentContainerStyle={styles.actionGrid}>
+                      <TouchableOpacity 
+                        style={styles.actionGridItem} 
+                        onPress={() => handleUpdateTag(selectedConv.conversationId, null)}
+                      >
+                        <View style={[styles.actionIcon, { backgroundColor: '#f3f4f6' }]}>
+                          <MaterialCommunityIcons name="tag-off" size={24} color="#64748b" />
+                        </View>
+                        <Text style={styles.actionLabel}>Bỏ nhãn</Text>
+                      </TouchableOpacity>
+
+                      {TAGS.map(tag => (
+                        <TouchableOpacity 
+                          key={tag.key} 
+                          style={styles.actionGridItem}
+                          onPress={() => handleUpdateTag(selectedConv.conversationId, tag.key)}
+                        >
+                          <View style={[styles.actionIcon, { backgroundColor: tag.color + '20' }]}>
+                            <MaterialCommunityIcons name="tag" size={24} color={tag.color} />
+                          </View>
+                          <Text style={styles.actionLabel}>{tag.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
                 </View>
               </TouchableWithoutFeedback>
             </View>
@@ -449,7 +531,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  listContent: { paddingHorizontal: 16 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
   conversationItem: {
     flexDirection: 'row',
     paddingVertical: 12,
@@ -697,6 +779,79 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748b',
     textAlign: 'center',
+  },
+  
+  // Pinned & Divider Styles
+  conversationItemPinned: {
+    backgroundColor: '#fff', // Giữ trắng hoặc xám rất nhẹ
+  },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  sectionHeaderText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pinBadge: {
+    position: 'absolute',
+    right: -2,
+    top: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#6366f1',
+    borderWidth: 2,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinIconTiny: {
+    transform: [{ rotate: '45deg' }],
+  },
+  lastMessageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 2,
+  },
+  rightActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemTagButton: {
+    padding: 4,
+  },
+  
+  // Action List Styles (Two-step menu)
+  actionList: {
+    paddingTop: 10,
+  },
+  actionListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 16,
+  },
+  actionListIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionListLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
   },
 });
 

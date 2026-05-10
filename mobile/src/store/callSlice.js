@@ -12,6 +12,8 @@ const initialState = {
   duration: 0,
   camOn: true,
   micOn: true,
+  activeConversationId: null, // Lưu conversationId của cuộc gọi hiện tại
+  endCallReason: null, // Lý do kết thúc: 'REJECTED', 'BUSY', 'ENDED', etc.
 };
 
 const callSlice = createSlice({
@@ -34,12 +36,14 @@ const callSlice = createSlice({
     setDuration: (state, action) => { state.duration = action.payload; },
     setCamOn: (state, action) => { state.camOn = action.payload; },
     setMicOn: (state, action) => { state.micOn = action.payload; },
+    setActiveConversationId: (state, action) => { state.activeConversationId = action.payload; },
+    setEndCallReason: (state, action) => { state.endCallReason = action.payload; },
     resetCall: (state) => { return { ...initialState }; },
   },
 });
 
 export const {
   setCallStatus, setCallType, setCallerInfo, setIncomingSignal,
-  setAgoraConfig, setRemoteUsers, setDuration, setCamOn, setMicOn, resetCall
+  setAgoraConfig, setRemoteUsers, setDuration, setCamOn, setMicOn, setActiveConversationId, setEndCallReason, resetCall
 } = callSlice.actions;
 export default callSlice.reducer;

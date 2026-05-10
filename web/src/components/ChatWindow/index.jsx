@@ -7,7 +7,7 @@ import MessageInput from '../MessageInput';
 import ForwardModal from '../ForwardModal';
 import CreateVoteModal from '../CreateVoteModal';
 import { chatApi } from '../../api/chatApi';
-import { Phone, Video, PanelRight, MoreVertical, MoreHorizontal, ShieldCheck, Pin, X, ChevronDown, ChevronUp, ChevronRight, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle, MessageCircle } from 'lucide-react';
+import { Phone, Video, PanelRight, MoreVertical, MoreHorizontal, ShieldCheck, Pin, X, ChevronDown, ChevronUp, ChevronRight, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle, MessageCircle, Users } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
 import GroupAvatar from '../GroupAvatar';
 import { useTheme } from '../../hooks/useTheme';
@@ -274,9 +274,16 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
               )}
             </h2>
             <div className="flex items-center space-x-2">
-              <span className={`text-[11px] font-medium ${currentMember?.status === 'ONLINE' ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : 'Vừa mới truy cập'}
-              </span>
+              {currentConv?.type === 'GROUP' ? (
+                <span className="text-[11px] font-medium text-slate-400 flex items-center">
+                  <Users size={12} className="mr-1" />
+                  {currentConv.members?.length || 0} thành viên
+                </span>
+              ) : (
+                <span className={`text-[11px] font-medium ${currentMember?.status === 'ONLINE' ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                  {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : 'Vừa mới truy cập'}
+                </span>
+              )}
               
               <div className="w-px h-3 bg-border mx-1" />
 
@@ -293,12 +300,6 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
                     if (friend?.status === 'ACCEPTED') return 'Bạn bè';
                     return 'Người lạ';
                   })()}
-                </span>
-              )}
-              
-              {currentConv?.type === 'GROUP' && (
-                <span className="text-[11px] font-medium text-indigo-500/70">
-                  Nhóm trò chuyện
                 </span>
               )}
 

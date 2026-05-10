@@ -193,8 +193,14 @@ const MessageList = React.forwardRef(({
           showReadStatus={shouldShowStatus}
           onReact={onReact}
           onLongPress={() => onLongPress(item)}
-          onPressMessage={(msgId) => {
-            onPressReply?.(msgId);
+          onPressMessage={(data) => {
+            if (data && typeof data === 'object') {
+              // Nếu là object (VOTE, CALL_BACK...) thì gọi onPressMessage
+              onPressMessage?.(data);
+            } else {
+              // Nếu là string (messageId) thì gọi onPressReply (để scroll tới tin nhắn đó)
+              onPressReply?.(data);
+            }
           }}
           isHighlighted={highlightedMessageId === (item.messageId || item.id)}
           allMessages={messages}
@@ -260,7 +266,7 @@ const MessageList = React.forwardRef(({
         ListFooterComponent={renderLoadingMoreIndicator}
         contentContainerStyle={styles.listContent}
         onContentSizeChange={(w, h) => {
-          if (isAtBottom.current && !isRefreshing && !isLoadingMoreMessages && !highlightedMessageId) {
+          if (isAtBottom.current && !isRefreshing && !isLoadingMoreMessages && !highlightedMessageId && reversedMessages.length > 0) {
             const listRef = ref?.current || null;
             listRef?.scrollToOffset({ offset: 0, animated: true });
           }
@@ -283,8 +289,12 @@ const MessageList = React.forwardRef(({
         onScrollToIndexFailed={(info) => {
           const wait = new Promise(resolve => setTimeout(resolve, 500));
           wait.then(() => {
-            if (ref?.current) {
-              ref.current.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+            if (ref?.current && reversedMessages.length > info.index) {
+              try {
+                ref.current.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+              } catch (e) {
+                console.warn('Scroll to index failed after retry:', e);
+              }
             }
           });
         }}

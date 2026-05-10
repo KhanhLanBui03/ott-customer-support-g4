@@ -21,6 +21,8 @@ import MediaViewer from './MediaViewer';
 import VideoThumbnail from './VideoThumbnail';
 import FileViewerModal from './FileViewerModal';
 import VoicePlayer from './common/VoicePlayer';
+import VoteMessage from './VoteMessage';
+import VoteDetailsModal from './VoteDetailsModal';
 
 const ChatBubble = ({ 
   message, 
@@ -74,6 +76,9 @@ const ChatBubble = ({
   const isOwn = initialIsOwn || (currentUserIdStr !== '' && String(message.senderId || '') === currentUserIdStr);
   const [reactionModalVisible, setReactionModalVisible] = useState(false);
   const [selectedReactionEmoji, setSelectedReactionEmoji] = useState('');
+  
+  const [voteDetailsVisible, setVoteDetailsVisible] = useState(false);
+  const [selectedVoteData, setSelectedVoteData] = useState(null);
 
   useEffect(() => {
     if (message.type === 'FILE') {
@@ -250,6 +255,38 @@ const ChatBubble = ({
     );
   };
 
+  const handleOpenVoteDetails = (vote) => {
+    setSelectedVoteData(vote);
+    setVoteDetailsVisible(true);
+  };
+
+  const renderVoteContent = () => {
+    if (message.type !== 'VOTE' || !message.vote) return null;
+    
+    // Tìm conversation hiện tại để check quyền admin
+    const currentConv = conversations.find(c => String(c.conversationId) === String(message.conversationId));
+    const meId = currentUserIdStr;
+    
+    const myRole = currentConv?.members?.find(m => String(m.userId || m.id) === meId)?.role;
+    const isAdmin = myRole === 'ADMIN' || myRole === 'OWNER';
+
+    return (
+      <VoteMessage
+        message={message}
+        currentUserId={meId}
+        isMe={isOwn}
+        isAdmin={isAdmin}
+        onVote={(msgId, optId, mult, sel) => {
+          onPressMessage?.({ action: 'VOTE', messageId: msgId, optionId: optId, allowMultiple: mult, currentSelection: sel });
+        }}
+        onCloseVote={(msgId) => {
+          onPressMessage?.({ action: 'CLOSE_VOTE', messageId: msgId });
+        }}
+        onViewDetails={handleOpenVoteDetails}
+      />
+    );
+  };
+
   if (message.type === 'SYSTEM' || String(message.senderId) === 'SYSTEM') {
     return (
       <View style={styles.systemMessageContainer}>
@@ -275,6 +312,12 @@ const ChatBubble = ({
         
         <View style={[styles.bubbleContainer, isOwn ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
           <Animated.View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble, isVoice && { paddingVertical: 6, paddingHorizontal: 10 }, { borderColor: highlightBorder, borderWidth: 2 }]}>
+            {message.forwardedFrom && (
+              <View style={[styles.forwardedIndicator, isOwn ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
+                <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : '#6366f1'} />
+                <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: '#6366f1' }]}>Chuyển tiếp</Text>
+              </View>
+            )}
             {message.replyTo && (() => {
               const r = message.replyTo;
               let mediaUrls = r.mediaUrls || r.media_urls || [];
@@ -485,6 +528,9 @@ const ChatBubble = ({
                     );
                   } catch (e) { return <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>{message.content}</Text>; }
                 }
+                if (message.type === 'VOTE') {
+                  return renderVoteContent();
+                }
                 return message.content ? (
                   <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText, (message.mediaUrls?.length > 0) && { marginTop: 8 }]}>{message.content}</Text>
                 ) : null;
@@ -536,6 +582,12 @@ const ChatBubble = ({
 
       <MediaViewer visible={mediaViewerVisible} onClose={() => setMediaViewerVisible(false)} allMedia={(message.mediaUrls || message.media_urls || []).map(url => ({ url: getFullUrl(url), type: message.type }))} initialIndex={selectedMediaIndex} />
       <FileViewerModal visible={fileViewerVisible} onClose={() => setFileViewerVisible(false)} fileUrl={selectedFile.url} fileName={selectedFile.name} />
+      
+      <VoteDetailsModal 
+        visible={voteDetailsVisible} 
+        onClose={() => setVoteDetailsVisible(false)} 
+        vote={selectedVoteData} 
+      />
     </Animated.View>
   );
 };
@@ -557,6 +609,8 @@ const styles = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 20 },
   ownText: { color: '#fff' },
   otherText: { color: '#1f2937' },
+  forwardedIndicator: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 4, opacity: 0.8 },
+  forwardedText: { fontSize: 11, fontStyle: 'italic', fontWeight: '600' },
   timeInside: { fontSize: 10, marginTop: 2, alignSelf: 'flex-end', minWidth: 45, textAlign: 'right' },
   ownTime: { color: 'rgba(255, 255, 255, 0.7)' },
   otherTime: { color: '#9ca3af' },

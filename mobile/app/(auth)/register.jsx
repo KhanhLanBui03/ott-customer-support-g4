@@ -15,10 +15,12 @@ import {
 import { useAuth } from '../../src/hooks/useAuth';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 
 const RegisterScreen = () => {
   const router = useRouter();
   const { register, sendOtp, verify, checkPhone, loading, error: authError } = useAuth();
+  const COOLDOWN_MS = 2 * 60 * 1000;
 
   const [step, setStep] = useState('verify-email'); // 'verify-email' or 'register'
   const [formData, setFormData] = useState({
@@ -38,6 +40,56 @@ const RegisterScreen = () => {
   const [phoneError, setPhoneError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
+
+  const normalizedEmail = useMemo(() => formData.email.trim().toLowerCase(), [formData.email]);
+  // SecureStore keys only allow alphanumeric, '.', '-', and '_'
+  const sanitizedEmail = normalizedEmail.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const cooldownKey = normalizedEmail ? `register_otp_cooldown_${sanitizedEmail}` : '';
+  const cooldownRemainingMs = Math.max(0, cooldownUntil - now);
+  const cooldownRemainingSeconds = Math.ceil(cooldownRemainingMs / 1000);
+  const isCooldownActive = cooldownRemainingMs > 0;
+
+  // Timer for cooldown
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Load cooldown from SecureStore
+  useEffect(() => {
+    const loadCooldown = async () => {
+      if (!cooldownKey) {
+        setCooldownUntil(0);
+        return;
+      }
+      try {
+        const stored = await SecureStore.getItemAsync(cooldownKey);
+        const storedCooldown = Number(stored || 0);
+        if (storedCooldown > Date.now()) {
+          setCooldownUntil(storedCooldown);
+        } else {
+          await SecureStore.deleteItemAsync(cooldownKey);
+          setCooldownUntil(0);
+        }
+      } catch (e) {
+        setCooldownUntil(0);
+      }
+    };
+    loadCooldown();
+  }, [cooldownKey]);
+
+  const applyCooldown = async (targetEmail) => {
+    const nextAllowedAt = Date.now() + COOLDOWN_MS;
+    setCooldownUntil(nextAllowedAt);
+    if (targetEmail && cooldownKey) {
+      await SecureStore.setItemAsync(cooldownKey, String(nextAllowedAt));
+    }
+  };
 
   // Mật khẩu requirements
   const passwordChecks = useMemo(() => ({
@@ -59,8 +111,14 @@ const RegisterScreen = () => {
       return;
     }
 
+    if (isCooldownActive) {
+      setLocalError(`Vui lòng chờ ${formatCooldown(cooldownRemainingSeconds)} trước khi gửi lại mã`);
+      return;
+    }
+
     try {
       await sendOtp(email, 'REGISTRATION');
+      await applyCooldown(email);
       setVerificationSent(true);
       Alert.alert('Thông báo', `Mã OTP đã được gửi đến ${email}`);
     } catch (err) {
@@ -142,6 +200,12 @@ const RegisterScreen = () => {
     }
   };
 
+  const formatCooldown = (remainingSeconds) => {
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
@@ -185,18 +249,28 @@ const RegisterScreen = () => {
               {localError ? <Text style={styles.errorText}>{localError}</Text> : null}
 
               <TouchableOpacity
-                style={[styles.primaryButton, loading && { opacity: 0.7 }]}
+                style={[styles.primaryButton, (loading || (step === 'verify-email' && isCooldownActive && !verificationSent)) && { opacity: 0.7 }]}
                 onPress={verificationSent ? handleVerifyOtp : handleSendOtp}
-                disabled={loading}
+                disabled={loading || (step === 'verify-email' && isCooldownActive && !verificationSent)}
               >
                 {loading ? <ActivityIndicator color="#fff" /> : (
-                  <Text style={styles.buttonText}>{verificationSent ? 'Xác thực OTP' : 'Gửi mã xác thực'}</Text>
+                  <Text style={styles.buttonText}>
+                    {verificationSent 
+                      ? 'Xác thực OTP' 
+                      : (isCooldownActive ? `Thử lại sau ${formatCooldown(cooldownRemainingSeconds)}` : 'Gửi mã xác thực')}
+                  </Text>
                 )}
               </TouchableOpacity>
 
               {verificationSent && (
-                <TouchableOpacity onPress={handleSendOtp} style={styles.resendButton}>
-                  <Text style={styles.resendText}>Gửi lại mã</Text>
+                <TouchableOpacity 
+                  onPress={handleSendOtp} 
+                  style={[styles.resendButton, isCooldownActive && { opacity: 0.5 }]}
+                  disabled={loading || isCooldownActive}
+                >
+                  <Text style={styles.resendText}>
+                    {isCooldownActive ? `Gửi lại mã sau ${formatCooldown(cooldownRemainingSeconds)}` : 'Gửi lại mã'}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>

@@ -27,8 +27,7 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
   // Load friends on mount
   useEffect(() => {
     if (visible) {
-      setInvitingIds(new Set()); // Reset trạng thái "đã mời" khi mở lại modal
-      setSearchQuery(''); // Xóa nội dung tìm kiếm cũ
+      setInvitingIds(new Set());
       loadFriends();
     }
   }, [visible]);
@@ -69,7 +68,7 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
       const response = await userApi.searchUser(searchQuery);
       const results = response.data || response || [];
       const normalizedResults = Array.isArray(results) ? results : (results.id ? [results] : []);
-      
+
       // Filter out existing members
       setSearchResults(normalizedResults.filter(
         u => !existingMemberIds.includes(String(u.userId || u.id))
@@ -177,8 +176,8 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
                 <View style={styles.emptyContainer}>
                   <MaterialIcons name="person-search" size={48} color="#475569" />
                   <Text style={styles.emptyText}>
-                    {searchQuery.length > 0 
-                      ? 'Không tìm thấy người dùng này' 
+                    {searchQuery.length > 0
+                      ? 'Không tìm thấy người dùng này'
                       : 'Bạn chưa có bạn bè nào để mời'}
                   </Text>
                 </View>

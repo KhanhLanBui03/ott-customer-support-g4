@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Modal,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -18,8 +19,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { mediaApi } from '../api/chatApi';
 import CONFIG from '../config';
 import { Audio } from 'expo-av';
+import PermissionModal from './common/PermissionModal';
 
-const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
+const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conversationType, onOpenPoll }) => {
   const [message, setMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
@@ -36,6 +38,14 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const recordingIntervalRef = useRef(null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [permissionModal, setPermissionModal] = useState({ 
+    visible: false, 
+    type: 'camera', 
+    onConfirm: () => {},
+    onCancel: () => setPermissionModal(prev => ({ ...prev, visible: false }))
+  });
+  const isPickingRef = useRef(false);
 
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
 
@@ -47,11 +57,8 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
 
   const startRecording = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        alert('Cần quyền truy cập Micro để ghi âm.');
-        return;
-      }
+      const granted = await requestPermission('mic', () => Audio.requestPermissionsAsync());
+      if (!granted) return;
 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -184,14 +191,119 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
     }
   };
 
-  const pickMedia = async () => {
+  const requestPermission = async (type, nativeRequest) => {
+    let checkFunc;
+    if (type === 'camera') checkFunc = () => ImagePicker.getCameraPermissionsAsync();
+    else if (type === 'gallery') checkFunc = () => ImagePicker.getMediaLibraryPermissionsAsync();
+    else if (type === 'mic') checkFunc = () => Audio.getPermissionsAsync();
+    
+    console.log(`[Permission] Requesting ${type}...`);
+    if (checkFunc) {
+      const { status, canAskAgain } = await checkFunc();
+      console.log(`[Permission] Current status for ${type}: ${status}`);
+      if (status === 'granted') return true;
+      
+      if (status === 'denied' && !canAskAgain) {
+        Alert.alert('Quyền bị từ chối', 'Bạn đã từ chối quyền này trước đó. Vui lòng vào Cài đặt để cấp quyền thủ công.');
+        return false;
+      }
+    }
+
+    console.log(`[Permission] Showing custom modal for ${type}`);
+    return new Promise((resolve) => {
+      setPermissionModal({
+        visible: true,
+        type,
+        onConfirm: async () => {
+          console.log(`[Permission] User confirmed modal for ${type}`);
+          setPermissionModal(prev => ({ ...prev, visible: false }));
+          const { status } = await nativeRequest();
+          console.log(`[Permission] Native request result for ${type}: ${status}`);
+          resolve(status === 'granted');
+        },
+        onCancel: () => {
+          console.log(`[Permission] User cancelled modal for ${type}`);
+          setPermissionModal(prev => ({ ...prev, visible: false }));
+          resolve(false);
+        }
+      });
+    });
+  };
+
+  const takePhoto = async () => {
+    if (isPickingRef.current) return;
+    isPickingRef.current = true;
+    console.log('[Camera] Starting takePhoto process');
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        alert('Cần quyền truy cập thư viện ảnh để gửi hình ảnh/video.');
+      const granted = await requestPermission('camera', () => ImagePicker.requestCameraPermissionsAsync());
+      if (!granted) {
+        console.log('[Camera] Permission denied');
+        isPickingRef.current = false;
         return;
       }
 
+      // Wait for modal to close fully
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('[Camera] Launching camera...');
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images', 'videos'],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        console.log('[Camera] Photo/Video taken successfully');
+        setIsUploading(true);
+        setUploadType('MEDIA');
+        const asset = result.assets[0];
+        
+        let fileName = asset.fileName || (asset.type === 'video' ? 'video.mp4' : 'camera_image.jpg');
+        const file = {
+          uri: asset.uri,
+          type: asset.type === 'video' ? 'video/mp4' : 'image/jpeg',
+          name: fileName,
+        };
+
+        try {
+          const response = await mediaApi.uploadFile(file);
+          const url = response.data?.data?.url || response.data?.url || response.url;
+          if (url) {
+            onSendMessage('', replyingTo?.messageId, asset.type === 'video' ? 'VIDEO' : 'IMAGE', [url]);
+            dispatch(clearReplyingTo());
+          }
+        } catch (uploadErr) {
+          console.error('[Camera] Upload failed', uploadErr);
+          Alert.alert('Lỗi', 'Không thể tải ảnh từ camera lên. Vui lòng thử lại.');
+        }
+      } else {
+        console.log('[Camera] Operation cancelled by user');
+      }
+    } catch (error) {
+      console.error('[Camera] takePhoto error:', error);
+    } finally {
+      console.log('[Camera] Resetting states in finally');
+      setIsUploading(false);
+      setUploadType(null);
+      isPickingRef.current = false;
+    }
+  };
+
+  const pickMedia = async () => {
+    if (isPickingRef.current) return;
+    isPickingRef.current = true;
+    console.log('[Gallery] Starting pickMedia process');
+    try {
+      const granted = await requestPermission('gallery', () => ImagePicker.requestMediaLibraryPermissionsAsync());
+      if (!granted) {
+        console.log('[Gallery] Permission denied');
+        isPickingRef.current = false;
+        return;
+      }
+
+      // Wait for modal to close
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('[Gallery] Launching media library...');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
@@ -199,6 +311,7 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        console.log(`[Gallery] Selected ${result.assets.length} items`);
         setIsUploading(true);
         setUploadType('MEDIA');
         const uploadedUrls = [];
@@ -243,15 +356,11 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
               if (attempts === maxAttempts) {
                 failCount++;
               } else {
-                // Wait a bit before retrying (exponential backoff could be added but simple delay for now)
                 await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
               }
             }
           }
         }
-
-        setIsUploading(false);
-        setUploadProgress(null);
 
         if (uploadedUrls.length > 0) {
           onSendMessage('', replyingTo?.messageId, messageType, uploadedUrls);
@@ -263,25 +372,35 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
         } else if (failCount > 0) {
           Alert.alert('Lỗi', 'Không thể tải ảnh lên. Vui lòng kiểm tra kết nối mạng.');
         }
+      } else {
+        console.log('[Gallery] Operation cancelled by user');
       }
     } catch (error) {
-      console.error('Pick media error:', error);
-      alert('Không thể tải tệp lên. Vui lòng thử lại.');
+      console.error('[Gallery] pickMedia error:', error);
+      Alert.alert('Lỗi', 'Không thể chọn hình ảnh. Vui lòng thử lại.');
     } finally {
+      console.log('[Gallery] Resetting states in finally');
       setIsUploading(false);
       setUploadType(null);
       setUploadProgress(null);
+      isPickingRef.current = false;
     }
   };
 
   const pickDocument = async () => {
+    if (isPickingRef.current) return;
+    isPickingRef.current = true;
+    console.log('[File] Starting pickDocument process (Directly launching picker)');
     try {
+      // DocumentPicker không cần quyền Storage trên iOS/Android hiện đại để mở trình chọn hệ thống
+      console.log('[File] Launching document picker...');
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         multiple: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        console.log(`[File] Selected ${result.assets.length} items`);
         setIsUploading(true);
         setUploadType('FILE');
         const uploadedUrls = [];
@@ -331,14 +450,18 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
         } else if (failCount > 0) {
           Alert.alert('Lỗi', 'Không thể tải tệp lên. Vui lòng thử lại.');
         }
+      } else {
+        console.log('[File] Operation cancelled by user');
       }
     } catch (error) {
-      console.error('Pick document error:', error);
+      console.error('[File] pickDocument error:', error);
       Alert.alert('Lỗi', 'Không thể chọn tài liệu. Vui lòng thử lại.');
     } finally {
+      console.log('[File] Resetting states in finally');
       setIsUploading(false);
       setUploadType(null);
       setUploadProgress(null);
+      isPickingRef.current = false;
     }
   };
 
@@ -438,37 +561,68 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
           <>
             <TouchableOpacity 
               style={styles.actionButton} 
-              onPress={pickMedia}
+              onPress={() => setShowAttachMenu(true)}
               disabled={isLoading || isUploading}
             >
-              {isUploading && uploadType === 'MEDIA' ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color="#667eea" />
-                  {uploadProgress && (
-                    <Text style={{ fontSize: 10, color: '#667eea', marginLeft: 2, fontWeight: 'bold' }}>{uploadProgress}</Text>
-                  )}
-                </View>
-              ) : (
-                <MaterialIcons name="image" size={24} color="#667eea" />
-              )}
+              <MaterialIcons name="add-circle-outline" size={28} color="#6366f1" />
             </TouchableOpacity>
+
+            {showAttachMenu && (
+              <TouchableOpacity 
+                style={styles.menuOverlay} 
+                activeOpacity={1} 
+                onPress={() => setShowAttachMenu(false)}
+              >
+                <View style={styles.menuContainer}>
+                  <Text style={styles.menuTitle}>Đính kèm</Text>
+                  <View style={styles.menuOptions}>
+                    <TouchableOpacity 
+                      style={styles.menuOption} 
+                      onPress={() => {
+                        setShowAttachMenu(false);
+                        setTimeout(pickMedia, 100);
+                      }}
+                    >
+                      <View style={[styles.menuIconBg, { backgroundColor: '#e0e7ff' }]}>
+                        <MaterialIcons name="image" size={24} color="#6366f1" />
+                      </View>
+                      <Text style={styles.menuOptionText}>Ảnh & Video</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={styles.menuOption} 
+                      onPress={() => {
+                        setShowAttachMenu(false);
+                        setTimeout(pickDocument, 100);
+                      }}
+                    >
+                      <View style={[styles.menuIconBg, { backgroundColor: '#fef3c7' }]}>
+                        <MaterialIcons name="description" size={24} color="#d97706" />
+                      </View>
+                      <Text style={styles.menuOptionText}>Tài liệu</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity 
               style={styles.actionButton} 
-              onPress={pickDocument}
+              onPress={takePhoto}
               disabled={isLoading || isUploading}
             >
-              {isUploading && uploadType === 'FILE' ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color="#667eea" />
-                  {uploadProgress && (
-                    <Text style={{ fontSize: 10, color: '#667eea', marginLeft: 2, fontWeight: 'bold' }}>{uploadProgress}</Text>
-                  )}
-                </View>
-              ) : (
-                <MaterialIcons name="description" size={24} color="#667eea" />
-              )}
+              <MaterialIcons name="photo-camera" size={24} color="#667eea" />
             </TouchableOpacity>
+
+            {conversationType === 'GROUP' && (
+              <TouchableOpacity 
+                style={styles.actionButton} 
+                onPress={onOpenPoll}
+                disabled={isLoading || isUploading}
+              >
+                <MaterialCommunityIcons name="poll" size={24} color="#667eea" />
+              </TouchableOpacity>
+            )}
 
             <TextInput
               style={styles.input}
@@ -519,6 +673,13 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange }) => {
             </View>
           </View>
         )}
+
+        <PermissionModal 
+          visible={permissionModal.visible}
+          type={permissionModal.type}
+          onClose={permissionModal.onCancel || (() => setPermissionModal(prev => ({ ...prev, visible: false })))}
+          onConfirm={permissionModal.onConfirm}
+        />
       </View>
     </View>
   );
@@ -646,6 +807,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#667eea',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  menuOverlay: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
+    height: 1000, // Cover the screen
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+    zIndex: 1000,
+  },
+  menuContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 30,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  menuOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  menuOption: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  menuIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  menuOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
   },
 });
 

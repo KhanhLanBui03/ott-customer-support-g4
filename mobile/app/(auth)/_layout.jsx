@@ -34,6 +34,13 @@ export default function AuthLayout() {
           animationEnabled: true,
         }}
       />
+      <Stack.Screen
+        name="forgot-password"
+        options={{
+          title: 'Forgot Password',
+          animationEnabled: true,
+        }}
+      />
     </Stack>
   );
 }

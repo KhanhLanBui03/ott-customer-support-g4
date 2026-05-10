@@ -10,7 +10,7 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
-import { MaterialIcons, Ionicons, FontAwesome5, Feather } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, FontAwesome5, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useSelector } from 'react-redux';
 import CONFIG from '../config';
@@ -19,7 +19,7 @@ const { width, height } = Dimensions.get('window');
 
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '😡'];
 
-const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) => {
+const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isPinned }) => {
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
   if (!message) return null;
 
@@ -35,12 +35,13 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) =
 
   const MenuButton = ({ icon, label, color = '#333', type, iconType = 'material' }) => (
     <TouchableOpacity style={styles.menuItem} onPress={() => handleAction(type)}>
-      <View style={styles.menuIconContainer}>
+      <View style={[styles.menuIconContainer, { backgroundColor: color + '15' }]}>
         {iconType === 'material' && <MaterialIcons name={icon} size={24} color={color} />}
+        {iconType === 'material-community' && <MaterialCommunityIcons name={icon} size={24} color={color} />}
         {iconType === 'ionicons' && <Ionicons name={icon} size={24} color={color} />}
         {iconType === 'feather' && <Feather name={icon} size={24} color={color} />}
       </View>
-      <Text style={styles.menuLabel}>{label}</Text>
+      <Text style={[styles.menuLabel, { color: '#334155' }]}>{label}</Text>
     </TouchableOpacity>
   );
 
@@ -138,26 +139,32 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn }) =
 
               {/* Menu Grid */}
               <View style={styles.menuGrid}>
-                <View style={styles.menuRow}>
-                  <MenuButton icon="reply" label="Trả lời" type="reply" color="#6366f1" />
-                  <MenuButton icon="content-copy" label="Sao chép" type="copy" color="#6b7280" />
+                {/* Row 1: Content Interaction */}
+                <MenuButton icon="reply" label="Trả lời" type="reply" color="#6366f1" />
+                {message.type !== 'VOTE' && message.type !== 'CALL_LOG' && message.type !== 'SYSTEM' && (
                   <MenuButton icon="arrow-forward" label="Chuyển tiếp" type="forward" color="#3b82f6" />
-                  <MenuButton icon="share" label="Chia sẻ" type="share" color="#8b5cf6" />
-                </View>
-                <View style={styles.menuRow}>
-                  <MenuButton icon="push-pin" label="Ghim" type="pin" color="#f59e0b" />
-                  <MenuButton icon="folder-open" label="Lưu tin nhắn" type="save" color="#10b981" />
-                  <MenuButton icon="notifications" label="Nhắc hẹn" type="remind" color="#ec4899" />
-                  <MenuButton icon="info" label="Chi tiết" type="info" color="#6b7280" />
-                </View>
-                <View style={styles.menuRow}>
-                  {isOwn && (
-                    <MenuButton icon="history" label="Thu hồi" type="recall" color="#ef4444" />
-                  )}
-                  <MenuButton icon="delete" label="Xóa ở tôi" type="delete" color="#ef4444" />
-                  <MenuButton icon="g-translate" label="Dịch" type="translate" color="#10b981" />
-                  <MenuButton icon="check-box" label="Chọn nhiều" type="select" color="#8b5cf6" />
-                </View>
+                )}
+                <MenuButton icon="content-copy" label="Sao chép" type="copy" color="#64748b" />
+                <MenuButton icon="g-translate" label="Dịch" type="translate" color="#10b981" />
+
+                {/* Row 2: Management & Tools */}
+                <MenuButton 
+                  icon={isPinned ? "pin-off" : "pin"} 
+                  label={isPinned ? "Bỏ ghim" : "Ghim"} 
+                  type={isPinned ? "unpin" : "pin"} 
+                  color="#f59e0b" 
+                  iconType="material-community" 
+                />
+                <MenuButton icon="folder-open" label="Lưu tin" type="save" color="#0d9488" />
+                <MenuButton icon="notifications" label="Nhắc hẹn" type="remind" color="#ec4899" />
+                <MenuButton icon="check-box" label="Chọn nhiều" type="select" color="#8b5cf6" />
+
+                {/* Row 3: Info & Destructive */}
+                <MenuButton icon="info" label="Chi tiết" type="info" color="#94a3b8" />
+                {isOwn && (
+                  <MenuButton icon="history" label="Thu hồi" type="recall" color="#ef4444" />
+                )}
+                <MenuButton icon="delete" label="Xóa ở tôi" type="delete" color="#f43f5e" />
               </View>
             </View>
           </TouchableWithoutFeedback>
@@ -245,32 +252,35 @@ const styles = StyleSheet.create({
   menuGrid: {
     width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 15,
-    elevation: 5,
-  },
-  menuRow: {
+    borderRadius: 32,
+    padding: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   menuItem: {
-    width: (width * 0.9 - 60) / 4,
+    width: '25%',
     alignItems: 'center',
+    paddingVertical: 12,
   },
   menuIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f8fafc',
+    width: 52,
+    height: 52,
+    borderRadius: 16, // Modern squircle-ish
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   menuLabel: {
-    fontSize: 11,
-    color: '#475569',
+    fontSize: 10,
+    fontWeight: '600',
     textAlign: 'center',
+    paddingHorizontal: 2,
   },
   mediaBubble: {
     padding: 4,

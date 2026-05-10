@@ -112,6 +112,9 @@ const Chat = () => {
     toggleCamera,
     audioBlocked,
     resumeAudio,
+    endCallReason,
+    micOn,
+    camOn,
   } = useAgoraCall(activeConversationId, activeConversation);
 
 
@@ -162,26 +165,26 @@ const Chat = () => {
     // 1. Nếu có callerId, nghĩa là mình đang NHẬN cuộc gọi (Incoming)
     if (callerId) {
       const callConv = conversations.find(c => c.conversationId === incomingSignal?.conversationId);
-      
+
       // Nếu là cuộc gọi Nhóm, hiển thị Tên và Avatar của Nhóm
       if (callConv?.type === 'GROUP' || incomingSignal?.signal?.conversationType === 'GROUP') {
-        return { 
-          name: callConv?.name || incomingSignal?.signal?.conversationName || 'Nhóm trò chuyện', 
-          avatar: callConv?.avatar || incomingSignal?.signal?.conversationAvatar || null 
+        return {
+          name: callConv?.name || incomingSignal?.signal?.conversationName || 'Nhóm trò chuyện',
+          avatar: callConv?.avatar || incomingSignal?.signal?.conversationAvatar || null
         };
       }
-      
+
       // Nếu là cuộc gọi Cá nhân (SINGLE), hiển thị người gọi
       let avatar = incomingSignal?.signal?.senderAvatar || null;
       let name = callerName;
-      
+
       // Tìm trong cuộc hội thoại 1-1 trước
       if (callConv) {
         const found = callConv.members?.find(m => String(m.userId) === String(callerId));
-        if (found) { 
-          avatar = found.avatar || found.avatarUrl || avatar; 
+        if (found) {
+          avatar = found.avatar || found.avatarUrl || avatar;
           if (found.fullName || found.name) {
-              name = found.fullName || found.name;
+            name = found.fullName || found.name;
           }
         }
       }
@@ -193,7 +196,7 @@ const Chat = () => {
           if (found) {
             avatar = found.avatar || found.avatarUrl || avatar;
             if (found.fullName || found.name) {
-                name = found.fullName || found.name;
+              name = found.fullName || found.name;
             }
             if (avatar) break; // Dừng khi tìm thấy avatar
           }
@@ -202,15 +205,15 @@ const Chat = () => {
 
       return { name, avatar };
     }
-    
+
     // 2. Nếu không có callerId, nghĩa là mình đang GỌI ĐI (Outgoing)
     if (!activeConversation) return { name: 'Người dùng', avatar: null };
 
     // Nếu là cuộc gọi Nhóm
     if (activeConversation.type === 'GROUP') {
-      return { 
-        name: activeConversation.name || 'Nhóm trò chuyện', 
-        avatar: activeConversation.avatar || null 
+      return {
+        name: activeConversation.name || 'Nhóm trò chuyện',
+        avatar: activeConversation.avatar || null
       };
     }
 
@@ -225,12 +228,16 @@ const Chat = () => {
   // ─── Danh sách Remote Streams cho Group Call ─────────────────────────────
   const remoteStreams = React.useMemo(() => {
     if (!remoteUsers || remoteUsers.length === 0) return [];
-    
-    return remoteUsers.map(user => {
+
+    return remoteUsers.map(u => {
       let memberName = 'Người dùng';
       let memberAvatar = null;
-      
-      // 1. Trường hợp cuộc gọi 1-1 (SINGLE): Chắc chắn là người kia
+
+      // Logic tìm kiếm thông tin người dùng dựa trên UID
+      // 1. Kiểm tra nếu là cuộc gọi 1-1 và UID khớp với remoteInfo đã tìm thấy
+      const currentRemoteUid = Math.abs(u.uid % 1000000); // Lấy phần base UID
+
+      // Tìm trong danh sách hội thoại hiện tại (SINGLE)
       if (activeConversation?.type === 'SINGLE') {
         const other = activeConversation.members?.find(m => String(m.userId) !== String(myId));
         if (other) {
@@ -238,14 +245,18 @@ const Chat = () => {
           memberAvatar = other.avatar || other.avatarUrl || memberAvatar;
         }
       } else {
-        // 2. Trường hợp cuộc gọi nhóm: Tìm theo UID (cần logic mapping hoặc tìm gần đúng)
+        // Tìm trong TOÀN BỘ các cuộc hội thoại để map UID -> Name/Avatar
         for (const conv of conversations) {
           const found = conv.members?.find(m => {
             const mId = String(m.userId);
-            // So sánh trực tiếp hoặc so sánh qua hash nếu cần
-            return mId === String(user.uid) || 
-                   (0 | (mId.split('-').reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0))) === Math.abs(user.uid);
+            // Hash UID giống logic toNumericUid của useAgoraCall
+            let hash = 0;
+            for (let i = 0; i < mId.length; i++) {
+              hash = ((hash << 5) - hash + mId.charCodeAt(i)) | 0;
+            }
+            return Math.abs(hash % 1000000) === currentRemoteUid || mId === String(u.uid);
           });
+
           if (found) {
             memberName = found.fullName || found.name || memberName;
             memberAvatar = found.avatar || found.avatarUrl || memberAvatar;
@@ -253,18 +264,24 @@ const Chat = () => {
           }
         }
       }
-      
+
+      // Nếu vẫn chưa tìm thấy, dùng thông tin từ remoteInfo (cho trường hợp cuộc gọi 1-1)
+      if (memberName === 'Người dùng' && activeConversation?.type !== 'GROUP') {
+        memberName = remoteInfo.name || memberName;
+        memberAvatar = remoteInfo.avatar || memberAvatar;
+      }
+
       return {
-        uid: user.uid,
-        videoTrack: user.videoTrack,
-        audioTrack: user.audioTrack,
-        hasVideo: user.hasVideo,
-        hasAudio: user.hasAudio,
+        uid: u.uid,
+        videoTrack: u.videoTrack,
+        audioTrack: u.audioTrack,
+        hasVideo: u.hasVideo,
+        hasAudio: u.hasAudio,
         name: memberName,
         avatar: memberAvatar,
       };
     });
-  }, [remoteUsers, conversations]);
+  }, [remoteUsers, conversations, activeConversation, myId, remoteInfo]);
 
   const allChatImages = React.useMemo(() => {
     const images = [];
@@ -276,9 +293,9 @@ const Chat = () => {
           const isImg = cleanUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)/i);
           const isVid = cleanUrl.match(/\.(mp4|webm|ogg)/i);
           if (isImg || isVid) {
-            images.push({ 
-              url, 
-              type: isImg ? 'IMAGE' : 'VIDEO', 
+            images.push({
+              url,
+              type: isImg ? 'IMAGE' : 'VIDEO',
               createdAt: msg.createdAt,
               senderName: msg.senderName,
               messageId: msg.messageId
@@ -424,27 +441,24 @@ const Chat = () => {
                   <div className={`px-5 py-3 border-b mb-2 ${isDark ? 'border-white/10' : 'border-slate-50'}`}>
                     <h3 className={`font-bold truncate text-base ${isDark ? 'text-white' : 'text-slate-800'}`}>{user?.fullName || 'Người dùng'}</h3>
                   </div>
-                  <button 
-                    onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }} 
-                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${
-                      isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
-                    }`}
+                  <button
+                    onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }}
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+                      }`}
                   >
                     Hồ sơ của bạn
                   </button>
-                  <button 
-                    onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }} 
-                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${
-                      isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
-                    }`}
+                  <button
+                    onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }}
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+                      }`}
                   >
                     Đổi mật khẩu
                   </button>
-                  <button 
-                    onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }} 
-                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors border-t font-medium ${
-                      isDark ? 'text-red-400 hover:bg-red-400/10 border-white/10' : 'text-red-500 hover:bg-red-50 border-slate-50'
-                    }`}
+                  <button
+                    onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }}
+                    className={`w-full text-left px-5 py-3 text-[14px] transition-colors border-t font-medium ${isDark ? 'text-red-400 hover:bg-red-400/10 border-white/10' : 'text-red-500 hover:bg-red-50 border-slate-50'
+                      }`}
                   >
                     Xóa tài khoản
                   </button>
@@ -525,6 +539,19 @@ const Chat = () => {
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
             </div>
+
+            {/* Mobile Logout Icon */}
+            {isMobile && (
+              <div className="relative group">
+                <button
+                  onClick={logout}
+                  className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-[22px] transition-all group active:scale-95"
+                  title="Đăng xuất"
+                >
+                  <LogOut size={22} />
+                </button>
+              </div>
+            )}
           </nav>
 
           {!isMobile && (
@@ -681,11 +708,11 @@ const Chat = () => {
                     </button>
 
                     <div className="h-px bg-border dark:bg-white/5 my-2" />
-                    
+
                     <div className="px-4 py-1.5 mb-1 flex items-center justify-between">
                       <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>Theo thẻ phân loại</p>
                       {selectedTags.length > 0 && (
-                        <button 
+                        <button
                           onClick={() => setSelectedTags([])}
                           className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase"
                         >
@@ -699,9 +726,9 @@ const Chat = () => {
                         <button
                           key={tag.key}
                           onClick={() => {
-                            setSelectedTags(prev => 
-                              prev.includes(tag.key) 
-                                ? prev.filter(k => k !== tag.key) 
+                            setSelectedTags(prev =>
+                              prev.includes(tag.key)
+                                ? prev.filter(k => k !== tag.key)
                                 : [...prev, tag.key]
                             );
                           }}
@@ -747,13 +774,13 @@ const Chat = () => {
                 onDelete={handleDeleteConversation}
                 activeId={activeConversationId}
                 onUpdateTag={async (id, tag) => {
-                    try {
-                      await chatApi.updateConversationTag(id, tag);
-                      fetchConversations();
-                    } catch (err) {
-                      console.error("Failed to update tag", err);
-                    }
-                 }}
+                  try {
+                    await chatApi.updateConversationTag(id, tag);
+                    fetchConversations();
+                  } catch (err) {
+                    console.error("Failed to update tag", err);
+                  }
+                }}
               />
             )}
           </div>
@@ -778,8 +805,8 @@ const Chat = () => {
                   allChatImages={allChatImages}
                 />
               ) : !isMobile ? (
-                <WelcomeCarousel 
-                  user={user} 
+                <WelcomeCarousel
+                  user={user}
                   onAction={(type) => {
                     if (type === 'createGroup') setIsGroupModalOpen(true);
                     if (type === 'addFriend') setIsSearchOpen(true);
@@ -911,7 +938,7 @@ const Chat = () => {
         initialView={friendsInitialView}
       />
 
-      <MediaLightbox 
+      <MediaLightbox
         isOpen={lightboxData.isOpen}
         onClose={() => setLightboxData(prev => ({ ...prev, isOpen: false }))}
         images={lightboxData.images}
@@ -933,8 +960,11 @@ const Chat = () => {
         onAccept={handleAcceptCall}
         onToggleMic={toggleMic}
         onToggleCamera={toggleCamera}
+        micOn={micOn}
+        camOn={camOn}
         audioBlocked={audioBlocked}
         onResumeAudio={resumeAudio}
+        endCallReason={endCallReason}
       />
     </div >
   );

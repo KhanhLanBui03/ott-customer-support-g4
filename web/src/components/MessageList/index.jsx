@@ -1358,12 +1358,15 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               {(() => {
                                                 const urls = msg.mediaUrls;
                                                 const count = urls.length;
-
+                                                const imagesAndVideos = urls.filter(url => {
+                                                  const fullUrl = getFullUrl(url);
+                                                  return fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg|mp4|webm|ogg)(\?|$)/i) || msg.type === 'IMAGE' || msg.type === 'VIDEO';
+                                                });
+                                                const otherFiles = urls.filter(url => !imagesAndVideos.includes(url));
                                                 const renderMediaItem = (url, idx, isSmall = true) => {
                                                   const fullUrl = getFullUrl(url);
                                                   const isImage = fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'IMAGE') || msg.type === 'IMAGE';
                                                   const isVideo = fullUrl.match(/\.(mp4|webm|ogg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'VIDEO') || msg.type === 'VIDEO';
-
                                                   if (isImage) {
                                                     return (
                                                       <div key={idx} className={cn("overflow-hidden cursor-pointer group/img relative bg-surface-100 dark:bg-surface-200", isSmall ? "aspect-square" : "aspect-video")} onClick={() => {
@@ -1413,61 +1416,71 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                     </div>
                                                   );
                                                 };
-
-                                                if (count === 1) {
-                                                  const url = urls[0];
-                                                  const fullUrl = getFullUrl(url);
-                                                  const isImage = fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'IMAGE') || msg.type === 'IMAGE';
-                                                  if (isImage) {
-                                                    return (
-                                                      <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => {
-                                                        if (Array.isArray(allChatImages)) {
-                                                          const idxInAll = allChatImages.findIndex(img => img.url === url);
-                                                          openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
-                                                        }
-                                                      }}>
-                                                        <img src={fullUrl} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
-                                                      </div>
-                                                    );
-                                                  }
-                                                  return renderMediaItem(url, 0, false);
-                                                }
-
-                                                const getRows = (c) => {
-                                                  if (c <= 5) return [c];
-                                                  if (c === 6) return [3, 3];
-                                                  if (c === 7) return [4, 3];
-                                                  if (c === 8) return [4, 4];
-                                                  const rows = [];
-                                                  let rem = c;
-                                                  while (rem > 0) {
-                                                    if (rem >= 5) { rows.push(5); rem -= 5; }
-                                                    else { rows.push(rem); rem = 0; }
-                                                  }
-                                                  return rows;
-                                                };
-
-                                                const rows = getRows(count);
-                                                let currentIndex = 0;
-
-                                                return (
-                                                  <div className="flex flex-col gap-[2px]">
-                                                    {rows.map((rowSize, rowIndex) => {
-                                                      const gridColsClass = {
-                                                        1: 'grid-cols-1',
-                                                        2: 'grid-cols-2',
-                                                        3: 'grid-cols-3',
-                                                        4: 'grid-cols-4',
-                                                        5: 'grid-cols-5'
-                                                      }[rowSize] || 'grid-cols-5';
-                                                      const rowUrls = urls.slice(currentIndex, currentIndex + rowSize);
-                                                      currentIndex += rowSize;
+                                                const renderGrid = (gridUrls) => {
+                                                  const gridCount = gridUrls.length;
+                                                  if (gridCount === 0) return null;
+                                                  if (gridCount === 1) {
+                                                    const url = gridUrls[0];
+                                                    const fullUrl = getFullUrl(url);
+                                                    const isImage = fullUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?|$)/i) || (fullUrl.startsWith('blob:') && msg.type === 'IMAGE') || msg.type === 'IMAGE';
+                                                    if (isImage) {
                                                       return (
-                                                        <div key={rowIndex} className={cn("grid gap-[2px]", gridColsClass)}>
-                                                          {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
+                                                        <div className="overflow-hidden cursor-pointer bg-surface-100 dark:bg-surface-200" onClick={() => {
+                                                          if (Array.isArray(allChatImages)) {
+                                                            const idxInAll = allChatImages.findIndex(img => img.url === url);
+                                                            openLightbox(allChatImages, idxInAll !== -1 ? idxInAll : 0);
+                                                          }
+                                                        }}>
+                                                          <img src={fullUrl} className="max-w-full h-auto block hover:scale-[1.02] transition-transform duration-700" alt="" />
                                                         </div>
                                                       );
-                                                    })}
+                                                    }
+                                                    return renderMediaItem(url, 0, false);
+                                                  }
+                                                  const getRows = (c) => {
+                                                    if (c <= 5) return [c];
+                                                    if (c === 6) return [3, 3];
+                                                    if (c === 7) return [4, 3];
+                                                    if (c === 8) return [4, 4];
+                                                    const rows = [];
+                                                    let rem = c;
+                                                    while (rem > 0) {
+                                                      if (rem >= 5) { rows.push(5); rem -= 5; }
+                                                      else { rows.push(rem); rem = 0; }
+                                                    }
+                                                    return rows;
+                                                  };
+                                                  const rows = getRows(gridCount);
+                                                  let currentIndex = 0;
+                                                  return (
+                                                    <div className="flex flex-col gap-[2px]">
+                                                      {rows.map((rowSize, rowIndex) => {
+                                                        const gridColsClass = {
+                                                          1: 'grid-cols-1',
+                                                          2: 'grid-cols-2',
+                                                          3: 'grid-cols-3',
+                                                          4: 'grid-cols-4',
+                                                          5: 'grid-cols-5'
+                                                        }[rowSize] || 'grid-cols-5';
+                                                        const rowUrls = gridUrls.slice(currentIndex, currentIndex + rowSize);
+                                                        currentIndex += rowSize;
+                                                        return (
+                                                          <div key={rowIndex} className={cn("grid gap-[2px]", gridColsClass)}>
+                                                            {rowUrls.map((url, i) => renderMediaItem(url, currentIndex - rowSize + i, true))}
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  );
+                                                };
+                                                return (
+                                                  <div className="flex flex-col space-y-1">
+                                                    {renderGrid(imagesAndVideos)}
+                                                    {otherFiles.map((url, idx) => (
+                                                      <div key={`file-${idx}`} className="w-full">
+                                                        {renderMediaItem(url, idx, false)}
+                                                      </div>
+                                                    ))}
                                                   </div>
                                                 );
                                               })()}

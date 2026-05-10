@@ -151,14 +151,14 @@ public class UserController {
 
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<Map<String, Object>>> searchUser(
-            jakarta.servlet.http.HttpServletRequest request,
+            Authentication authentication,
             @org.springframework.web.bind.annotation.RequestParam String phoneNumber
     ) {
         if (phoneNumber == null || phoneNumber.isBlank()) {
             throw new ValidationException("Phone number is required for search");
         }
 
-        String myId = getUserId(request);
+        String myId = getAuthUserId(authentication);
         if (myId == null) {
             throw new com.chatapp.common.exception.UnauthorizedException("User not authenticated");
         }
@@ -182,6 +182,9 @@ public class UserController {
         // 2. Kiểm tra quan hệ bạn bè trong DB
         String status = "NONE";
         Boolean isRequester = null;
+        
+        System.out.println("DEBUG SEARCH: myId=" + myId + ", foundUserId=" + user.getUserId());
+        
         if (!myId.equals(user.getUserId())) {
             Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(myId, user.getUserId());
             Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(user.getUserId(), myId);
@@ -189,12 +192,15 @@ public class UserController {
             if (f1.isPresent()) {
                 status = f1.get().getStatus();
                 isRequester = true;
+              System.out.println("DEBUG SEARCH: Found friendship f1, status=" + status);
             } else if (f2.isPresent()) {
                 status = f2.get().getStatus();
                 isRequester = false;
+              System.out.println("DEBUG SEARCH: Found friendship f2, status=" + status);
             }
         } else {
             status = "SELF"; // Tự tìm chính mình
+            System.out.println("DEBUG SEARCH: Detected SELF search");
         }
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();

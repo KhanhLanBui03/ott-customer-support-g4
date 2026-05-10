@@ -1,136 +1,180 @@
-export const getAgoraHTML = (config, callType) => {
-  return `
-  <!DOCTYPE html>
-  <html>
+export const getAgoraHTML = (config, callType, isCaller = false) => {
+    return `
+<!DOCTYPE html>
+<html>
   <head>
-    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
     <style>
-      body { margin: 0; padding: 0; background: #0f172a; overflow: hidden; width: 100vw; height: 100vh; }
-      #remote-container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
-      #local-container { position: absolute; width: 110px; height: 160px; bottom: 250px; right: 20px; border-radius: 20px; overflow: hidden; z-index: 10; border: 2px solid #6366f1; background: #1e293b; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
-      .video-view { width: 100%; height: 100%; background: #000; object-fit: cover; border-radius: inherit; }
-      /* Gradient overlays for controls readability */
-      .overlay-gradient-top { position: absolute; top: 0; left: 0; right: 0; height: 150px; background: linear-gradient(to bottom, rgba(15,23,42,0.8) 0%, transparent 100%); z-index: 5; pointer-events: none; }
-      .overlay-gradient-bottom { position: absolute; bottom: 0; left: 0; right: 0; height: 250px; background: linear-gradient(to top, rgba(15,23,42,0.9) 0%, transparent 100%); z-index: 5; pointer-events: none; }
-      /* Lớp phủ để bắt sự kiện chạm mở khóa âm thanh */
-      #unlock-layer { position: absolute; width: 100%; height: 100%; z-index: 99; }
+      body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #111827; overflow: hidden; font-family: -apple-system, sans-serif; }
+      #remote-container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 1; background: #000; }
+      .video-view { width: 100%; height: 100%; background: #000; object-fit: cover; }
+      #local-container { 
+        position: absolute; width: 110px; height: 150px; 
+        top: 80px; right: 20px; /* Chuyển lên trên bên phải */
+        z-index: 10; border-radius: 12px; overflow: hidden; border: 2px solid rgba(255,255,255,0.4);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5); background: #222;
+        touch-action: none; /* Quan trọng để kéo thả mượt mà */
+      }
+      #unlock-layer { 
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        z-index: 9999; background: transparent;
+      }
     </style>
   </head>
   <body>
     <div id="unlock-layer"></div>
-    <div class="overlay-gradient-top"></div>
-    <div class="overlay-gradient-bottom"></div>
     <div id="remote-container"></div>
     <div id="local-container"></div>
+    
     <script>
-      const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-      let localTracks = { videoTrack: null, audioTrack: null };
-      
-      function log(msg) {
+      const log = (msg) => {
+        console.log("[WebView-Agora] " + msg);
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg }));
+      };
+
+      let client = null;
+      let localTracks = { videoTrack: null, audioTrack: null };
+      let isJoined = false;
+
+      // Logic kéo thả khung Local Video
+      const localBox = document.getElementById('local-container');
+      let isDragging = false;
+      let offset = { x: 0, y: 0 };
+
+      localBox.addEventListener('touchstart', (e) => {
+        isDragging = true;
+        const touch = e.touches[0];
+        offset.x = touch.clientX - localBox.offsetLeft;
+        offset.y = touch.clientY - localBox.offsetTop;
+        localBox.style.borderColor = "#6366f1"; // Đổi màu viền khi đang kéo
+      });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        let x = touch.clientX - offset.x;
+        let y = touch.clientY - offset.y;
+        
+        // Giới hạn không cho kéo ra ngoài màn hình
+        const maxX = window.innerWidth - localBox.offsetWidth - 10;
+        const maxY = window.innerHeight - localBox.offsetHeight - 10;
+        x = Math.max(10, Math.min(x, maxX));
+        y = Math.max(10, Math.min(y, maxY));
+
+        localBox.style.left = x + 'px';
+        localBox.style.top = y + 'px';
+        localBox.style.right = 'auto'; // Hủy bỏ thuộc tính right: 20px ban đầu
+        localBox.style.bottom = 'auto';
+      });
+
+      document.addEventListener('touchend', () => {
+        isDragging = false;
+        localBox.style.borderColor = "rgba(255,255,255,0.4)";
+      });
+
+      function toNumericUid(userId, isCaller) {
+        let baseUid = 0;
+        if (typeof userId === 'number') baseUid = userId;
+        else if (userId && /^\\d+$/.test(String(userId))) baseUid = parseInt(String(userId), 10);
+        else if (userId) {
+            let hash = 0;
+            const s = String(userId);
+            for (let i = 0; i < s.length; i++) {
+                hash = ((hash << 5) - hash) + s.charCodeAt(i);
+                hash = hash & hash;
+            }
+            baseUid = Math.abs(hash) % 1000000;
+        }
+        return (isCaller ? 1000000 : 2000000) + (baseUid % 1000000);
       }
 
-      // Lắng nghe lệnh từ React Native
+      function unlockAudio() {
+        try {
+            const silent = document.getElementById('silent-audio');
+            if (silent) silent.play().catch(() => {});
+            if (client) {
+                client.remoteUsers.forEach(user => {
+                    if (user.audioTrack) user.audioTrack.play().catch(() => {});
+                });
+            }
+            document.getElementById('unlock-layer').style.display = 'none';
+        } catch (e) { log("Unlock error: " + e.message); }
+      }
+
       window.handleAction = async (action) => {
-        log("Received action: " + action.type + " enabled: " + action.enabled);
-        if (action.type === 'toggle-mic') {
-          if (localTracks.audioTrack) {
-            await localTracks.audioTrack.setEnabled(action.enabled);
+        try {
+          if (action.type === 'toggle-mic') {
+            if (localTracks.audioTrack) await localTracks.audioTrack.setEnabled(action.enabled);
+          } else if (action.type === 'toggle-cam') {
+            if (localTracks.videoTrack) {
+              await localTracks.videoTrack.setEnabled(action.enabled);
+              localBox.style.display = action.enabled ? 'block' : 'none';
+            } else if (action.enabled && isJoined) {
+              localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
+              localTracks.videoTrack.play("local-container");
+              await client.publish(localTracks.videoTrack);
+              localBox.style.display = 'block';
+            }
           }
-        } else if (action.type === 'toggle-cam') {
-          if (localTracks.videoTrack) {
-            await localTracks.videoTrack.setEnabled(action.enabled);
-          }
-        }
+        } catch (err) { log("Action error: " + err.message); }
       };
 
-      // Mở khóa âm thanh khi người dùng chạm vào màn hình
-      // Mở khóa âm thanh khi người dùng chạm vào màn hình
-      document.getElementById('unlock-layer').onclick = async () => {
-        log("User clicked to unlock audio");
-        try {
-          // Kích hoạt AudioContext
-          if (AgoraRTC.getAudioContext()) {
-            await AgoraRTC.getAudioContext().resume();
-          }
-          // Resume lại âm thanh cho tất cả remote users đã có
-          client.remoteUsers.forEach(user => {
-            if (user.audioTrack) {
-              user.audioTrack.play();
-              log("Playing audio for: " + user.uid);
-            }
-          });
-        } catch (e) {
-          log("Unlock error: " + e.message);
-        }
-        document.getElementById('unlock-layer').remove();
-      };
+      document.getElementById('unlock-layer').onclick = unlockAudio;
+      document.getElementById('unlock-layer').ontouchstart = unlockAudio;
 
       async function start() {
+        if (window.isAgoraStarted) return;
+        window.isAgoraStarted = true;
         try {
+          client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
           const token = "${config.token}" === "null" ? null : "${config.token}";
+          const isCallerFlag = ${isCaller};
+          const numericUid = toNumericUid("${config.uid}", isCallerFlag);
           
-          // Đăng ký listener TRƯỚC KHI join
           client.on("user-published", async (user, mediaType) => {
-            log("Remote user published: " + user.uid + " " + mediaType);
-            await client.subscribe(user, mediaType);
-            log("Subscribed to " + user.uid);
-            
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'user-joined', uid: user.uid }));
-
-            if (mediaType === "video") {
-              const remotePlayerContainer = document.createElement("div");
-              remotePlayerContainer.id = user.uid.toString();
-              remotePlayerContainer.className = "video-view";
-              document.getElementById("remote-container").append(remotePlayerContainer);
-              user.videoTrack.play(remotePlayerContainer);
-            }
-            if (mediaType === "audio") {
-              user.audioTrack.play();
-              log("Audio playing for " + user.uid);
-            }
+                await client.subscribe(user, mediaType);
+                if (mediaType === "video") {
+                  let container = document.getElementById(user.uid.toString());
+                  if (!container) {
+                    container = document.createElement("div");
+                    container.id = user.uid.toString();
+                    container.className = "video-view";
+                    document.getElementById("remote-container").append(container);
+                  }
+                  user.videoTrack.play(container);
+                }
+                if (mediaType === "audio") user.audioTrack.play().catch(() => {});
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'user-published', uid: user.uid, mediaType: mediaType }));
           });
 
           client.on("user-left", (user) => {
-            log("User left: " + user.uid);
-            const player = document.getElementById(user.uid.toString());
-            if (player) player.remove();
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'user-left', uid: user.uid }));
+                const el = document.getElementById(user.uid.toString());
+                if (el) el.remove();
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'user-left', uid: user.uid }));
           });
 
-          log("Joining channel: ${config.channel}");
-          await client.join("${config.appId}", "${config.channel}", token, null);
-          log("Joined successfully as " + client.uid);
+          log("Joining: " + "${config.channel}" + " as " + numericUid);
+          await client.join("${config.appId}", "${config.channel}", token, numericUid);
+          isJoined = true;
           
-          if ("${callType}" === 'video') {
-            localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
-            localTracks.videoTrack.play("local-container");
-          }
+          await new Promise(r => setTimeout(r, 500));
           localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-          log("Mic track created. Muted: " + localTracks.audioTrack.muted);
-          
-          // Kiểm tra âm lượng mỗi giây
-          setInterval(() => {
-            if (localTracks.audioTrack) {
-              const level = localTracks.audioTrack.getVolumeLevel();
-              if (level > 0.01) {
-                log("Mic volume detected: " + level.toFixed(2));
-              }
-            }
-          }, 1000);
-
-          await client.publish(Object.values(localTracks).filter(t => t !== null));
-          log("Local tracks published");
-
-        } catch (e) {
-          log("Agora error: " + e.message);
-        }
+          if ("${callType}" === 'video') {
+              localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
+              localTracks.videoTrack.play("local-container");
+              localBox.style.display = 'block';
+          }
+          if (isJoined) {
+              const tracks = Object.values(localTracks).filter(t => t !== null);
+              if (tracks.length > 0) await client.publish(tracks);
+          }
+        } catch (e) { log("Join Error: " + e.message); }
       }
       start();
     </script>
+    <audio id="silent-audio" loop><source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=" type="audio/wav"></audio>
   </body>
-  </html>
-  `;
+</html>
+    `;
 };

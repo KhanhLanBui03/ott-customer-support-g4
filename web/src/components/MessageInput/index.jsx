@@ -22,6 +22,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const { conversations, friends } = useChat();
   const { isRecording, durationFormatted, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
   const fileInputRef = useRef();
+  const imageInputRef = useRef();
   const textInputRef = useRef();
   const typingTimeoutRef = useRef(null);
 
@@ -264,7 +265,13 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
 
   // Check for blocks or restrictions
   const renderInputArea = () => {
-    const currentConv = conversations.find(c => c.conversationId === conversationId);
+    const currentConv = conversations.find(c => c.conversationId === conversationId) || (
+      conversationId?.includes('shop-expert-ai-bot') ? {
+        conversationId: conversationId,
+        type: 'SINGLE',
+        isAI: true
+      } : null
+    );
     if (!currentConv) return null;
 
     // 1. Single chat block check
@@ -314,19 +321,34 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     // 3. Normal input area
     return (
       <form onSubmit={handleSend} className="flex items-center space-x-1.5 sm:space-x-4 bg-background p-2 sm:p-2.5 pr-2 sm:pr-4 rounded-[40px] shadow-2xl shadow-indigo-500/5 dark:shadow-black/40 border border-border relative z-10 group focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
-        <button
-          type="button"
-          onClick={onOpenVoteModal}
-          className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative"
-        >
-          <BarChart2 size={24} />
+        {currentConv?.type === 'GROUP' && (
+          <button
+            type="button"
+            onClick={onOpenVoteModal}
+            className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative"
+          >
+            <BarChart2 size={24} />
+            <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
+              Bình chọn
+            </span>
+          </button>
+        )}
+
+        {/* Image Upload */}
+        <button type="button" onClick={() => imageInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative">
+          <ImageIconLucide size={20} className={isUploading ? 'animate-spin' : ''} />
           <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
-            Bình chọn
+            Gửi ảnh
           </span>
         </button>
+        <input type="file" ref={imageInputRef} className="hidden" accept="image/*" multiple onChange={handleFileChange} />
 
+        {/* File Upload */}
         <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative">
           <Paperclip size={20} className={isUploading ? 'animate-spin' : ''} />
+          <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
+            Gửi tệp
+          </span>
         </button>
         <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
         <div className="w-[1px] h-8 bg-border hidden sm:block" />
@@ -494,7 +516,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       {/* Reply Preview Bar */}
       {replyingTo && (
         <div className="absolute bottom-full mb-3 left-0 right-0 glass-premium p-3 rounded-[24px] border border-indigo-500/20 shadow-xl flex items-center justify-between animate-msg z-20">
-          <div 
+          <div
             className="flex flex-1 items-center space-x-3 overflow-hidden cursor-pointer hover:bg-surface-200/50 p-2 -m-2 rounded-[18px] transition-all"
             onClick={(e) => {
               if (!replyingTo?.messageId) return;
@@ -504,7 +526,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
             }}
           >
             <div className="w-1 h-8 bg-indigo-500 rounded-full flex-shrink-0" />
-            
+
             {/* Attachment Thumbnail if available */}
             {((replyingTo.mediaUrls && replyingTo.mediaUrls.length > 0) || replyingTo.type === 'STICKER') && (
               <div className="flex-shrink-0">
@@ -536,10 +558,10 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                 {(() => {
                   const content = replyingTo.content || replyingTo.text || '';
                   const mediaUrls = replyingTo.mediaUrls || replyingTo.media_urls || [];
-                  const isVoice = replyingTo.type === 'VOICE' || 
-                                 (content && (content.includes('chat-media/') || content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
-                                 (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
-                  
+                  const isVoice = replyingTo.type === 'VOICE' ||
+                    (content && (content.includes('chat-media/') || content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
+                    (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+
                   if (isVoice) return 'Tin nhắn thoại';
                   if (content && replyingTo.type !== 'STICKER' && !content.startsWith('http')) return content;
                   if (replyingTo.type === 'IMAGE') return 'Hình ảnh';
@@ -554,8 +576,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                         name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
                         name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
                         return name || 'Tệp đính kèm';
-                      } catch(e) {
-                         return 'Tệp đính kèm';
+                      } catch (e) {
+                        return 'Tệp đính kèm';
                       }
                     }
                     return 'Tệp đính kèm';
@@ -573,7 +595,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       {suggestions.length > 0 && !text.trim() && attachments.length === 0 && (
         <div className="absolute bottom-full mb-3 left-0 right-0 flex items-center space-x-2 px-4 overflow-x-auto no-scrollbar animate-fade-in-up pb-1">
           <div className="flex-shrink-0 p-1.5 bg-indigo-500/10 text-indigo-400 rounded-lg mr-1">
-             <SparklesIcon size={12} className="animate-pulse" />
+            <SparklesIcon size={12} className="animate-pulse" />
           </div>
           {suggestions.map((suggestion, i) => (
             <button
@@ -585,7 +607,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
               {suggestion}
             </button>
           ))}
-          <button 
+          <button
             type="button"
             onClick={() => setSuggestions([])}
             className="p-1.5 text-foreground/20 hover:text-red-500 transition-colors"

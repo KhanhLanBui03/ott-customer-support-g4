@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
 import MessageModal from '../../../src/components/MessageModal';
-import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage } from '../../../src/store/chatSlice';
+import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
-import { conversationApi } from '../../../src/api/chatApi';
+import { conversationApi, chatApi } from '../../../src/api/chatApi';
+import CreateVoteModal from '../../../src/components/CreateVoteModal';
 import { formatLastSeen } from '../../../src/utils/dateUtils';
+import ForwardModal from '../../../src/components/ForwardModal';
 import { useAgoraCall } from '../../../src/hooks/useAgoraCall';
 
 const ChatDetailScreen = () => {
@@ -22,6 +24,9 @@ const ChatDetailScreen = () => {
 
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [createVoteModalVisible, setCreateVoteModalVisible] = useState(false);
+  const [forwardModalVisible, setForwardModalVisible] = useState(false);
+  const [showAllPins, setShowAllPins] = useState(false);
 
   // KÍCH HOẠT WEBSOCKET TRỰC TIẾP TẠI ĐÂY
   const { sendMessageRealtime, sendReadReceipt, sendTypingStart, sendTypingStop } = useWebSocket();
@@ -135,21 +140,66 @@ const ChatDetailScreen = () => {
     return () => clearInterval(interval);
   }, [dispatch]);
 
+  const getPinnedPreviewText = (pin) => {
+    if (!pin) return '';
+    if (pin.type === 'IMAGE') return '[Hình ảnh]';
+    if (pin.type === 'VIDEO') return '[Video]';
+    if (pin.type === 'AUDIO' || pin.type === 'VOICE') return '[Ghi âm]';
+    if (pin.type === 'FILE') {
+      // Thường content của FILE message là tên file
+      return pin.content || '[Tệp tin]';
+    }
+    return pin.content || 'Tin nhắn';
+  };
+
   const flatListRef = useRef(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
 
   const handleScrollToMessage = (messageId) => {
+    if (!messages || messages.length === 0 || !flatListRef.current) return;
+
     // Với danh sách inverted, index của reversedMessages chính là vị trí ta cần
     const index = [...messages].reverse().findIndex(m => m.messageId === messageId);
-    if (index !== -1 && flatListRef.current) {
+    if (index !== -1) {
       try {
-        flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-        setHighlightedMessageId(messageId);
-        setTimeout(() => setHighlightedMessageId(null), 2000);
+        // Đảm bảo list đã render xong bằng cách dùng setTimeout hoặc requestAnimationFrame
+        setTimeout(() => {
+          if (flatListRef.current) {
+            flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+            setHighlightedMessageId(messageId);
+            setTimeout(() => setHighlightedMessageId(null), 2000);
+          }
+        }, 100);
       } catch (err) {
-        console.warn('Scroll to index failed, trying offset fallback');
+        console.warn('Scroll to message failed:', err);
       }
     }
+  };
+
+  const handleUnpinAll = () => {
+    Alert.alert('Bỏ ghim tất cả', 'Bạn có chắc chắn muốn bỏ ghim tất cả tin nhắn trong cuộc hội thoại này?', [
+      { text: 'Hủy', style: 'cancel' },
+      { 
+        text: 'Bỏ ghim hết', 
+        style: 'destructive',
+        onPress: async () => {
+          for (const pin of conversation.pinnedMessages) {
+            await dispatch(unpinMessage({ messageId: pin.messageId, conversationId: realId }));
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleUnpinSingle = (messageId) => {
+    Alert.alert('Bỏ ghim', 'Bỏ ghim tin nhắn này?', [
+      { text: 'Hủy', style: 'cancel' },
+      { 
+        text: 'Bỏ ghim', 
+        style: 'destructive',
+        onPress: () => dispatch(unpinMessage({ messageId, conversationId: realId }))
+      }
+    ]);
   };
 
   const handleSendMessage = useCallback((content, replyToMessageId, type = 'TEXT', mediaUrls = []) => {
@@ -168,6 +218,49 @@ const ChatDetailScreen = () => {
   const handlePressMessage = (message) => {
     if (!message || !realId) return;
 
+    // Xử lý Vote
+    if (message.action === 'VOTE') {
+      let optionIds = [];
+      if (message.allowMultiple) {
+        const current = message.currentSelection || [];
+        if (current.includes(message.optionId)) {
+          // Nếu đã chọn rồi thì bỏ chọn
+          optionIds = current.filter(id => id !== message.optionId);
+        } else {
+          // Nếu chưa chọn thì thêm vào danh sách
+          optionIds = [...current, message.optionId];
+        }
+      } else {
+        // Vote đơn thì chỉ gửi 1 optionId duy nhất
+        optionIds = [message.optionId];
+      }
+      
+      chatApi.submitVote(realId, message.messageId, { optionIds }).catch(e => {
+        console.error('Submit vote error:', e);
+        Alert.alert('Lỗi', 'Không thể gửi bình chọn. Vui lòng thử lại.');
+      });
+      return;
+    }
+
+    if (message.action === 'CLOSE_VOTE') {
+      Alert.alert(
+        'Xác nhận',
+        'Bạn có chắc chắn muốn kết thúc cuộc bình chọn này?',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { 
+            text: 'Kết thúc', 
+            style: 'destructive',
+            onPress: () => chatApi.closeVote(realId, message.messageId).catch(e => {
+              console.error('Close vote error:', e);
+              Alert.alert('Lỗi', 'Không thể kết thúc bình chọn.');
+            })
+          }
+        ]
+      );
+      return;
+    }
+
     // Xử lý nút "Gọi lại" từ CALL_LOG
     if (message.action === 'CALL_BACK') {
       handleStartCall(message.callType || 'audio');
@@ -180,6 +273,20 @@ const ChatDetailScreen = () => {
     // Chỉ gửi read receipt khi người dùng thật sự click vào tin nhắn trong màn chat
     guardedSendReadReceipt(String(message.messageId), realId);
     dispatch(markConversationRead(realId));
+  };
+
+  const handleOpenPoll = () => {
+    setCreateVoteModalVisible(true);
+  };
+
+  const handleCreateVote = async (voteData) => {
+    try {
+      setCreateVoteModalVisible(false);
+      await chatApi.createVote(realId, voteData);
+    } catch (err) {
+      console.error('Failed to create vote:', err);
+      Alert.alert('Lỗi', 'Không thể tạo cuộc bình chọn. Vui lòng thử lại.');
+    }
   };
 
   const handleReaction = async (messageId, emoji) => {
@@ -201,7 +308,6 @@ const ChatDetailScreen = () => {
     }));
 
     try {
-      const { chatApi } = require('../../../src/api/chatApi');
       if (alreadyReacted) {
         await chatApi.removeReaction(messageId, realId, { emoji });
       } else {
@@ -330,6 +436,16 @@ const ChatDetailScreen = () => {
           }
         ]);
         break;
+      case 'forward':
+      case 'share':
+        setForwardModalVisible(true);
+        break;
+      case 'pin':
+        dispatch(pinMessage({ messageId: message.messageId, conversationId: realId }));
+        break;
+      case 'unpin':
+        dispatch(unpinMessage({ messageId: message.messageId, conversationId: realId }));
+        break;
       default:
         console.log('Action not implemented:', type);
     }
@@ -400,6 +516,98 @@ const ChatDetailScreen = () => {
           </View>
         </View>
  
+        {/* Pinned Messages Bar */}
+        {conversation?.pinnedMessages?.length > 0 && (
+          <View style={styles.pinnedContainer}>
+            {!showAllPins ? (
+              <View style={styles.pinnedMain}>
+                <View style={styles.pinnedLeftIcon}>
+                  <MaterialCommunityIcons name="comment-text-outline" size={20} color="#6366f1" />
+                </View>
+                
+                <TouchableOpacity 
+                  style={styles.pinnedInfo}
+                  onPress={() => handleScrollToMessage(conversation.pinnedMessages[conversation.pinnedMessages.length - 1].messageId)}
+                >
+                  <Text style={styles.pinnedTypeLabel}>TIN NHẮN</Text>
+                  <Text style={styles.pinnedPreview} numberOfLines={1}>
+                    <Text style={styles.pinnedSenderName}>
+                      {conversation.pinnedMessages[conversation.pinnedMessages.length - 1].senderName}: 
+                    </Text>
+                    {" "}{getPinnedPreviewText(conversation.pinnedMessages[conversation.pinnedMessages.length - 1])}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.pinnedRightActions}>
+                  {conversation.pinnedMessages.length > 1 && (
+                    <TouchableOpacity 
+                      style={styles.webMoreBadge}
+                      onPress={() => setShowAllPins(true)}
+                    >
+                      <Text style={styles.webMoreBadgeText}>+{conversation.pinnedMessages.length} ghim</Text>
+                      <Ionicons name="chevron-down" size={14} color="#fff" />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity 
+                    style={styles.pinnedMoreButton}
+                    onPress={() => handleUnpinSingle(conversation.pinnedMessages[conversation.pinnedMessages.length - 1].messageId)}
+                  >
+                    <MaterialIcons name="more-horiz" size={20} color="#94a3b8" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.expandedContainer}>
+                <View style={styles.expandedHeader}>
+                  <Text style={styles.expandedHeaderText}>DANH SÁCH GHIM ({conversation.pinnedMessages.length})</Text>
+                  <TouchableOpacity 
+                    style={styles.collapseButton}
+                    onPress={() => setShowAllPins(false)}
+                  >
+                    <Text style={styles.collapseButtonText}>THU GỌN</Text>
+                    <Ionicons name="chevron-up" size={14} color="#94a3b8" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.pinnedList}>
+                  {conversation.pinnedMessages.slice().reverse().map((pin) => (
+                    <View key={pin.messageId} style={styles.webPinnedItem}>
+                      <View style={styles.pinnedLeftIcon}>
+                        <MaterialCommunityIcons name="comment-text-outline" size={18} color="#6366f1" />
+                      </View>
+                      <TouchableOpacity 
+                        style={styles.pinnedInfo}
+                        onPress={() => handleScrollToMessage(pin.messageId)}
+                      >
+                        <Text style={styles.pinnedTypeLabel}>TIN NHẮN</Text>
+                        <Text style={styles.pinnedPreview} numberOfLines={1}>
+                          <Text style={styles.pinnedSenderName}>{pin.senderName}: </Text>
+                          {getPinnedPreviewText(pin)}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.pinnedMoreButton}
+                        onPress={() => handleUnpinSingle(pin.messageId)}
+                      >
+                        <MaterialIcons name="more-horiz" size={18} color="#94a3b8" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.viewAllFooter}
+                  onPress={() => {
+                    Alert.alert('Thông báo', 'Tính năng đang được phát triển. Đây sẽ là nơi hiển thị toàn bộ lịch sử tin nhắn ghim của nhóm.');
+                  }}
+                >
+                  <Text style={styles.viewAllFooterText}>XEM TẤT CẢ Ở BẢNG TIN NHÓM</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
         <View style={styles.chatArea}>
           {isLoading && messages.length === 0 ? (
             <View style={styles.loadingContainer}>
@@ -456,7 +664,9 @@ const ChatDetailScreen = () => {
             </View>
           ) : (
             <MessageInput 
+              conversationType={conversation?.type}
               onSendMessage={handleSendMessage} 
+              onOpenPoll={handleOpenPoll}
               onTypingChange={(isTyping) => {
                 if (isTyping) {
                   sendTypingStart(realId);
@@ -471,10 +681,23 @@ const ChatDetailScreen = () => {
         <MessageModal
           visible={modalVisible}
           message={selectedMessage}
+          isPinned={conversation?.pinnedMessages?.some(p => String(p.messageId) === String(selectedMessage?.messageId))}
           isOwn={selectedMessage?.senderId === (currentUser?.userId || currentUser?.id)}
           onClose={() => setModalVisible(false)}
           onAction={handleModalAction}
           onReact={handleReaction}
+        />
+
+        <CreateVoteModal
+          visible={createVoteModalVisible}
+          onClose={() => setCreateVoteModalVisible(false)}
+          onCreate={handleCreateVote}
+        />
+
+        <ForwardModal
+          visible={forwardModalVisible}
+          onClose={() => setForwardModalVisible(false)}
+          messageToForward={selectedMessage}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -553,6 +776,115 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 14,
     fontWeight: '500',
+  },
+  pinnedContainer: {
+    backgroundColor: '#1e293b', // Màu nền tối giống Web trong screenshot
+    zIndex: 10,
+  },
+  pinnedMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  pinnedLeftIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinnedInfo: {
+    flex: 1,
+  },
+  pinnedTypeLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginBottom: 2,
+  },
+  pinnedSenderName: {
+    fontWeight: '700',
+    color: '#fff',
+  },
+  pinnedPreview: {
+    fontSize: 13,
+    color: '#e2e8f0',
+  },
+  pinnedRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  webMoreBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#334155',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  webMoreBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  pinnedMoreButton: {
+    padding: 4,
+  },
+  expandedContainer: {
+    backgroundColor: '#1e293b',
+  },
+  expandedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  expandedHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  collapseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  collapseButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  pinnedList: {
+    maxHeight: 250,
+  },
+  webPinnedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+    gap: 12,
+  },
+  viewAllFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+  },
+  viewAllFooterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
   },
 });
 

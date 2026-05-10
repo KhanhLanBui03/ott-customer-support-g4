@@ -84,7 +84,7 @@ const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false, status }) 
     return (
         <div className={`relative w-full h-full bg-[#111] overflow-hidden ${roundedClass}`}>
             <div ref={ref} className="w-full h-full" />
-            {(!stream.videoTrack || isAudioCall) && (
+            {(!stream.videoTrack) && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 to-slate-900">
                     <Avatar size={fullscreen ? "w-28 h-28" : "w-16 h-16"} pulse={false} url={avatarUrl} nameInitial={initial} />
                     {fullscreen && (
@@ -114,6 +114,8 @@ const VideoCall = ({
     remoteName,
     remoteAvatar,
     duration,
+    camOn: initialCamOn = true,
+    micOn: initialMicOn = true,
     onHangup,
     onAccept,
     onToggleMic,
@@ -122,12 +124,31 @@ const VideoCall = ({
     cameraError = null,
     audioBlocked = false,
     onResumeAudio,
+    endCallReason = null,
 }) => {
     const localRef  = useRef(null);
     const remoteRef = useRef(null);
 
-    const [micOn, setMicOn]   = useState(true);
-    const [camOn, setCamOn]   = useState(true);
+    const [micOn, setMicOn]   = useState(initialMicOn);
+    const [camOn, setCamOn]   = useState(initialCamOn);
+
+    // Đồng bộ state khi prop thay đổi từ bên ngoài (hook)
+    useEffect(() => {
+        setMicOn(initialMicOn);
+    }, [initialMicOn]);
+
+    useEffect(() => {
+        setCamOn(initialCamOn);
+    }, [initialCamOn]);
+
+    // Bỏ cái useEffect cũ làm ghi đè state vô tội vạ
+    // useEffect(() => {
+    //     if (callType === 'audio') {
+    //         setCamOn(false);
+    //     } else {
+    //         setCamOn(true);
+    //     }
+    // }, [callType]);
 
     // ─── Play local video ────────────────────────────────────────────────────
     useEffect(() => {
@@ -154,7 +175,8 @@ const VideoCall = ({
     // ─── Xác định tên + avatar hiển thị tùy trạng thái ─────────────────────
     const isOutgoing  = status === 'outgoing';
     const isIncoming  = status === 'incoming';
-    const isConnected = status === 'connected' || status === 'ended';
+    const isConnected = status === 'connected';
+    const isEnded     = status === 'ended';
 
     const displayName   = remoteName;
     const displayAvatar = remoteAvatar;
@@ -164,6 +186,23 @@ const VideoCall = ({
 
     return (
         <div className="fixed inset-0 z-[9999] flex flex-col" style={{ background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)' }}>
+
+            {/* ══════════════════════════════════════════════════════════════
+                ENDED — Màn hình kết thúc / bị từ chối
+            ══════════════════════════════════════════════════════════════ */}
+            {isEnded && (
+                <div className="flex flex-col items-center justify-center h-full py-20 px-6">
+                    <div className="flex flex-col items-center space-y-8">
+                        <Avatar size="w-32 h-32" ring={true} url={displayAvatar} nameInitial={initial} />
+                        <div className="text-center">
+                            <h2 className="text-3xl font-bold text-white mb-2">{displayName || 'Người dùng'}</h2>
+                            <div className="px-6 py-2 bg-white/10 rounded-full border border-white/20">
+                                <p className="text-white font-medium">{endCallReason || 'Cuộc gọi đã kết thúc'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ══════════════════════════════════════════════════════════════
                 INCOMING — Màn hình cuộc gọi đến
@@ -266,7 +305,7 @@ const VideoCall = ({
                     </div>
 
                     {/* Local video preview nhỏ ở góc */}
-                    {callType === 'video' && localVideoTrack && (
+                    {localVideoTrack && (
                         <div className="absolute top-6 right-6 w-28 h-36 rounded-2xl overflow-hidden border border-white/20 shadow-2xl bg-black">
                             <div ref={localRef} className={`w-full h-full ${camOn ? 'opacity-100' : 'opacity-0'}`} />
                             {!camOn && (
@@ -369,19 +408,36 @@ const VideoCall = ({
                     )}
 
                     {/* Local video — picture-in-picture */}
-                    {callType === 'video' && (
-                        <div className="absolute top-20 right-4 w-28 h-40 rounded-2xl overflow-hidden border border-white/20 shadow-2xl bg-black z-20">
-                            <div ref={localRef} className={`w-full h-full transition-opacity ${camOn ? 'opacity-100' : 'opacity-0'}`} />
-                        {!camOn && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a2e]">
-                                <VideoOff size={22} className="text-white/30" />
+                    <div className="absolute top-20 right-4 w-28 h-40 rounded-2xl overflow-hidden border border-white/20 shadow-2xl bg-black z-20">
+                        <div ref={localRef} className={`w-full h-full transition-opacity ${camOn ? 'opacity-100' : 'opacity-0'}`} />
+                    {!camOn && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a2e]">
+                            <VideoOff size={22} className="text-white/30" />
+                        </div>
+                    )}
+                    {!micOn && (
+                        <div className="absolute bottom-2 left-2 bg-red-500/90 rounded-full p-1">
+                            <MicOff size={10} className="text-white" />
+                        </div>
+                    )}
+                    </div>
+
+                    {/* Audio Blocked Banner */}
+                    {audioBlocked && (
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[30] flex flex-col items-center gap-4">
+                            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-3xl flex flex-col items-center text-center max-w-xs shadow-2xl">
+                                <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                                    <Volume2 size={32} className="text-indigo-400" />
+                                </div>
+                                <h3 className="text-white font-bold text-lg mb-2">Âm thanh bị chặn</h3>
+                                <p className="text-white/60 text-sm mb-6">Trình duyệt đã chặn tự động phát âm thanh. Vui lòng nhấn nút bên dưới để nghe.</p>
+                                <button 
+                                    onClick={onResumeAudio}
+                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-xl shadow-indigo-600/30 active:scale-95"
+                                >
+                                    Bật âm thanh
+                                </button>
                             </div>
-                        )}
-                        {!micOn && (
-                            <div className="absolute bottom-2 left-2 bg-red-500/90 rounded-full p-1">
-                                <MicOff size={10} className="text-white" />
-                            </div>
-                        )}
                         </div>
                     )}
 
@@ -400,15 +456,13 @@ const VideoCall = ({
                             </button>
 
                             {/* Camera */}
-                            {callType === 'video' && (
-                                <button
-                                    onClick={toggleCam}
-                                    className={`w-14 h-14 flex items-center justify-center rounded-full transition-all active:scale-95 ${camOn ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-400'}`}
-                                    title={camOn ? 'Tắt camera' : 'Bật camera'}
-                                >
-                                    {camOn ? <Video size={22} className="text-white" /> : <VideoOff size={22} className="text-white" />}
-                                </button>
-                            )}
+                            <button
+                                onClick={toggleCam}
+                                className={`w-14 h-14 flex items-center justify-center rounded-full transition-all active:scale-95 ${camOn ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-400'}`}
+                                title={camOn ? 'Tắt camera' : 'Bật camera'}
+                            >
+                                {camOn ? <Video size={22} className="text-white" /> : <VideoOff size={22} className="text-white" />}
+                            </button>
 
                             {/* End call */}
                             <button

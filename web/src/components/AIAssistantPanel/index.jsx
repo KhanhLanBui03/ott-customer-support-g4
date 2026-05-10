@@ -23,6 +23,7 @@ const AIAssistantPanel = ({ conversationId }) => {
     setType(actionType);
     setResult(null);
     try {
+      let response;
       const startTs = isCustomRange && customStart ? new Date(customStart).getTime() : null;
       const endTs = isCustomRange && customEnd ? new Date(customEnd).getTime() : null;
       const currentRange = isCustomRange ? 0 : timeRange;
