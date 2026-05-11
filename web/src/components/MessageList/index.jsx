@@ -215,13 +215,34 @@ const getDocViewerUrl = (u, e) => {
   return `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
 };
 
+const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').split('/api')[0] || `http://${window.location.hostname}:8080`;
+
 const getFullUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
   const trimmedUrl = url.trim();
-  if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('blob:') || trimmedUrl.startsWith('data:')) return trimmedUrl;
-
-  const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').split('/api')[0] || `http://${window.location.hostname}:8080`;
   return `${baseUrl}${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`;
+};
+
+const renderContentWithMentions = (content, isMe) => {
+  if (!content) return null;
+  // Regex to find @mentions (handles spaces using \u200B marker)
+  const parts = content.split(/(@[^\u200B]+\u200B|@\S+)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      return (
+        <span 
+          key={i} 
+          className={cn(
+            "font-bold mx-0.5",
+            isMe ? "text-white" : "text-indigo-600 dark:text-indigo-400"
+          )}
+        >
+          {part.replace('\u200B', '')}
+        </span>
+      );
+    }
+    return part;
+  });
 };
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages, onLoadMore }) => {
@@ -1486,7 +1507,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               })()}
                                             </div>
                                           )}
-                                          {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+                                          {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{renderContentWithMentions(msg.content, isMe)}</p>}
 
                                           {/* Translation Display */}
                                           {translationLoading[msg.messageId] && (
