@@ -9,7 +9,8 @@ import { userApi } from '../api/userApi';
 import { useChat } from '../hooks/useChat';
 import { useAuth } from '../hooks/useAuth';
 import { fetchFriends, fetchConversations } from '../store/chatSlice';
-import { removePendingFriend, setPendingRequests } from '../store/notificationSlice';
+import { addActivity, removePendingFriend, setPendingRequests } from '../store/notificationSlice';
+import { notificationApi } from '../api/notificationApi';
 import { useTheme } from '../hooks/useTheme';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
@@ -96,10 +97,32 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
   const handleAcceptRequest = async (userId) => {
     setLoading(true);
     try {
+      const other = pendingFriends.find(p => String(p.userId) === String(userId)) || {};
+      const otherName = other.fullName || other.name || other.phoneNumber || `Người dùng ${String(userId).slice(0, 8)}`;
       await friendApi.acceptRequest(userId);
       dispatch(removePendingFriend(userId));
       dispatch(fetchFriends());
       await dispatch(fetchConversations());
+      dispatch(addActivity({
+        type: 'FRIEND_ACCEPTED',
+        senderId: userId,
+        receiverId: currentUser?.userId || currentUser?.id,
+        user: other,
+        message: `Bạn đã trở thành bạn bè của ${otherName}`
+      }));
+      // Create a notification for the requester to inform them their request was accepted
+      try {
+        const myId = currentUser?.userId || currentUser?.id;
+        await notificationApi.createNotification({
+          senderId: myId,
+          receiverId: userId,
+          type: 'FRIEND_ACCEPTED',
+          message: `Bạn đã trở thành bạn bè của ${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'}.`
+        });
+      } catch (e) {
+        // Non-blocking: log and continue
+        console.warn('Failed to create FRIEND_ACCEPTED notification', e);
+      }
     } catch (err) {
       console.error("Failed to accept", err);
     } finally {
@@ -137,6 +160,19 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
     setLoading(true);
     try {
       await friendApi.sendRequest(foundUser.userId);
+      const myId = currentUser?.userId || currentUser?.id;
+      if (myId && foundUser?.userId) {
+        try {
+          await notificationApi.createNotification({
+            senderId: myId,
+            receiverId: foundUser.userId,
+            type: 'FRIEND_REQUEST',
+            message: `${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'} đã gửi lời mời kết bạn cho bạn.`
+          });
+        } catch (e) {
+          console.warn('Failed to create FRIEND_REQUEST notification', e);
+        }
+      }
       setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING' }));
     } catch (err) {
       setError('Gửi lời mời thất bại');

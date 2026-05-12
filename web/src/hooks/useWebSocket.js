@@ -123,11 +123,9 @@ export const useWebSocket = () => {
                         message: `${data.fullName || 'Ai đó'} đã chấp nhận lời mời kết bạn.`
                     }));
                 } else if (event.eventType === 'FRIEND_DELETE') {
-                    dispatch(addActivity({
-                        type: 'FRIEND_DELETE',
-                        user: data,
-                        message: `${data.fullName || 'Ai đó'} đã hủy kết bạn.`
-                    }));
+                    // Do not create a user-facing activity when a friend is removed/unfriended.
+                    // Backend will update friend lists; we intentionally avoid spamming activities for removes.
+                    // Keep updateFriendStatus / fetchFriends to refresh UI.
                 } else if (event.eventType === 'FRIEND_REQUEST_REJECTED') {
                     dispatch(addActivity({
                         type: 'FRIEND_REQUEST_REJECTED',

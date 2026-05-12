@@ -1,9 +1,11 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { X, Check, UserMinus, Bell, User, Users } from 'lucide-react';
+import { X, CheckCircle2, UserMinus, Bell, User, Users } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
+import { notificationApi } from '../../api/notificationApi';
+import { useAuth } from '../../hooks/useAuth';
 import { chatApi } from '../../api/chatApi';
-import { removePendingFriend, removePendingGroup, markActivitiesAsRead } from '../../store/notificationSlice';
+import { addActivity, removePendingFriend, removePendingGroup, markActivitiesAsRead } from '../../store/notificationSlice';
 import { fetchConversations, fetchFriends } from '../../store/chatSlice';
 import { useEffect } from 'react';
 import { UserCheck, UserX } from 'lucide-react';
@@ -14,6 +16,14 @@ const NotificationModal = ({ isOpen, onClose }) => {
   const { friends } = useSelector(state => state.chat);
   const { isDark } = useTheme();
   const dispatch = useDispatch();
+  const { user: currentUser } = useAuth();
+
+  const formatNotificationTime = (value) => {
+    if (!value) return '--:--';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '--:--';
+    return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   useEffect(() => {
     if (isOpen && activities.some(a => !a.isRead)) {
@@ -25,10 +35,30 @@ const NotificationModal = ({ isOpen, onClose }) => {
 
   const handleAcceptFriend = async (userId) => {
     try {
+      const other = pendingFriends.find(p => String(p.userId) === String(userId)) || {};
+      const otherName = other.fullName || other.name || other.phoneNumber || `Người dùng ${String(userId).slice(0,8)}`;
       await friendApi.acceptRequest(userId);
       dispatch(removePendingFriend(userId));
       dispatch(fetchConversations());
       dispatch(fetchFriends());
+      dispatch(addActivity({
+        type: 'FRIEND_ACCEPTED',
+        senderId: userId,
+        receiverId: currentUser?.userId || currentUser?.id,
+        user: other,
+        message: `Bạn đã trở thành bạn bè của ${otherName}`
+      }));
+      try {
+        const myId = currentUser?.userId || currentUser?.id;
+        await notificationApi.createNotification({
+          senderId: myId,
+          receiverId: userId,
+          type: 'FRIEND_ACCEPTED',
+          message: `Bạn đã trở thành bạn bè của ${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'}.`
+        });
+      } catch (e) {
+        console.warn('Failed to create FRIEND_ACCEPTED notification', e);
+      }
     } catch (err) {
       console.error("Failed to accept friend request", err);
     }
@@ -213,18 +243,18 @@ const NotificationModal = ({ isOpen, onClose }) => {
                         : (isDark ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50/20 border-indigo-100 shadow-sm')
                     }`}>
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        activity.type === 'FRIEND_ACCEPT' 
-                          ? (isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-500') 
+                        activity.type === 'FRIEND_ACCEPT' || activity.type === 'FRIEND_ACCEPTED'
+                          ? (isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-500')
                           : (isDark ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-500')
                         }`}>
-                        {activity.type === 'FRIEND_ACCEPT' ? <UserCheck size={20} /> : <UserX size={20} />}
+                        {activity.type === 'FRIEND_ACCEPT' || activity.type === 'FRIEND_ACCEPTED' ? <CheckCircle2 size={20} /> : <UserX size={20} />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className={`text-sm font-bold leading-tight ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
                           {activity.message}
                         </p>
                         <p className={`text-[9px] font-bold uppercase mt-1 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                          {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatNotificationTime(activity.createdAt || activity.timestamp)}
                         </p>
                       </div>
                     </div>

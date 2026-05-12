@@ -17,8 +17,8 @@ import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
 import MediaLightbox from '../../components/MediaLightbox';
 import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal } from 'lucide-react';
-import { setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
-import { setConversations } from '../../store/chatSlice';
+import { fetchNotifications, setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
+import { setActiveConversation, setConversations } from '../../store/chatSlice';
 import { useTheme } from '../../hooks/useTheme';
 import { useDispatch, useSelector } from 'react-redux';
 import { chatApi } from '../../api/chatApi';
@@ -112,29 +112,34 @@ const Chat = () => {
     toggleCamera,
   } = useAgoraCall(activeConversationId, activeConversation);
 
+  const myId = user?.userId || user?.id;
+
 
   useEffect(() => {
     fetchConversations();
     fetchFriends();
     // Fetch initial notifications
-    const fetchNotifications = () => {
+    const loadNotifications = () => {
       friendApi.getPendingRequests().then(res => {
         dispatch(setPendingRequests(res.data || []));
       }).catch(() => { });
       chatApi.getPendingInvitations().then(res => {
         dispatch(setPendingGroups(res.data || []));
       }).catch(() => { });
+      if (myId) {
+        dispatch(fetchNotifications(myId));
+      }
     };
-    fetchNotifications();
+    loadNotifications();
 
     // Auto-refresh notifications every 30 seconds as fallback
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(loadNotifications, 30000);
     return () => {
       clearInterval(interval);
       // Xóa active conversation khi thoát khỏi màn hình chat chính để tránh auto-read "ma"
-      selectConversation(null);
+      dispatch(setActiveConversation(null));
     };
-  }, [fetchConversations, dispatch, selectConversation]);
+  }, [fetchConversations, fetchFriends, dispatch, myId]);
 
   useEffect(() => {
     const disconnect = connect();
@@ -149,8 +154,6 @@ const Chat = () => {
 
 
   // ─── Thông tin người nghe/gọi (phải đặt SAU activeConversation) ──────────
-  const myId = user?.userId || user?.id;
-
   const remoteInfo = React.useMemo(() => {
     // 1. Nếu có callerId, nghĩa là mình đang NHẬN cuộc gọi (Incoming)
     if (callerId) {

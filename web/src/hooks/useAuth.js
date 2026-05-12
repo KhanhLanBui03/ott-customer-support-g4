@@ -1,6 +1,7 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { setCredentials, logout as logoutAction } from '../store/authSlice';
 import { authApi } from '../api/authApi';
+import { fetchNotifications } from '../store/notificationSlice';
 
 const mapAuthPayload = (data) => ({
   token: data.accessToken,
@@ -35,6 +36,7 @@ export const useAuth = () => {
       rememberMe: remember,
     };
     dispatch(setCredentials(authData));
+    dispatch(fetchNotifications());
     return authData;
   };
 
@@ -55,6 +57,7 @@ export const useAuth = () => {
     if (autoLogin && data?.accessToken) {
       const authData = mapAuthPayload(data);
       dispatch(setCredentials(authData));
+      dispatch(fetchNotifications());
       return authData;
     }
     return data;

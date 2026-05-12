@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon, Mic, Square, Video } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
+import { notificationApi } from '../../api/notificationApi';
 import { useChat } from '../../hooks/useChat';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import { addOptimisticMessage } from '../../store/chatSlice';
@@ -19,12 +20,72 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const { sendMessage, sendTyping } = useWebSocket();
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
-  const { conversations, friends } = useChat();
+  const { conversations, friends, messages } = useChat();
   const { isRecording, durationFormatted, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
   const fileInputRef = useRef();
   const imageInputRef = useRef();
   const textInputRef = useRef();
   const typingTimeoutRef = useRef(null);
+  const strangerNotifiedConversationsRef = useRef(new Set());
+
+  const getFirstStrangerMessageNotificationPayload = () => {
+    const currentUserId = user?.userId || user?.id;
+    if (!currentUserId || !conversationId) return null;
+
+    const currentConv = conversations.find(c => c.conversationId === conversationId);
+    if (!currentConv || currentConv.type !== 'SINGLE' || currentConv.isAI) return null;
+
+    const myId = String(currentUserId).toLowerCase();
+    const otherMember = currentConv.members?.find((member) => {
+      const memberId = String(member?.userId || member?.id || '').toLowerCase();
+      return memberId && memberId !== myId;
+    });
+
+    const receiverId = otherMember?.userId || otherMember?.id;
+    if (!receiverId) return null;
+
+    const friendEntry = Array.isArray(friends) ? friends.find((friend) => {
+      const friendId = String(friend?.userId || friend?.id || friend?.friendId || '').toLowerCase();
+      return friendId && friendId === String(receiverId).toLowerCase();
+    }) : null;
+
+    const friendStatus = friendEntry?.status;
+    const isStranger = !friendStatus || friendStatus === 'NONE' || friendStatus === 'PENDING';
+    if (!isStranger) return null;
+
+    if (strangerNotifiedConversationsRef.current.has(conversationId)) return null;
+
+    const conversationMessages = Array.isArray(messages?.[conversationId]) ? messages[conversationId] : [];
+    const hasPersistedMessages = conversationMessages.some((message) => {
+      const messageId = String(message?.messageId || '');
+      return messageId && !messageId.startsWith('temp-');
+    });
+
+    const hasConversationHistory = Boolean(
+      currentConv.lastMessageTime || (currentConv.lastMessage && String(currentConv.lastMessage).trim())
+    );
+
+    if (hasPersistedMessages || hasConversationHistory) return null;
+
+    return {
+      senderId: currentUserId,
+      receiverId,
+      type: 'MESSAGE',
+      message: `${user?.fullName || user?.phoneNumber || 'Ai đó'} đã gửi cho bạn một tin nhắn từ người lạ.`
+    };
+  };
+
+  const notifyFirstStrangerMessage = async () => {
+    const payload = getFirstStrangerMessageNotificationPayload();
+    if (!payload) return;
+
+    try {
+      await notificationApi.createNotification(payload);
+      strangerNotifiedConversationsRef.current.add(conversationId);
+    } catch (err) {
+      console.warn('Failed to create stranger MESSAGE notification', err);
+    }
+  };
 
   const emojiCategories = [
     { id: 'smileys', label: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'] },
@@ -103,7 +164,11 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     };
 
     dispatch(addOptimisticMessage({ conversationId, message: optimisticMsg }));
-    sendMessage(conversationId, messageContent, type, finalAttachments, replyingTo?.messageId);
+    sendMessage(conversationId, messageContent, type, finalAttachments, replyingTo?.messageId)
+      .then(() => {
+        notifyFirstStrangerMessage();
+      })
+      .catch(() => { });
 
     if (replyingTo) onCancelReply();
     if (typingTimeoutRef.current) { clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = null; }
@@ -147,7 +212,11 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
         };
 
         dispatch(addOptimisticMessage({ conversationId, message: optimisticMsg }));
-        sendMessage(conversationId, voiceUrl, 'VOICE', [voiceUrl], replyingTo?.messageId);
+        sendMessage(conversationId, voiceUrl, 'VOICE', [voiceUrl], replyingTo?.messageId)
+          .then(() => {
+            notifyFirstStrangerMessage();
+          })
+          .catch(() => { });
 
         if (replyingTo) onCancelReply();
         setText('');
