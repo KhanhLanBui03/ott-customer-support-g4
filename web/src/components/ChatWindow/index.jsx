@@ -9,6 +9,7 @@ import CreateVoteModal from '../CreateVoteModal';
 import { chatApi } from '../../api/chatApi';
 import { Phone, Video, PanelRight, MoreVertical, MoreHorizontal, ShieldCheck, Pin, X, ChevronDown, ChevronUp, ChevronRight, Trash2, UserPlus, ArrowLeft, Stars as SparklesIcon, Ban, AlertCircle, MessageCircle, Users } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
+import { notificationApi } from '../../api/notificationApi';
 import GroupAvatar from '../GroupAvatar';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -595,9 +596,23 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
                 <button 
                   onClick={async () => {
                     try {
-                      await friendApi.sendRequest(currentMember.userId || currentMember.id);
+                      const targetUserId = currentMember.userId || currentMember.id;
+                      await friendApi.sendRequest(targetUserId);
+                      const myId = user?.userId || user?.id;
+                      if (myId && targetUserId) {
+                        try {
+                          await notificationApi.createNotification({
+                            senderId: myId,
+                            receiverId: targetUserId,
+                            type: 'FRIEND_REQUEST',
+                            message: `${user?.fullName || user?.phoneNumber || 'Ai đó'} đã gửi lời mời kết bạn cho bạn.`
+                          });
+                        } catch (e) {
+                          console.warn('Failed to create FRIEND_REQUEST notification', e);
+                        }
+                      }
                       dispatch(updateFriendStatus({
-                        userId: currentMember.userId || currentMember.id,
+                        userId: targetUserId,
                         status: 'PENDING',
                         isRequester: true
                       }));
