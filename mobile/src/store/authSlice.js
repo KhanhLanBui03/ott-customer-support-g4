@@ -217,16 +217,22 @@ const authSlice = createSlice({
       })
       .addCase(verifyOtp.fulfilled, (state, action) => {
         state.loading = false;
-        state.isAuthenticated = true;
-        // Use user object if provided, otherwise reconstruct from payload
-        if (action.payload.user) {
-          state.user = action.payload.user;
-        } else {
-          const { userId, phoneNumber, firstName, lastName, avatarUrl } = action.payload;
-          state.user = { userId, phoneNumber, firstName, lastName, avatarUrl };
+        
+        // Chỉ đặt isAuthenticated nếu có token (trường hợp login sau OTP)
+        // Với REGISTRATION, backend không trả về token
+        if (action.payload.accessToken) {
+          state.isAuthenticated = true;
+          state.accessToken = action.payload.accessToken;
+          state.refreshToken = action.payload.refreshToken;
+          
+          if (action.payload.user) {
+            state.user = action.payload.user;
+          } else {
+            const { userId, phoneNumber, firstName, lastName, avatarUrl } = action.payload;
+            state.user = { userId, phoneNumber, firstName, lastName, avatarUrl };
+          }
         }
-        state.accessToken = action.payload.accessToken;
-        state.refreshToken = action.payload.refreshToken;
+        
         state.otpSent = false;
       })
       .addCase(verifyOtp.rejected, (state, action) => {

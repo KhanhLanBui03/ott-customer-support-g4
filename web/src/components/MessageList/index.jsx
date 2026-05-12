@@ -215,13 +215,34 @@ const getDocViewerUrl = (u, e) => {
   return `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
 };
 
+const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').split('/api')[0] || `http://${window.location.hostname}:8080`;
+
 const getFullUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
   const trimmedUrl = url.trim();
-  if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('blob:') || trimmedUrl.startsWith('data:')) return trimmedUrl;
-
-  const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').split('/api')[0] || `http://${window.location.hostname}:8080`;
   return `${baseUrl}${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`;
+};
+
+const renderContentWithMentions = (content, isMe) => {
+  if (!content) return null;
+  // Regex to find @mentions (handles spaces using \u200B marker)
+  const parts = content.split(/(@[^\u200B]+\u200B|@\S+)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      return (
+        <span 
+          key={i} 
+          className={cn(
+            "font-bold mx-0.5",
+            isMe ? "text-white" : "text-indigo-600 dark:text-indigo-400"
+          )}
+        >
+          {part.replace('\u200B', '')}
+        </span>
+      );
+    }
+    return part;
+  });
 };
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages, onLoadMore }) => {
@@ -1098,33 +1119,33 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               let ArrowIcon = null;
                               let iconColor = 'text-slate-400';
 
-                              if (cStatus === 'MISSED' || cStatus === 'REJECTED') {
-                                isMissed = true;
-                                if (isMe) {
-                                  title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
-                                  subtitle = 'Cuộc gọi không được trả lời';
-                                  ArrowIcon = ArrowUpRight;
-                                  iconColor = 'text-red-500';
-                                } else {
-                                  title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
-                                  subtitle = 'Bấm để gọi lại';
-                                  ArrowIcon = ArrowDownLeft;
-                                  iconColor = 'text-red-500';
-                                }
-                              } else {
-                                if (isMe) {
-                                  title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
-                                  ArrowIcon = ArrowUpRight;
+                              if (isMe) {
+                                title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
+                                ArrowIcon = ArrowUpRight;
+                                if (cStatus === 'SUCCESS') {
+                                  const mins = Math.floor(duration / 60);
+                                  const secs = duration % 60;
+                                  subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                                   iconColor = 'text-blue-400';
                                 } else {
-                                  title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
-                                  ArrowIcon = ArrowDownLeft;
-                                  iconColor = 'text-emerald-500';
+                                  subtitle = cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi không được trả lời';
+                                  iconColor = 'text-red-400';
+                                  isMissed = true;
                                 }
-
-                                const mins = Math.floor(duration / 60);
-                                const secs = duration % 60;
-                                subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                              } else {
+                                ArrowIcon = ArrowDownLeft;
+                                if (cStatus === 'SUCCESS') {
+                                  title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
+                                  const mins = Math.floor(duration / 60);
+                                  const secs = duration % 60;
+                                  subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                                  iconColor = 'text-emerald-500';
+                                } else {
+                                  title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+                                  subtitle = cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
+                                  iconColor = 'text-red-500';
+                                  isMissed = true;
+                                }
                               }
 
                               const MainIcon = cType === 'video' ? VideoIcon : Phone;
@@ -1486,7 +1507,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               })()}
                                             </div>
                                           )}
-                                          {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{msg.content}</p>}
+                                          {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{renderContentWithMentions(msg.content, isMe)}</p>}
 
                                           {/* Translation Display */}
                                           {translationLoading[msg.messageId] && (

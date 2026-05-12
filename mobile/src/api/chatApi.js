@@ -60,6 +60,17 @@ export const chatApi = {
   markAsRead: (messageId, conversationId) => {
     return axiosClient.put(`/messages/${messageId}/read`, null, { params: { conversationId } });
   },
+
+  // Vote actions
+  createVote: (conversationId, data) => {
+    return axiosClient.post(`/messages/${encodeURIComponent(conversationId)}/vote`, data);
+  },
+  submitVote: (conversationId, messageId, data) => {
+    return axiosClient.put(`/messages/${encodeURIComponent(conversationId)}/vote/${messageId}`, data);
+  },
+  closeVote: (conversationId, messageId) => {
+    return axiosClient.put(`/messages/${encodeURIComponent(conversationId)}/vote/${messageId}/close`);
+  },
 };
 
 /**
@@ -172,6 +183,17 @@ export const conversationApi = {
   // Toggle chat restriction (Admin/Owner only)
   toggleChatRestriction: (conversationId) => {
     return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`);
+  },
+  
+  // Pinning endpoints
+  pinMessage: (conversationId, messageId) => {
+    return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`);
+  },
+  unpinMessage: (conversationId, messageId) => {
+    return axiosClient.delete(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`);
+  },
+  togglePinConversation: (conversationId) => {
+    return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-pin`);
   },
 };
 

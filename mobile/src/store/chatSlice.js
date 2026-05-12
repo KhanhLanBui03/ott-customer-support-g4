@@ -105,12 +105,61 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
       type: messageData.type || 'TEXT',
       senderId: myId,
       replyToMessageId: messageData.replyToMessageId,
-      mediaUrls: messageData.mediaUrls || []
+      mediaUrls: messageData.mediaUrls || [],
+      forwardedFrom: messageData.forwardedFrom
     };
 
     sendMessageViaSocket(payload);
     return null; 
   } catch (error) { return rejectWithValue(error.response?.data?.message); }
+});
+
+export const pinMessage = createAsyncThunk('chat/pinMessage', async ({ messageId, conversationId }, { rejectWithValue, getState }) => {
+  try {
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, conversationId, myId);
+    await conversationApi.pinMessage(realId, messageId);
+    return { messageId, conversationId: realId };
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Không thể ghim tin nhắn');
+  }
+});
+
+export const unpinMessage = createAsyncThunk('chat/unpinMessage', async ({ messageId, conversationId }, { rejectWithValue, getState }) => {
+  try {
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, conversationId, myId);
+    await conversationApi.unpinMessage(realId, messageId);
+    return { messageId, conversationId: realId };
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Không thể bỏ ghim tin nhắn');
+  }
+});
+
+export const pinConversation = createAsyncThunk('chat/pinConversation', async (conversationId, { rejectWithValue, getState }) => {
+  try {
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, conversationId, myId);
+    await conversationApi.togglePinConversation(realId);
+    return realId;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Không thể ghim hội thoại');
+  }
+});
+
+export const unpinConversation = createAsyncThunk('chat/unpinConversation', async (conversationId, { rejectWithValue, getState }) => {
+  try {
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, conversationId, myId);
+    await conversationApi.togglePinConversation(realId);
+    return realId;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Không thể bỏ ghim hội thoại');
+  }
 });
 
 const isVoiceMessage = (message) => {
@@ -366,6 +415,23 @@ const chatSlice = createSlice({
         }
       }
     },
+    pinMessageOptimistic: (state, action) => {
+      const { conversationId, messageId, content, senderName, type } = action.payload;
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv) {
+        if (!conv.pinnedMessages) conv.pinnedMessages = [];
+        if (!conv.pinnedMessages.find(m => String(m.messageId) === String(messageId))) {
+          conv.pinnedMessages.push({ messageId, content, senderName, type });
+        }
+      }
+    },
+    unpinMessageOptimistic: (state, action) => {
+      const { conversationId, messageId } = action.payload;
+      const conv = state.conversations.find(c => c.conversationId === conversationId);
+      if (conv && conv.pinnedMessages) {
+        conv.pinnedMessages = conv.pinnedMessages.filter(m => String(m.messageId) !== String(messageId));
+      }
+    },
     updateConversation: (state, action) => {
       const { conversationId, ...updates } = action.payload;
       const idx = state.conversations.findIndex(c => c.conversationId === conversationId);
@@ -473,6 +539,44 @@ const chatSlice = createSlice({
             m => String(m.messageId) !== String(messageId)
           );
         }
+      })
+      .addCase(pinMessage.fulfilled, (state, action) => {
+        const { messageId, conversationId } = action.payload;
+        const conv = state.conversations.find(c => c.conversationId === conversationId);
+        if (conv) {
+          if (!conv.pinnedMessages) conv.pinnedMessages = [];
+          if (!conv.pinnedMessages.find(m => String(m.messageId) === String(messageId))) {
+            // Find message details from messages state if possible
+            const msgDetails = state.messages[conversationId]?.find(m => String(m.messageId) === String(messageId));
+            conv.pinnedMessages.push({
+              messageId,
+              content: msgDetails?.content || 'Tin nhắn',
+              senderName: msgDetails?.senderName || 'Người dùng',
+              type: msgDetails?.type || 'TEXT'
+            });
+          }
+        }
+      })
+      .addCase(unpinMessage.fulfilled, (state, action) => {
+        const { messageId, conversationId } = action.payload;
+        const conv = state.conversations.find(c => c.conversationId === conversationId);
+        if (conv && conv.pinnedMessages) {
+          conv.pinnedMessages = conv.pinnedMessages.filter(m => String(m.messageId) !== String(messageId));
+        }
+      })
+      .addCase(pinConversation.fulfilled, (state, action) => {
+        const conversationId = action.payload;
+        const conv = state.conversations.find(c => c.conversationId === conversationId);
+        if (conv) {
+          conv.isPinned = true;
+        }
+      })
+      .addCase(unpinConversation.fulfilled, (state, action) => {
+        const conversationId = action.payload;
+        const conv = state.conversations.find(c => c.conversationId === conversationId);
+        if (conv) {
+          conv.isPinned = false;
+        }
       });
   },
 });
@@ -492,6 +596,8 @@ export const {
   setTyping,
   setUserStatus,
   setMessageRead,
+  pinMessageOptimistic,
+  unpinMessageOptimistic,
   updateConversation,
   removeMemberLocal,
   updateMemberRoleLocal,

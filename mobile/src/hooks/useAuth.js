@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, registerUser, verifyOtp, resendOtp, logoutUser, clearError } from '../store/authSlice';
+import authApi from '../api/authApi';
 
 /**
  * Custom hook for authentication (React Native)
@@ -90,6 +91,8 @@ export const useAuth = () => {
     verify,
     resend,
     logout,
+    forgotPassword: (email) => authApi.forgotPassword(email),
+    resetPassword: (data) => authApi.resetPassword(data),
     clearError: handleClearError,
   };
 };

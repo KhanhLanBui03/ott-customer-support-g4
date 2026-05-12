@@ -70,18 +70,20 @@ export const subscribeToCalls = (userId) => {
     callSubscription = stompClient.subscribe(topic, (message) => {
         try {
             const data = JSON.parse(message.body);
-            console.log('🔥 RAW SIGNAL:', data); // 👈 thêm dòng này
-            if (data.eventType === 'CALL_SIGNAL') {
-                // Backend wraps signal inside data.payload: { senderId, signal }
-                // We need to normalise into the shape useVideoCall.handleSignal expects:
-                // { senderId, signal, conversationId }
+            console.log('[STOMP] 📞 Raw signal received:', data);
+            
+            // Lấy signal: ưu tiên data.payload.signal (nếu backend bọc), 
+            // nếu không thử lấy trực tiếp data.signal (từ các client khác gửi lên)
+            const signal = data.payload?.signal || data.signal;
+            
+            if (signal) {
                 const normalised = {
-                    senderId: data.payload?.senderId,
-                    senderName: data.payload?.senderName,
-                    signal: data.payload?.signal,
-                    conversationId: data.conversationId,
+                    senderId: String(data.payload?.senderId || data.senderId || ''),
+                    senderName: data.payload?.senderName || data.senderName || 'Người dùng',
+                    signal: signal,
+                    conversationId: String(data.conversationId || data.payload?.conversationId || ''),
                 };
-                console.log('[STOMP] 📡 Call signal received:', normalised.signal?.type, 'from', normalised.senderId);
+                console.log('[STOMP] 📡 Processed Signal:', normalised.signal?.type, '| From:', normalised.senderId, '| Channel:', normalised.conversationId);
                 broadcastSignal(normalised);
             }
         } catch (e) {

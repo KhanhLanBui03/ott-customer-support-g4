@@ -87,6 +87,41 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     }
   };
 
+  // Mention System States
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState('');
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [mentionTriggerPos, setMentionTriggerPos] = useState(0);
+  const [isSmartTrigger, setIsSmartTrigger] = useState(false);
+
+  const currentConv = conversations.find(c => c.conversationId === conversationId) || (
+    conversationId?.includes('shop-expert-ai-bot') ? {
+      conversationId: conversationId,
+      type: 'SINGLE',
+      isAI: true
+    } : null
+  );
+
+  const mentionOptions = React.useMemo(() => {
+    if (!currentConv) return [];
+    const options = [];
+    if (currentConv.type === 'GROUP') {
+      options.push({ id: 'All', name: 'Báo cho cả nhóm', type: 'ALL', icon: <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white"><ShieldAlert size={14} /></div> });
+    }
+    
+    const members = (currentConv.members || [])
+      .filter(m => String(m.userId || m.id) !== String(user?.userId || user?.id))
+      .map(m => ({ 
+        id: m.userId || m.id, 
+        name: m.fullName || m.name, 
+        type: 'MEMBER', 
+        avatar: m.avatar || m.avatarUrl 
+      }));
+    
+    options.push(...members);
+    return options;
+  }, [currentConv, user]);
+
   const emojiCategories = [
     { id: 'smileys', label: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'] },
     { id: 'gestures', label: '👋', emojis: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦿', '🦶', '👂', '🦻', '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄'] },
@@ -251,7 +286,45 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
 
   const handleInputChange = (e) => {
     const newValue = e.target.value;
+    const cursorPosition = e.target.selectionStart;
     setText(newValue);
+
+    // Smart Mention detection logic
+    const textBeforeCursor = newValue.substring(0, cursorPosition);
+    const words = textBeforeCursor.split(/\s/);
+    const lastWord = words[words.length - 1];
+
+    // Case 1: Manual trigger with @
+    const lastAtPos = textBeforeCursor.lastIndexOf('@');
+    if (lastAtPos !== -1 && !textBeforeCursor.substring(lastAtPos + 1).includes(' ')) {
+      const filter = textBeforeCursor.substring(lastAtPos + 1).toLowerCase();
+      setShowMentions(true);
+      setMentionFilter(filter);
+      setMentionTriggerPos(lastAtPos);
+      setSelectedMentionIndex(0);
+    } 
+    // Case 2: Auto trigger on name match (without @) - only for Group chats
+    else if (lastWord.length >= 2 && currentConv?.type === 'GROUP') {
+      const filter = lastWord.toLowerCase();
+      // Check if the filter matches any member name partially
+      const hasMatch = mentionOptions.some(m => 
+        m.name.toLowerCase().includes(filter) || 
+        (m.shortcut && m.shortcut.toLowerCase().includes(filter))
+      );
+
+      if (hasMatch) {
+        setShowMentions(true);
+        setMentionFilter(filter);
+        setMentionTriggerPos(cursorPosition - lastWord.length);
+        setIsSmartTrigger(true);
+        setSelectedMentionIndex(0);
+      } else {
+        setShowMentions(false);
+      }
+    } else {
+      setShowMentions(false);
+    }
+
     if (newValue.trim().length > 0) {
       if (!typingTimeoutRef.current) sendTyping(conversationId, true);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -259,6 +332,39 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     } else {
       if (typingTimeoutRef.current) { clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = null; sendTyping(conversationId, false); }
     }
+  };
+
+  const insertMention = (mention) => {
+    const textBefore = text.substring(0, mentionTriggerPos);
+    const textAfter = text.substring(textInputRef.current.selectionStart);
+    const mentionText = mention.type === 'MEMBER' ? mention.name : mention.id;
+    // Use Zero Width Space (\u200B) as a hidden delimiter for mentions with spaces
+    // If it's a smart trigger (no @), we need to add the @ symbol
+    const prefix = isSmartTrigger ? '@' : '';
+    const newText = `${textBefore}${prefix}${mentionText}\u200B ${textAfter}`;
+    
+    setText(newText);
+    setShowMentions(false);
+    setIsSmartTrigger(false);
+    
+    // Special handling for @GIF and @STICKER shortcuts
+    if (mention.id === 'GIF') {
+      setShowEmojis(true);
+      setActiveTab('gif');
+      // Remove the @GIF from text after triggering
+      setText(textBefore + textAfter);
+    } else if (mention.id === 'STICKER') {
+      setShowEmojis(true);
+      setActiveTab('sticker');
+      // Remove the @STICKER from text after triggering
+      setText(textBefore + textAfter);
+    }
+
+    setTimeout(() => {
+      textInputRef.current.focus();
+      const newPos = textBefore.length + mentionText.length + 2;
+      textInputRef.current.setSelectionRange(newPos, newPos);
+    }, 0);
   };
 
   const fetchSuggestions = async () => {
@@ -287,8 +393,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     }
   }, [conversationId]);
 
-  const handleFileChange = async (e) => {
-    const files = Array.from(e.target.files);
+  const processFiles = async (files) => {
     if (files.length === 0) return;
 
     const maxFiles = 10;
@@ -320,6 +425,28 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       console.error("Upload failed", err);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    processFiles(files);
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const files = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+
+    if (files.length > 0) {
+      processFiles(files);
     }
   };
 
@@ -388,58 +515,131 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     }
 
     // 3. Normal input area
+    const currentName = currentConv.type === 'GROUP' 
+      ? `Nhóm ${currentConv.name || 'Hội nhóm'}` 
+      : (() => {
+          const otherMember = currentConv.members?.find(m => String(m.userId || m.id) !== String(user?.userId || user?.id));
+          return otherMember?.fullName || otherMember?.name || 'Bạn bè';
+        })();
+
+    const dynamicPlaceholder = `Nhập @, tin nhắn tới ${currentName}`;
+
+    const filteredMentions = mentionOptions.filter(m => 
+      m.name.toLowerCase().includes(mentionFilter) || 
+      (m.shortcut && m.shortcut.toLowerCase().includes(mentionFilter))
+    ).slice(0, 8);
+
     return (
-      <form onSubmit={handleSend} className="flex items-center space-x-1.5 sm:space-x-4 bg-background p-2 sm:p-2.5 pr-2 sm:pr-4 rounded-[40px] shadow-2xl shadow-indigo-500/5 dark:shadow-black/40 border border-border relative z-10 group focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
+      <form onSubmit={handleSend} className="flex flex-col w-full relative">
+        {/* Mentions Menu */}
+        {showMentions && filteredMentions.length > 0 && (
+          <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-border overflow-hidden z-[100] animate-in slide-in-from-bottom-2 duration-200">
+            <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-border flex items-center justify-between">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Nhắc tên thành viên</span>
+            </div>
+            <div className="max-h-64 overflow-y-auto no-scrollbar py-1">
+              {filteredMentions.map((mention, idx) => (
+                <div
+                  key={mention.id}
+                  onClick={() => insertMention(mention)}
+                  onMouseEnter={() => setSelectedMentionIndex(idx)}
+                  className={`flex items-center space-x-3 px-3 py-2 cursor-pointer transition-colors ${idx === selectedMentionIndex ? 'bg-indigo-500/10 dark:bg-indigo-500/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                >
+                  {mention.type === 'MEMBER' ? (
+                    <img src={mention.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(mention.name)}&background=random`} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
+                  ) : mention.icon}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-bold truncate ${idx === selectedMentionIndex ? 'text-indigo-600 dark:text-indigo-400' : 'text-foreground'}`}>{mention.name}</p>
+                    {mention.type === 'ALL' && <p className="text-[10px] text-slate-400 font-medium">@All</p>}
+                    {mention.type === 'SHORTCUT' && <p className="text-[10px] text-slate-400 font-medium">{mention.shortcut}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center space-x-1.5 sm:space-x-4 bg-background p-2 sm:p-2.5 pr-2 sm:pr-4 rounded-[40px] shadow-2xl shadow-indigo-500/5 dark:shadow-black/40 border border-border relative z-10 group focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
         {currentConv?.type === 'GROUP' && (
           <button
             type="button"
             onClick={onOpenVoteModal}
-            className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative"
+            className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 relative"
           >
             <BarChart2 size={24} />
-            <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
-              Bình chọn
-            </span>
           </button>
         )}
 
         {/* Image Upload */}
-        <button type="button" onClick={() => imageInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative">
+        <button type="button" onClick={() => imageInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 relative">
           <ImageIconLucide size={20} className={isUploading ? 'animate-spin' : ''} />
-          <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
-            Gửi ảnh
-          </span>
         </button>
         <input type="file" ref={imageInputRef} className="hidden" accept="image/*" multiple onChange={handleFileChange} />
 
         {/* File Upload */}
-        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 group relative">
+        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-foreground/40 hover:text-indigo-500 hover:bg-indigo-500/10 rounded-2xl transition-all active:scale-95 relative">
           <Paperclip size={20} className={isUploading ? 'animate-spin' : ''} />
-          <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-200 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-border shadow-xl pointer-events-none">
-            Gửi tệp
-          </span>
         </button>
         <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
         <div className="w-[1px] h-8 bg-border hidden sm:block" />
-        <textarea
-          ref={textInputRef}
-          className="flex-1 bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-1 sm:px-2 font-bold tracking-tight min-w-0 resize-none py-2 max-h-32 no-scrollbar overflow-y-auto"
-          placeholder={isUploading ? "Đang đồng bộ tập vị tin..." : "Soạn tin nhắn..."}
-          value={text}
-          onChange={(e) => {
-            handleInputChange(e);
-            e.target.style.height = 'auto';
-            e.target.style.height = `${e.target.scrollHeight}px`;
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSend(e);
-            }
-          }}
-          rows={1}
-          disabled={isUploading}
-        />
+
+        <div className="flex-1 relative min-w-0">
+          <div 
+            className="absolute inset-0 px-2 py-2 text-sm sm:text-[16px] font-bold tracking-tight whitespace-pre-wrap break-words pointer-events-none no-scrollbar overflow-hidden z-0"
+            aria-hidden="true"
+            style={{ 
+              lineHeight: '1.5',
+              fontFamily: 'inherit'
+            }}
+          >
+            {text.split(/(@[^\u200B]+\u200B|@\S+)/g).map((part, i) => 
+              part.startsWith('@') 
+                ? <span key={i} className="text-indigo-500 dark:text-indigo-400 font-bold">{part.replace('\u200B', '')}</span> 
+                : <span key={i} style={{ visibility: 'hidden' }}>{part}</span>
+            )}
+          </div>
+          <textarea
+            ref={textInputRef}
+            className="w-full bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-2 font-bold tracking-tight resize-none py-2 max-h-32 no-scrollbar overflow-y-auto relative z-10 caret-indigo-500"
+            style={{ lineHeight: '1.5' }}
+            placeholder={isUploading ? "Đang đồng bộ tập tin..." : dynamicPlaceholder}
+            value={text}
+            spellCheck={false}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            onChange={(e) => {
+              handleInputChange(e);
+              e.target.style.height = 'auto';
+              e.target.style.height = `${e.target.scrollHeight}px`;
+            }}
+            onKeyDown={(e) => {
+              if (showMentions && filteredMentions.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSelectedMentionIndex(prev => (prev + 1) % filteredMentions.length);
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSelectedMentionIndex(prev => (prev - 1 + filteredMentions.length) % filteredMentions.length);
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  insertMention(filteredMentions[selectedMentionIndex]);
+                } else if (e.key === 'Escape') {
+                  setShowMentions(false);
+                }
+                return;
+              }
+
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
+            onPaste={handlePaste}
+            rows={1}
+            disabled={isUploading}
+          />
+        </div>
         <div className="flex items-center space-x-1 sm:space-x-2">
           <button
             type="button"
@@ -477,7 +677,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`w-10 h-10 flex items-center justify-center transition-all rounded-full active:scale-90 focus:outline-none ${showEmojis ? 'text-white bg-indigo-500 shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}><Smile size={20} /></button>
           <button type="submit" disabled={(!text.trim() && attachments.length === 0) || isUploading} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full transition-all flex-shrink-0 focus:outline-none ${(text.trim() || attachments.length > 0) && !isUploading ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-xl shadow-indigo-500/40 scale-100 hover:scale-110 active:scale-90' : 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-700 scale-95 cursor-not-allowed opacity-50'}`}><Send size={20} fill="currentColor" /></button>
         </div>
-      </form>
+      </div>
+    </form>
     );
   };
 

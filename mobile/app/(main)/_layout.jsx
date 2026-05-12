@@ -7,6 +7,8 @@ import Svg, { Path } from 'react-native-svg';
 import { initializeSocket, disconnectSocket } from '../../src/utils/socket';
 import { addMessage, setCurrentUserId, fetchConversations } from '../../src/store/chatSlice';
 import { addNotification } from '../../src/store/notificationSlice';
+import { useAgoraCall } from '../../src/hooks/useAgoraCall';
+import VideoCall from '../../src/components/VideoCall';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TAB_BAR_WIDTH = SCREEN_WIDTH - 32;
@@ -42,13 +44,36 @@ export default function MainLayout() {
       });
     }
     return () => disconnectSocket();
-  }, [accessToken, user?.userId]);
+  }, [accessToken, user?.userId, user?.id]);
+
+  // Global Call Integration
+  const {
+    callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
+    camOn, micOn, remoteUsers, setRemoteUsers, acceptCall, endCall, connect: connectCall,
+    toggleMic, toggleCamera, agoraConfig, endCallReason
+  } = useAgoraCall(null, null);
+
+  useEffect(() => {
+    if (accessToken) {
+      const disconnect = connectCall();
+      return () => disconnect?.();
+    }
+  }, [accessToken, connectCall]);
+
+  const handleAcceptCall = () => acceptCall(incomingSignal);
+  const handleHangup = () => {
+    let reason = 'ENDED';
+    if (callStatus === 'incoming') reason = 'REJECTED';
+    else if (callStatus === 'outgoing') reason = 'MISSED';
+    endCall(true, reason);
+  };
 
   return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} badge={badgeValue} />}
-      screenOptions={{ headerShown: false }}
-    >
+    <View style={{ flex: 1 }}>
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} badge={badgeValue} />}
+        screenOptions={{ headerShown: false }}
+      >
       <Tabs.Screen name="index" options={{ title: 'Tin nhắn', icon: 'chatbubble' }} />
       <Tabs.Screen name="contacts" options={{ title: 'Danh bạ', icon: 'people' }} />
       <Tabs.Screen name="notifications" options={{ title: 'Thông báo', icon: 'notifications' }} />
@@ -59,8 +84,27 @@ export default function MainLayout() {
       <Tabs.Screen name="chat/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="chat-info/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-    </Tabs>
+        <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      </Tabs>
+
+      <VideoCall
+        callStatus={callStatus}
+        callType={callType}
+        callerName={callerName}
+        duration={duration}
+        formatDuration={formatDuration}
+        camOn={camOn}
+        micOn={micOn}
+        remoteUsers={remoteUsers}
+        setRemoteUsers={setRemoteUsers}
+        onAccept={handleAcceptCall}
+        onHangup={handleHangup}
+        onToggleMic={toggleMic}
+        onToggleCamera={toggleCamera}
+        callerInfo={callerInfo}
+        agoraConfig={agoraConfig}
+      />
+    </View>
   );
 }
 
