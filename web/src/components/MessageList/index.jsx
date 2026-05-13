@@ -39,6 +39,7 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
 import VoteDetailsModal from '../VoteDetailsModal';
 import { useTheme } from '../../hooks/useTheme';
+import UserInfoModal from '../UserInfoModal';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -220,32 +221,14 @@ const baseUrl = (window.CONFIG?.API_URL || import.meta.env.VITE_API_URL || '').s
 const getFullUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
   const trimmedUrl = url.trim();
+  if (/^(https?|blob|data):/i.test(trimmedUrl)) {
+    return trimmedUrl;
+  }
   return `${baseUrl}${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`;
 };
 
-const renderContentWithMentions = (content, isMe) => {
-  if (!content) return null;
-  // Regex to find @mentions (handles spaces using \u200B marker)
-  const parts = content.split(/(@[^\u200B]+\u200B|@\S+)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('@')) {
-      return (
-        <span 
-          key={i} 
-          className={cn(
-            "font-bold mx-0.5",
-            isMe ? "text-white" : "text-indigo-600 dark:text-indigo-400"
-          )}
-        >
-          {part.replace('\u200B', '')}
-        </span>
-      );
-    }
-    return part;
-  });
-};
 
-const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onScrollToMessage, openLightbox, allChatImages, onLoadMore }) => {
+const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onStartCall, onScrollToMessage, openLightbox, allChatImages, onLoadMore }) => {
 
   const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
@@ -292,11 +275,61 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const [translatedMessages, setTranslatedMessages] = useState({}); // { messageId: text }
   const [translationLoading, setTranslationLoading] = useState({}); // { messageId: boolean }
   const [isNearBottom, setIsNearBottom] = useState(true); // Track if user is near bottom of scroll
+  const [selectedUserInfo, setSelectedUserInfo] = useState(null);
+  const [isUserInfoModalOpen, setIsUserInfoModalOpen] = useState(false);
 
 
   const { sendRead } = useWebSocket();
   const meId = user?.userId || user?.id;
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
+
+  const handleMentionClick = (mentionText) => {
+    const name = mentionText.startsWith('@') ? mentionText.substring(1) : mentionText;
+    const cleanName = name.replace('\u200B', '').trim();
+    
+    // Find member by name
+    const member = currentConv?.members?.find(m => 
+      (m.fullName || m.name || '').toLowerCase() === cleanName.toLowerCase() ||
+      (m.fullName || m.name || '').toLowerCase().includes(cleanName.toLowerCase())
+    );
+
+    if (member) {
+      setSelectedUserInfo({
+        ...member,
+        id: member.userId || member.id,
+        name: member.fullName || member.name
+      });
+      setIsUserInfoModalOpen(true);
+    }
+  };
+
+  const renderContentWithMentions = (content, isMe) => {
+    if (!content) return null;
+    // Regex to find @mentions (handles spaces using \u200B marker)
+    const parts = content.split(/(@[^\u200B]+\u200B|@\S+)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('@')) {
+        return (
+          <span 
+            key={i} 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleMentionClick(part);
+            }}
+            className={cn(
+              "px-2 py-0.5 rounded-lg font-bold transition-all mx-0.5 inline-block mb-0.5 cursor-pointer hover:scale-105 active:scale-95 shadow-sm",
+              isMe 
+                ? "bg-white/20 text-white shadow-sm ring-1 ring-white/30" 
+                : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500/20"
+            )}
+          >
+            {part.replace('\u200B', '')}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
 
   // Synchronize optimistic reactions with server state
   useEffect(() => {
@@ -1795,6 +1828,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         )}
       </div>
 
+      {/* User Info Modal */}
+      <UserInfoModal
+        isOpen={isUserInfoModalOpen}
+        onClose={() => setIsUserInfoModalOpen(false)}
+        userInfo={selectedUserInfo}
+        onStartCall={onStartCall}
+      />
     </>
   );
 };

@@ -110,7 +110,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl text-slate-400 dark:text-white/40 transition-colors">
+          <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-50 text-slate-400'}`}>
             <X size={24} />
           </button>
         </div>
@@ -128,9 +128,9 @@ const NotificationModal = ({ isOpen, onClose }) => {
               {/* Friend Requests Section */}
               {pendingFriends.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-widest px-2">Lời mời kết bạn</p>
+                  <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Lời mời kết bạn</p>
                   {pendingFriends.map((req) => (
-                    <div key={req.userId} className="p-4 bg-slate-50/50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 border border-transparent hover:border-slate-100 dark:hover:border-white/5 rounded-2xl transition-all group shadow-sm hover:shadow-md">
+                    <div key={req.userId} className={`p-4 border rounded-2xl transition-all group shadow-sm hover:shadow-md ${isDark ? 'bg-white/5 hover:bg-white/10 border-transparent hover:border-white/5' : 'bg-slate-50/50 hover:bg-white border-transparent hover:border-slate-100'}`}>
                       <div className="flex items-center space-x-4">
                         <div className="w-12 h-12 rounded-xl bg-slate-200 overflow-hidden shadow-inner border border-white">
                           {req.avatarUrl ? (

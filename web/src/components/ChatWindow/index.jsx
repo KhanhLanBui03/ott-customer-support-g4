@@ -59,20 +59,29 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
     { key: 'colleague', label: 'Đồng nghiệp', color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500/20', bgColor: 'bg-blue-500/5' }
   ];
 
+  const currentConv = conversation || conversations.find(c => c.conversationId === conversationId);
+
+  // Find the other member for status display in single chats
+  const currentMember = currentConv?.members?.find(m => {
+    const mId = String(m.userId || m.id || '');
+    const uId = String(user?.id || user?.userId || '');
+    return mId !== uId && mId !== '';
+  });
+
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [isForwardModalOpen, setIsForwardModalOpen] = useState(false);
   const [isCreateVoteOpen, setIsCreateVoteOpen] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [pendingCallType, setPendingCallType] = useState(null);
 
-  const handleCallClick = (type) => {
+  const handleCallClick = React.useCallback((type) => {
     if (currentConv?.type === 'GROUP') {
       setPendingCallType(type);
       setCountdown(3);
     } else {
       onStartCall(type);
     }
-  };
+  }, [currentConv, onStartCall]);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -86,12 +95,16 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
 
   useEffect(() => {
     const handleStartCallAgain = (e) => {
-      const type = e.detail?.type || 'video';
-      handleCallClick(type);
+      const { type, isSingle } = e.detail || {};
+      if (isSingle) {
+        onStartCall(type || 'audio');
+      } else {
+        handleCallClick(type || 'audio');
+      }
     };
     window.addEventListener('START_CALL_AGAIN', handleStartCallAgain);
     return () => window.removeEventListener('START_CALL_AGAIN', handleStartCallAgain);
-  }, []);
+  }, [handleCallClick]);
 
   useEffect(() => {
     if (replyingTo) {
@@ -117,15 +130,6 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
   useEffect(() => {
     fetchFriends();
   }, [fetchFriends]);
-
-  const currentConv = conversation || conversations.find(c => c.conversationId === conversationId);
-
-  // Find the other member for status display in single chats
-  const currentMember = currentConv?.members?.find(m => {
-    const mId = String(m.userId || m.id || '');
-    const uId = String(user?.id || user?.userId || '');
-    return mId !== uId && mId !== '';
-  });
 
   const formatLastSeen = (status, lastSeenAt) => {
     if (status === 'ONLINE') return 'Online';
@@ -690,6 +694,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, onToggleInfo, isI
             setForwardingMessage(msg);
             setIsForwardModalOpen(true);
           }}
+          onStartCall={onStartCall}
           openLightbox={openLightbox}
           allChatImages={allChatImages}
         />

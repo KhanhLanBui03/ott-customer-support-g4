@@ -68,6 +68,21 @@ public class ConversationService {
                         if (!isSender && !isActor) {
                             int currentUnread = uc.getUnreadCount() != null ? uc.getUnreadCount() : 0;
                             uc.setUnreadCount(currentUnread + 1);
+                            
+                            // Check for mention
+                            String lowerContent = content.toLowerCase();
+                            boolean hasAllMention = lowerContent.contains("@all") || lowerContent.contains("@báo cho cả nhóm");
+                            
+                            if (hasAllMention) {
+                                uc.setUnreadMention(true);
+                            } else {
+                                userRepository.findById(memberId).ifPresent(u -> {
+                                    String fullName = u.getFullName();
+                                    if (fullName != null && lowerContent.contains("@" + fullName.toLowerCase())) {
+                                        uc.setUnreadMention(true);
+                                    }
+                                });
+                            }
                         }
                         
                         userConversationRepository.save(uc);
@@ -88,7 +103,24 @@ public class ConversationService {
                                 .updatedAt(timestamp)
                                 // Only set unread count if sender is not this member
                                 .unreadCount(memberId.equals(senderId) ? 0 : 1)
+                                .unreadMention(false) // Will be updated below if needed
                                 .build();
+
+                        // Check for mention on new record creation too
+                        if (!memberId.equals(senderId)) {
+                            String lowerContent = content.toLowerCase();
+                            if (lowerContent.contains("@all") || lowerContent.contains("@báo cho cả nhóm")) {
+                                newUc.setUnreadMention(true);
+                            } else {
+                                userRepository.findById(memberId).ifPresent(u -> {
+                                    String fullName = u.getFullName();
+                                    if (fullName != null && lowerContent.contains("@" + fullName.toLowerCase())) {
+                                        newUc.setUnreadMention(true);
+                                    }
+                                });
+                            }
+                        }
+
                         userConversationRepository.save(newUc);
                         
                         // Broadcast conversation recreate event to notify user immediately
@@ -110,10 +142,17 @@ public class ConversationService {
 
     public void markAsRead(String userId, String conversationId) {
         userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
+            boolean changed = false;
             if (uc.getUnreadCount() != null && uc.getUnreadCount() > 0) {
-                // Save the unread count before clearing it, so AI can know how many messages were missed
                 uc.setLastUnreadCount(uc.getUnreadCount());
                 uc.setUnreadCount(0);
+                changed = true;
+            }
+            if (Boolean.TRUE.equals(uc.getUnreadMention())) {
+                uc.setUnreadMention(false);
+                changed = true;
+            }
+            if (changed) {
                 userConversationRepository.save(uc);
             }
         });
@@ -220,30 +259,7 @@ public class ConversationService {
     }
 
     public List<ConversationResponse> getUserConversations(String userId) {
-        // Self-healing: Ensure all friends have a conversation
-        try {
-            List<com.chatapp.modules.contact.domain.Friendship> sent = friendshipRepository.findByRequesterId(userId);
-            List<com.chatapp.modules.contact.domain.Friendship> received = friendshipRepository.findByAddresseeId(userId);
-            
-            Set<String> friendIds = new HashSet<>();
-            sent.stream().filter(f -> "ACCEPTED".equals(f.getStatus())).forEach(f -> friendIds.add(f.getAddresseeId()));
-            received.stream().filter(f -> "ACCEPTED".equals(f.getStatus())).forEach(f -> friendIds.add(f.getRequesterId()));
-
-            for (String friendId : friendIds) {
-                Set<String> members = Set.of(userId, friendId);
-                String convId = generateSingleId(members);
-                if (!conversationRepository.findById(convId).isPresent()) {
-                    log.info("Self-healing: Creating missing conversation {} for friends", convId);
-                    com.chatapp.modules.conversation.dto.CreateConversationRequest req = 
-                        new com.chatapp.modules.conversation.dto.CreateConversationRequest();
-                    req.setType("SINGLE");
-                    req.setMemberIds(new ArrayList<>(members));
-                    createConversation(req, userId);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Self-healing failed in getUserConversations", e);
-        }
+        // Note: Self-healing moved out of main list flow to improve performance
 
         List<UserConversation> ucs = userConversationRepository.findByUserIdOrderByUpdatedAtDesc(userId);
 
@@ -328,16 +344,8 @@ public class ConversationService {
                 userRepository.findById(mId).ifPresent(u -> {
                     UserConversation memberUc = userConversationRepository.findById(mId, convId).orElse(null);
                     
-                    // Fetch friendship status
-                    String fStatus = "NONE";
-                    if (!mId.equals(userId)) {
-                        Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
-                        Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
-                        if (f1.isPresent()) fStatus = f1.get().getStatus();
-                        else if (f2.isPresent()) fStatus = f2.get().getStatus();
-                    } else {
-                        fStatus = "SELF";
-                    }
+                    // Fast-track friendship status for list view
+                    String fStatus = mId.equals(userId) ? "SELF" : "NONE";
 
                     members.add(ConversationResponse.MemberInfo.builder()
                             .userId(u.getUserId())
@@ -365,6 +373,7 @@ public class ConversationService {
                     .lastMessageTime(uc.getUpdatedAt())
                     .updatedAt(uc.getUpdatedAt())
                     .unreadCount(uc.getUnreadCount())
+                    .hasUnreadMention(Boolean.TRUE.equals(uc.getUnreadMention()))
                     .members(members)
                     .pinnedMessages(fullConv != null ? fetchPinnedMessages(fullConv) : new ArrayList<>())
                     .isPinned(uc.getIsPinned() != null && uc.getIsPinned())
@@ -390,7 +399,7 @@ public class ConversationService {
             userRepository.findById(mId).ifPresent(u -> {
                 UserConversation memberUc = userConversationRepository.findById(mId, conversationId).orElse(null);
                 
-                // Fetch friendship status
+                // Restore friendship status check for detail view to ensure UI displays correctly
                 String fStatus = "NONE";
                 if (!mId.equals(userId)) {
                     Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
@@ -428,6 +437,7 @@ public class ConversationService {
                 .pinnedMessages(fetchPinnedMessages(conv))
                 .isPinned(userConv.getIsPinned() != null && userConv.getIsPinned())
                 .tag(userConv.getTag())
+                .hasUnreadMention(Boolean.TRUE.equals(userConv.getUnreadMention()))
                 .onlyAdminsCanChat(conv.getOnlyAdminsCanChat() != null && Boolean.TRUE.equals(conv.getOnlyAdminsCanChat()))
                 .build();
     }

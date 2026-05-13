@@ -379,7 +379,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
               </div>
             ) : (
               <div className="flex items-center justify-center space-x-2 group/name">
-                <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{conversation.name || 'Nhóm chat'}</h4>
+                <h4 className="text-xl font-black text-foreground tracking-tight">
+                  {conversation.type === 'GROUP' 
+                    ? (conversation.name || 'Nhóm chat')
+                    : (conversation.name || (() => {
+                        const otherMember = conversation.members?.find(m => String(m.userId || m.id) !== String(user?.userId || user?.id));
+                        return otherMember?.fullName || otherMember?.name || 'Bạn bè';
+                      })())}
+                </h4>
                 {conversation.type === 'GROUP' && isAdmin && (
                   <button 
                     onClick={() => { setEditName(conversation.name || ''); setIsEditingName(true); }}
