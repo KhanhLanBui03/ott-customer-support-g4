@@ -95,7 +95,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             
             <div className="space-y-2 relative">
-              <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1 flex items-center space-x-2">
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
                 <Lock size={12} /><span>Mật khẩu cũ</span>
               </label>
               <div className="relative">
@@ -107,11 +107,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                     if(errorMsg.includes('mật khẩu cũ')) setErrorMsg('');
                   }}
                   placeholder="Nhập mật khẩu cũ..."
-                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                     errorMsg.includes('mật khẩu cũ') 
                       ? 'border-red-500/50 focus:border-red-500' 
                       : (isDark ? 'border-white/10 focus:border-indigo-500' : 'border-slate-200 focus:border-slate-400')
-                  } ${isDark ? 'bg-surface-100 text-white placeholder:text-white/20' : 'bg-slate-50 text-slate-800 placeholder:text-slate-400'}`}
+                  } ${isDark ? 'bg-surface-100 text-white placeholder:text-white/30' : 'bg-slate-50 text-slate-900 placeholder:text-slate-400'}`}
                 />
                 {successMsg && (
                   <div className="absolute inset-y-0 right-4 flex items-center">
@@ -125,7 +125,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1 flex items-center space-x-2">
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
                 <Lock size={12} /><span>Mật khẩu mới</span>
               </label>
               <input
@@ -133,33 +133,33 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Nhập mật khẩu mới..."
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
-                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
-                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
                 }`}
               />
               
               {/* Password Requirements */}
-              <div className="mt-3 p-4 bg-white/50 rounded-2xl border border-cursor-dark/5 space-y-2">
-                <div className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.2em] mb-2">Yêu cầu bảo mật:</div>
-                <div className={`text-[11px] font-mono flex items-center space-x-2 ${reqs.length ? 'text-cursor-success' : 'text-cursor-dark/40'}`}>
+              <div className={`mt-3 p-4 rounded-2xl border space-y-2 ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/50 border-cursor-dark/5'}`}>
+                <div className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Yêu cầu bảo mật:</div>
+                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.length ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.length ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
                   <span>Ít nhất 8 ký tự</span>
                 </div>
-                <div className={`text-[11px] font-mono flex items-center space-x-2 ${reqs.lower ? 'text-cursor-success' : 'text-cursor-dark/40'}`}>
+                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.lower ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.lower ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
                   <span>Chứa chữ cái in thường</span>
                 </div>
-                <div className={`text-[11px] font-mono flex items-center space-x-2 ${reqs.upper ? 'text-cursor-success' : 'text-cursor-dark/40'}`}>
+                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.upper ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.upper ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
                   <span>Chứa chữ cái in hoa</span>
                 </div>
-                <div className={`text-[11px] font-mono flex items-center space-x-2 ${reqs.number ? 'text-cursor-success' : 'text-cursor-dark/40'}`}>
+                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.number ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.number ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
                   <span>Chứa số</span>
                 </div>
-                <div className={`text-[11px] font-mono flex items-center space-x-2 ${reqs.special ? 'text-cursor-success' : 'text-cursor-dark/40'}`}>
+                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.special ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.special ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
                   <span>Chứa ký tự đặc biệt (@$!%*?&)</span>
                 </div>
@@ -167,7 +167,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-mono font-black text-cursor-dark/40 uppercase tracking-[0.3em] px-1 flex items-center space-x-2">
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
                 <Lock size={12} /><span>Xác nhận mật khẩu</span>
               </label>
               <input
@@ -175,10 +175,10 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Nhập lại mật khẩu mới..."
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
-                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
-                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
                 }`}
               />
                {confirmPassword && newPassword !== confirmPassword && (

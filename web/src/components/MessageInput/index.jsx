@@ -42,14 +42,42 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   );
 
   const mentionOptions = React.useMemo(() => {
-    if (!currentConv) return [];
+    if (!currentConv || currentConv.type !== 'GROUP') return [];
+
     const options = [];
-    if (currentConv.type === 'GROUP') {
+    const normalizedText = text.normalize('NFC');
+    const SEPARATORS = [' ', ',', '.', '?', '!', '\u200B', '\n', '\t'];
+    
+    // Check for @All or @Báo cho cả nhóm
+    const parts = normalizedText.split('@');
+    const hasAllMention = parts.some(part => {
+      const p = part.toLowerCase();
+      return (p.startsWith('all') && (p.length === 3 || SEPARATORS.includes(p[3]))) ||
+             (p.startsWith('báo cho cả nhóm') && (p.length === 15 || SEPARATORS.includes(p[15])));
+    });
+
+    if (currentConv.type === 'GROUP' && !hasAllMention) {
       options.push({ id: 'All', name: 'Báo cho cả nhóm', type: 'ALL', icon: <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white"><ShieldAlert size={14} /></div> });
     }
     
     const members = (currentConv.members || [])
       .filter(m => String(m.userId || m.id) !== String(user?.userId || user?.id))
+      .filter(m => {
+        const rawName = m.fullName || m.name || '';
+        if (!rawName) return true;
+        
+        const name = rawName.trim().normalize('NFC').toLowerCase();
+        
+        // Check if @name is already in the text
+        // We look through all parts starting with @
+        return !parts.some(part => {
+          const p = part.toLowerCase();
+          if (!p.startsWith(name)) return false;
+          
+          // Must be the full name: either end of part or followed by a separator
+          return p.length === name.length || SEPARATORS.includes(p[name.length]);
+        });
+      })
       .map(m => ({ 
         id: m.userId || m.id, 
         name: m.fullName || m.name, 
@@ -59,7 +87,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     
     options.push(...members);
     return options;
-  }, [currentConv, user]);
+  }, [currentConv, user, text]);
 
   const emojiCategories = [
     { id: 'smileys', label: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'] },
@@ -225,13 +253,14 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     const words = textBeforeCursor.split(/\s/);
     const lastWord = words[words.length - 1];
 
-    // Case 1: Manual trigger with @
+    // Case 1: Manual trigger with @ - only for Group chats
     const lastAtPos = textBeforeCursor.lastIndexOf('@');
-    if (lastAtPos !== -1 && !textBeforeCursor.substring(lastAtPos + 1).includes(' ')) {
+    if (lastAtPos !== -1 && !textBeforeCursor.substring(lastAtPos + 1).includes(' ') && currentConv?.type === 'GROUP') {
       const filter = textBeforeCursor.substring(lastAtPos + 1).toLowerCase();
       setShowMentions(true);
       setMentionFilter(filter);
       setMentionTriggerPos(lastAtPos);
+      setIsSmartTrigger(false);
       setSelectedMentionIndex(0);
     } 
     // Case 2: Auto trigger on name match (without @) - only for Group chats
@@ -270,8 +299,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     const textAfter = text.substring(textInputRef.current.selectionStart);
     const mentionText = mention.type === 'MEMBER' ? mention.name : mention.id;
     // Use Zero Width Space (\u200B) as a hidden delimiter for mentions with spaces
-    // If it's a smart trigger (no @), we need to add the @ symbol
-    const prefix = isSmartTrigger ? '@' : '';
+    // Ensure @ prefix is always present for member and group mentions
+    const prefix = (mention.type === 'MEMBER' || mention.type === 'ALL') ? '@' : '';
     const newText = `${textBefore}${prefix}${mentionText}\u200B ${textAfter}`;
     
     setText(newText);
@@ -464,8 +493,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       <form onSubmit={handleSend} className="flex flex-col w-full relative">
         {/* Mentions Menu */}
         {showMentions && filteredMentions.length > 0 && (
-          <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-border overflow-hidden z-[100] animate-in slide-in-from-bottom-2 duration-200">
-            <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-border flex items-center justify-between">
+          <div className="absolute bottom-full mb-2 left-0 w-64 bg-surface-100 rounded-2xl shadow-2xl border border-border overflow-hidden z-[100] animate-in slide-in-from-bottom-2 duration-200">
+            <div className="p-2 bg-surface-200 border-b border-border flex items-center justify-between">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Nhắc tên thành viên</span>
             </div>
             <div className="max-h-64 overflow-y-auto no-scrollbar py-1">
@@ -474,13 +503,15 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                   key={mention.id}
                   onClick={() => insertMention(mention)}
                   onMouseEnter={() => setSelectedMentionIndex(idx)}
-                  className={`flex items-center space-x-3 px-3 py-2 cursor-pointer transition-colors ${idx === selectedMentionIndex ? 'bg-indigo-500/10 dark:bg-indigo-500/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  className={`flex items-center space-x-3 px-3 py-2 cursor-pointer transition-colors ${idx === selectedMentionIndex ? 'bg-indigo-500/10' : 'hover:bg-surface-200'}`}
                 >
                   {mention.type === 'MEMBER' ? (
                     <img src={mention.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(mention.name)}&background=random`} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
                   ) : mention.icon}
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-bold truncate ${idx === selectedMentionIndex ? 'text-indigo-600 dark:text-indigo-400' : 'text-foreground'}`}>{mention.name}</p>
+                    <p className={`text-sm font-bold truncate ${idx === selectedMentionIndex ? 'text-indigo-500' : 'text-foreground'}`}>
+                      {mention.name}
+                    </p>
                     {mention.type === 'ALL' && <p className="text-[10px] text-slate-400 font-medium">@All</p>}
                     {mention.type === 'SHORTCUT' && <p className="text-[10px] text-slate-400 font-medium">{mention.shortcut}</p>}
                   </div>
@@ -803,7 +834,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
               key={i}
               type="button"
               onClick={() => handleSend(null, suggestion, 'TEXT')}
-              className="flex-shrink-0 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-[13px] font-bold text-slate-800 dark:text-slate-200 rounded-2xl transition-all shadow-md whitespace-nowrap active:scale-95"
+              className="flex-shrink-0 px-4 py-2 bg-surface-100 border border-border hover:border-indigo-500 hover:bg-surface-200 text-[13px] font-bold text-foreground hover:text-indigo-500 rounded-2xl transition-all shadow-md whitespace-nowrap active:scale-95"
             >
               {suggestion}
             </button>

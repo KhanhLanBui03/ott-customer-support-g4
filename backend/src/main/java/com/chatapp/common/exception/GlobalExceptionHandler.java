@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import com.chatapp.common.exception.LockedAccountException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -133,7 +134,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(LockedAccountException.class)
-    public ResponseEntity<ApiResponse<?>> handleLockedAccountException(
+    public ResponseEntity<ApiResponse<?>> handleAccountLocked(
             LockedAccountException ex, WebRequest request) {
         log.warn("LockedAccountException: {}", ex.getMessage());
         ErrorDTO error = ErrorDTO.builder()

@@ -185,6 +185,11 @@ const chatSlice = createSlice({
     },
     setActiveConversation: (state, action) => {
       state.activeConversationId = action.payload;
+      const conv = state.conversations.find(c => c.conversationId === action.payload);
+      if (conv) {
+        conv.unreadCount = 0;
+        conv.unreadMention = false;
+      }
     },
     setMessages: (state, action) => {
       const { conversationId, messages } = action.payload;
@@ -235,9 +240,22 @@ const chatSlice = createSlice({
         if (isOpenConversation) {
           // Nếu đang mở hội thoại này, luôn đảm bảo unreadCount là 0
           conv.unreadCount = 0;
+          conv.unreadMention = false;
         } else if (isOtherSender) {
           // Nếu đang ở ngoài và là tin nhắn từ người khác, tăng số tin nhắn chưa đọc
           conv.unreadCount = (conv.unreadCount || 0) + 1;
+
+          // Kiểm tra xem có mention không (Không phân biệt hoa thường)
+          const content = (normalizedMessage.content || '').toLowerCase();
+          const myName = (action.payload.currentUserName || '').toLowerCase();
+          const hasMention = 
+            (myName && content.includes(`@${myName}`)) || 
+            content.includes('@all') || 
+            content.includes('@báo cho cả nhóm');
+            
+          if (hasMention) {
+            conv.unreadMention = true;
+          }
         }
 
         // Đưa hội thoại lên đầu danh sách
@@ -422,6 +440,7 @@ const chatSlice = createSlice({
       const conv = state.conversations.find(c => c.conversationId === conversationId);
       if (conv) {
         conv.unreadCount = 0;
+        conv.unreadMention = false;
       }
     },
     updateUserPresence: (state, action) => {
@@ -496,6 +515,7 @@ const chatSlice = createSlice({
         const conv = state.conversations.find(c => c.conversationId === conversationId);
         if (conv) {
           conv.unreadCount = 0;
+          conv.unreadMention = false;
         }
       }
     },
@@ -548,6 +568,8 @@ const chatSlice = createSlice({
         state.loading = true;
       })
       .addCase(fetchConversations.fulfilled, (state, action) => {
+        const myName = (state.user?.fullName || state.user?.name || '').toLowerCase();
+        
         const uniqueConvs = (action.payload || []).reduce((acc, current) => {
           const x = acc.find(item => String(item.conversationId) === String(current.conversationId));
           if (!x) {
@@ -556,7 +578,20 @@ const chatSlice = createSlice({
             if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
               lastMessage = "Tin nhắn thoại";
             }
-            return acc.concat([{ ...current, lastMessage }]);
+
+            // Check if last message contains a mention to me
+            const hasMention = lastMessage && myName && current.unreadCount > 0 && (
+              lastMessage.toLowerCase().includes(`@${myName}`) || 
+              lastMessage.toLowerCase().includes('@all') ||
+              lastMessage.toLowerCase().includes('@báo cho cả nhóm')
+            );
+
+            return acc.concat([{ 
+              ...current, 
+              lastMessage,
+              // Use hasUnreadMention from backend, fallback to client-side detection if needed
+              unreadMention: current.hasUnreadMention ?? !!(current.unreadMention || hasMention)
+            }]);
           } else {
             return acc;
           }

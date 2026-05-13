@@ -61,6 +61,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
+        // Optimize executor to handle high volume of connect/disconnect events
+        registration.taskExecutor()
+                .corePoolSize(16)
+                .maxPoolSize(64)
+                .queueCapacity(512);
+
         registration.interceptors(new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -88,5 +94,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 return message;
             }
         });
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        // Optimize outbound to prevent backpressure issues when sending to slow clients
+        registration.taskExecutor()
+                .corePoolSize(16)
+                .maxPoolSize(64)
+                .queueCapacity(512);
     }
 }

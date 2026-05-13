@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { 
-  Pin, Trash2, MoreHorizontal, Users
+  Pin, Trash2, MoreHorizontal, Users, AtSign
 } from 'lucide-react';
 import GroupAvatar from '../GroupAvatar';
 
@@ -220,6 +220,11 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
                   </div>
 
                   <div className="flex items-center space-x-2 flex-shrink-0">
+                    {conv.unreadMention && conv.unreadCount > 0 && (
+                      <div className="w-[18px] h-[18px] flex items-center justify-center text-indigo-500 animate-pulse">
+                        <AtSign size={14} strokeWidth={3} />
+                      </div>
+                    )}
                     {conv.unreadCount > 0 && (
                       <div className="min-w-[18px] h-[18px] px-1 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-500/30">
                         <span className="text-[9px] font-bold leading-none">

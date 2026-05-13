@@ -63,7 +63,8 @@ export const useWebSocket = () => {
                 dispatch(addMessage({
                     conversationId: event.conversationId,
                     message: msg,
-                    currentUserId
+                    currentUserId,
+                    currentUserName: currentUser?.fullName || currentUser?.name
                 }));
 
                 // Auto-read if conversation is active AND tab is visible

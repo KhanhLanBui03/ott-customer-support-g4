@@ -123,77 +123,77 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}>Họ</label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Họ</label>
               <input
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Nhập họ..."
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
-                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
-                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
                 }`}
               />
             </div>
             <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}>Tên</label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Tên</label>
               <input
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Nhập tên..."
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono transition-all focus:outline-none ${
+                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
-                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
-                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                    ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
                 }`}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}><Mail size={12} /><span>Email</span></label>
+            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Mail size={12} /><span>Email</span></label>
             <input
               type="text"
               value={user?.email || 'Chưa cập nhật email'}
               disabled
-              className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono cursor-not-allowed transition-all ${isDark ? 'text-white/50' : 'text-cursor-dark/50'}`}
+              className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono font-bold cursor-not-allowed transition-all ${isDark ? 'text-white/80' : 'text-cursor-dark/80'}`}
             />
           </div>
 
           <div className="space-y-2">
-            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}>Tiểu sử</label>
+            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Tiểu sử</label>
             <textarea
               rows={3}
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               placeholder="Giới thiệu về bản thân..."
-              className={`w-full px-5 py-4 border rounded-2xl text-sm font-serif italic transition-all resize-none focus:outline-none ${
+              className={`w-full px-5 py-4 border rounded-2xl text-sm font-serif italic font-semibold transition-all resize-none focus:outline-none ${
                 isDark 
-                  ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/20 focus:border-indigo-500' 
-                  : 'bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-slate-400'
+                  ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
+                  : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-500 focus:border-slate-400'
               }`}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
              <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}><Phone size={12} /><span>Số điện thoại</span></label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Phone size={12} /><span>Số điện thoại</span></label>
               <input
                 type="text"
                 value={user?.phoneNumber || 'Chưa cập nhật'}
                 disabled
-                className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono cursor-not-allowed transition-all ${isDark ? 'text-white/50' : 'text-cursor-dark/50'}`}
+                className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono font-bold cursor-not-allowed transition-all ${isDark ? 'text-white/80' : 'text-cursor-dark/80'}`}
               />
             </div>
              <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}><Hash size={12} /><span>ID Người dùng</span></label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Hash size={12} /><span>ID Người dùng</span></label>
               <input
                 type="text"
                 value={user?.userId || user?.id || ''}
                 disabled
-                className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-[10px] font-mono cursor-not-allowed transition-all truncate ${isDark ? 'text-white/50' : 'text-cursor-dark/50'}`}
+                className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-[10px] font-mono font-bold cursor-not-allowed transition-all truncate ${isDark ? 'text-white/80' : 'text-cursor-dark/80'}`}
               />
             </div>
           </div>

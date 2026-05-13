@@ -61,6 +61,9 @@ public class UserConversation {
     @DynamoDBAttribute(attributeName = "tag")
     private String tag; // customer, family, work, friends, later, colleague
 
+    @DynamoDBAttribute(attributeName = "unreadMention")
+    private Boolean unreadMention;
+
     public Boolean getIsPinned() {
         return isPinned;
     }

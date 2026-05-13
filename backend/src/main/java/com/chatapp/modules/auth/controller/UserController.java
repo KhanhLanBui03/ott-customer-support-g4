@@ -35,6 +35,48 @@ public class UserController {
     private final ConversationRepository conversationRepository;
     private final UserConversationRepository userConversationRepository;
 
+    @GetMapping("/{userId:.+}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getUserProfile(
+            Authentication authentication,
+            @org.springframework.web.bind.annotation.PathVariable("userId") String userId
+    ) {
+        String myId = getAuthUserId(authentication);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ValidationException("User not found"));
+
+        // Check friendship status
+        String status = "NONE";
+        Boolean isRequester = null;
+        
+        if (!myId.equals(userId)) {
+            Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(myId, userId);
+            Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(userId, myId);
+            
+            if (f1.isPresent()) {
+                status = f1.get().getStatus();
+                isRequester = true;
+            } else if (f2.isPresent()) {
+                status = f2.get().getStatus();
+                isRequester = false;
+            }
+        } else {
+            status = "SELF";
+        }
+
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("userId", user.getUserId());
+        data.put("phoneNumber", user.getPhoneNumber());
+        data.put("firstName", user.getFirstName() == null ? "" : user.getFirstName());
+        data.put("lastName", user.getLastName() == null ? "" : user.getLastName());
+        data.put("fullName", user.getFullName() == null ? "" : user.getFullName());
+        data.put("avatarUrl", user.getAvatarUrl() == null ? "" : user.getAvatarUrl());
+        data.put("bio", user.getBio() == null ? "" : user.getBio());
+        data.put("friendshipStatus", status);
+        data.put("isRequester", isRequester);
+
+        return ResponseEntity.ok(ApiResponse.success(data, "User profile fetched"));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMe(Authentication authentication) {
         String userId = getAuthUserId(authentication);
