@@ -257,6 +257,9 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     });
   };
 
+  // Xác định log cuộc gọi mới nhất để chỉ hiển thị "Đang diễn ra" cho log đó
+  const latestCallLogId = [...(messages || [])].reverse().find(m => m.type === 'CALL_LOG')?.messageId;
+
   const scrollRef = useRef();
   const bottomRef = useRef();
   const menuRef = useRef();
@@ -981,6 +984,16 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                 const isSystem = msg.type === 'SYSTEM';
                 const isRecalled = msg.isRecalled;
                 const isPinned = pinnedIds.includes(msg.messageId);
+                
+                // NẾU LÀ LOG CUỘC GỌI: Kiểm tra để ẩn các log "Đang diễn ra" đã cũ
+                if (msg.type === 'CALL_LOG') {
+                  try {
+                    const callData = JSON.parse(msg.content);
+                    if (callData.status === 'ONGOING' && msg.messageId !== latestCallLogId) {
+                      return null;
+                    }
+                  } catch (e) { }
+                }
 
                 if (showDateHeader) {
                   dateHeader = (
@@ -1145,14 +1158,28 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               const cType = callData?.callType || 'video';
                               const cStatus = callData?.status || 'MISSED';
                               const duration = callData?.duration || 0;
+                              const startTime = callData?.startTime;
 
                               let title = '';
                               let subtitle = '';
                               let isMissed = false;
+                              // Một log cuộc gọi CHỈ được coi là "Đang diễn ra" nếu nó là log mới nhất
+                              let isOngoing = cStatus === 'ONGOING' && msg.messageId === latestCallLogId;
+                              
                               let ArrowIcon = null;
                               let iconColor = 'text-slate-400';
 
-                              if (isMe) {
+                              if (isOngoing) {
+                                title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
+                                iconColor = 'text-indigo-500 animate-pulse';
+                                if (startTime) {
+                                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                                    const mins = Math.floor(elapsed / 60);
+                                    subtitle = elapsed < 60 ? 'Vừa bắt đầu' : `Đang diễn ra (${mins} phút)`;
+                                } else {
+                                    subtitle = 'Đang diễn ra';
+                                }
+                              } else if (isMe) {
                                 title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
                                 ArrowIcon = ArrowUpRight;
                                 if (cStatus === 'SUCCESS') {
@@ -1161,53 +1188,94 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                                   iconColor = 'text-blue-400';
                                 } else {
-                                  subtitle = cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi không được trả lời';
+                                  subtitle = cStatus === 'BUSY' ? 'Máy bận' : 
+                                            (cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 
+                                            (cStatus === 'ONGOING' ? 'Cuộc gọi đã kết thúc' : 'Cuộc gọi nhỡ'));
                                   iconColor = 'text-red-400';
                                   isMissed = true;
                                 }
                               } else {
                                 ArrowIcon = ArrowDownLeft;
                                 if (cStatus === 'SUCCESS') {
-                                  title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
-                                  const mins = Math.floor(duration / 60);
-                                  const secs = duration % 60;
-                                  subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                                  iconColor = 'text-emerald-500';
-                                } else {
-                                  title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
-                                  subtitle = cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
-                                  iconColor = 'text-red-500';
-                                  isMissed = true;
-                                }
+                                    title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
+                                    const mins = Math.floor(duration / 60);
+                                    const secs = duration % 60;
+                                    subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                                    iconColor = 'text-emerald-500';
+                                  } else {
+                                    title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+                                    subtitle = cStatus === 'BUSY' ? 'Máy bận' : 
+                                              (cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 
+                                              (cStatus === 'ONGOING' ? 'Cuộc gọi đã kết thúc' : 'Cuộc gọi nhỡ'));
+                                    iconColor = 'text-red-500';
+                                    isMissed = true;
+                                  }
                               }
 
                               const MainIcon = cType === 'video' ? VideoIcon : Phone;
 
-                              return (
-                                <div className="w-[240px] rounded-[10px] flex flex-col group/call overflow-hidden bg-[#242526] border border-[#3A3B3C] shadow-sm">
-                                  <div className="p-3.5 pb-2">
-                                    <p className={cn("text-[15px] font-semibold mb-2", (isMissed && !isMe) ? "text-[#F33045]" : "text-[#E4E6EB]")}>
-                                      {title}
-                                    </p>
-                                    <div className="flex items-center space-x-2">
-                                      <div className="relative flex items-center justify-center text-slate-400">
-                                        <MainIcon size={18} fill="currentColor" className="opacity-80" />
-                                        <div className={cn("absolute -top-1 -right-1.5 p-0.5 rounded-full bg-[#242526]", iconColor)}>
-                                          <ArrowIcon size={12} strokeWidth={3} />
+                                return (
+                                  <div className={cn(
+                                      "w-[260px] rounded-[22px] flex flex-col group/call overflow-hidden border transition-all duration-300 shadow-sm",
+                                      isMe 
+                                        ? (isDark ? "bg-indigo-600 border-indigo-500 shadow-indigo-900/20" : "bg-indigo-600 border-indigo-500 shadow-indigo-200")
+                                        : (isOngoing 
+                                            ? (isDark ? "bg-indigo-500/10 border-indigo-500/20 glass-premium" : "bg-indigo-500/5 border-indigo-500/10 glass-premium")
+                                            : (isDark ? "bg-slate-800/80 border-white/5 glass-premium" : "bg-slate-50/80 border-slate-200 glass-premium"))
+                                  )}>
+                                      <div className="p-4 flex items-start space-x-3">
+                                        <div className={cn(
+                                          "flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover/call:scale-110 shadow-sm",
+                                          isMe ? "bg-white/20 text-white" : (isOngoing ? "bg-indigo-500/10 text-indigo-500" : "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500")
+                                        )}>
+                                          <MainIcon size={20} className={isOngoing && !isMe ? "animate-pulse" : ""} />
+                                          {!isOngoing && (
+                                              <div className={cn(
+                                                "absolute -top-1 -right-1 p-0.5 rounded-full border-2", 
+                                                isMe ? "border-indigo-600 bg-indigo-500 text-white" : (isDark ? "border-slate-800 bg-slate-700" : "border-white bg-slate-200"),
+                                                !isMe && isMissed ? "text-red-500" : (isMe ? "text-white" : "text-indigo-400")
+                                              )}>
+                                                  <ArrowIcon size={10} strokeWidth={3} />
+                                              </div>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="flex-1 min-w-0">
+                                          <p className={cn(
+                                              "text-[14px] font-bold truncate leading-tight mb-1",
+                                              isMe ? "text-white" : (isOngoing ? (isDark ? "text-white" : "text-slate-900") : (isMissed ? "text-red-500" : (isDark ? "text-slate-100" : "text-slate-900")))
+                                          )}>
+                                            {title}
+                                          </p>
+                                          <p className={cn(
+                                            "text-[12px] font-medium",
+                                            isMe ? "text-white/80" : (isOngoing ? (isDark ? "text-indigo-300" : "text-slate-600") : (isDark ? "text-slate-400" : "text-slate-600"))
+                                          )}>
+                                            {subtitle} • {new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                          </p>
                                         </div>
                                       </div>
-                                      <span className="text-[14px] font-medium text-[#B0B3B8]">{subtitle}</span>
-                                    </div>
+  
+                                      <div className="px-4 pb-4 mt-1">
+                                        <button 
+                                          onClick={() => {
+                                            const event = new CustomEvent('START_CALL_AGAIN', { detail: { type: cType } });
+                                            window.dispatchEvent(event);
+                                          }} 
+                                          className={cn(
+                                            "w-full py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-[0.98] flex items-center justify-center space-x-2 border shadow-sm",
+                                            isMe 
+                                              ? "bg-white/15 hover:bg-white/25 text-white border-white/10" 
+                                              : (isOngoing 
+                                                  ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-md shadow-indigo-600/20" 
+                                                  : (isDark ? "bg-slate-700/50 hover:bg-slate-700 text-slate-300 border-white/5" : "bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200"))
+                                          )}
+                                        >
+                                          <span>{isOngoing ? "Tham gia ngay" : "Gọi lại"}</span>
+                                        </button>
+                                      </div>
                                   </div>
-                                  <div className="w-full h-[1px] bg-[#3A3B3C] mx-3 w-[calc(100%-24px)] mt-2" />
-                                  <button onClick={() => {
-                                    const event = new CustomEvent('START_CALL_AGAIN', { detail: { type: cType } });
-                                    window.dispatchEvent(event);
-                                  }} className="w-full py-2.5 flex items-center justify-center text-[14px] font-semibold text-[#2E89FF] hover:bg-white/5 active:bg-white/10 transition-colors">
-                                    Gọi lại
-                                  </button>
-                                </div>
-                              )
+                                );
                             })()) : msg.type === 'VOTE' && msg.vote ? (
                               <div className={cn(
                                 "w-full max-w-[500px] rounded-[28px] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500",

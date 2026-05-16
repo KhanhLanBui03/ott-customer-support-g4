@@ -49,9 +49,11 @@ export default function MainLayout() {
   // Global Call Integration
   const {
     callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
-    camOn, micOn, remoteUsers, setRemoteUsers, acceptCall, endCall, connect: connectCall,
-    toggleMic, toggleCamera, agoraConfig, endCallReason
+    camOn, micOn, remoteUsers, setRemoteUsers, acceptCall, endCall, resetCall, connect: connectCall,
+    toggleMic, toggleCamera, agoraConfig, endCallReason, isGroup
   } = useAgoraCall(null, null);
+
+
 
   useEffect(() => {
     if (accessToken) {
@@ -61,12 +63,19 @@ export default function MainLayout() {
   }, [accessToken, connectCall]);
 
   const handleAcceptCall = () => acceptCall(incomingSignal);
-  const handleHangup = () => {
-    let reason = 'ENDED';
+  const handleHangup = (sendSignal = true, manualReason = null) => {
+    let reason = manualReason || 'ENDED';
     if (callStatus === 'incoming') reason = 'REJECTED';
     else if (callStatus === 'outgoing') reason = 'MISSED';
-    endCall(true, reason);
+    
+    // Nếu hết 30s mà chưa ai vào nhóm (đã connect nhưng remoteUsers = 0) thì chốt là MISSED
+    if (isGroup && callStatus === 'connected' && remoteUsers.length === 0 && !manualReason) {
+        reason = 'MISSED';
+    }
+
+    endCall(sendSignal, reason);
   };
+
 
   return (
     <View style={{ flex: 1 }}>
@@ -91,19 +100,23 @@ export default function MainLayout() {
         callStatus={callStatus}
         callType={callType}
         callerName={callerName}
+        callerInfo={callerInfo}
+        incomingSignal={incomingSignal}
         duration={duration}
         formatDuration={formatDuration}
-        camOn={camOn}
-        micOn={micOn}
-        remoteUsers={remoteUsers}
-        setRemoteUsers={setRemoteUsers}
         onAccept={handleAcceptCall}
         onHangup={handleHangup}
+        onReset={resetCall}
         onToggleMic={toggleMic}
         onToggleCamera={toggleCamera}
-        callerInfo={callerInfo}
+        micOn={micOn}
+        camOn={camOn}
+        remoteUsers={remoteUsers}
         agoraConfig={agoraConfig}
+        endCallReason={endCallReason}
+        isGroup={isGroup}
       />
+
     </View>
   );
 }

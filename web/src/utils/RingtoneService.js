@@ -101,6 +101,35 @@ class RingtoneService {
         playBeep();
     }
 
+    playBusy() {
+        this.stop();
+        this.init();
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume().catch(() => {});
+        }
+        this.isPlaying = true;
+
+        const now = this.audioCtx.currentTime;
+        // 3 beeps: 0.5s on, 0.5s off
+        for (let i = 0; i < 3; i++) {
+            const start = now + i * 0.8;
+            [480, 620].forEach(f => {
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = f;
+                gain.gain.setValueAtTime(0, start);
+                gain.gain.linearRampToValueAtTime(0.15, start + 0.05);
+                gain.gain.setValueAtTime(0.15, start + 0.35);
+                gain.gain.linearRampToValueAtTime(0, start + 0.4);
+                osc.connect(gain);
+                gain.connect(this.audioCtx.destination);
+                osc.start(start);
+                osc.stop(start + 0.4);
+            });
+        }
+    }
+
     stop() {
         this.isPlaying = false;
         this.timeoutIds.forEach(id => clearTimeout(id));
@@ -147,7 +176,8 @@ class RingtoneService {
         };
 
         playBusyTone();
-        setTimeout(playVoice, 1500); // Wait for busy tone to finish
+        // playVoice disabled
+
     }
 }
 

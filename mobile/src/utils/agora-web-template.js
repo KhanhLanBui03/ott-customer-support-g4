@@ -1,180 +1,429 @@
-export const getAgoraHTML = (config, callType, isCaller = false) => {
+export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberMap = {}, myInfo = {}) => {
+    const memberMapJson = JSON.stringify(initialMemberMap);
+    const myInfoJson = JSON.stringify(myInfo);
+
     return `
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
     <style>
-      body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #111827; overflow: hidden; font-family: -apple-system, sans-serif; }
-      #remote-container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 1; background: #000; }
-      .video-view { width: 100%; height: 100%; background: #000; object-fit: cover; }
-      #local-container { 
-        position: absolute; width: 110px; height: 150px; 
-        top: 80px; right: 20px; /* Chuyển lên trên bên phải */
-        z-index: 10; border-radius: 12px; overflow: hidden; border: 2px solid rgba(255,255,255,0.4);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5); background: #222;
-        touch-action: none; /* Quan trọng để kéo thả mượt mà */
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { background: #000; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
+      
+      #main-grid {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        gap: 2px;
+        padding: 2px;
+        background: #000;
       }
-      #unlock-layer { 
-        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-        z-index: 9999; background: transparent;
+      
+      .video-tile {
+        position: relative;
+        background: #0f172a;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
+
+      body.single-mode .video-tile.remote { position: absolute; inset: 0; z-index: 1; }
+      body.single-mode .video-tile.local {
+        position: absolute;
+        top: 30px;
+        right: 20px;
+        width: 110px;
+        height: 150px;
+        border-radius: 16px;
+        z-index: 10;
+        border: 2px solid rgba(255,255,255,0.3);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+        transition: all 0.4s ease;
+      }
+
+      /* Khi chưa có video đối phương, cho mình lên toàn màn hình */
+      body.single-mode:not(.has-remote-video) .video-tile.local {
+        top: 0;
+        right: 0;
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        border: none;
+      }
+
+
+      .video-view { width: 100%; height: 100%; z-index: 2; position: relative; display: none; }
+      .video-view video { object-fit: cover !important; }
+
+      .avatar-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        z-index: 1;
+      }
+      body.single-mode .avatar-placeholder { display: none !important; }
+
+
+      .avatar-circle {
+        width: 80px;
+        height: 80px;
+        border-radius: 40px;
+        background: #6366f1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 32px;
+        font-weight: bold;
+        border: 4px solid rgba(255,255,255,0.1);
+        background-size: cover;
+        background-position: center;
+        margin-bottom: 12px;
+      }
+
+      body.single-mode .local .avatar-circle {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+      }
+
+      .member-label {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(8px);
+        color: #fff;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        z-index: 5;
+        border: 1px solid rgba(255,255,255,0.1);
+      }
+      
+      #unlock-layer { position: fixed; inset: 0; background: rgba(0,0,0,0.8); color: white; display: none; align-items: center; justify-content: center; z-index: 1000; }
     </style>
   </head>
-  <body>
-    <div id="unlock-layer"></div>
-    <div id="remote-container"></div>
-    <div id="local-container"></div>
-    
-    <script>
-      const log = (msg) => {
-        console.log("[WebView-Agora] " + msg);
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg }));
-      };
+  <body class="${isGroup ? 'group-mode' : 'single-mode'}">
+    <div id="unlock-layer">Chạm để bật âm thanh</div>
+    <div id="main-grid">
+        <div id="local-container" class="video-tile local">
+            <div id="local-placeholder" class="avatar-placeholder">
+                <div class="avatar-circle" id="local-avatar"></div>
+            </div>
+            <div id="local-player" class="video-view"></div>
+            <div class="member-label">Bạn (You)</div>
+        </div>
+    </div>
 
+    <script>
+      let memberMap = ${memberMapJson};
+      let myInfo = ${myInfoJson};
       let client = null;
       let localTracks = { videoTrack: null, audioTrack: null };
-      let isJoined = false;
+      const numericUid = Number("${config.uid}");
 
-      // Logic kéo thả khung Local Video
-      const localBox = document.getElementById('local-container');
-      let isDragging = false;
-      let offset = { x: 0, y: 0 };
-
-      localBox.addEventListener('touchstart', (e) => {
-        isDragging = true;
-        const touch = e.touches[0];
-        offset.x = touch.clientX - localBox.offsetLeft;
-        offset.y = touch.clientY - localBox.offsetTop;
-        localBox.style.borderColor = "#6366f1"; // Đổi màu viền khi đang kéo
-      });
-
-      document.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        const touch = e.touches[0];
-        let x = touch.clientX - offset.x;
-        let y = touch.clientY - offset.y;
-        
-        // Giới hạn không cho kéo ra ngoài màn hình
-        const maxX = window.innerWidth - localBox.offsetWidth - 10;
-        const maxY = window.innerHeight - localBox.offsetHeight - 10;
-        x = Math.max(10, Math.min(x, maxX));
-        y = Math.max(10, Math.min(y, maxY));
-
-        localBox.style.left = x + 'px';
-        localBox.style.top = y + 'px';
-        localBox.style.right = 'auto'; // Hủy bỏ thuộc tính right: 20px ban đầu
-        localBox.style.bottom = 'auto';
-      });
-
-      document.addEventListener('touchend', () => {
-        isDragging = false;
-        localBox.style.borderColor = "rgba(255,255,255,0.4)";
-      });
-
-      function toNumericUid(userId, isCaller) {
-        let baseUid = 0;
-        if (typeof userId === 'number') baseUid = userId;
-        else if (userId && /^\\d+$/.test(String(userId))) baseUid = parseInt(String(userId), 10);
-        else if (userId) {
-            let hash = 0;
-            const s = String(userId);
-            for (let i = 0; i < s.length; i++) {
-                hash = ((hash << 5) - hash) + s.charCodeAt(i);
-                hash = hash & hash;
-            }
-            baseUid = Math.abs(hash) % 1000000;
-        }
-        return (isCaller ? 1000000 : 2000000) + (baseUid % 1000000);
+      function log(msg) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: msg }));
       }
 
-      function unlockAudio() {
-        try {
-            const silent = document.getElementById('silent-audio');
-            if (silent) silent.play().catch(() => {});
-            if (client) {
-                client.remoteUsers.forEach(user => {
-                    if (user.audioTrack) user.audioTrack.play().catch(() => {});
-                });
-            }
-            document.getElementById('unlock-layer').style.display = 'none';
-        } catch (e) { log("Unlock error: " + e.message); }
+      function getInitial(name) {
+        return (name || 'U').charAt(0).toUpperCase();
+      }
+
+      function setAvatar(el, info) {
+        if (!el) return;
+        if (info && info.avatar) {
+          el.style.backgroundImage = 'url(' + info.avatar + ')';
+          el.innerText = '';
+        } else {
+          el.style.backgroundImage = 'none';
+          el.innerText = getInitial(info ? info.name : 'U');
+        }
+      }
+
+      // Khởi tạo avatar cho local
+      setAvatar(document.getElementById('local-avatar'), myInfo);
+
+      function updateGridLayout() {
+        const grid = document.getElementById('main-grid');
+        const tiles = Array.from(grid.children).filter(el => el.id !== 'unlock-layer');
+        const count = tiles.length;
+
+        if ("${isGroup}" === "true") {
+          if (count <= 1) {
+            grid.style.gridTemplateColumns = '1fr';
+            grid.style.gridTemplateRows = '1fr';
+          } else if (count === 2) {
+            grid.style.gridTemplateColumns = '1fr';
+            grid.style.gridTemplateRows = '1fr 1fr';
+          } else if (count <= 4) {
+            grid.style.gridTemplateColumns = '1fr 1fr';
+            grid.style.gridTemplateRows = '1fr 1fr';
+          } else {
+            grid.style.gridTemplateColumns = '1fr 1fr';
+            grid.style.gridAutoRows = '1fr';
+          }
+
+          const local = document.getElementById('local-container');
+          if (count >= 2 && tiles[0] !== local && tiles[1] !== local) {
+             grid.insertBefore(local, tiles[1]);
+          }
+        }
+      }
+
+      function getOrCreateTile(uid) {
+        let tile = document.getElementById(uid.toString());
+        if (!tile) {
+            tile = document.createElement('div');
+            tile.id = uid.toString();
+            tile.className = 'video-tile remote';
+            
+            const info = memberMap[uid.toString()] || { name: 'Thành viên ' + uid };
+            
+            const placeholder = document.createElement('div');
+            placeholder.className = 'avatar-placeholder';
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar-circle';
+            setAvatar(avatar, info);
+            placeholder.appendChild(avatar);
+            tile.appendChild(placeholder);
+
+            const player = document.createElement('div');
+            player.className = 'video-view';
+            tile.appendChild(player);
+            
+            const label = document.createElement('div');
+            label.className = 'member-label';
+            label.innerText = info.name;
+            tile.appendChild(label);
+            
+            document.getElementById('main-grid').appendChild(tile);
+            updateGridLayout();
+        }
+        return tile;
       }
 
       window.handleAction = async (action) => {
-        try {
-          if (action.type === 'toggle-mic') {
-            if (localTracks.audioTrack) await localTracks.audioTrack.setEnabled(action.enabled);
-          } else if (action.type === 'toggle-cam') {
-            if (localTracks.videoTrack) {
-              await localTracks.videoTrack.setEnabled(action.enabled);
-              localBox.style.display = action.enabled ? 'block' : 'none';
-            } else if (action.enabled && isJoined) {
-              localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
-              localTracks.videoTrack.play("local-container");
-              await client.publish(localTracks.videoTrack);
-              localBox.style.display = 'block';
+        if (action.type === 'join') doJoin();
+        if (action.type === 'toggle-mic' && localTracks.audioTrack) {
+          await localTracks.audioTrack.setEnabled(action.enabled);
+        }
+        if (action.type === 'toggle-cam') {
+          try {
+            if (action.enabled) {
+              if (!localTracks.videoTrack) {
+                localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
+                await client.publish(localTracks.videoTrack);
+                localTracks.videoTrack.play('local-player');
+              } else {
+                await localTracks.videoTrack.setEnabled(true);
+              }
+              document.getElementById('local-player').style.display = 'block';
+              document.getElementById('local-container').style.display = 'flex';
+            } else {
+              if (localTracks.videoTrack) await localTracks.videoTrack.setEnabled(false);
+              document.getElementById('local-player').style.display = 'none';
+              // 1-1 thì ẩn hẳn khung PIP, Group thì để lại hiện avatar
+              if ("${isGroup}" !== "true") {
+                document.getElementById('local-container').style.display = 'none';
+              }
             }
-          }
-        } catch (err) { log("Action error: " + err.message); }
+          } catch (e) { log("Cam error: " + e.message); }
+        }
+
+
+        if (action.type === 'leave') {
+          try {
+            if (client) {
+              await client.leave();
+              log("Agora client left channel");
+            }
+            if (localTracks.videoTrack) { localTracks.videoTrack.stop(); localTracks.videoTrack.close(); localTracks.videoTrack = null; }
+            if (localTracks.audioTrack) { localTracks.audioTrack.stop(); localTracks.audioTrack.close(); localTracks.audioTrack = null; }
+          } catch (e) { log("Leave error: " + e.message); }
+        }
+
+
+        if (action.type === 'update-members') {
+
+          memberMap = action.members;
+          Object.keys(memberMap).forEach(uid => {
+            const tile = document.getElementById(uid);
+            if (tile) {
+                const info = memberMap[uid];
+                tile.querySelector('.member-label').innerText = info.name;
+                setAvatar(tile.querySelector('.avatar-circle'), info);
+            }
+          });
+        }
       };
 
-      document.getElementById('unlock-layer').onclick = unlockAudio;
-      document.getElementById('unlock-layer').ontouchstart = unlockAudio;
+      async function doJoin() {
 
-      async function start() {
         if (window.isAgoraStarted) return;
         window.isAgoraStarted = true;
+        
         try {
           client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+          window.agoraClient = client; // Export để RN poll được
           const token = "${config.token}" === "null" ? null : "${config.token}";
-          const isCallerFlag = ${isCaller};
-          const numericUid = toNumericUid("${config.uid}", isCallerFlag);
-          
+
+          const localBox = document.getElementById('local-player');
+
+          if ("${callType}" === "video") {
+            document.getElementById('local-player').style.display = 'block';
+          }
+
+          client.on("user-joined", (user) => {
+                log("User joined channel: " + user.uid);
+                window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                    type: 'user-joined', 
+                    uid: user.uid 
+                }));
+          });
+
           client.on("user-published", async (user, mediaType) => {
-                await client.subscribe(user, mediaType);
-                if (mediaType === "video") {
-                  let container = document.getElementById(user.uid.toString());
-                  if (!container) {
-                    container = document.createElement("div");
-                    container.id = user.uid.toString();
-                    container.className = "video-view";
-                    document.getElementById("remote-container").append(container);
-                  }
-                  user.videoTrack.play(container);
+                log("User published media: " + user.uid + " (" + mediaType + ")");
+                try {
+                    await client.subscribe(user, mediaType);
+                    log("Subscribed to: " + user.uid + " " + mediaType);
+                    
+                    const tile = getOrCreateTile(user.uid);
+                    if (mediaType === "video") {
+                        const tile = getOrCreateTile(user.uid);
+                        const player = tile.querySelector('.video-view');
+                        if (player) {
+                          player.style.display = 'block';
+                          user.videoTrack.play(player);
+                        }
+                        document.body.classList.add('has-remote-video');
+                        log("Playing remote video for: " + user.uid);
+                    }
+                    if (mediaType === "audio") {
+                        user.audioTrack.play().catch(err => {
+                            log("Audio play error: " + err.message);
+                            if (err.code === 'AUTOPLAY_NOT_ALLOWED') {
+                                document.getElementById('unlock-layer').style.display = 'flex';
+                            }
+                        });
+                    }
+
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                        type: 'user-published', 
+                        uid: user.uid, 
+                        mediaType: mediaType 
+                    }));
+                } catch (err) {
+                    log("Subscribe error: " + err.message);
                 }
-                if (mediaType === "audio") user.audioTrack.play().catch(() => {});
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'user-published', uid: user.uid, mediaType: mediaType }));
+          });
+
+          client.on("user-unpublished", (user, mediaType) => {
+                log("User unpublished: " + user.uid + " (" + mediaType + ")");
+                if (mediaType === "video") {
+                  document.body.classList.remove('has-remote-video');
+                  const tile = document.getElementById(user.uid.toString());
+                  if (tile) {
+                    const player = tile.querySelector('.video-view');
+                    if (player) player.style.display = 'none';
+                  }
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                    type: 'user-unpublished', 
+                    uid: user.uid, 
+                    mediaType: 'video' 
+                  }));
+                }
           });
 
           client.on("user-left", (user) => {
+                log("User left channel: " + user.uid);
                 const el = document.getElementById(user.uid.toString());
                 if (el) el.remove();
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'user-left', uid: user.uid }));
+                updateGridLayout();
+                window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                    type: 'user-left', 
+                    uid: user.uid 
+                }));
           });
 
-          log("Joining: " + "${config.channel}" + " as " + numericUid);
+          log("Joining channel: " + "${config.channel}" + " as " + numericUid);
           await client.join("${config.appId}", "${config.channel}", token, numericUid);
-          isJoined = true;
+          log("Join success. Remote users existing: " + client.remoteUsers.length);
           
-          await new Promise(r => setTimeout(r, 500));
+          // Kiểm tra những người đã ở sẵn trong phòng
+          client.remoteUsers.forEach(user => {
+              log("Existing user found: " + user.uid);
+              window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                  type: 'user-joined', 
+                  uid: user.uid 
+              }));
+              // Nếu họ đã publish thì Agora sẽ tự bắn user-published sau đó
+          });
+
           localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-          if ("${callType}" === 'video') {
-              localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
-              localTracks.videoTrack.play("local-container");
-              localBox.style.display = 'block';
+          await client.publish(localTracks.audioTrack);
+          log("Local audio published");
+
+          if ("${callType}" === "video") {
+            localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
+            localTracks.videoTrack.play(localBox);
+            await client.publish(localTracks.videoTrack);
+            log("Local video published");
           }
-          if (isJoined) {
-              const tracks = Object.values(localTracks).filter(t => t !== null);
-              if (tracks.length > 0) await client.publish(tracks);
-          }
-        } catch (e) { log("Join Error: " + e.message); }
+          
+          updateGridLayout();
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'joined' }));
+
+          // Heartbeat để đồng bộ số lượng người và trạng thái Video
+          setInterval(() => {
+            if (window.agoraClient) {
+              const remoteUsers = window.agoraClient.remoteUsers;
+              const videoUids = remoteUsers.filter(u => u.hasVideo).map(u => u.uid);
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                type: 'sync', 
+                count: remoteUsers.length,
+                videoUids: videoUids
+              }));
+            }
+          }, 2000);
+
+        } catch (e) { log("Join error: " + e.message); }
       }
-      start();
+
+
+
+      function unlockAudio() {
+        if (client) {
+            client.remoteUsers.forEach(user => {
+                if (user.audioTrack) user.audioTrack.play().catch(() => {});
+            });
+        }
+        document.getElementById('unlock-layer').style.display = 'none';
+      }
+      document.getElementById('unlock-layer').onclick = unlockAudio;
+
+      setTimeout(() => {
+        log("Triggering auto-join...");
+        window.handleAction({ type: 'join' });
+      }, 200);
     </script>
-    <audio id="silent-audio" loop><source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=" type="audio/wav"></audio>
   </body>
 </html>
     `;
 };
+
+
+

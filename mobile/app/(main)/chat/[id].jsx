@@ -14,6 +14,8 @@ import CreateVoteModal from '../../../src/components/CreateVoteModal';
 import { formatLastSeen } from '../../../src/utils/dateUtils';
 import ForwardModal from '../../../src/components/ForwardModal';
 import { useAgoraCall } from '../../../src/hooks/useAgoraCall';
+import CallCountdownModal from '../../../src/components/CallCountdownModal';
+
 
 const ChatDetailScreen = () => {
   const insets = useSafeAreaInsets();
@@ -117,11 +119,37 @@ const ChatDetailScreen = () => {
   );
 
   // Call Actions
-  const { startCall } = useAgoraCall(realId, conversation, false);
-  const handleStartCall = (type) => startCall(type, { 
-    name: conversation?.name, 
-    avatar: conversation?.avatar || conversation?.avatarUrl 
-  });
+  const { 
+    startCall, acceptCall, endCall, cancelCountdown, 
+    callStatus, callType, countdown, showCountdown 
+  } = useAgoraCall(realId, conversation, false);
+
+  const handleStartCall = (type, isJoin = false, startTime = null) => {
+
+    startCall(type, { 
+      isJoin, 
+      startTime,
+      name: conversation?.name, 
+      avatar: conversation?.avatar || conversation?.avatarUrl 
+    });
+  };
+
+  const lastCallMsgRaw = useMemo(() => {
+    return [...messages].reverse().find(m => m.type === 'CALL_LOG');
+  }, [messages]);
+
+  const lastCallMsg = useMemo(() => {
+    if (!lastCallMsgRaw?.content) return null;
+    try {
+      return JSON.parse(lastCallMsgRaw.content);
+    } catch (e) {
+      return null;
+    }
+  }, [lastCallMsgRaw]);
+
+  const isOngoingInChat = lastCallMsg?.status === 'ONGOING' && conversation?.type === 'GROUP';
+  const showOngoingBanner = isOngoingInChat && callStatus === 'idle';
+
 
   // Wrap sendReadReceipt - chỉ gửi khi screen đang focused
   const guardedSendReadReceipt = useCallback((messageId, convId) => {
@@ -516,7 +544,33 @@ const ChatDetailScreen = () => {
           </View>
         </View>
  
-        {/* Pinned Messages Bar */}
+        {/* Ongoing Group Call Banner (Tham gia ngay) */}
+        {showOngoingBanner && (
+          <TouchableOpacity 
+            style={styles.ongoingCallContainer}
+            onPress={() => handleStartCall(lastCallMsg?.callType || 'video', true, lastCallMsg?.startTime)}
+          >
+            <View style={styles.ongoingCallLeft}>
+              <View style={styles.ongoingIconContainer}>
+                <Feather name="video" size={20} color="#6366f1" />
+                <View style={styles.ongoingOnlineDot} />
+              </View>
+              <View>
+                <Text style={styles.ongoingCallTitle}>Cuộc gọi nhóm đang diễn ra</Text>
+                <Text style={styles.ongoingCallSub}>Nhấn để tham gia cùng mọi người</Text>
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={styles.joinButton}
+              onPress={() => handleStartCall(lastCallMsg?.callType || 'video', true, lastCallMsg?.startTime)}
+            >
+              <Text style={styles.joinButtonText}>Tham gia ngay</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        )}
+
+
+
         {conversation?.pinnedMessages?.length > 0 && (
           <View style={styles.pinnedContainer}>
             {!showAllPins ? (
@@ -699,7 +753,15 @@ const ChatDetailScreen = () => {
           onClose={() => setForwardModalVisible(false)}
           messageToForward={selectedMessage}
         />
+
+        <CallCountdownModal 
+          visible={showCountdown}
+          countdown={countdown}
+          callType={callType}
+          onCancel={cancelCountdown}
+        />
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 };
@@ -886,6 +948,74 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#94a3b8',
   },
+  // Ongoing Call Banner Styles
+  ongoingCallContainer: {
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(99, 102, 241, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 20,
+  },
+  ongoingCallLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    marginRight: 8,
+  },
+
+  ongoingIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  ongoingOnlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  ongoingCallTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  ongoingCallSub: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  joinButton: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  joinButtonText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+
 });
 
 export default ChatDetailScreen;

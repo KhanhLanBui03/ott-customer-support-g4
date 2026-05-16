@@ -458,27 +458,32 @@ const ChatBubble = ({
                 if (message.type === 'CALL_LOG') {
                   try {
                     const callData = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
-                    const isMe = isOwn;
                     const cType = callData.callType || 'audio';
                     const status = callData.status;
                     const duration = callData.duration || 0;
                     
                     let title = '';
                     let subtitle = '';
-                    let iconColor = isOwn ? '#fff' : '#64748b';
                     let iconName = 'phone';
+                    let iconColor = isOwn ? '#fff' : '#6366f1';
+                    let isOngoing = status === 'ONGOING';
 
-                    if (isMe) {
+                    if (isOngoing) {
+                      title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
+                      iconName = cType === 'video' ? 'video' : 'phone-in-talk';
+                      subtitle = 'Nhấn để tham gia';
+                      iconColor = isOwn ? '#fff' : '#6366f1';
+                    } else if (isOwn) {
                       title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
                       iconName = 'phone-outgoing';
                       if (status === 'SUCCESS') {
                         const mins = Math.floor(duration / 60);
                         const secs = duration % 60;
                         subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                        iconColor = isOwn ? '#fff' : '#60A5FA';
+                        iconColor = isOwn ? '#fff' : '#10b981';
                       } else {
-                        subtitle = status === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi không được trả lời';
-                        iconColor = isOwn ? 'rgba(255,255,255,0.8)' : '#F87171';
+                        subtitle = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
+                        iconColor = isOwn ? 'rgba(255,255,255,0.8)' : '#ef4444';
                       }
                     } else {
                       if (status === 'SUCCESS') {
@@ -487,47 +492,58 @@ const ChatBubble = ({
                         const mins = Math.floor(duration / 60);
                         const secs = duration % 60;
                         subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                        iconColor = isOwn ? '#fff' : '#10B981';
+                        iconColor = '#10b981';
                       } else {
                         title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
                         iconName = 'phone-missed';
                         subtitle = status === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
-                        iconColor = '#EF4444';
+                        iconColor = '#ef4444';
                       }
                     }
 
-                    const isMissedIncoming = !isMe && status !== 'SUCCESS';
+                    const isMissedIncoming = !isOwn && !isOngoing && status !== 'SUCCESS';
 
                     return (
                       <View style={styles.callLogContainer}>
-                        <Text style={[
-                          styles.callLogTitle, 
-                          isMissedIncoming && styles.missedCallTitle, 
-                          isOwn ? styles.ownText : styles.otherText
-                        ]}>
-                          {title}
-                        </Text>
-                        <View style={styles.callLogBody}>
-                          <MaterialCommunityIcons 
-                            name={iconName} 
-                            size={20} 
-                            color={iconColor} 
-                          />
-                          <Text style={[styles.callLogStatus, isOwn ? styles.ownText : styles.otherText]}>
-                            {subtitle}
-                          </Text>
+                        <View style={styles.callLogHeader}>
+                          <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
+                            <MaterialCommunityIcons 
+                              name={iconName} 
+                              size={22} 
+                              color={isOngoing && !isOwn ? '#6366f1' : iconColor} 
+                            />
+                          </View>
+                          <View style={styles.callLogTextGroup}>
+                            <Text style={[
+                              styles.callLogTitle, 
+                              isMissedIncoming && styles.missedCallTitle, 
+                              isOwn ? styles.ownText : styles.otherText
+                            ]} numberOfLines={1}>
+                              {title}
+                            </Text>
+                            <Text style={[styles.callLogStatus, isOwn ? styles.ownText : styles.otherText, { opacity: 0.7 }]}>
+                              {subtitle} • {formatTime(message.createdAt)}
+                            </Text>
+                          </View>
                         </View>
+                        
                         <View style={[styles.callLogDivider, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]} />
+                        
                         <TouchableOpacity 
                           style={styles.callBackBtn}
-                          onPress={() => onPressMessage?.({ ...message, action: 'CALL_BACK', callType: callData.callType || 'audio' })}
+                          onPress={() => onPressMessage?.({ ...message, action: 'CALL_BACK', callType: callData.callType || 'video' })}
                         >
-                          <Text style={[styles.callBackText, { color: isOwn ? '#fff' : '#6366f1' }]}>Gọi lại</Text>
+                          <Text style={[styles.callBackText, { color: isOwn ? '#fff' : '#6366f1' }]}>
+                            {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     );
                   } catch (e) { return <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>{message.content}</Text>; }
                 }
+
+
+
                 if (message.type === 'VOTE') {
                   return renderVoteContent();
                 }
@@ -689,13 +705,26 @@ const styles = StyleSheet.create({
   systemDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#6366f1', opacity: 0.6 },
   systemMessageText: { fontSize: 11, fontWeight: '800', color: '#64748b', letterSpacing: 0.5, textAlign: 'center' },
   callLogContainer: { minWidth: 200, padding: 4 },
-  callLogTitle: { fontSize: 15, fontWeight: '700', marginBottom: 8 },
-  callLogBody: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  callLogStatus: { fontSize: 14, opacity: 0.9 },
+  callLogHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  callIconWrapper: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
+  ongoingIconWrapper: { backgroundColor: 'rgba(255,255,255,0.2)' },
+  callLogTextGroup: { flex: 1 },
+  callLogTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  ongoingLogTitle: { color: '#fff' },
+  callLogStatus: { fontSize: 12, opacity: 0.8 },
+  ongoingLogSub: { color: 'rgba(255,255,255,0.7)' },
   callLogDivider: { height: 1, marginBottom: 8 },
   callBackBtn: { alignItems: 'center', paddingVertical: 4 },
   callBackText: { fontWeight: '600', fontSize: 14 },
   missedCallTitle: { color: '#ef4444' },
+  ongoingLogContainer: { minWidth: 260, padding: 14, backgroundColor: '#6366f1', borderRadius: 20, shadowColor: '#6366f1', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
+  ongoingLogTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  ongoingLogSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
+  ongoingIconWrapper: { backgroundColor: 'rgba(255,255,255,0.25)', width: 44, height: 44, borderRadius: 22 },
+  ongoingJoinBtn: { backgroundColor: '#fff', paddingVertical: 12, borderRadius: 14, alignItems: 'center', marginTop: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  ongoingJoinBtnText: { color: '#6366f1', fontWeight: '900', fontSize: 15, letterSpacing: 0.5 },
 });
+
+
 
 export default React.memo(ChatBubble);
