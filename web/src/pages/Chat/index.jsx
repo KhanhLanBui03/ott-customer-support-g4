@@ -1009,7 +1009,6 @@ const Chat = () => {
                  sanitize(cid) === sanitize(callCid) || 
                  sanitize(cid) === sanitize(incomingCid);
         }) || activeConversation}
-        isGroup={isGroupCall}
         ringDuration={ringDuration}
         onClose={() => setCallStatus('idle')}
       />
