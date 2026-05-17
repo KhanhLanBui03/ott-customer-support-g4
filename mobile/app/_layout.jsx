@@ -76,10 +76,14 @@ function RootLayoutNav() {
   );
 }
 
+import { ThemeProvider } from '../src/context/ThemeContext';
+
 export default function RootLayout() {
   return (
     <Provider store={store}>
-      <RootLayoutNav />
+      <ThemeProvider>
+        <RootLayoutNav />
+      </ThemeProvider>
     </Provider>
   );
 }

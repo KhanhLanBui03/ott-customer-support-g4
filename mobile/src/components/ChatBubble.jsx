@@ -1,14 +1,14 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TouchableOpacity, 
-  Animated, 
-  Modal, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  Animated,
+  Modal,
   ScrollView,
-  PanResponder, 
+  PanResponder,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
@@ -23,24 +23,31 @@ import FileViewerModal from './FileViewerModal';
 import VoicePlayer from './common/VoicePlayer';
 import VoteMessage from './VoteMessage';
 import VoteDetailsModal from './VoteDetailsModal';
+import { useTheme } from '../context/ThemeContext';
+import UserActionModal from './common/UserActionModal';
 
-const ChatBubble = ({ 
-  message, 
-  isOwn: initialIsOwn, 
-  isOnline = false, 
-  latestReadBy = [], 
-  showReadStatus = true, 
-  onReact, 
-  onLongPress, 
+
+const ChatBubble = ({
+  message,
+  isOwn: initialIsOwn,
+  isOnline = false,
+  latestReadBy = [],
+  showReadStatus = true,
+  onReact,
+  onLongPress,
   onPressMessage,
   isHighlighted = false,
-  allMessages = []
+  allMessages = [],
+  members = []
 }) => {
+
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const conversations = useSelector(state => state.chat.conversations);
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
+
 
   const highlightAnim = useRef(new Animated.Value(0)).current;
 
@@ -67,7 +74,7 @@ const ChatBubble = ({
   });
 
   const currentUserIdStr = String(user?.userId || user?.id || '');
-  
+
   const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
   const [fileExists, setFileExists] = useState(false);
@@ -76,9 +83,13 @@ const ChatBubble = ({
   const isOwn = initialIsOwn || (currentUserIdStr !== '' && String(message.senderId || '') === currentUserIdStr);
   const [reactionModalVisible, setReactionModalVisible] = useState(false);
   const [selectedReactionEmoji, setSelectedReactionEmoji] = useState('');
-  
+
   const [voteDetailsVisible, setVoteDetailsVisible] = useState(false);
   const [selectedVoteData, setSelectedVoteData] = useState(null);
+
+  const [userActionVisible, setUserActionVisible] = useState(false);
+  const [selectedUserForAction, setSelectedUserForAction] = useState(null);
+
 
   useEffect(() => {
     if (message.type === 'FILE') {
@@ -169,9 +180,9 @@ const ChatBubble = ({
 
   const mediaFiles = message.mediaUrls || message.media_urls || [];
   const firstMedia = mediaFiles[0];
-  const isVoice = message.type === 'VOICE' || 
-                 (message.content && message.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ||
-                 (firstMedia && String(firstMedia).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+  const isVoice = message.type === 'VOICE' ||
+    (message.content && message.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ||
+    (firstMedia && String(firstMedia).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
 
   const reactionUserNamesFor = (emoji) => {
     if (!message.reactions || !message.reactions[emoji]) return [];
@@ -185,10 +196,11 @@ const ChatBubble = ({
         {Object.entries(message.reactions).map(([emoji, users]) => {
           if (!Array.isArray(users) || users.length === 0) return null;
           return (
-            <TouchableOpacity key={emoji} style={styles.reactionBadge} activeOpacity={0.75} onPress={() => openReactionDetail(emoji)}>
+            <TouchableOpacity key={emoji} style={[styles.reactionBadge, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.75} onPress={() => openReactionDetail(emoji)}>
               <Text style={styles.reactionEmoji}>{emoji}</Text>
-              <Text style={styles.reactionCount}>{users.length > 1 ? users.length : ''}</Text>
+              <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{users.length > 1 ? users.length : ''}</Text>
             </TouchableOpacity>
+
           );
         })}
       </View>
@@ -211,8 +223,8 @@ const ChatBubble = ({
     };
     const msgSenderId = String(message.senderId || '');
     const readers = readSource.map(mapReader).filter((reader) => reader.id && reader.id !== msgSenderId).reduce((unique, reader) => {
-        if (!unique.some((r) => r.id === reader.id)) unique.push(reader);
-        return unique;
+      if (!unique.some((r) => r.id === reader.id)) unique.push(reader);
+      return unique;
     }, []);
     if (readers.length === 0) return null;
     return (
@@ -262,11 +274,11 @@ const ChatBubble = ({
 
   const renderVoteContent = () => {
     if (message.type !== 'VOTE' || !message.vote) return null;
-    
+
     // Tìm conversation hiện tại để check quyền admin
     const currentConv = conversations.find(c => String(c.conversationId) === String(message.conversationId));
     const meId = currentUserIdStr;
-    
+
     const myRole = currentConv?.members?.find(m => String(m.userId || m.id) === meId)?.role;
     const isAdmin = myRole === 'ADMIN' || myRole === 'OWNER';
 
@@ -286,16 +298,83 @@ const ChatBubble = ({
       />
     );
   };
+  const handleMentionPress = (fullName) => {
+    // Tìm member từ fullName
+    const member = members.find(m => (m.fullName || m.name) === fullName);
+    if (member) {
+      setSelectedUserForAction({
+        ...member,
+        userId: member.userId || member.id,
+        fullName: member.fullName || member.name,
+      });
+      setUserActionVisible(true);
+    }
+  };
+
+  const renderTextWithMentions = (content) => {
+    if (!content) return null;
+    if (members.length === 0) return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{content}</Text>;
+
+    const currentConv = conversations.find(c => String(c.conversationId) === String(message.conversationId));
+    const isGroup = currentConv?.type === 'GROUP';
+
+    if (!isGroup) return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{content}</Text>;
+
+    // Tạo regex từ danh sách tên thành viên
+    const sortedMembers = [...members]
+      .filter(m => (m.fullName || m.name))
+      .sort((a, b) => (b.fullName || b.name).length - (a.fullName || a.name).length);
+
+    if (sortedMembers.length === 0 && !content.includes('@All')) return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{content}</Text>;
+
+    const memberNames = sortedMembers.map(m => (m.fullName || m.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const names = [...memberNames, 'All'].join('|');
+    const regex = new RegExp(`@(${names})`, 'g');
+
+
+    const parts = content.split(regex);
+    const result = [];
+
+    // Split sẽ trả về mảng: [text_before, matched_name, text_after, matched_name, ...]
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i % 2 === 1) {
+        // Đây là phần khớp với tên (vì dùng ngoặc tròn trong regex nên split giữ lại phần khớp)
+        result.push(
+          <Text
+            key={i}
+            style={[
+              styles.mentionText,
+              { color: isOwn ? '#fff' : colors.primary }
+            ]}
+            onPress={() => part !== 'All' && handleMentionPress(part)}
+          >
+            @{part}
+          </Text>
+
+        );
+      } else if (part) {
+        result.push(<Text key={i}>{part}</Text>);
+      }
+    }
+
+    return (
+      <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }], (message.mediaUrls?.length > 0) && { marginTop: 8 }]}>
+        {result}
+      </Text>
+    );
+  };
 
   if (message.type === 'SYSTEM' || String(message.senderId) === 'SYSTEM') {
     return (
       <View style={styles.systemMessageContainer}>
-        <View style={styles.systemMessageWrapper}>
-          <View style={styles.systemDot} />
-          <Text style={styles.systemMessageText}>{message.content?.toUpperCase() || 'THÔNG BÁO HỆ THỐNG'}</Text>
-          <View style={styles.systemDot} />
+        <View style={[styles.systemMessageWrapper, { backgroundColor: isDark ? colors.surface200 : 'rgba(0, 0, 0, 0.05)' }]}>
+          <View style={[styles.systemDot, { backgroundColor: colors.primary }]} />
+          <Text style={[styles.systemMessageText, { color: colors.textMuted }]}>{message.content?.toUpperCase() || 'THÔNG BÁO HỆ THỐNG'}</Text>
+          <View style={[styles.systemDot, { backgroundColor: colors.primary }]} />
         </View>
       </View>
+
     );
   }
 
@@ -308,10 +387,16 @@ const ChatBubble = ({
       )}
 
       <TouchableOpacity activeOpacity={message.isRecalled ? 1 : 0.8} onPress={() => !message.isRecalled && onPressMessage?.(message)} onLongPress={() => !message.isRecalled && onLongPress?.()} style={[styles.messageWrapper, isOwn ? styles.ownWrapper : styles.otherWrapper]}>
-        {!isOwn && <Text style={styles.senderName}>{senderInfo?.fullName || senderInfo?.name || message.senderName || 'User'}</Text>}
-        
+        {!isOwn && <Text style={[styles.senderName, { color: colors.textMuted }]}>{senderInfo?.fullName || senderInfo?.name || message.senderName || 'User'}</Text>}
+
         <View style={[styles.bubbleContainer, isOwn ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
-          <Animated.View style={[styles.bubble, isOwn ? styles.ownBubble : styles.otherBubble, isVoice && { paddingVertical: 6, paddingHorizontal: 10 }, { borderColor: highlightBorder, borderWidth: 2 }]}>
+          <Animated.View style={[
+            styles.bubble,
+            isOwn ? [styles.ownBubble, { backgroundColor: colors.primary }] : [styles.otherBubble, { backgroundColor: colors.surface200 }],
+            isVoice && { paddingVertical: 6, paddingHorizontal: 10 },
+            { borderColor: highlightBorder, borderWidth: 2 }
+          ]}>
+
             {message.forwardedFrom && (
               <View style={[styles.forwardedIndicator, isOwn ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
                 <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : '#6366f1'} />
@@ -361,8 +446,19 @@ const ChatBubble = ({
               }
               const displayReplyText = isVoiceReply ? 'Tin nhắn thoại' : (content.trim() || typeLabel);
               return (
-                <TouchableOpacity activeOpacity={0.7} onPress={() => onPressMessage?.(r.messageId)} style={[styles.replyBubble, isOwn ? styles.ownReplyBubble : styles.otherReplyBubble]}>
-                  <View style={styles.replyLine} />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => onPressMessage?.(r.messageId)}
+                  style={[
+                    styles.replyBubble,
+                    isOwn
+                      ? { backgroundColor: 'rgba(255, 255, 255, 0.12)', borderLeftColor: '#fff' }
+                      : { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', borderLeftColor: colors.primary }
+                  ]}
+                >
+                  <View style={[styles.replyLine, { backgroundColor: isOwn ? '#fff' : colors.primary }]} />
+
+
                   {isFileReply && mediaUrls[0] ? (
                     <View style={[styles.replyThumbnail, { backgroundColor: getFileConfig(mediaUrls[0]).color, alignItems: 'center', justifyContent: 'center' }]}><MaterialCommunityIcons name={getFileConfig(mediaUrls[0]).icon} size={18} color="#fff" /></View>
                   ) : thumbUrl ? (
@@ -371,7 +467,7 @@ const ChatBubble = ({
                     <View style={[styles.replyThumbnail, { backgroundColor: 'rgba(102, 126, 234, 0.1)', alignItems: 'center', justifyContent: 'center' }]}><MaterialIcons name="mic" size={16} color="#667eea" /></View>
                   ) : null}
                   <View style={styles.replyContent}>
-                    <Text style={styles.replySender} numberOfLines={1}>
+                    <Text style={[styles.replySender, { color: isOwn ? '#fff' : colors.primary }]} numberOfLines={1}>
                       {(() => {
                         const currentMeId = String(user?.userId || user?.id || '');
                         if (String(senderId) === currentMeId) return 'Bạn';
@@ -383,7 +479,8 @@ const ChatBubble = ({
                         return name || 'Người dùng';
                       })()}
                     </Text>
-                    <Text style={styles.replyText} numberOfLines={1}>{displayReplyText}</Text>
+                    <Text style={[styles.replyText, { color: isOwn ? 'rgba(255, 255, 255, 0.8)' : (isDark ? '#cbd5e1' : '#64748b') }]} numberOfLines={1}>{displayReplyText}</Text>
+
                   </View>
                 </TouchableOpacity>
               );
@@ -406,21 +503,22 @@ const ChatBubble = ({
                   return '#6366f1';
                 };
                 return (
-                  <TouchableOpacity style={[styles.fileBubble, isOwn ? styles.ownFileBubble : styles.otherFileBubble]} onPress={async () => {
-                      const fullUrl = getFullUrl(url);
-                      const cleanName = decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''));
-                      setSelectedFile({ url: fullUrl, name: cleanName });
-                      setFileViewerVisible(true);
+                  <TouchableOpacity style={[styles.fileBubble, isOwn ? styles.ownFileBubble : [styles.otherFileBubble, { backgroundColor: colors.surface200, borderColor: colors.border }]]} onPress={async () => {
+                    const fullUrl = getFullUrl(url);
+                    const cleanName = decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''));
+                    setSelectedFile({ url: fullUrl, name: cleanName });
+                    setFileViewerVisible(true);
                   }}>
                     <View style={[styles.fileIconBig, { backgroundColor: getFileColor(url) }]}><Text style={styles.fileIconText}>{ext}</Text></View>
                     <View style={styles.fileInfo}>
-                      <Text style={[styles.fileName, { color: isOwn ? '#fff' : '#1e293b' }]} numberOfLines={1}>{decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''))}</Text>
+                      <Text style={[styles.fileName, { color: colors.foreground }]} numberOfLines={1}>{decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''))}</Text>
                       <View style={styles.fileStatusRow}>
-                        <Text style={[styles.fileSize, { color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748b' }]}>{ext} • 22 KB</Text>
+                        <Text style={[styles.fileSize, { color: colors.textMuted }]}>{ext} • 22 KB</Text>
                         {fileExists && <View style={styles.downloadedBadge}><MaterialIcons name="check-circle" size={12} color="#10b981" /><Text style={styles.downloadedText}>Đã có trên máy</Text></View>}
                       </View>
                     </View>
                   </TouchableOpacity>
+
                 );
               }
               const total = mediaUrls.length;
@@ -444,8 +542,9 @@ const ChatBubble = ({
 
             {message.isRecalled ? (
               <View style={styles.recalledContent}>
-                <MaterialIcons name="history" size={16} color={isOwn ? 'rgba(255,255,255,0.7)' : '#9ca3af'} style={{ marginRight: 4 }} />
-                <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : styles.otherRecalledText]}>Tin nhắn đã bị thu hồi</Text>
+                <MaterialIcons name="history" size={16} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.textSubtle} style={{ marginRight: 4 }} />
+                <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : [styles.otherRecalledText, { color: colors.textSubtle }]]}>Tin nhắn đã bị thu hồi</Text>
+
               </View>
             ) : (
               (() => {
@@ -461,7 +560,7 @@ const ChatBubble = ({
                     const cType = callData.callType || 'audio';
                     const status = callData.status;
                     const duration = callData.duration || 0;
-                    
+
                     let title = '';
                     let subtitle = '';
                     let iconName = 'phone';
@@ -507,16 +606,16 @@ const ChatBubble = ({
                       <View style={styles.callLogContainer}>
                         <View style={styles.callLogHeader}>
                           <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
-                            <MaterialCommunityIcons 
-                              name={iconName} 
-                              size={22} 
-                              color={isOngoing && !isOwn ? '#6366f1' : iconColor} 
+                            <MaterialCommunityIcons
+                              name={iconName}
+                              size={22}
+                              color={isOngoing && !isOwn ? '#6366f1' : iconColor}
                             />
                           </View>
                           <View style={styles.callLogTextGroup}>
                             <Text style={[
-                              styles.callLogTitle, 
-                              isMissedIncoming && styles.missedCallTitle, 
+                              styles.callLogTitle,
+                              isMissedIncoming && styles.missedCallTitle,
                               isOwn ? styles.ownText : styles.otherText
                             ]} numberOfLines={1}>
                               {title}
@@ -526,16 +625,16 @@ const ChatBubble = ({
                             </Text>
                           </View>
                         </View>
-                        
-                        <View style={[styles.callLogDivider, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]} />
-                        
-                        <TouchableOpacity 
+
+                        <View style={[styles.callLogDivider, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : colors.border }]} />
+                        <TouchableOpacity
                           style={styles.callBackBtn}
                           onPress={() => onPressMessage?.({ ...message, action: 'CALL_BACK', callType: callData.callType || 'video' })}
                         >
                           <Text style={[styles.callBackText, { color: isOwn ? '#fff' : '#6366f1' }]}>
                             {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}
                           </Text>
+
                         </TouchableOpacity>
                       </View>
                     );
@@ -547,12 +646,12 @@ const ChatBubble = ({
                 if (message.type === 'VOTE') {
                   return renderVoteContent();
                 }
-                return message.content ? (
-                  <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText, (message.mediaUrls?.length > 0) && { marginTop: 8 }]}>{message.content}</Text>
-                ) : null;
-              })()
-            )}
-            <Text style={[styles.timeInside, isOwn ? styles.ownTime : styles.otherTime]}>{formatTime(message.createdAt || Date.now())}</Text>
+                return message.content ? renderTextWithMentions(message.content) : null;
+              })())}
+
+
+            <Text style={[styles.timeInside, isOwn ? styles.ownTime : [styles.otherTime, { color: colors.textSubtle }]]}>{formatTime(message.createdAt || Date.now())}</Text>
+
           </Animated.View>
           {renderReactions()}
         </View>
@@ -565,46 +664,64 @@ const ChatBubble = ({
 
       <Modal visible={reactionModalVisible} transparent animationType="fade" onRequestClose={closeReactionDetail}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chi tiết cảm xúc</Text>
-              <TouchableOpacity onPress={closeReactionDetail} style={styles.closeButton}><Ionicons name="close" size={22} color="#fff" /></TouchableOpacity>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Chi tiết cảm xúc</Text>
+              <TouchableOpacity onPress={closeReactionDetail} style={styles.closeButton}><Ionicons name="close" size={22} color={colors.foreground} /></TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <View style={styles.modalEmojiColumn}>
+              <View style={[styles.modalEmojiColumn, { backgroundColor: isDark ? colors.surface100 : colors.surface200, borderRightColor: colors.border }]}>
                 {Object.entries(message.reactions || {}).map(([emoji, users]) => (
-                  <TouchableOpacity key={emoji} style={[styles.modalEmojiButton, selectedReactionEmoji === emoji && styles.modalEmojiButtonActive]} onPress={() => setSelectedReactionEmoji(emoji)}>
+                  <TouchableOpacity key={emoji} style={[styles.modalEmojiButton, { backgroundColor: colors.card }, selectedReactionEmoji === emoji && [styles.modalEmojiButtonActive, { backgroundColor: colors.primary }]]} onPress={() => setSelectedReactionEmoji(emoji)}>
                     <Text style={styles.modalEmoji}>{emoji}</Text>
-                    <Text style={styles.modalEmojiCount}>{Array.isArray(users) ? users.length : 0}</Text>
+                    <Text style={[styles.modalEmojiCount, { color: colors.textMuted }]}>{Array.isArray(users) ? users.length : 0}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
               <View style={styles.modalUserColumn}>
-                <Text style={styles.modalSectionLabel}>Người đã chọn</Text>
+                <Text style={[styles.modalSectionLabel, { color: colors.textSubtle }]}>Người đã chọn</Text>
                 <ScrollView contentContainerStyle={styles.modalUserList}>
                   {(reactionUserNamesFor(selectedReactionEmoji) || []).length > 0 ? (
                     reactionUserNamesFor(selectedReactionEmoji).map((name, index) => (
-                      <View key={`${selectedReactionEmoji}-${index}`} style={styles.modalUserItem}><Text style={styles.modalUserText}>{name}</Text></View>
+                      <View key={`${selectedReactionEmoji}-${index}`} style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>{name}</Text></View>
                     ))
                   ) : (
-                    <View style={styles.modalUserItem}><Text style={styles.modalUserText}>Chưa có ai phản ứng</Text></View>
+                    <View style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>Chưa có ai phản ứng</Text></View>
                   )}
                 </ScrollView>
               </View>
             </View>
           </View>
+
         </View>
       </Modal>
 
       <MediaViewer visible={mediaViewerVisible} onClose={() => setMediaViewerVisible(false)} allMedia={(message.mediaUrls || message.media_urls || []).map(url => ({ url: getFullUrl(url), type: message.type }))} initialIndex={selectedMediaIndex} />
       <FileViewerModal visible={fileViewerVisible} onClose={() => setFileViewerVisible(false)} fileUrl={selectedFile.url} fileName={selectedFile.name} />
-      
-      <VoteDetailsModal 
-        visible={voteDetailsVisible} 
-        onClose={() => setVoteDetailsVisible(false)} 
-        vote={selectedVoteData} 
+      <VoteDetailsModal
+        visible={voteDetailsVisible}
+        onClose={() => setVoteDetailsVisible(false)}
+        vote={selectedVoteData}
+      />
+
+
+      <UserActionModal
+        visible={userActionVisible}
+        user={selectedUserForAction}
+        onClose={() => setUserActionVisible(false)}
+        onMention={(u) => {
+          // Gửi một hành động lên màn hình chat để chèn mention vào input
+          onPressMessage?.({ action: 'MENTION', user: u });
+        }}
+        onMessage={(u) => {
+          router.push(`/chat/${encodeURIComponent(u.userId || u.id)}`);
+        }}
+        onCall={(u) => {
+          onPressMessage?.({ action: 'CALL_BACK', callType: 'audio', targetUser: u });
+        }}
       />
     </Animated.View>
+
   );
 };
 
@@ -625,7 +742,15 @@ const styles = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 20 },
   ownText: { color: '#fff' },
   otherText: { color: '#1f2937' },
+  mentionText: {
+    fontWeight: '900',
+    textDecorationLine: 'none',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+  },
+
+
   forwardedIndicator: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 4, opacity: 0.8 },
+
   forwardedText: { fontSize: 11, fontStyle: 'italic', fontWeight: '600' },
   timeInside: { fontSize: 10, marginTop: 2, alignSelf: 'flex-end', minWidth: 45, textAlign: 'right' },
   ownTime: { color: 'rgba(255, 255, 255, 0.7)' },
@@ -637,13 +762,12 @@ const styles = StyleSheet.create({
   deliveryStatusText: { fontSize: 11, marginLeft: 4, letterSpacing: 0.2 },
   deliveryStatusOnline: { color: '#4338ca' },
   deliveryStatusSent: { color: '#6b7280' },
-  replyBubble: { flexDirection: 'row', borderRadius: 8, padding: 8, marginBottom: 6, minWidth: 150, alignSelf: 'stretch' },
-  ownReplyBubble: { backgroundColor: 'rgba(255, 255, 255, 1)' },
-  otherReplyBubble: { backgroundColor: 'rgba(0, 0, 0, 0.05)' },
-  replyLine: { width: 3, backgroundColor: '#667eea', borderRadius: 2, marginRight: 8 },
+  replyBubble: { flexDirection: 'row', borderRadius: 12, padding: 8, marginBottom: 8, minWidth: 150, alignSelf: 'stretch', overflow: 'hidden' },
+  replyLine: { width: 4, borderRadius: 2, marginRight: 10 },
   replyContent: { flex: 1, justifyContent: 'center' },
-  replySender: { fontSize: 12, fontWeight: '700', color: '#667eea', marginBottom: 2 },
-  replyText: { fontSize: 12, color: '#6b7280' },
+  replySender: { fontSize: 13, fontWeight: '800', marginBottom: 2 },
+  replyText: { fontSize: 12, fontWeight: '500' },
+
   replyThumbnail: { width: 30, height: 30, borderRadius: 4, marginRight: 8 },
   reactionsContainer: { position: 'absolute', bottom: -18, flexDirection: 'row', zIndex: 10, elevation: 4 },
   ownReactions: { right: 0 },

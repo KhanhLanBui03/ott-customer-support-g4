@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Users, Check, Search, User, ShieldCheck } from 'lucide-react';
+import { X, Users, Check, Search, User, ShieldCheck, Camera } from 'lucide-react';
 import { friendApi } from '../api/friendApi';
+import { chatApi } from '../api/chatApi';
 import { useChat } from '../hooks/useChat';
+import { useDispatch } from 'react-redux';
+import { updateConversation } from '../store/chatSlice';
 
 const CreateGroupModal = ({ isOpen, onClose }) => {
   const [groupName, setGroupName] = useState('');
@@ -9,13 +12,18 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [groupAvatar, setGroupAvatar] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
   const { create, selectConversation } = useChat();
+  const dispatch = useDispatch();
 
   useEffect(() => {
     if (isOpen) {
       fetchFriends();
       setGroupName('');
       setSelectedIds([]);
+      setGroupAvatar(null);
+      setAvatarPreview(null);
     }
   }, [isOpen]);
 
@@ -35,15 +43,47 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
     );
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setGroupAvatar(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleCreateGroup = async () => {
     if (!groupName.trim() || selectedIds.length < 2) return;
     
     setLoading(true);
     try {
       const result = await create('GROUP', selectedIds, groupName);
-      if (result.payload) {
-        const convId = result.payload.conversationId || result.payload?.data?.conversationId;
-        if (convId) selectConversation(convId);
+      const convData = result.payload?.data || result.payload;
+      
+      if (convData) {
+        const convId = convData.conversationId || convData.id;
+        
+        if (convId) {
+          // If avatar selected, upload it
+          if (groupAvatar) {
+            try {
+              const uploadRes = await chatApi.uploadMedia(groupAvatar, 'conversation-avatars');
+              const uploadedUrl = uploadRes.data?.data?.mediaUrl || uploadRes.data?.mediaUrl || uploadRes.data?.url || uploadRes.url;
+              
+              if (uploadedUrl) {
+                await chatApi.updateConversationAvatar(convId, uploadedUrl);
+                dispatch(updateConversation({ conversationId: convId, avatarUrl: uploadedUrl }));
+              }
+            } catch (uploadErr) {
+              console.warn("Group created but avatar upload failed", uploadErr);
+            }
+          }
+          
+          selectConversation(convId);
+        }
         onClose();
       }
     } catch (err) {
@@ -77,17 +117,48 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
         </div>
 
         <div className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar">
-          {/* Group Info */}
-          <div className="space-y-4">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/40 px-1">Tên nhóm</label>
-            <input
-              type="text"
-              placeholder="Nhập tên nhóm..."
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              className="w-full px-6 py-4 bg-surface-200 border-none rounded-2xl text-sm font-bold text-foreground placeholder:text-foreground/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-              autoFocus
-            />
+          {/* Group Avatar & Name */}
+          <div className="flex flex-col items-center space-y-6">
+            <div className="relative group">
+              <div className="w-24 h-24 rounded-[32px] bg-surface-200 border-2 border-dashed border-border overflow-hidden flex items-center justify-center transition-all group-hover:border-indigo-500/50 shadow-inner">
+                {avatarPreview ? (
+                  <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <Camera size={32} className="text-foreground/20 group-hover:text-indigo-500/50 transition-colors" />
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                title="Chọn ảnh đại diện nhóm"
+              />
+              {avatarPreview && (
+                 <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGroupAvatar(null); 
+                    setAvatarPreview(null);
+                  }}
+                  className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:scale-110 transition-all z-20"
+                 >
+                   <X size={12} />
+                 </button>
+              )}
+            </div>
+            
+            <div className="w-full space-y-4">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/40 px-1">Tên nhóm</label>
+              <input
+                type="text"
+                placeholder="Nhập tên nhóm..."
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                className="w-full px-6 py-4 bg-surface-200 border-none rounded-2xl text-sm font-bold text-foreground placeholder:text-foreground/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                autoFocus
+              />
+            </div>
           </div>
 
           {/* Search Member */}

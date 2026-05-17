@@ -21,9 +21,13 @@ import { userApi } from '../../src/api/userApi';
 import { mediaApi } from '../../src/api/mediaApi';
 import { restoreState } from '../../src/store/authSlice';
 import * as SecureStore from 'expo-secure-store';
+import { useTheme } from '../../src/context/ThemeContext';
+
 
 const EditProfileScreen = () => {
+  const { colors, isDark } = useTheme();
   const router = useRouter();
+
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
 
@@ -137,68 +141,76 @@ const EditProfileScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>HỒ SƠ CỦA BẠN</Text>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>HỒ SƠ CỦA BẠN</Text>
           <TouchableOpacity onPress={() => router.push('/profile')} style={styles.closeButton}>
-            <Ionicons name="close" size={26} color="#64748b" />
+            <Ionicons name="close" size={26} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
+
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatarWrapper}>
               <Image
                 source={{ uri: avatarUrl || `https://ui-avatars.com/api/?name=${firstName}&background=random` }}
-                style={styles.avatar}
+                style={[styles.avatar, { borderColor: colors.background, backgroundColor: colors.surface200 }]}
               />
+
               {isUploading && (
                 <View style={styles.uploadingOverlay}>
                   <ActivityIndicator color="#fff" />
                 </View>
               )}
-              <TouchableOpacity style={styles.cameraIconContainer} onPress={pickImage} disabled={isUploading}>
+              <TouchableOpacity style={[styles.cameraIconContainer, { backgroundColor: colors.primary, borderColor: colors.background }]} onPress={pickImage} disabled={isUploading}>
                 <MaterialIcons name="photo-camera" size={20} color="#fff" />
               </TouchableOpacity>
+
             </View>
 
             {/* FIX: Chỉ hiển thị tên đã được lưu trong Redux, không hiển thị tên đang gõ */}
-            <Text style={styles.displayFullName}>{user?.firstName} {user?.lastName}</Text>
+            <Text style={[styles.displayFullName, { color: colors.foreground }]}>{user?.firstName} {user?.lastName}</Text>
           </View>
+
 
           <View style={styles.form}>
             <View style={styles.inputRow}>
               <View style={[styles.inputGroup, { flex: 1, marginRight: 12 }]}>
-                <Text style={styles.label}>HỌ</Text>
-                <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Họ" />
+                <Text style={[styles.label, { color: colors.textSubtle }]}>HỌ</Text>
+                <TextInput style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} value={lastName} onChangeText={setLastName} placeholder="Họ" placeholderTextColor={colors.textSubtle} />
               </View>
               <View style={[styles.inputGroup, { flex: 1.5 }]}>
-                <Text style={styles.label}>TÊN</Text>
-                <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="Tên" />
+                <Text style={[styles.label, { color: colors.textSubtle }]}>TÊN</Text>
+                <TextInput style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} value={firstName} onChangeText={setFirstName} placeholder="Tên" placeholderTextColor={colors.textSubtle} />
               </View>
+
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>TIỂU SỬ</Text>
+              <Text style={[styles.label, { color: colors.textSubtle }]}>TIỂU SỬ</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
                 value={bio}
                 onChangeText={setBio}
                 placeholder="Nhập tiểu sử của bạn..."
+                placeholderTextColor={colors.textSubtle}
                 multiline
                 numberOfLines={3}
               />
             </View>
+
           </View>
 
           <TouchableOpacity
-            style={[styles.saveBtn, (loading || isUploading) && { opacity: 0.7 }]}
+            style={[styles.saveBtn, { backgroundColor: colors.primary }, (loading || isUploading) && { opacity: 0.7 }]}
             onPress={handleSave}
             disabled={loading || isUploading}
           >
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>LƯU THAY ĐỔI</Text>}
           </TouchableOpacity>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

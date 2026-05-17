@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, Animated } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, Animated, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchConversations, setCurrentUserId, updateConversation, removeConversationLocal, pinConversation, unpinConversation } from '../../src/store/chatSlice';
@@ -10,13 +10,18 @@ import SearchModal from '../../src/components/SearchModal';
 import CreateGroupModal from '../../src/components/CreateGroupModal';
 import { TAGS, getTagByKey } from '../../src/constants/tags';
 import { conversationApi } from '../../src/api/chatApi';
+import { useTheme } from '../../src/context/ThemeContext';
+
 
 const HomeScreen = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { conversations, loading } = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
+  const { colors, isDark, toggleTheme } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [searchVisible, setSearchVisible] = useState(false);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   
@@ -55,6 +60,27 @@ const HomeScreen = () => {
   // Logic lọc danh sách và phân đoạn Ghim
   const displayConversations = useMemo(() => {
     let filtered = conversations.filter(conv => {
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        
+        // 1. Check Group Name / Conversation Name
+        const convName = (conv.name || '').toLowerCase();
+        if (convName.includes(query)) return true;
+
+        // 2. Check all members in this conversation (names and phones)
+        const members = conv.members || conv.participants || [];
+        const hasMatchingMember = members.some(m => {
+          const fullName = (m.fullName || m.name || m.firstName || '').toLowerCase();
+          const phone = (m.phoneNumber || m.phone || '').toLowerCase();
+          return fullName.includes(query) || phone.includes(query);
+        });
+
+        if (hasMatchingMember) return true;
+
+        return false;
+      }
+
       if (filterType === 'unread' && (conv.unreadCount || 0) === 0) return false;
       if (selectedTags.length > 0) {
         if (!conv.tag || !selectedTags.includes(conv.tag)) return false;
@@ -153,11 +179,12 @@ const HomeScreen = () => {
   const renderConversationItem = ({ item }) => {
     if (item.isHeader) {
       return (
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionHeaderText}>{item.title}</Text>
+        <View style={[styles.sectionHeader, { backgroundColor: isDark ? colors.surface200 : '#f9fafb', borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionHeaderText, { color: colors.textMuted }]}>{item.title}</Text>
         </View>
       );
     }
+
 
     const currentUserId = String(currentUser?.userId || currentUser?.id || '');
     const members = item.members || item.participants || [];
@@ -185,7 +212,32 @@ const HomeScreen = () => {
     const unreadText = unreadCount > 9 ? '9+' : String(unreadCount);
     const isOwnLastMessage = String(item.lastMessageSenderId || item.lastSenderId || '') === currentUserId;
     const lastMessagePreview = item.lastMessage || 'Chưa có tin nhắn';
-    const previewText = isOwnLastMessage ? `Bạn: ${lastMessagePreview}` : lastMessagePreview;
+    
+    // Kiểm tra mention
+    const myName = currentUser?.fullName || currentUser?.name || '';
+    const isMentioned = !isOwnLastMessage && (
+      lastMessagePreview.includes(`@${myName}`) || 
+      lastMessagePreview.toLowerCase().includes('@all')
+    );
+
+    // Lấy tên người gửi thực tế từ danh sách thành viên
+    const lastSenderId = String(item.lastMessageSenderId || item.lastSenderId || '');
+    const lastSender = members.find(m => String(m.userId || m.id) === lastSenderId);
+    
+    let senderName = 'Thành viên';
+    if (lastSender) {
+      senderName = lastSender.fullName || lastSender.name || lastSender.firstName || 'Thành viên';
+    } else if (item.lastMessageSenderName || item.lastSenderName) {
+      senderName = item.lastMessageSenderName || item.lastSenderName;
+    }
+
+    const previewText = isMentioned 
+      ? `${senderName}: ${lastMessagePreview}`
+      : (isOwnLastMessage ? `Bạn: ${lastMessagePreview}` : (item.type === 'GROUP' ? `${senderName}: ${lastMessagePreview}` : lastMessagePreview));
+
+
+
+
     
     // Lấy thông tin tag
     const tagInfo = item.tag ? getTagByKey(item.tag) : null;
@@ -202,8 +254,9 @@ const HomeScreen = () => {
         <TouchableOpacity
           style={[
             styles.conversationItem, 
-            isUnread && styles.conversationItemUnread,
-            item.isPinned && styles.conversationItemPinned
+            { backgroundColor: colors.background, borderBottomColor: colors.border },
+            isUnread && { backgroundColor: isDark ? colors.surface200 : '#eef2ff' },
+            item.isPinned && { backgroundColor: isDark ? colors.surface100 : colors.background }
           ]}
           onPress={() => router.push(`/chat/${encodeURIComponent(item.conversationId)}`)}
           onLongPress={() => {
@@ -215,7 +268,7 @@ const HomeScreen = () => {
         >
           <View style={styles.avatarContainer}>
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            {isOnline && <View style={styles.onlineBadge} />}
+            {isOnline && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
             {item.isPinned && (
               <View style={styles.pinBadge}>
                 <MaterialCommunityIcons name="pin" size={10} color="#fff" style={styles.pinIconTiny} />
@@ -225,72 +278,118 @@ const HomeScreen = () => {
           <View style={styles.conversationInfo}>
             <View style={styles.conversationHeader}>
               <View style={styles.nameRow}>
-                <Text style={styles.conversationName} numberOfLines={1}>{displayName}</Text>
+                <Text style={[styles.conversationName, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
                 {tagInfo && (
                   <View style={[styles.tagDot, { backgroundColor: tagInfo.color }]} />
                 )}
               </View>
               <View style={styles.rightLabel}>
-                <Text style={styles.conversationTime}>
+                <Text style={[styles.conversationTime, { color: colors.textSubtle }]}>
                   {item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </Text>
               </View>
             </View>
             <View style={styles.lastMessageRow}>
-              <Text style={[styles.lastMessage, isUnread && styles.lastMessageUnread]} numberOfLines={1}>
+              <Text style={[styles.lastMessage, { color: colors.textMuted }, isUnread && [styles.lastMessageUnread, { color: colors.foreground }]]} numberOfLines={1}>
                 {previewText}
               </Text>
               <View style={styles.rightActionsRow}>
+                {isMentioned && (
+                  <View style={styles.mentionBadge}>
+                    <MaterialCommunityIcons name="at" size={16} color="#6366f1" />
+                  </View>
+                )}
                 {unreadCount > 0 && (
                   <View style={styles.unreadBadge}>
                     <Text style={styles.unreadBadgeText}>{unreadText}</Text>
                   </View>
                 )}
               </View>
+
             </View>
           </View>
         </TouchableOpacity>
+
       </Swipeable>
     );
   };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header chính */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Tin nhắn</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Tin nhắn</Text>
           <View style={styles.headerButtons}>
-            <TouchableOpacity style={styles.headerButton} onPress={() => setCreateGroupVisible(true)}>
-              <MaterialIcons name="group-add" size={24} color="#1f2937" />
+            <TouchableOpacity 
+              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              onPress={toggleTheme}
+            >
+              <Ionicons 
+                name={isDark ? "sunny" : "moon"} 
+                size={22} 
+                color={colors.foreground} 
+              />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton} onPress={() => setSearchVisible(true)}>
-              <MaterialIcons name="search" size={24} color="#1f2937" />
+            <TouchableOpacity 
+              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              onPress={() => setCreateGroupVisible(true)}
+            >
+              <MaterialIcons name="group-add" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              onPress={() => setSearchVisible(true)}
+              title="Tìm bạn mới"
+            >
+              <MaterialIcons name="person-add" size={24} color={colors.foreground} />
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* Search Bar (Conversation Filter) */}
+        <View style={styles.searchContainer}>
+          <View style={[styles.searchBar, { backgroundColor: isDark ? colors.surface200 : '#f3f4f6' }]}>
+            <MaterialIcons name="search" size={20} color={colors.textMuted} />
+            <TextInput
+              placeholder="Tìm kiếm hội thoại..."
+              placeholderTextColor={colors.textMuted}
+              style={[styles.searchInput, { color: colors.foreground }]}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+
         {/* Tabs Phân loại (Đồng bộ Web) */}
-        <View style={styles.filterTabs}>
+        <View style={[styles.filterTabs, { borderBottomColor: colors.border }]}>
           <TouchableOpacity style={styles.tabItem}>
             <Text style={styles.tabTextActive}>Ưu tiên</Text>
             <View style={styles.tabIndicator} />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.filterButton, (filterType !== 'all' || selectedTags.length > 0) && styles.filterButtonActive]} 
+            style={[styles.filterButton, (filterType !== 'all' || selectedTags.length > 0) ? styles.filterButtonActive : { backgroundColor: colors.surface200 }]} 
             onPress={() => setFilterVisible(true)}
           >
-            <Text style={[styles.filterButtonText, (filterType !== 'all' || selectedTags.length > 0) && styles.filterButtonTextActive]}>
+            <Text style={[styles.filterButtonText, (filterType !== 'all' || selectedTags.length > 0) ? styles.filterButtonTextActive : { color: colors.textMuted }]}>
               {filterType === 'unread' ? 'Chưa đọc' : selectedTags.length > 0 ? `Phân loại (${selectedTags.length})` : 'Phân loại'}
             </Text>
             <Ionicons 
               name="chevron-down" 
               size={14} 
-              color={filterType !== 'all' || selectedTags.length > 0 ? "#fff" : "#64748b"} 
+              color={(filterType !== 'all' || selectedTags.length > 0) ? "#fff" : colors.textMuted} 
             />
           </TouchableOpacity>
         </View>
+
 
         {loading && !refreshing && conversations.length === 0 ? (
           <View style={styles.loadingContainer}>
@@ -316,14 +415,14 @@ const HomeScreen = () => {
           <TouchableWithoutFeedback onPress={() => setFilterVisible(false)}>
             <View style={styles.modalOverlay}>
               <TouchableWithoutFeedback>
-                <View style={styles.filterModalContainer}>
-                  <Text style={styles.modalLabel}>THEO TRẠNG THÁI</Text>
+                <View style={[styles.filterModalContainer, { backgroundColor: colors.card }]}>
+                  <Text style={[styles.modalLabel, { color: colors.textSubtle }]}>THEO TRẠNG THÁI</Text>
                   <TouchableOpacity 
                     style={styles.filterOption} 
                     onPress={() => { setFilterType('all'); setFilterVisible(false); }}
                   >
-                    <Text style={[styles.optionText, filterType === 'all' && styles.optionTextActive]}>Tất cả</Text>
-                    <View style={[styles.radioCircle, filterType === 'all' && styles.radioActive]}>
+                    <Text style={[styles.optionText, { color: colors.foreground }, filterType === 'all' && styles.optionTextActive]}>Tất cả</Text>
+                    <View style={[styles.radioCircle, { borderColor: colors.border }, filterType === 'all' && styles.radioActive]}>
                       {filterType === 'all' && <View style={styles.radioDot} />}
                     </View>
                   </TouchableOpacity>
@@ -332,22 +431,22 @@ const HomeScreen = () => {
                     onPress={() => { setFilterType('unread'); setFilterVisible(false); }}
                   >
                     <View style={styles.nameRow}>
-                      <Text style={[styles.optionText, filterType === 'unread' && styles.optionTextActive]}>Chưa đọc</Text>
+                      <Text style={[styles.optionText, { color: colors.foreground }, filterType === 'unread' && styles.optionTextActive]}>Chưa đọc</Text>
                       {conversations.filter(c => c.unreadCount > 0).length > 0 && (
                         <View style={styles.countBadge}>
                           <Text style={styles.countBadgeText}>{conversations.filter(c => c.unreadCount > 0).length}</Text>
                         </View>
                       )}
                     </View>
-                    <View style={[styles.radioCircle, filterType === 'unread' && styles.radioActive]}>
+                    <View style={[styles.radioCircle, { borderColor: colors.border }, filterType === 'unread' && styles.radioActive]}>
                       {filterType === 'unread' && <View style={styles.radioDot} />}
                     </View>
                   </TouchableOpacity>
 
-                  <View style={styles.modalDivider} />
+                  <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
                   
                   <View style={styles.modalHeaderRow}>
-                    <Text style={styles.modalLabel}>THEO THẺ PHÂN LOẠI</Text>
+                    <Text style={[styles.modalLabel, { color: colors.textSubtle }]}>THEO THẺ PHÂN LOẠI</Text>
                     {selectedTags.length > 0 && (
                       <TouchableOpacity onPress={() => setSelectedTags([])}>
                         <Text style={styles.clearText}>XÓA</Text>
@@ -368,9 +467,9 @@ const HomeScreen = () => {
                         >
                           <View style={styles.tagLabel}>
                             <View style={[styles.tagIcon, { backgroundColor: tag.color }]} />
-                            <Text style={[styles.optionText, isSelected && styles.optionTextActive]}>{tag.label}</Text>
+                            <Text style={[styles.optionText, { color: colors.foreground }, isSelected && styles.optionTextActive]}>{tag.label}</Text>
                           </View>
-                          <View style={[styles.checkbox, isSelected && { backgroundColor: '#4f46e5', borderColor: '#4f46e5' }]}>
+                          <View style={[styles.checkbox, { borderColor: colors.border }, isSelected && { backgroundColor: '#4f46e5', borderColor: '#4f46e5' }]}>
                             {isSelected && <Ionicons name="checkmark" size={12} color="#fff" />}
                           </View>
                         </TouchableOpacity>
@@ -378,6 +477,7 @@ const HomeScreen = () => {
                     })}
                   </ScrollView>
                 </View>
+
               </TouchableWithoutFeedback>
             </View>
           </TouchableWithoutFeedback>
@@ -388,12 +488,12 @@ const HomeScreen = () => {
           <TouchableWithoutFeedback onPress={() => setActionModalVisible(false)}>
             <View style={styles.bottomOverlay}>
               <TouchableWithoutFeedback>
-                <View style={styles.actionSheet}>
+                <View style={[styles.actionSheet, { backgroundColor: colors.card }]}>
                   <View style={styles.sheetHeader}>
-                    <Text style={styles.sheetTitle}>
+                    <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
                       {actionModalType === 'menu' ? 'Tác vụ hội thoại' : 'Phân loại hội thoại'}
                     </Text>
-                    <View style={styles.sheetHandle} />
+                    <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
                   </View>
                   
                   {actionModalType === 'menu' ? (
@@ -402,14 +502,14 @@ const HomeScreen = () => {
                         style={styles.actionListItem} 
                         onPress={() => handleTogglePin(selectedConv)}
                       >
-                        <View style={[styles.actionListIcon, { backgroundColor: '#e0e7ff' }]}>
+                        <View style={[styles.actionListIcon, { backgroundColor: isDark ? colors.surface300 : '#e0e7ff' }]}>
                           <MaterialCommunityIcons 
                             name={selectedConv?.isPinned ? "pin-off" : "pin"} 
                             size={24} 
-                            color="#6366f1" 
+                            color={isDark ? colors.primary : "#6366f1"} 
                           />
                         </View>
-                        <Text style={styles.actionListLabel}>
+                        <Text style={[styles.actionListLabel, { color: colors.foreground }]}>
                           {selectedConv?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}
                         </Text>
                       </TouchableOpacity>
@@ -418,10 +518,10 @@ const HomeScreen = () => {
                         style={styles.actionListItem} 
                         onPress={() => setActionModalType('tags')}
                       >
-                        <View style={[styles.actionListIcon, { backgroundColor: '#fef3c7' }]}>
+                        <View style={[styles.actionListIcon, { backgroundColor: isDark ? colors.surface300 : '#fef3c7' }]}>
                           <MaterialCommunityIcons name="tag-plus-outline" size={24} color="#d97706" />
                         </View>
-                        <Text style={styles.actionListLabel}>Phân loại</Text>
+                        <Text style={[styles.actionListLabel, { color: colors.foreground }]}>Phân loại</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -430,10 +530,10 @@ const HomeScreen = () => {
                         style={styles.actionGridItem} 
                         onPress={() => handleUpdateTag(selectedConv.conversationId, null)}
                       >
-                        <View style={[styles.actionIcon, { backgroundColor: '#f3f4f6' }]}>
-                          <MaterialCommunityIcons name="tag-off" size={24} color="#64748b" />
+                        <View style={[styles.actionIcon, { backgroundColor: colors.surface200 }]}>
+                          <MaterialCommunityIcons name="tag-off" size={24} color={colors.textMuted} />
                         </View>
-                        <Text style={styles.actionLabel}>Bỏ nhãn</Text>
+                        <Text style={[styles.actionLabel, { color: colors.textMuted }]}>Bỏ nhãn</Text>
                       </TouchableOpacity>
 
                       {TAGS.map(tag => (
@@ -445,12 +545,13 @@ const HomeScreen = () => {
                           <View style={[styles.actionIcon, { backgroundColor: tag.color + '20' }]}>
                             <MaterialCommunityIcons name="tag" size={24} color={tag.color} />
                           </View>
-                          <Text style={styles.actionLabel}>{tag.label}</Text>
+                          <Text style={[styles.actionLabel, { color: colors.textMuted }]}>{tag.label}</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
                   )}
                 </View>
+
               </TouchableWithoutFeedback>
             </View>
           </TouchableWithoutFeedback>
@@ -482,6 +583,26 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#1f2937' },
   headerButtons: { flexDirection: 'row', gap: 10 },
   headerButton: { padding: 8, backgroundColor: '#f3f4f6', borderRadius: 12 },
+  
+  // Search Bar Styles
+  searchContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    height: 48,
+    borderRadius: 16,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: 8,
+  },
   
   // Filter Tabs Styles
   filterTabs: {
@@ -555,12 +676,16 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  rightLabel: {
+  rightActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+  },
+  mentionBadge: {
+    marginRight: 2,
   },
   unreadBadge: {
+
     minWidth: 22,
     height: 22,
     borderRadius: 11,
@@ -588,10 +713,13 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   conversationInfo: { flex: 1, marginLeft: 16 },
-  conversationHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  conversationName: { fontSize: 16, fontWeight: '600', color: '#1f2937' },
-  conversationTime: { fontSize: 12, color: '#9ca3af' },
-  lastMessage: { fontSize: 14, color: '#6b7280' },
+  lastMessageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lastMessage: { fontSize: 14, color: '#6b7280', flex: 1, marginRight: 8 },
+
   lastMessageUnread: { fontWeight: '700', color: '#111827' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100 },

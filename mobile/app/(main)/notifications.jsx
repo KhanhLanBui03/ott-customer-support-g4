@@ -17,6 +17,8 @@ import { fetchConversations } from '../../src/store/chatSlice';
 import { friendApi } from '../../src/api/friendApi';
 import { conversationApi } from '../../src/api/chatApi';
 import { Alert } from 'react-native';
+import { useTheme } from '../../src/context/ThemeContext';
+
 
 const formatDate = (date) => {
   if (!date) return '';
@@ -36,7 +38,9 @@ const formatFullDate = (date) => {
 };
 
 const NotificationsScreen = () => {
+  const { colors, isDark } = useTheme();
   const dispatch = useDispatch();
+
   const { notifications, loading } = useSelector((state) => state.notifications);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -136,66 +140,76 @@ const NotificationsScreen = () => {
     const isActionable = item.type === 'FRIEND_REQUEST' || item.type === 'GROUP_INVITE';
 
     return (
-      <View style={[styles.notificationItem, isUnread && styles.unreadItem]}>
+      <View style={[
+        styles.notificationItem, 
+        { backgroundColor: colors.background, borderBottomColor: colors.border },
+        isUnread && [styles.unreadItem, { backgroundColor: isDark ? colors.surface200 : '#f0f7ff' }]
+      ]}>
+
         <View style={styles.itemMainContent}>
           <View style={styles.iconContainer}>
             {item.avatarUrl ? (
               <Image 
                 source={{ uri: getAvatarUrl(item.avatarUrl, item.fullName) }} 
-                style={styles.senderAvatar} 
+                style={[styles.senderAvatar, { backgroundColor: colors.surface200 }]} 
               />
             ) : (
               <View style={[styles.iconBg, { backgroundColor: getIconColor(item.type) }]}>
                 <MaterialIcons name={getIconName(item.type)} size={24} color="#fff" />
               </View>
             )}
-            {isUnread && <View style={styles.unreadDot} />}
+            {isUnread && <View style={[styles.unreadDot, { borderColor: isDark ? colors.surface200 : '#fff' }]} />}
+
           </View>
 
           <View style={styles.contentContainer}>
             <View style={styles.headerRow}>
-              <Text style={[styles.title, isUnread && styles.unreadText]}>{item.title || 'Thông báo'}</Text>
-              <Text style={styles.time}>{formatDate(date)}</Text>
+              <Text style={[styles.title, { color: colors.textMuted }, isUnread && [styles.unreadText, { color: colors.foreground }]]}>{item.title || 'Thông báo'}</Text>
+              <Text style={[styles.time, { color: colors.textSubtle }]}>{formatDate(date)}</Text>
             </View>
+
             
-            <Text style={styles.message}>
-              <Text style={styles.boldText}>{item.message}</Text>
+            <Text style={[styles.message, { color: colors.textMuted }]}>
+              <Text style={[styles.boldText, { color: colors.foreground }]}>{item.message}</Text>
               {item.subMessage ? ` ${item.subMessage}` : ''}
             </Text>
             
-            {!(isActionable && isUnread) && <Text style={styles.dateText}>{formatFullDate(date)}</Text>}
+            {!(isActionable && isUnread) && <Text style={[styles.dateText, { color: colors.textSubtle }]}>{formatFullDate(date)}</Text>}
+
             
             {item.type === 'FRIEND_REQUEST' && isUnread && (
               <View style={styles.actionRow}>
                 <TouchableOpacity 
-                  style={styles.acceptButton}
+                  style={[styles.acceptButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
                   onPress={() => handleAcceptFriendRequest(item.senderId, item.id || item.notificationId)}
                 >
                   <Text style={styles.acceptButtonText}>CHẤP NHẬN</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.rejectButton}
+                  style={[styles.rejectButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => handleRejectFriendRequest(item.senderId, item.id || item.notificationId, item.fullName)}
                 >
-                  <Text style={styles.rejectButtonText}>HỦY</Text>
+                  <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>HỦY</Text>
                 </TouchableOpacity>
+
               </View>
             )}
 
             {item.type === 'GROUP_INVITE' && isUnread && (
               <View style={styles.actionRow}>
                 <TouchableOpacity 
-                  style={styles.acceptButton}
+                  style={[styles.acceptButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
                   onPress={() => handleAcceptGroupInvite(item.invitationId || item.id, item.id || item.notificationId)}
                 >
                   <Text style={styles.acceptButtonText}>THAM GIA</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.rejectButton}
+                  style={[styles.rejectButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => handleRejectGroupInvite(item.invitationId || item.id, item.id || item.notificationId)}
                 >
-                  <Text style={styles.rejectButtonText}>TỪ CHỐI</Text>
+                  <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>TỪ CHỐI</Text>
                 </TouchableOpacity>
+
               </View>
             )}
           </View>
@@ -223,18 +237,20 @@ const NotificationsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Thông báo</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông báo</Text>
         <TouchableOpacity style={styles.markAllBtn}>
-          <Text style={styles.markAllText}>Đánh dấu đã đọc</Text>
+          <Text style={[styles.markAllText, { color: colors.primary }]}>Đánh dấu đã đọc</Text>
         </TouchableOpacity>
       </View>
 
+
       {loading && !refreshing && notifications.length === 0 ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#667eea" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
+
       ) : (
         <FlatList
           data={notifications}

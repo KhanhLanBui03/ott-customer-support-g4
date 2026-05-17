@@ -13,6 +13,7 @@ import FriendManagementModal from '../../components/FriendManagementModal';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import NotificationModal from '../../components/NotificationModal';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
+import LogoutModal from '../../components/LogoutModal';
 import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
 import MediaLightbox from '../../components/MediaLightbox';
@@ -57,6 +58,7 @@ const Chat = () => {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [filterType, setFilterType] = useState('all'); // 'all', 'unread'
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
@@ -569,7 +571,7 @@ const Chat = () => {
             {isMobile && (
               <div className="relative group">
                 <button
-                  onClick={logout}
+                  onClick={() => setIsLogoutModalOpen(true)}
                   className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-[22px] transition-all group active:scale-95"
                   title="Đăng xuất"
                 >
@@ -585,7 +587,7 @@ const Chat = () => {
                 <Settings size={24} />
               </button>
               <button
-                onClick={logout}
+                onClick={() => setIsLogoutModalOpen(true)}
                 className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all active:scale-95"
               >
                 <LogOut size={24} />
@@ -958,6 +960,7 @@ const Chat = () => {
       <CreateGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} />
       <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
       <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />
+      <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} />
       <FriendManagementModal
         isOpen={isFriendsOpen}
         onClose={() => setIsFriendsOpen(false)}
