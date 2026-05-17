@@ -101,12 +101,12 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
 
   useEffect(() => {
     const handleStartCallAgain = (e) => {
-      const { type, isSingle } = e.detail || {};
+      const { type, isSingle, startTime } = e.detail || {};
       if (isSingle) {
         onStartCall(type || 'audio');
       } else {
         // Tham gia cuộc gọi đang diễn ra thì không cần đếm ngược
-        handleCallClick(type || 'audio', true);
+        handleCallClick(type || 'audio', true, startTime);
       }
     };
     window.addEventListener('START_CALL_AGAIN', handleStartCallAgain);

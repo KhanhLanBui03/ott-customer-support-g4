@@ -409,6 +409,7 @@ const VideoCall = ({
                         </p>
                         <div className="relative">
                             <Avatar size="w-32 h-32" pulse url={displayAvatar} nameInitial={initial} />
+                            <CountdownCircle duration={ringDuration} size={144} />
                         </div>
                         <div className="text-center">
                             <h2 className="text-3xl font-bold text-white tracking-tight">{displayName || 'Người dùng'}</h2>
@@ -567,7 +568,7 @@ const VideoCall = ({
                                     <div ref={localRef} className={`w-full h-full transition-opacity duration-700 ${camOn ? 'opacity-100' : 'opacity-0'}`} />
                                     {!camOn && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#1e1e2e] to-[#0f0f1a]">
-                                            <Avatar size="w-32 h-32" ring={isMeSpeaking ? "ring-8 ring-green-500" : true} url={user?.avatar || user?.avatarUrl} nameInitial={user?.fullName?.[0]?.toUpperCase()} />
+                                            {/* Xóa avatar ở đây để tránh bị đè với thẻ chờ phía trước */}
                                         </div>
                                     )}
                                     {/* Highlight viền khi nói chuyện một mình */}

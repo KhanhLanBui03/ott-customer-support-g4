@@ -78,7 +78,7 @@ const ProfileScreen = () => {
     userId: user.userId || 'N/A',
     phoneNumber: user.phoneNumber || 'N/A',
     email: user.email || 'Chưa cập nhật email',
-    fullName: user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : 'Người dùng'),
+    fullName: user.fullName || (user.lastName && user.firstName ? `${user.lastName} ${user.firstName}` : 'Người dùng'),
     avatar: user.avatarUrl || user.avatar || `https://ui-avatars.com/api/?name=${user.firstName || 'U'}&background=random`,
     bio: user.bio || user.statusMessage || 'Chưa có tiểu sử',
     status: user.status || 'online',

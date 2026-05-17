@@ -291,7 +291,8 @@ const ChatDetailScreen = () => {
 
     // Xử lý nút "Gọi lại" từ CALL_LOG
     if (message.action === 'CALL_BACK') {
-      handleStartCall(message.callType || 'audio');
+      const isOngoing = lastCallMsg?.status === 'ONGOING';
+      handleStartCall(message.callType || 'audio', isOngoing, message.startTime);
       return;
     }
 
@@ -683,6 +684,7 @@ const ChatDetailScreen = () => {
                   onlineUsers={onlineUsers}
                   typingUsers={chatState.typingUsers?.[realId] || []}
                   sendReadReceipt={guardedSendReadReceipt}
+                  onPressMessage={handlePressMessage}
                   onLoadMore={handleLoadMore}
                   onReact={handleReaction}
                   onLongPress={handleLongPressMessage}

@@ -17,6 +17,8 @@ const initialState = {
   isGroup: false,
   countdown: 3,
   showCountdown: false,
+  isInitiator: false,
+  startTime: null,
 };
 
 
@@ -24,6 +26,7 @@ const callSlice = createSlice({
   name: 'call',
   initialState,
   reducers: {
+    setIsInitiator: (state, action) => { state.isInitiator = action.payload; },
     setCallStatus: (state, action) => { state.callStatus = action.payload; },
     setCallType: (state, action) => { state.callType = action.payload; },
     setIsGroup: (state, action) => { state.isGroup = action.payload; },
@@ -68,16 +71,17 @@ const callSlice = createSlice({
     setEndCallReason: (state, action) => { state.endCallReason = action.payload; },
     setCountdown: (state, action) => { state.countdown = action.payload; },
     setShowCountdown: (state, action) => { state.showCountdown = action.payload; },
+    setStartTime: (state, action) => { state.startTime = action.payload; },
     resetCall: (state) => { return { ...initialState }; },
 
   },
 });
 
 export const {
-  setCallStatus, setCallType, setIsGroup, setCallerInfo, setIncomingSignal,
+  setIsInitiator, setCallStatus, setCallType, setIsGroup, setCallerInfo, setIncomingSignal,
   setAgoraConfig, setRemoteUsers, addRemoteUser, removeRemoteUser, updateRemoteUserVideo,
   setDuration, setCamOn, setMicOn, setActiveConversationId, setEndCallReason, 
-  setCountdown, setShowCountdown, resetCall
+  setCountdown, setShowCountdown, setStartTime, resetCall
 } = callSlice.actions;
 
 

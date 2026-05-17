@@ -279,7 +279,9 @@ const Chat = () => {
               }
               return Math.abs(hash);
             };
-            return toNumericUid(mId) === Number(u.uid);
+            const stdUid = toNumericUid(mId);
+            const mobUid = toNumericUid(mId + '_mobile');
+            return stdUid === Number(u.uid) || mobUid === Number(u.uid);
           });
 
           if (found) {
