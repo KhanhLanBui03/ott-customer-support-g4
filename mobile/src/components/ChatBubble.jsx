@@ -531,7 +531,7 @@ const ChatBubble = ({
                         
                         <TouchableOpacity 
                           style={styles.callBackBtn}
-                          onPress={() => onPressMessage?.({ ...message, action: 'CALL_BACK', callType: callData.callType || 'video' })}
+                          onPress={() => onPressMessage?.({ ...message, action: 'CALL_BACK', callType: callData.callType || 'video', startTime: callData.startTime })}
                         >
                           <Text style={[styles.callBackText, { color: isOwn ? '#fff' : '#6366f1' }]}>
                             {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}

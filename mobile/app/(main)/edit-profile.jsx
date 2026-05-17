@@ -164,7 +164,7 @@ const EditProfileScreen = () => {
             </View>
 
             {/* FIX: Chỉ hiển thị tên đã được lưu trong Redux, không hiển thị tên đang gõ */}
-            <Text style={styles.displayFullName}>{user?.firstName} {user?.lastName}</Text>
+            <Text style={styles.displayFullName}>{user?.lastName} {user?.firstName}</Text>
           </View>
 
           <View style={styles.form}>

@@ -11,7 +11,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #000; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
+      body { background: transparent; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
       
       #main-grid {
         display: grid;
@@ -19,12 +19,12 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
         height: 100%;
         gap: 2px;
         padding: 2px;
-        background: #000;
+        background: transparent;
       }
       
       .video-tile {
         position: relative;
-        background: #0f172a;
+        background: transparent;
         overflow: hidden;
         width: 100%;
         height: 100%;
@@ -36,7 +36,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
       body.single-mode .video-tile.remote { position: absolute; inset: 0; z-index: 1; }
       body.single-mode .video-tile.local {
         position: absolute;
-        top: 30px;
+        top: 50px;
         right: 20px;
         width: 110px;
         height: 150px;
@@ -44,17 +44,45 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
         z-index: 10;
         border: 2px solid rgba(255,255,255,0.3);
         box-shadow: 0 12px 32px rgba(0,0,0,0.6);
-        transition: all 0.4s ease;
+        transform-origin: center center;
+        will-change: transform, top, right, width, height, border-radius, box-shadow;
+        transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        touch-action: none;
+        user-select: none;
       }
 
-      /* Khi chưa có video đối phương, cho mình lên toàn màn hình */
+      body.single-mode .video-tile.local.dragging {
+        z-index: 999;
+        border-color: rgba(99, 102, 241, 0.8);
+        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8);
+        transition: none !important;
+      }
+
+      body.single-mode .video-tile.local.returning {
+        transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.3s ease, box-shadow 0.3s ease !important;
+      }
+
+      /* Full-screen local video background when remote has no video */
       body.single-mode:not(.has-remote-video) .video-tile.local {
-        top: 0;
-        right: 0;
-        width: 100vw;
-        height: 100vh;
-        border-radius: 0;
-        border: none;
+        position: absolute;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        top: 0 !important;
+        right: 0 !important;
+        border-radius: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        z-index: 1 !important;
+        transform: none !important;
+      }
+      
+      body.single-mode:not(.has-remote-video) .video-tile.local .member-label {
+        display: none !important;
+      }
+      
+      body.single-mode:not(.has-remote-video) .video-tile.remote {
+        display: none !important;
       }
 
 
@@ -224,9 +252,11 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
           try {
             if (action.enabled) {
               if (!localTracks.videoTrack) {
-                localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
+                localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
+                    encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                });
                 await client.publish(localTracks.videoTrack);
-                localTracks.videoTrack.play('local-player');
+                localTracks.videoTrack.play('local-player', { fit: 'contain' });
               } else {
                 await localTracks.videoTrack.setEnabled(true);
               }
@@ -278,7 +308,10 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
         try {
           client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
           window.agoraClient = client; // Export để RN poll được
-          const token = "${config.token}" === "null" ? null : "${config.token}";
+          let token = "${config.token}";
+          if (token === "null" || token === "undefined" || !token || token === "") {
+              token = null;
+          }
 
           const localBox = document.getElementById('local-player');
 
@@ -306,7 +339,14 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
                         const player = tile.querySelector('.video-view');
                         if (player) {
                           player.style.display = 'block';
-                          user.videoTrack.play(player);
+                          const playTrack = () => {
+                            if (user.videoTrack) {
+                              user.videoTrack.play(player, { fit: 'contain' });
+                            }
+                          };
+                          playTrack();
+                          setTimeout(playTrack, 100);
+                          setTimeout(playTrack, 500);
                         }
                         document.body.classList.add('has-remote-video');
                         log("Playing remote video for: " + user.uid);
@@ -372,15 +412,39 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
               // Nếu họ đã publish thì Agora sẽ tự bắn user-published sau đó
           });
 
-          localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-          await client.publish(localTracks.audioTrack);
-          log("Local audio published");
+          let tracksToPublish = [];
+
+          try {
+            localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+            tracksToPublish.push(localTracks.audioTrack);
+            log("Local audio track created");
+          } catch (audioError) {
+            log("Failed to create local audio track: " + audioError.message);
+          }
 
           if ("${callType}" === "video") {
-            localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
-            localTracks.videoTrack.play(localBox);
-            await client.publish(localTracks.videoTrack);
-            log("Local video published");
+            try {
+              localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
+                  encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+              });
+              localTracks.videoTrack.play(localBox, { fit: 'contain' });
+              tracksToPublish.push(localTracks.videoTrack);
+              log("Local video track created");
+            } catch (videoError) {
+              log("Failed to create local video track: " + videoError.message);
+              if ("${isGroup}" !== "true") {
+                document.getElementById('local-container').style.display = 'none';
+              }
+            }
+          }
+
+          if (tracksToPublish.length > 0) {
+            try {
+              await client.publish(tracksToPublish);
+              log("Successfully published " + tracksToPublish.length + " local tracks together");
+            } catch (pubError) {
+              log("Failed to publish local tracks: " + pubError.message);
+            }
           }
           
           updateGridLayout();
@@ -414,6 +478,61 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
         document.getElementById('unlock-layer').style.display = 'none';
       }
       document.getElementById('unlock-layer').onclick = unlockAudio;
+
+      // Premium Draggable & Zoomable PIP Box for 1-1 Single Mode
+      if ("${isGroup}" !== "true") {
+        (function() {
+          const localBox = document.getElementById('local-container');
+          let isDragging = false;
+          let startX, startY;
+          let currentX = 0, currentY = 0;
+
+          localBox.addEventListener('touchstart', (e) => {
+            if (!document.body.classList.contains('has-remote-video')) return;
+
+            isDragging = true;
+            localBox.classList.add('dragging');
+            localBox.classList.remove('returning');
+            
+            const touch = e.touches[0];
+            startX = touch.clientX - currentX;
+            startY = touch.clientY - currentY;
+            
+            localBox.style.transform = 'translate(' + currentX + 'px, ' + currentY + 'px) scale(1.3)';
+          }, { passive: false });
+
+          localBox.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault(); // Ngăn cuộn trang webview khi kéo thả
+            
+            const touch = e.touches[0];
+            currentX = touch.clientX - startX;
+            currentY = touch.clientY - startY;
+            
+            localBox.style.transform = 'translate(' + currentX + 'px, ' + currentY + 'px) scale(1.3)';
+          }, { passive: false });
+
+          const releasePIP = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            localBox.classList.remove('dragging');
+            localBox.classList.add('returning');
+            
+            currentX = 0;
+            currentY = 0;
+            
+            localBox.style.transform = 'translate(0px, 0px) scale(1)';
+            
+            setTimeout(() => {
+              localBox.classList.remove('returning');
+            }, 400);
+          };
+
+          localBox.addEventListener('touchend', releasePIP);
+          localBox.addEventListener('touchcancel', releasePIP);
+        })();
+      }
 
       setTimeout(() => {
         log("Triggering auto-join...");

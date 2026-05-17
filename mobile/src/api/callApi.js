@@ -12,6 +12,12 @@ export const callApi = {
      */
     getAgoraToken: (channelId) =>
         axiosClient.get(`/call/token`, { params: { channelId } }),
+
+    /**
+     * Lấy thời gian server để đồng bộ.
+     */
+    getServerTime: () =>
+        axiosClient.get(`/call/time`),
 };
 
 export default callApi;
