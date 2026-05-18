@@ -7,8 +7,12 @@ import { notificationApi } from '../../api/notificationApi';
 import { useChat } from '../../hooks/useChat';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import { addOptimisticMessage } from '../../store/chatSlice';
+import { useTheme } from '../../hooks/useTheme';
+
+const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteModal, onScrollToMessage }) => {
+  const { isDark } = useTheme();
   const [text, setText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [attachments, setAttachments] = useState([]);
@@ -894,16 +898,21 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
 
       {/* AI Smart Replies */}
       {suggestions.length > 0 && !text.trim() && attachments.length === 0 && (
-        <div className="absolute bottom-full mb-3 left-0 right-0 flex items-center space-x-2 px-4 overflow-x-auto no-scrollbar animate-fade-in-up pb-1">
-          <div className="flex-shrink-0 p-1.5 bg-indigo-500/10 text-indigo-400 rounded-lg mr-1">
-            <SparklesIcon size={12} className="animate-pulse" />
+        <div className="absolute bottom-full mb-3 left-0 right-0 flex items-center space-x-2 px-4 overflow-x-auto no-scrollbar animate-in slide-in-from-bottom-2 duration-300 pb-1">
+          <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-indigo-500/10 text-indigo-500 rounded-xl shadow-sm">
+            <SparklesIcon size={14} className="animate-pulse" />
           </div>
           {suggestions.map((suggestion, i) => (
             <button
               key={i}
               type="button"
               onClick={() => handleSend(null, suggestion, 'TEXT')}
-              className="flex-shrink-0 px-4 py-2 bg-surface-100 border border-border hover:border-indigo-500 hover:bg-surface-200 text-[13px] font-bold text-foreground hover:text-indigo-500 rounded-2xl transition-all shadow-md whitespace-nowrap active:scale-95"
+              className={cn(
+                "flex-shrink-0 px-4 py-2 text-[13px] font-bold rounded-2xl transition-all shadow-lg active:scale-95 whitespace-nowrap border",
+                isDark 
+                  ? "bg-slate-900/80 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/10 hover:border-indigo-500/40" 
+                  : "bg-white border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 shadow-indigo-500/5"
+              )}
             >
               {suggestion}
             </button>
@@ -911,7 +920,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           <button
             type="button"
             onClick={() => setSuggestions([])}
-            className="p-1.5 text-foreground/20 hover:text-red-500 transition-colors"
+            className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"
           >
             <X size={14} />
           </button>

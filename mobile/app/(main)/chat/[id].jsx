@@ -14,6 +14,8 @@ import CreateVoteModal from '../../../src/components/CreateVoteModal';
 import { formatLastSeen } from '../../../src/utils/dateUtils';
 import ForwardModal from '../../../src/components/ForwardModal';
 import { useAgoraCall } from '../../../src/hooks/useAgoraCall';
+import CallCountdownModal from '../../../src/components/CallCountdownModal';
+
 
 const ChatDetailScreen = () => {
   const insets = useSafeAreaInsets();
@@ -117,11 +119,53 @@ const ChatDetailScreen = () => {
   );
 
   // Call Actions
-  const { startCall } = useAgoraCall(realId, conversation, false);
-  const handleStartCall = (type) => startCall(type, { 
-    name: conversation?.name, 
-    avatar: conversation?.avatar || conversation?.avatarUrl 
-  });
+  const { 
+    startCall, acceptCall, endCall, cancelCountdown, 
+    callStatus, callType, countdown, showCountdown 
+  } = useAgoraCall(realId, conversation, false);
+
+  const handleStartCall = (type, isJoin = false, startTime = null) => {
+
+    startCall(type, { 
+      isJoin, 
+      startTime,
+      name: conversation?.name || displayName || 'Nhóm chat', 
+      avatar: conversation?.avatar || conversation?.avatarUrl || headerAvatarUrl 
+    });
+  };
+
+  const lastCallMsgRaw = useMemo(() => {
+    return [...messages].reverse().find(m => m.type === 'CALL_LOG');
+  }, [messages]);
+
+  const lastCallMsg = useMemo(() => {
+    if (!lastCallMsgRaw?.content) return null;
+    try {
+      return JSON.parse(lastCallMsgRaw.content);
+    } catch (e) {
+      return null;
+    }
+  }, [lastCallMsgRaw]);
+
+  const isOngoingInChat = lastCallMsg?.status === 'ONGOING' && (conversation?.type === 'GROUP' || (realId && !realId.includes('SINGLE#')));
+  const showOngoingBanner = isOngoingInChat && callStatus === 'idle';
+
+  console.log('💎 [ChatDetailScreen] Render values - callStatus:', callStatus, 'isOngoingInChat:', isOngoingInChat, 'showOngoingBanner:', showOngoingBanner);
+
+  useEffect(() => {
+    console.log('[DEBUG-BANNER] ------------------');
+    console.log('[DEBUG-BANNER] conversationId:', conversationId);
+    console.log('[DEBUG-BANNER] realId:', realId);
+    console.log('[DEBUG-BANNER] messages count:', messages?.length);
+    console.log('[DEBUG-BANNER] lastCallMsgRaw:', lastCallMsgRaw);
+    console.log('[DEBUG-BANNER] lastCallMsg:', lastCallMsg);
+    console.log('[DEBUG-BANNER] conversation type:', conversation?.type);
+    console.log('[DEBUG-BANNER] callStatus:', callStatus);
+    console.log('[DEBUG-BANNER] isOngoingInChat:', isOngoingInChat);
+    console.log('[DEBUG-BANNER] showOngoingBanner:', showOngoingBanner);
+    console.log('[DEBUG-BANNER] ------------------');
+  }, [conversationId, realId, messages, lastCallMsgRaw, lastCallMsg, conversation, callStatus, isOngoingInChat, showOngoingBanner]);
+
 
   // Wrap sendReadReceipt - chỉ gửi khi screen đang focused
   const guardedSendReadReceipt = useCallback((messageId, convId) => {
@@ -263,7 +307,8 @@ const ChatDetailScreen = () => {
 
     // Xử lý nút "Gọi lại" từ CALL_LOG
     if (message.action === 'CALL_BACK') {
-      handleStartCall(message.callType || 'audio');
+      const isOngoing = message.isOngoing === true;
+      handleStartCall(message.callType || 'audio', isOngoing, isOngoing ? message.startTime : null);
       return;
     }
 
@@ -516,7 +561,33 @@ const ChatDetailScreen = () => {
           </View>
         </View>
  
-        {/* Pinned Messages Bar */}
+        {/* Ongoing Group Call Banner (Tham gia ngay) */}
+        {showOngoingBanner && (
+          <TouchableOpacity 
+            style={styles.ongoingCallContainer}
+            onPress={() => handleStartCall(lastCallMsg?.callType || 'video', true, lastCallMsg?.startTime)}
+          >
+            <View style={styles.ongoingCallLeft}>
+              <View style={styles.ongoingIconContainer}>
+                <Feather name="video" size={20} color="#fff" />
+                <View style={styles.ongoingOnlineDot} />
+              </View>
+              <View>
+                <Text style={styles.ongoingCallTitle}>Cuộc gọi nhóm đang diễn ra</Text>
+                <Text style={styles.ongoingCallSub}>Nhấn để tham gia cùng mọi người</Text>
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={styles.joinButton}
+              onPress={() => handleStartCall(lastCallMsg?.callType || 'video', true, lastCallMsg?.startTime)}
+            >
+              <Text style={styles.joinButtonText}>Tham gia ngay</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        )}
+
+
+
         {conversation?.pinnedMessages?.length > 0 && (
           <View style={styles.pinnedContainer}>
             {!showAllPins ? (
@@ -629,6 +700,7 @@ const ChatDetailScreen = () => {
                   onlineUsers={onlineUsers}
                   typingUsers={chatState.typingUsers?.[realId] || []}
                   sendReadReceipt={guardedSendReadReceipt}
+                  onPressMessage={handlePressMessage}
                   onLoadMore={handleLoadMore}
                   onReact={handleReaction}
                   onLongPress={handleLongPressMessage}
@@ -699,7 +771,15 @@ const ChatDetailScreen = () => {
           onClose={() => setForwardModalVisible(false)}
           messageToForward={selectedMessage}
         />
+
+        <CallCountdownModal 
+          visible={showCountdown}
+          countdown={countdown}
+          callType={callType}
+          onCancel={cancelCountdown}
+        />
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 };
@@ -886,6 +966,76 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#94a3b8',
   },
+  // Ongoing Call Banner Styles
+  ongoingCallContainer: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  ongoingCallLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    marginRight: 8,
+  },
+
+  ongoingIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  ongoingOnlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#6366f1',
+  },
+  ongoingCallTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  ongoingCallSub: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+  },
+  joinButton: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  joinButtonText: {
+    color: '#6366f1',
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+
 });
 
 export default ChatDetailScreen;

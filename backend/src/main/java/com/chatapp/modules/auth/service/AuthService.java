@@ -146,7 +146,7 @@ public class AuthService {
                 .orElseThrow(() -> new ValidationException(MessageConstants.Error.USER_NOT_FOUND));
 
         // Generate new access token
-        String sessionId = UUID.randomUUID().toString();
+        String sessionId = sessionService.createSession(userId);
         String deviceId = request.getDeviceId() != null ? request.getDeviceId() : "unknown";
 
         String newAccessToken = jwtUtil.generateToken(userId, user.getPhoneNumber(), sessionId, deviceId);

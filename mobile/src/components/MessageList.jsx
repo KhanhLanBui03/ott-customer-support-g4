@@ -161,9 +161,23 @@ const MessageList = React.forwardRef(({
 
     // Logic hiển thị trạng thái "Đã gửi/Đã nhận"
     const originalIndex = messages.findIndex(m => m.messageId === item.messageId);
+
+    // ✅ TỰ ĐỘNG ẨN: Nếu tin nhắn này là "Cuộc gọi đang diễn ra" nhưng đã có tin nhật ký mới hơn
+    // (VD: Đã kết thúc), thì ẩn tin "Đang diễn ra" này đi để chat gọn gàng.
+    if (item.type === 'CALL_LOG') {
+      try {
+        const callData = typeof item.content === 'string' ? JSON.parse(item.content) : (item.content || {});
+        if (callData.status === 'ONGOING') {
+          const hasNewerCallLog = messages.slice(originalIndex + 1).some(m => m.type === 'CALL_LOG');
+          if (hasNewerCallLog) return null;
+        }
+      } catch (e) {}
+    }
+
     const shouldShowStatus = !latestReadBy.length && !messages.slice(originalIndex + 1).some((nextMessage) => {
       return Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) !== String(currentUserId || ''));
     });
+
 
     // Logic Date Separator cho danh sách Inverted
     const currentMsgDate = item.createdAt ? new Date(item.createdAt).toDateString() : null;

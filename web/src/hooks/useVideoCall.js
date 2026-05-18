@@ -120,7 +120,14 @@ export const useVideoCall = (conversationId) => {
   const endCall = useCallback((emit = true) => {
     const cid = activeCallConvIdRef.current || conversationId;
 
-    if (emit) emitCallSignal(cid, { type: 'HANGUP' });
+    const isGroup = String(cid).startsWith('GROUP#');
+    if (emit && cid) {
+      if (isGroup) {
+        emitCallSignal(cid, { type: 'LEAVE' });
+      } else {
+        emitCallSignal(cid, { type: 'HANGUP' });
+      }
+    }
 
     // ❗ đóng peer
     if (pcRef.current) {

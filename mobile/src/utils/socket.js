@@ -32,7 +32,6 @@ export const clearAllHandlers = () => {
   wallpaperUpdateHandlers.clear();
   conversationUpdateHandlers.clear();
   globalHandlers.clear();
-  callHandlers.clear(); // Thêm cho Calling
   console.log('🧹 All socket handlers cleared');
 };
 
@@ -130,7 +129,8 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
         stompClient.subscribe(`/topic/calls.${userId}`, (message) => {
           try {
             const data = JSON.parse(message.body);
-            console.log('📞 [Socket] Call signal received:', data?.signal?.type);
+            const signalType = data?.signal?.type || data?.payload?.signal?.type;
+            console.log('📞 [Socket] Call signal received:', signalType);
             callHandlers.forEach(handler => handler(data));
           } catch (e) {
             console.error('❌ Error parsing call signal:', e);
@@ -233,6 +233,7 @@ export const disconnectSocket = () => {
     console.log('🛑 Mobile socket deactivated');
   }
   clearAllHandlers();
+  callHandlers.clear();
 };
 
 export default {
