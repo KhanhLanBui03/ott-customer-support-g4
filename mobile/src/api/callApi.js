@@ -10,8 +10,8 @@ export const callApi = {
      * @param {string} channelId - conversationId, dùng làm Agora channel name
      * @returns {Promise<{token, appId, channelId, uid}>}
      */
-    getAgoraToken: (channelId) =>
-        axiosClient.get(`/call/token`, { params: { channelId } }),
+    getAgoraToken: (channelId, uid) =>
+        axiosClient.get(`/call/token`, { params: { channelId, uid } }),
 
     /**
      * Lấy thời gian server để đồng bộ.
