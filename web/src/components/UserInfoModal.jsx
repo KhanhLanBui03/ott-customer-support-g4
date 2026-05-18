@@ -61,14 +61,24 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
         const convId = result.payload.conversationId || result.payload?.data?.conversationId;
         
         if (convId) {
+          const name = profile?.fullName || profile?.name || userInfo.fullName || userInfo.name;
+          const avatar = profile?.avatarUrl || profile?.avatar || userInfo.avatarUrl || userInfo.avatar || null;
+
           // If already in this conversation, just start call
           if (convId === activeConversationId) {
-            if (onStartCall) onStartCall(type);
+            if (onStartCall) onStartCall(type, { targetName: name, targetAvatar: avatar });
           } else {
             // Switch conversation and then start call via event
             selectConversation(convId);
             setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('START_CALL_AGAIN', { detail: { type, isSingle: true } }));
+              window.dispatchEvent(new CustomEvent('START_CALL_AGAIN', { 
+                detail: { 
+                  type, 
+                  isSingle: true,
+                  targetName: name,
+                  targetAvatar: avatar
+                } 
+              }));
             }, 500);
           }
         }

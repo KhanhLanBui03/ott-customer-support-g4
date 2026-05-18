@@ -129,8 +129,8 @@ const ChatDetailScreen = () => {
     startCall(type, { 
       isJoin, 
       startTime,
-      name: conversation?.name, 
-      avatar: conversation?.avatar || conversation?.avatarUrl 
+      name: conversation?.name || displayName || 'Nhóm chat', 
+      avatar: conversation?.avatar || conversation?.avatarUrl || headerAvatarUrl 
     });
   };
 
@@ -147,8 +147,24 @@ const ChatDetailScreen = () => {
     }
   }, [lastCallMsgRaw]);
 
-  const isOngoingInChat = lastCallMsg?.status === 'ONGOING' && conversation?.type === 'GROUP';
+  const isOngoingInChat = lastCallMsg?.status === 'ONGOING' && (conversation?.type === 'GROUP' || (realId && !realId.includes('SINGLE#')));
   const showOngoingBanner = isOngoingInChat && callStatus === 'idle';
+
+  console.log('💎 [ChatDetailScreen] Render values - callStatus:', callStatus, 'isOngoingInChat:', isOngoingInChat, 'showOngoingBanner:', showOngoingBanner);
+
+  useEffect(() => {
+    console.log('[DEBUG-BANNER] ------------------');
+    console.log('[DEBUG-BANNER] conversationId:', conversationId);
+    console.log('[DEBUG-BANNER] realId:', realId);
+    console.log('[DEBUG-BANNER] messages count:', messages?.length);
+    console.log('[DEBUG-BANNER] lastCallMsgRaw:', lastCallMsgRaw);
+    console.log('[DEBUG-BANNER] lastCallMsg:', lastCallMsg);
+    console.log('[DEBUG-BANNER] conversation type:', conversation?.type);
+    console.log('[DEBUG-BANNER] callStatus:', callStatus);
+    console.log('[DEBUG-BANNER] isOngoingInChat:', isOngoingInChat);
+    console.log('[DEBUG-BANNER] showOngoingBanner:', showOngoingBanner);
+    console.log('[DEBUG-BANNER] ------------------');
+  }, [conversationId, realId, messages, lastCallMsgRaw, lastCallMsg, conversation, callStatus, isOngoingInChat, showOngoingBanner]);
 
 
   // Wrap sendReadReceipt - chỉ gửi khi screen đang focused
@@ -291,8 +307,8 @@ const ChatDetailScreen = () => {
 
     // Xử lý nút "Gọi lại" từ CALL_LOG
     if (message.action === 'CALL_BACK') {
-      const isOngoing = lastCallMsg?.status === 'ONGOING';
-      handleStartCall(message.callType || 'audio', isOngoing, message.startTime);
+      const isOngoing = message.isOngoing === true;
+      handleStartCall(message.callType || 'audio', isOngoing, isOngoing ? message.startTime : null);
       return;
     }
 
@@ -553,7 +569,7 @@ const ChatDetailScreen = () => {
           >
             <View style={styles.ongoingCallLeft}>
               <View style={styles.ongoingIconContainer}>
-                <Feather name="video" size={20} color="#6366f1" />
+                <Feather name="video" size={20} color="#fff" />
                 <View style={styles.ongoingOnlineDot} />
               </View>
               <View>
@@ -952,15 +968,17 @@ const styles = StyleSheet.create({
   },
   // Ongoing Call Banner Styles
   ongoingCallContainer: {
-    backgroundColor: 'rgba(99, 102, 241, 0.08)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(99, 102, 241, 0.15)',
+    backgroundColor: '#6366f1',
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
   ongoingCallLeft: {
     flexDirection: 'row',
@@ -974,7 +992,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -988,31 +1006,31 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10b981',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#6366f1',
   },
   ongoingCallTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#ffffff',
   },
   ongoingCallSub: {
     fontSize: 11,
-    color: '#64748b',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
   },
   joinButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   joinButtonText: {
-    color: '#fff',
+    color: '#6366f1',
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',

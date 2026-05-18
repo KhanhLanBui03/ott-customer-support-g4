@@ -122,6 +122,8 @@ const VideoCall = ({
 
   const [remoteHasVideo, setRemoteHasVideo] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [notificationMsg, setNotificationMsg] = useState(null);
+  const [notificationType, setNotificationType] = useState('join'); // 'join' or 'leave'
 
 
   useEffect(() => {
@@ -243,6 +245,17 @@ const VideoCall = ({
       console.log('📬 [VideoCall] Message:', data.type, data);
 
       if (data.type === 'user-joined' || data.type === 'user-published') {
+        const uidStr = data.uid.toString();
+        const alreadyExists = remoteUsers.some(u => String(u.uid) === uidStr);
+        if (!alreadyExists) {
+          const userName = memberMap[uidStr]?.name || 'Một thành viên';
+          setNotificationMsg(`${userName} đã tham gia phòng`);
+          setNotificationType('join');
+          setTimeout(() => {
+            setNotificationMsg(prev => (prev && prev.includes(userName) && prev.includes('tham gia') ? null : prev));
+          }, 3000);
+        }
+
         dispatch(addRemoteUser({ uid: data.uid, mediaType: data.mediaType || 'audio' }));
         if (data.mediaType === 'video') setRemoteHasVideo(true);
       } else if (data.type === 'user-unpublished') {
@@ -253,8 +266,38 @@ const VideoCall = ({
             setRemoteHasVideo(false);
           }
         }
-      } else if (data.type === 'sync') {
-        if (data.count > 0 && remoteUsers.length === 0) {
+      } else if (data.type === 'user-left') {
+        const uidStr = data.uid.toString();
+        const userName = memberMap[uidStr]?.name || 'Một thành viên';
+        setNotificationMsg(`${userName} đã rời phòng`);
+        setNotificationType('leave');
+        setTimeout(() => {
+          setNotificationMsg(prev => (prev && prev.includes(userName) && prev.includes('rời phòng') ? null : prev));
+        }, 3000);
+
+        dispatch(removeRemoteUser(data.uid));
+        if (!isGroup && remoteUsers.length <= 1 && callStatus === 'connected') {
+          onHangup(false);
+        }
+      } else if (data.type === 'sync' || data.type === 'sync-count') {
+        if (data.count === 0 && remoteUsers.length > 0) {
+          dispatch(setRemoteUsers([]));
+        } else if (data.uids) {
+          // Đồng bộ chính xác danh sách UID thực tế từ Agora!
+          // Loại bỏ những UIDs trong Redux không còn tồn tại trong Agora
+          const currentUids = new Set(data.uids.map(id => String(id)));
+          const validUsers = remoteUsers.filter(u => !String(u.uid).startsWith('sync-') && currentUids.has(String(u.uid)));
+          
+          // Thêm những UIDs mới chưa có trong Redux
+          const existingUids = new Set(validUsers.map(u => String(u.uid)));
+          data.uids.forEach(uid => {
+            if (!existingUids.has(String(uid))) {
+              validUsers.push({ uid, mediaType: 'audio' });
+            }
+          });
+          
+          dispatch(setRemoteUsers(validUsers));
+        } else if (data.count > 0 && remoteUsers.length === 0) {
           dispatch(addRemoteUser({ uid: 'sync-' + Date.now(), mediaType: 'audio' }));
         }
         if (data.videoUids) {
@@ -324,6 +367,14 @@ const VideoCall = ({
       onRequestClose={() => dispatch(resetCall())}
     >
       <View style={styles.container}>
+          {/* Notification Toast */}
+          {notificationMsg && (
+            <View style={styles.notificationCapsule}>
+              <View style={[styles.pulseDot, notificationType === 'leave' ? styles.pulseDotLeave : styles.pulseDotJoin]} />
+              <Text style={styles.notificationText}>{notificationMsg}</Text>
+            </View>
+          )}
+
           {/* WebView */}
           {/* WebView or Loading State */}
           {(callStatus === 'connected' || callStatus === 'ended') && agoraConfig && (
@@ -756,6 +807,42 @@ const styles = StyleSheet.create({
     color: '#1e1b4b',
     fontSize: 18,
     fontWeight: '800',
+  },
+  notificationCapsule: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 100 : 85,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    zIndex: 9999,
+    elevation: 20,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  pulseDotJoin: {
+    backgroundColor: '#22c55e',
+  },
+  pulseDotLeave: {
+    backgroundColor: '#ef4444',
+  },
+  notificationText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

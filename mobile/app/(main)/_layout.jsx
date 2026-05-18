@@ -50,7 +50,7 @@ export default function MainLayout() {
   const {
     callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
     camOn, micOn, remoteUsers, setRemoteUsers, acceptCall, endCall, resetCall, connect: connectCall,
-    toggleMic, toggleCamera, agoraConfig, endCallReason, isGroup
+    toggleMic, toggleCamera, agoraConfig, endCallReason, isGroup, hasHadRemote
   } = useAgoraCall(null, null);
 
 
@@ -68,8 +68,8 @@ export default function MainLayout() {
     if (callStatus === 'incoming') reason = 'REJECTED';
     else if (callStatus === 'outgoing') reason = 'MISSED';
     
-    // Nếu hết 30s mà chưa ai vào nhóm (đã connect nhưng remoteUsers = 0) thì chốt là MISSED
-    if (isGroup && callStatus === 'connected' && remoteUsers.length === 0 && !manualReason) {
+    // Nếu hết 30s mà chưa ai vào nhóm (đã connect nhưng remoteUsers = 0 và chưa có ai từng tham gia) thì chốt là MISSED
+    if (isGroup && callStatus === 'connected' && remoteUsers.length === 0 && !hasHadRemote && !manualReason) {
         reason = 'MISSED';
     }
 
