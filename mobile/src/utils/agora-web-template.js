@@ -253,7 +253,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
             if (action.enabled) {
               if (!localTracks.videoTrack) {
                 localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                    encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                    encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 500, bitrateMax: 2000 }
                 });
                 await client.publish(localTracks.videoTrack);
                 localTracks.videoTrack.play('local-player', { fit: 'contain' });
@@ -351,7 +351,12 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
                         document.body.classList.add('has-remote-video');
                         log("Playing remote video for: " + user.uid);
                     }
-                    if (mediaType === "audio") {
+                    if (mediaType === "audio" && user.audioTrack) {
+                        try {
+                            user.audioTrack.setVolume(150);
+                        } catch (e) {
+                            log("Failed to set audio volume: " + e.message);
+                        }
                         user.audioTrack.play().catch(err => {
                             log("Audio play error: " + err.message);
                             if (err.code === 'AUTOPLAY_NOT_ALLOWED') {
@@ -415,7 +420,12 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
           let tracksToPublish = [];
 
           try {
-            localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+            localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+                AEC: true,
+                AGC: true,
+                ANS: true,
+                encoderConfig: 'speech_standard'
+            });
             tracksToPublish.push(localTracks.audioTrack);
             log("Local audio track created");
           } catch (audioError) {
@@ -425,7 +435,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
           if ("${callType}" === "video") {
             try {
               localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                  encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                  encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 500, bitrateMax: 2000 }
               });
               localTracks.videoTrack.play(localBox, { fit: 'contain' });
               tracksToPublish.push(localTracks.videoTrack);

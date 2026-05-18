@@ -39,6 +39,7 @@ public class CallController {
     @GetMapping("/token")
     public ResponseEntity<?> getToken(
             @RequestParam String channelId,
+            @RequestParam(required = false) String uid,
             Principal principal) {
 
         if (principal == null) {
@@ -47,17 +48,18 @@ public class CallController {
         }
 
         String userId = principal.getName();
-        log.info("[Agora] Token request from user={} for channel={}", userId, channelId);
+        String targetUid = (uid != null && !uid.isBlank()) ? uid : userId;
+        log.info("[Agora] Token request from user={} for channel={} (targetUid={})", userId, channelId, targetUid);
 
         try {
-            String token = agoraTokenService.generateToken(channelId, userId);
-            log.info("[Agora] Token generated OK for user={} channel={}", userId, channelId);
+            String token = agoraTokenService.generateToken(channelId, targetUid);
+            log.info("[Agora] Token generated OK for user={} channel={} (targetUid={})", userId, channelId, targetUid);
 
             java.util.Map<String, Object> responseData = new java.util.HashMap<>();
             responseData.put("token", token);
             responseData.put("appId", agoraTokenService.getAppId());
             responseData.put("channelId", channelId);
-            responseData.put("uid", userId);
+            responseData.put("uid", targetUid);
 
             return ResponseEntity.ok(responseData);
         } catch (Exception e) {

@@ -667,9 +667,9 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             activeChannelRef.current = cid;
             dispatch(setActiveConversationId(cid));
 
-            const safeChannelId = sanitizeChannelId(cid);
-            const res = await callApi.getAgoraToken(safeChannelId);
             const numericUid = toNumericUid(user?.userId || user?.id);
+            const safeChannelId = sanitizeChannelId(cid);
+            const res = await callApi.getAgoraToken(safeChannelId, numericUid);
             const config = { ...res, channel: safeChannelId, uid: numericUid, sessionId: Date.now() };
             dispatch(setAgoraConfig(config));
 
@@ -727,9 +727,9 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             const isGroupCall = signalData?.conversationType === 'GROUP' || callState.isGroup || String(cid).includes('GROUP');
             isGroupRef.current = isGroupCall;
             dispatch(setIsGroup(isGroupCall));
-            const safeChannelId = sanitizeChannelId(cid);
-            const res = await callApi.getAgoraToken(safeChannelId);
             const numericUid = toNumericUid(user?.userId || user?.id);
+            const safeChannelId = sanitizeChannelId(cid);
+            const res = await callApi.getAgoraToken(safeChannelId, numericUid);
             const config = { ...res, channel: safeChannelId, uid: numericUid, sessionId: Date.now() };
             dispatch(setAgoraConfig(config));
 
