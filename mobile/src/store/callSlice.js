@@ -19,6 +19,7 @@ const initialState = {
   showCountdown: false,
   isInitiator: false,
   startTime: null,
+  hasHadRemote: false,
 };
 
 
@@ -41,8 +42,10 @@ const callSlice = createSlice({
     },
     setAgoraConfig: (state, action) => { state.agoraConfig = action.payload; },
     setRemoteUsers: (state, action) => { state.remoteUsers = action.payload; },
+    setHasHadRemote: (state, action) => { state.hasHadRemote = action.payload; },
     addRemoteUser: (state, action) => {
       const { uid, mediaType } = action.payload;
+      state.hasHadRemote = true;
       const index = state.remoteUsers.findIndex(u => u.uid === uid);
       if (index !== -1) {
         state.remoteUsers[index] = { 
@@ -53,7 +56,6 @@ const callSlice = createSlice({
         state.remoteUsers = [...state.remoteUsers, { uid, hasVideo: mediaType === 'video' }];
       }
     },
-
     updateRemoteUserVideo: (state, action) => {
         const { uid, hasVideo } = action.payload;
         state.remoteUsers = state.remoteUsers.map(u => 
@@ -81,7 +83,7 @@ export const {
   setIsInitiator, setCallStatus, setCallType, setIsGroup, setCallerInfo, setIncomingSignal,
   setAgoraConfig, setRemoteUsers, addRemoteUser, removeRemoteUser, updateRemoteUserVideo,
   setDuration, setCamOn, setMicOn, setActiveConversationId, setEndCallReason, 
-  setCountdown, setShowCountdown, setStartTime, resetCall
+  setCountdown, setShowCountdown, setStartTime, resetCall, setHasHadRemote
 } = callSlice.actions;
 
 

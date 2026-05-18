@@ -65,8 +65,14 @@ async function calibrateServerTime() {
 
 export const useAgoraCall = (conversationId, activeConversation = null, isListener = true) => {
     const { user } = useSelector((state) => state.auth);
+    const { conversations } = useSelector((state) => state.chat);
     const myId = user?.userId || user?.id;
     const dispatch = useDispatch();
+
+    const activeConversationRef = useRef(activeConversation);
+    useEffect(() => {
+        activeConversationRef.current = activeConversation;
+    }, [activeConversation]);
 
     const [callStatus, setCallStatus] = useState('idle');
     const [incomingSignal, setIncomingSignal] = useState(null);
@@ -116,6 +122,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
     const callStatusRef = useRef('idle');
     const callIsGroupRef = useRef(false);
     const remoteUserIdRef = useRef(null);
+    const leftUsersRef = useRef(new Set());
 
     useEffect(() => {
         calibrateServerTime();
@@ -244,14 +251,14 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             String(cid).startsWith('GROUP#') ||
             String(cid).includes('GROUP');
 
+        const isLastPerson = isGroup ? (remoteUsers.length === 0) : true;
+
         if (emit && cid) {
             if (isActuallyGroup) {
-                if (isInitiatorRef.current) {
-                    // Nếu là người gọi: Gửi HANGUP để hủy cuộc gọi cho tất cả
-                    console.log('[Agora] Initiator sending HANGUP for group:', cid);
-                    emitCallSignal(cid, { type: 'HANGUP', reason });
+                if (isLastPerson) {
+                    console.log('[Agora] Last person sending HANGUP for group:', cid);
+                    emitCallSignal(cid, { type: 'HANGUP', reason: 'ENDED' });
                 } else {
-                    // Nếu là người nhận: Chỉ gửi LEAVE để thoát mình ra
                     console.log('[Agora] Participant sending LEAVE for group:', cid);
                     emitCallSignal(cid, {
                         type: 'LEAVE',
@@ -259,7 +266,6 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                     });
                 }
             } else {
-                // 1-1 HOẶC Nhóm chưa có ai vào: Gửi HANGUP để hủy cuộc mời cho tất cả
                 console.log('[Agora] Sending HANGUP signal for session:', cid);
                 emitCallSignal(cid, { type: 'HANGUP', reason });
             }
@@ -267,7 +273,6 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
 
         const isCaller = isInitiatorRef.current;
-        const isLastPerson = isGroup ? (agoraClient.remoteUsers.length === 0 || remoteUsers.length === 0) : true;
         const isSuccessReason = (reason === 'ENDED' || reason === 'SUCCESS') && (isGroup ? hasHadRemoteRef.current : true);
         let shouldLog = isSuccessReason ? isLastPerson : isCaller;
 
@@ -346,7 +351,13 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
     endCallRef.current = endCall;
 
-    const updateRemoteUsers = () => setRemoteUsers(Array.from(agoraClient.remoteUsers));
+    const updateRemoteUsers = () => {
+        const activeUsers = Array.from(agoraClient.remoteUsers).filter(u => {
+            const uNum = Number(u.uid);
+            return !leftUsersRef.current.has(uNum);
+        });
+        setRemoteUsers(activeUsers);
+    };
 
     useEffect(() => {
         if (remoteUsers.length > 0 && ringTimerRef.current) {
@@ -358,26 +369,88 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
     }, [remoteUsers.length]);
 
     useEffect(() => {
-        const handleUserPublished = async (remoteUser, mediaType) => {
-            console.log('[Agora] Remote user published:', remoteUser.uid, mediaType);
-            await agoraClient.subscribe(remoteUser, mediaType);
+        const handleUserJoined = (remoteUser) => {
+            console.log('[Agora] Remote user joined:', remoteUser.uid);
+            
+            const incomingUid = Number(remoteUser.uid);
+            leftUsersRef.current.delete(incomingUid);
 
-            if (mediaType === 'audio' && remoteUser.audioTrack) {
-                remoteUser.audioTrack.setVolume(100);
-                remoteUser.audioTrack.play().catch(err => {
-                    console.error('[Agora] Play audio failed:', err);
-                    if (err.name === 'NotAllowedError' || err.message?.includes('autoplay')) {
-                        setAudioBlocked(true);
-                    }
+            // Bắn thông báo tham gia phòng với tên đầy đủ
+            let member = null;
+            const activeConv = activeConversationRef.current;
+            if (activeConv) {
+                member = activeConv.members?.find(m => {
+                    const mid = String(m.userId || m.id || m._id);
+                    const webUid = toNumericUid(mid);
+                    const mobileUid = toNumericUid(mid + '_mobile');
+                    return webUid === incomingUid || mobileUid === incomingUid;
                 });
             }
 
+            if (!member && conversations) {
+                for (const conv of conversations) {
+                    const found = conv.members?.find(m => {
+                        const mid = String(m.userId || m.id || m._id);
+                        const webUid = toNumericUid(mid);
+                        const mobileUid = toNumericUid(mid + '_mobile');
+                        return webUid === incomingUid || mobileUid === incomingUid;
+                    });
+                    if (found) {
+                        member = found;
+                        break;
+                    }
+                }
+            }
+
+            if (member) {
+                const mid = String(member.userId || member.id || member._id);
+                leftUsersRef.current.delete(toNumericUid(mid));
+                leftUsersRef.current.delete(toNumericUid(mid + '_mobile'));
+            }
+
+            updateRemoteUsers();
+            hasHadRemoteRef.current = true;
+
+            const userName = member?.fullName || member?.name || 'Một thành viên';
+            
+            setUserLeftMsg(`${userName} đã tham gia phòng`);
+            setTimeout(() => {
+                setUserLeftMsg(prev => (prev && prev.includes(userName) && prev.includes('tham gia') ? null : prev));
+            }, 3000);
+        };
+
+        const handleUserPublished = async (remoteUser, mediaType) => {
+            console.log('[Agora] Remote user published:', remoteUser.uid, mediaType);
+            leftUsersRef.current.delete(Number(remoteUser.uid));
+
+            // Cập nhật UI ngay lập tức để hiển thị avatar thành viên, tránh bị kẹt màn hình chờ
             updateRemoteUsers();
             hasHadRemoteRef.current = true;
 
             if (callStatusRef.current !== 'connected' && callStatusRef.current !== 'ended') {
                 setCallStatus('connected');
                 if (!startTimeRef.current) startTimeRef.current = getTrueTime();
+            }
+
+            // Thực hiện đăng ký subscribe bất đồng bộ dưới nền
+            try {
+                await agoraClient.subscribe(remoteUser, mediaType);
+                console.log(`[Agora] Subscribed successfully to ${remoteUser.uid} (${mediaType})`);
+
+                if (mediaType === 'audio' && remoteUser.audioTrack) {
+                    remoteUser.audioTrack.setVolume(100);
+                    remoteUser.audioTrack.play().catch(err => {
+                        console.error('[Agora] Play audio failed:', err);
+                        if (err.name === 'NotAllowedError' || err.message?.includes('autoplay')) {
+                            setAudioBlocked(true);
+                        }
+                    });
+                }
+                
+                // Cập nhật lại UI sau khi đã subscribe xong để nhận track mới
+                updateRemoteUsers();
+            } catch (err) {
+                console.error('[Agora] Failed to subscribe to remote track:', err);
             }
         };
 
@@ -416,6 +489,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 }
             }
         };
+        agoraClient.on('user-joined', handleUserJoined);
         agoraClient.on('user-published', handleUserPublished);
         agoraClient.on('user-unpublished', handleUserUnpublished);
         agoraClient.on('user-left', handleUserLeft);
@@ -439,6 +513,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
         agoraClient.on('volume-indicator', handleVolumeIndicator);
 
         return () => {
+            agoraClient.off('user-joined', handleUserJoined);
             agoraClient.off('user-published', handleUserPublished);
             agoraClient.off('user-unpublished', handleUserUnpublished);
             agoraClient.off('user-left', handleUserLeft);
@@ -519,8 +594,8 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
                 const cidMatch = (incomingCid === activeCid) || (sIncoming === sActive) || (rawIncoming === rawActive);
 
-                // Nếu là tín hiệu HANGUP/LEAVE/ACCEPTED từ chính mình (đồng bộ thiết bị) thì ta luôn chấp nhận không cần khớp CID khắt khe
-                const shouldProcess = cidMatch || isPartnerSignal || (isSelfSync && (signal.type === 'HANGUP' || signal.type === 'LEAVE' || signal.type === 'CALL_ACCEPTED'));
+                // Nếu là tín hiệu HANGUP/LEAVE/ACCEPTED từ chính mình (đồng bộ thiết bị) thì ta chỉ chấp nhận khi khớp CID đang diễn ra
+                const shouldProcess = cidMatch || isPartnerSignal || (isSelfSync && cidMatch && (signal.type === 'HANGUP' || signal.type === 'LEAVE' || signal.type === 'CALL_ACCEPTED'));
 
                 if (!shouldProcess) {
                     console.log('[Agora] Signal CID mismatch, ignoring. Cleaned Incoming:', sIncoming, 'Cleaned Active:', sActive, 'isPartner:', isPartnerSignal);
@@ -536,22 +611,17 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                     const numericUid = toNumericUid(senderId);
                     const mobileUid = toNumericUid(senderId + '_mobile');
 
-                    // Xóa user khỏi danh sách hiển thị ngay lập tức (không chờ Agora timeout 20s)
-                    setRemoteUsers(prev => {
-                        const filtered = prev.filter(u => {
-                            const uNum = Number(u.uid);
-                            return uNum !== numericUid && uNum !== mobileUid && String(u.uid) !== String(senderId);
-                        });
-                        if (filtered.length !== prev.length) {
-                            console.log(`[Agora] ✅ Successfully instant-removed ${senderId} from UI.`);
-                        }
-                        return filtered;
-                    });
+                    // Lưu vào danh sách các UID đã chủ động rời phòng
+                    leftUsersRef.current.add(numericUid);
+                    leftUsersRef.current.add(mobileUid);
 
-                    if (signal.type === 'LEAVE') {
+                    // Xóa user khỏi danh sách hiển thị ngay lập tức (không chờ Agora timeout 20s)
+                    updateRemoteUsers();
+
+                    if (signal.type === 'LEAVE' || signal.type === 'HANGUP') {
                         setUserLeftMsg(`${signal.senderName || 'Một thành viên'} đã rời phòng`);
-                        setTimeout(() => setUserLeftMsg(null), 3000);
-                        return; // Chỉ thoát sớm nếu là LEAVE của nhóm
+                        setTimeout(() => setUserLeftMsg(prev => (prev && prev.includes(signal.senderName || 'Một thành viên') && prev.includes('rời phòng') ? null : prev)), 3000);
+                        return; // Chỉ thoát sớm nếu là LEAVE/HANGUP của nhóm
                     }
                 }
 
@@ -614,6 +684,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             hasHadRemoteRef.current = false;
             setError(null);
             setEndCallReason(null);
+            leftUsersRef.current.clear();
             setCallType(type);
             setMicOn(true);
             setCamOn(type === 'video');
@@ -646,7 +717,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
 
             // Đối với cuộc gọi NHÓM, người gọi vào phòng luôn để chờ mọi người
-            if (activeConversation?.type === 'GROUP') {
+            if (isGroupMode) {
                 setCallStatus('connected');
                 if (!startTimeRef.current) {
                     startTimeRef.current = options.startTime || getTrueTime();
@@ -698,6 +769,8 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             if (audioTrack) await audioTrack.setEnabled(true);
 
             await agoraClient.join(appId, safeChannelId, token || null, joinUid);
+            if (agoraClient.remoteUsers.length > 0) hasHadRemoteRef.current = true;
+            updateRemoteUsers();
             await agoraClient.publish([audioTrack, videoTrack].filter(Boolean));
             setCamOn(type === 'video' && !!videoTrack);
         } catch (e) {
@@ -718,6 +791,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
             setError(null);
             setEndCallReason(null);
+            leftUsersRef.current.clear();
             const channelId = signalData?.conversationId || signalData?.activeConversationId;
             const convType = signalData?.conversationType || signalData?.type || activeConversation?.type;
             const actualCallType = signalData?.signal?.callType || signalData?.callType || 'video';
@@ -752,6 +826,8 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             currentJoinUidRef.current = joinUid;
 
             await agoraClient.join(res.appId, safeChannelId, res.token || null, joinUid);
+            if (agoraClient.remoteUsers.length > 0) hasHadRemoteRef.current = true;
+            updateRemoteUsers();
             const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
             let videoTrack = null;
             if (actualCallType === 'video') {

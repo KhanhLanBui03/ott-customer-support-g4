@@ -455,11 +455,13 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
             if (window.agoraClient) {
               const remoteUsers = window.agoraClient.remoteUsers;
               const videoUids = remoteUsers.filter(u => u.hasVideo).map(u => u.uid);
+              const uids = remoteUsers.map(u => u.uid);
               
               window.ReactNativeWebView.postMessage(JSON.stringify({ 
                 type: 'sync', 
                 count: remoteUsers.length,
-                videoUids: videoUids
+                videoUids: videoUids,
+                uids: uids
               }));
             }
           }, 2000);

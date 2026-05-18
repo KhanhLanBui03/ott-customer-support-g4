@@ -32,7 +32,6 @@ export const clearAllHandlers = () => {
   wallpaperUpdateHandlers.clear();
   conversationUpdateHandlers.clear();
   globalHandlers.clear();
-  callHandlers.clear(); // Thêm cho Calling
   console.log('🧹 All socket handlers cleared');
 };
 
@@ -234,6 +233,7 @@ export const disconnectSocket = () => {
     console.log('🛑 Mobile socket deactivated');
   }
   clearAllHandlers();
+  callHandlers.clear();
 };
 
 export default {
