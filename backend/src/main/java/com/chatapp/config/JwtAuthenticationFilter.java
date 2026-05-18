@@ -32,33 +32,52 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        String requestUri = request.getRequestURI();
         try {
             String jwt = getJwtFromRequest(request);
+            log.debug("Processing request to: {} with JWT present: {}", requestUri, StringUtils.hasText(jwt));
 
-            if (StringUtils.hasText(jwt) && jwtUtil.validateToken(jwt)) {
-                String userId = jwtUtil.extractUserId(jwt);
-                String sessionId = jwtUtil.extractSessionId(jwt);
+            if (StringUtils.hasText(jwt)) {
+                if (jwtUtil.validateToken(jwt)) {
+                    String userId = jwtUtil.extractUserId(jwt);
+                    String sessionId = jwtUtil.extractSessionId(jwt);
 
-                // Check if session is still valid (Single Session Logic)
-                if (sessionId != null && !sessionService.isValidSession(sessionId, userId)) {
-                    log.warn("Session {} is no longer valid for user: {}", sessionId, userId);
-                    filterChain.doFilter(request, response);
-                    return;
+                    log.debug("JWT valid. UserId: {}, SessionId: {}", userId, sessionId);
+
+                    // Check if session is still valid (Single Session Logic)
+                    if (sessionId != null && !sessionService.isValidSession(sessionId, userId)) {
+                        log.warn("Session {} is no longer valid for user: {}. Denying access.", sessionId, userId);
+                        writeErrorResponse(response, "Session has expired or is invalid. Please login again.");
+                        return; // Stop filter chain immediately
+                    }
+
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    log.debug("Authentication set in SecurityContext for user: {}", userId);
+                } else {
+                    log.warn("Invalid JWT token for request: {}", requestUri);
                 }
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-                
-                log.debug("JWT validation successful for user: {}", userId);
             }
         } catch (Exception ex) {
-            log.warn("JWT validation failed: {}", ex.getMessage());
+            log.error("JWT validation error for request {}: {}", requestUri, ex.getMessage(), ex);
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void writeErrorResponse(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        String json = String.format(
+            "{\"success\": false, \"message\": \"%s\", \"error\": {\"code\": \"UNAUTHORIZED\", \"message\": \"%s\"}}",
+            message, message
+        );
+        response.getWriter().write(json);
     }
 
     /**

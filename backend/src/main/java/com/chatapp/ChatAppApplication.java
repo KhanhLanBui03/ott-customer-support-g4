@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Main Spring Boot Application class for ChatApp
@@ -16,6 +17,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  */
 @SpringBootApplication
 @EnableAsync
+@EnableScheduling
 public class ChatAppApplication {
 
     @org.springframework.beans.factory.annotation.Autowired

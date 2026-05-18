@@ -1,6 +1,7 @@
 package com.chatapp.modules.message.domain;
 
 import com.amazonaws.services.dynamodbv2.datamodeling.*;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -96,6 +97,7 @@ public class Message {
 
     // Không bắt buộc lưu DB, chỉ dùng tạm cho trả về client
     @DynamoDBIgnore
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private String transcript;
 
     @Data
