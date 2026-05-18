@@ -3,10 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal, Dimensions, Image, Pla
 import Svg, { Circle } from 'react-native-svg';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 
-import { 
-  setRemoteUsers, setCallStatus, setCallType, 
+import {
+  setRemoteUsers, setCallStatus, setCallType,
   setAgoraConfig, resetCall, setEndCallReason,
-  addRemoteUser, updateRemoteUserVideo, removeRemoteUser 
+  addRemoteUser, updateRemoteUserVideo, removeRemoteUser
 } from '../store/callSlice';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,11 +30,11 @@ const CountdownRing = ({ size = 180, duration = 30000, onComplete }) => {
       easing: Easing.linear,
       useNativeDriver: true,
     });
-    
+
     animation.start(({ finished }) => {
       if (finished) onComplete?.();
     });
-    
+
     return () => animation.stop();
   }, [duration]); // Run if duration changes (though it shouldn't usually change once started)
 
@@ -100,29 +100,24 @@ const VideoCall = ({
 }) => {
   const dispatch = useDispatch();
   const webViewRef = useRef(null);
-  const [showControls, setShowControls] = useState(true);
+  const showControls = true;
 
-  const lastTap = useRef(0);
-
-  const handleDoubleTap = () => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300;
-    if (now - lastTap.current < DOUBLE_TAP_DELAY) {
-      setShowControls(prev => !prev);
-    }
-    lastTap.current = now;
-  };
 
   const handleTimeout = useCallback(() => {
-    // console.log('⏰ [VideoCall] UI Countdown finished.');
-  }, []);
+    console.log('⏰ [VideoCall] UI Countdown finished. Triggering timeout hangup.');
+    if (webViewRef.current) {
+      const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
+      webViewRef.current.injectJavaScript(script);
+    }
+    onHangup();
+  }, [onHangup]);
 
-  const { 
+  const {
     activeConversationId
   } = useSelector(state => state.call);
 
 
-  const { user } = useSelector(state => state.auth); 
+  const { user } = useSelector(state => state.auth);
   const { conversations } = useSelector(state => state.chat);
 
   const [remoteHasVideo, setRemoteHasVideo] = useState(false);
@@ -167,14 +162,19 @@ const VideoCall = ({
   const memberMap = useMemo(() => {
     const currentConv = conversations.find(c => c.conversationId === activeConversationId);
     if (!currentConv || !currentConv.members) return {};
-    
+
     return currentConv.members.reduce((acc, m) => {
       const mid = m.userId || m.id || m._id;
       if (mid) {
-        acc[toNumericUid(mid.toString())] = { 
+        const sMid = mid.toString();
+        const info = {
           name: m.fullName || m.name || 'Thành viên',
           avatar: m.avatar || m.avatarUrl || m.profilePic
         };
+        acc[toNumericUid(sMid)] = info;
+        acc[toNumericUid(sMid + '_mobile')] = info;
+        acc[toNumericUid(sMid + '_caller')] = info;
+        acc[toNumericUid(sMid + '_receiver')] = info;
       }
       return acc;
     }, {});
@@ -189,7 +189,15 @@ const VideoCall = ({
     };
     // Gỡ memberMap khỏi deps để tránh reload WebView khi dữ liệu hội thoại thay đổi
     return getAgoraHTML(agoraConfig, callType, isCaller, isGroup, memberMap, myInfo);
-  }, [agoraConfig?.channel, agoraConfig?.token, callType, !!incomingSignal, isGroup]);
+  }, [
+    agoraConfig?.channel,
+    agoraConfig?.token,
+    agoraConfig?.uid,         // <--- Thêm UID để cập nhật đúng định danh thiết bị
+    agoraConfig?.sessionId,   // <--- Thêm Session ID để reload chuẩn xác khi chuyển đổi trạng thái
+    callType,
+    !!incomingSignal,
+    isGroup
+  ]);
 
   // Cập nhật memberMap vào WebView mà không cần reload
   useEffect(() => {
@@ -240,7 +248,10 @@ const VideoCall = ({
       } else if (data.type === 'user-unpublished') {
         if (data.mediaType === 'video') {
           dispatch(updateRemoteUserVideo({ uid: data.uid, hasVideo: false }));
-          setRemoteHasVideo(false);
+          const stillHasVideo = remoteUsers.some(u => String(u.uid) !== String(data.uid) && u.hasVideo);
+          if (!stillHasVideo) {
+            setRemoteHasVideo(false);
+          }
         }
       } else if (data.type === 'sync') {
         if (data.count > 0 && remoteUsers.length === 0) {
@@ -248,15 +259,22 @@ const VideoCall = ({
         }
         if (data.videoUids) {
           const hasVideo = data.videoUids.length > 0;
-          setRemoteHasVideo(hasVideo);
-          data.videoUids.forEach(uid => {
-            dispatch(updateRemoteUserVideo({ uid, hasVideo: true }));
-          });
+          if (hasVideo) {
+            setRemoteHasVideo(true);
+            data.videoUids.forEach(uid => {
+              dispatch(updateRemoteUserVideo({ uid, hasVideo: true }));
+            });
+          } else {
+            const stillHasVideo = remoteUsers.some(u => u.hasVideo);
+            if (!stillHasVideo) {
+              setRemoteHasVideo(false);
+            }
+          }
         }
       } else if (data.type === 'user-left') {
         dispatch(removeRemoteUser(data.uid));
         if (!isGroup && remoteUsers.length <= 1 && callStatus === 'connected') {
-          onHangup(false); 
+          onHangup(false);
         }
       } else if (data.type === 'joined') {
         console.log('✅ [VideoCall] Joined Agora Room');
@@ -264,7 +282,7 @@ const VideoCall = ({
     } catch (e) {
       console.warn('❌ [VideoCall] Msg Error:', e);
     }
-  }, [dispatch, remoteUsers.length, isGroup, callStatus, onHangup]);
+  }, [dispatch, remoteUsers, isGroup, callStatus, onHangup]);
 
 
   const handlerRef = useRef(handleWebViewMessage);
@@ -299,17 +317,16 @@ const VideoCall = ({
 
 
   return (
-    <Modal 
-      visible={callStatus !== 'idle'} 
-      animationType="slide" 
+    <Modal
+      visible={callStatus !== 'idle'}
+      animationType="slide"
       transparent={false}
       onRequestClose={() => dispatch(resetCall())}
     >
-      <TouchableWithoutFeedback onPress={handleDoubleTap}>
-        <View style={styles.container}>
+      <View style={styles.container}>
           {/* WebView */}
           {/* WebView or Loading State */}
-          {callStatus === 'connected' && agoraConfig && (
+          {(callStatus === 'connected' || callStatus === 'ended') && agoraConfig && (
             <View style={styles.webViewContainer}>
               <WebView
                 key={agoraConfig.sessionId || agoraConfig.channel}
@@ -322,6 +339,7 @@ const VideoCall = ({
                 domStorageEnabled={true}
                 mediaPlaybackRequiresUserAction={false}
                 allowsInlineMediaPlayback={true}
+                mediaCapturePermissionGrantType="grant"
                 onMessage={onMessage}
 
                 onPermissionRequest={(event) => event.grant()}
@@ -340,13 +358,15 @@ const VideoCall = ({
 
 
 
+
+
           {/* Overlay UI */}
           <View style={[
-            styles.overlayContainer, 
+            styles.overlayContainer,
             callStatus === 'connected' && { backgroundColor: 'transparent' }
           ]} pointerEvents="box-none">
             <View style={styles.overlay} pointerEvents="box-none">
-              
+
               {/* Header */}
               {(showControls || callStatus === 'incoming' || callStatus === 'outgoing') && (
 
@@ -355,9 +375,13 @@ const VideoCall = ({
                     <View style={styles.headerBadge}>
                       <Ionicons name={callType === 'video' ? 'videocam' : 'call'} size={10} color="#6366f1" />
                       <Text style={styles.callTypeTitle}>
-                        {callStatus === 'outgoing' ? 'Đang gọi...' : 
-                         callStatus === 'incoming' ? 'Cuộc gọi đến' : 
-                         isGroup ? 'CUỘC GỌI NHÓM' : 'CUỘC GỌI VIDEO'}
+                        {callStatus === 'outgoing'
+                          ? (callType === 'video' ? 'ĐANG GỌI VIDEO...' : 'ĐANG GỌI THOẠI...')
+                          : callStatus === 'incoming'
+                            ? (callType === 'video' ? 'CUỘC GỌI VIDEO ĐẾN' : 'CUỘC GỌI THOẠI ĐẾN')
+                            : isGroup
+                              ? (callType === 'video' ? 'CUỘC GỌI VIDEO NHÓM' : 'CUỘC GỌI THOẠI NHÓM')
+                              : (callType === 'video' ? 'CUỘC GỌI VIDEO' : 'CUỘC GỌI THOẠI')}
                       </Text>
 
                     </View>
@@ -386,9 +410,9 @@ const VideoCall = ({
                   <View style={styles.endScreenContent}>
                     <View style={styles.endAvatarWrapper}>
                       {formatAvatarUrl(isGroup ? (activeConversation?.avatar || callerInfo?.avatar) : callerInfo?.avatar) ? (
-                        <Image 
-                          source={{ uri: formatAvatarUrl(isGroup ? (activeConversation?.avatar || callerInfo?.avatar) : callerInfo?.avatar) }} 
-                          style={styles.endAvatar} 
+                        <Image
+                          source={{ uri: formatAvatarUrl(isGroup ? (activeConversation?.avatar || callerInfo?.avatar) : callerInfo?.avatar) }}
+                          style={styles.endAvatar}
                         />
                       ) : (
                         <View style={[styles.endAvatar, styles.initialsAvatar]}>
@@ -407,7 +431,7 @@ const VideoCall = ({
                       <Text style={styles.endReasonText}>{endCallReason || 'Cuộc gọi đã kết thúc'}</Text>
                     </View>
 
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.backToChatButton}
                       onPress={() => onReset?.()}
                     >
@@ -417,8 +441,8 @@ const VideoCall = ({
                 </View>
               )}
 
-              {/* Overlay UI Layer: Hiện khi đang chờ, kết thúc, Nhóm chưa có ai, HOẶC 1-1 mà đối phương tắt cam */}
-              {(callStatus === 'outgoing' || callStatus === 'incoming' || callStatus === 'ended' || (isGroup && callStatus === 'connected' && remoteUsers.length === 0) || (!isGroup && callStatus === 'connected' && !remoteHasVideo)) && (
+              {/* Overlay UI Layer: Hiện khi đang chờ, Nhóm chưa có ai, HOẶC 1-1 mà đối phương tắt cam */}
+              {(callStatus === 'outgoing' || callStatus === 'incoming' || (isGroup && callStatus === 'connected' && remoteUsers.length === 0) || (!isGroup && callStatus === 'connected' && !remoteHasVideo)) && (
 
 
 
@@ -436,15 +460,15 @@ const VideoCall = ({
                         const tiles = [list[0], { isLocal: true }, ...list.slice(1)];
                         return tiles.map((item, i) => (
                           <View key={i} style={styles.gridTile}>
-                             <View style={styles.tileAvatarContainer}>
-                                {item.isLocal ? (
-                                    user?.avatar ? <Image source={{ uri: formatAvatarUrl(user.avatar) }} style={styles.tileAvatar} /> : 
-                                    <View style={[styles.tileAvatar, styles.initialsAvatar]}><Text style={styles.tileInitials}>B</Text></View>
-                                ) : (
-                                    <View style={[styles.tileAvatar, styles.initialsAvatar]}><Text style={styles.tileInitials}>U</Text></View>
-                                )}
-                             </View>
-                             <Text style={styles.tileName} numberOfLines={1}>{item.isLocal ? 'Bạn' : (memberMap[item.uid]?.name || `User ${item.uid}`)}</Text>
+                            <View style={styles.tileAvatarContainer}>
+                              {item.isLocal ? (
+                                user?.avatar ? <Image source={{ uri: formatAvatarUrl(user.avatar) }} style={styles.tileAvatar} /> :
+                                  <View style={[styles.tileAvatar, styles.initialsAvatar]}><Text style={styles.tileInitials}>B</Text></View>
+                              ) : (
+                                <View style={[styles.tileAvatar, styles.initialsAvatar]}><Text style={styles.tileInitials}>U</Text></View>
+                              )}
+                            </View>
+                            <Text style={styles.tileName} numberOfLines={1}>{item.isLocal ? 'Bạn' : (memberMap[item.uid]?.name || `User ${item.uid}`)}</Text>
                           </View>
                         ));
                       })()}
@@ -452,41 +476,38 @@ const VideoCall = ({
                   ) : (
                     /* SOLO VIEW / 1-1 / WAITING */
                     <View style={styles.singleParticipantInfo}>
-                          <View style={[
-                          styles.waitingCard,
-                          (callStatus === 'connected' && !isGroup) && { backgroundColor: 'transparent', borderWidth: 0, shadowOpacity: 0 }
-                        ]}>
-                          <View style={styles.avatarContainer}>
-                            {formatAvatarUrl(isGroup ? (activeConversation?.avatar || callerInfo?.avatar) : callerInfo?.avatar) ? (
-                              <Image 
-                                source={{ uri: formatAvatarUrl(isGroup ? (activeConversation?.avatar || callerInfo?.avatar) : callerInfo?.avatar) }} 
-                                style={styles.avatar} 
-                              />
-                            ) : (
-                              <View style={[styles.avatar, styles.initialsAvatar]}>
-                                <Text style={styles.initialsText}>{(isGroup ? (activeConversation?.name || callerInfo?.name) : (callerName || callerInfo?.name))?.charAt(0).toUpperCase() || 'U'}</Text>
-                              </View>
-                            )}
+                      <View style={styles.waitingCard}>
+                        <View style={styles.avatarContainer}>
+                          {formatAvatarUrl(isGroup ? (activeConversation?.avatar || callerInfo?.avatar) : callerInfo?.avatar) ? (
+                            <Image
+                              source={{ uri: formatAvatarUrl(isGroup ? (activeConversation?.avatar || callerInfo?.avatar) : callerInfo?.avatar) }}
+                              style={styles.avatar}
+                            />
+                          ) : (
+                            <View style={[styles.avatar, styles.initialsAvatar]}>
+                              <Text style={styles.initialsText}>{(isGroup ? (activeConversation?.name || callerInfo?.name) : (callerName || callerInfo?.name))?.charAt(0).toUpperCase() || 'U'}</Text>
+                            </View>
+                          )}
 
-                            {/* Vòng tròn đếm ngược (Hiện cho cả 1-1 và Group khi đang chờ) */}
-                            {(callStatus === 'outgoing' || callStatus === 'incoming' || (isGroup && callStatus === 'connected' && remoteUsers.length === 0)) && (
-                               <CountdownRing size={160} duration={30000} onComplete={handleTimeout} />
-                            )}
+                          {/* Vòng tròn đếm ngược (Hiện cho cả 1-1 và Group khi đang chờ) */}
+                          {(callStatus === 'outgoing' || callStatus === 'incoming' || (isGroup && callStatus === 'connected' && remoteUsers.length === 0)) && (
+                            <CountdownRing size={160} duration={30000} onComplete={handleTimeout} />
+                          )}
 
-                          </View>
-                          
-                          <View style={styles.statusInfo}>
-                            <Text style={styles.callerName}>{isGroup ? (activeConversation?.name || callerInfo?.name || 'Cuộc gọi nhóm') : (callerName || callerInfo?.name)}</Text>
-                            
-                            <Text style={styles.statusText}>
-                              {callStatus === 'outgoing' ? 'Đang gọi...' : 
-                               callStatus === 'incoming' ? 'Cuộc gọi đến...' : 
-                               (isGroup && remoteUsers.length === 0) ? 'ĐANG CHỜ MỌI NGƯỜI THAM GIA...' :
-                               callStatus === 'connected' ? (isGroup ? 'Đang họp nhóm...' : 'Đang trò chuyện...') :
-                               'Cuộc gọi đã kết thúc'}
-                            </Text>
-                          </View>
                         </View>
+
+                        <View style={styles.statusInfo}>
+                          <Text style={styles.callerName}>{isGroup ? (activeConversation?.name || callerInfo?.name || 'Cuộc gọi nhóm') : (callerName || callerInfo?.name)}</Text>
+
+                          <Text style={styles.statusText}>
+                            {callStatus === 'outgoing' ? 'Đang gọi...' :
+                              callStatus === 'incoming' ? 'Cuộc gọi đến...' :
+                                (isGroup && remoteUsers.length === 0) ? 'ĐANG CHỜ MỌI NGƯỜI THAM GIA...' :
+                                  callStatus === 'connected' ? (isGroup ? 'Đang họp nhóm...' : 'Đang trò chuyện...') :
+                                    'Cuộc gọi đã kết thúc'}
+                          </Text>
+                        </View>
+                      </View>
 
                     </View>
                   )}
@@ -501,12 +522,18 @@ const VideoCall = ({
                     {callStatus === 'incoming' ? (
                       <View style={styles.incomingButtons}>
                         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                          <TouchableOpacity 
+                          <TouchableOpacity
                             onPress={() => {
-                              const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
-                              webViewRef.current?.injectJavaScript(script);
-                              onHangup();
-                            }} 
+                              requestAnimationFrame(() => {
+                                try {
+                                  const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
+                                  webViewRef.current?.injectJavaScript(script);
+                                } catch (err) {
+                                  console.warn('[Agora] Failed to inject leave script:', err);
+                                }
+                                onHangup();
+                              });
+                            }}
                             style={[styles.btn, styles.btnHangup]}
                             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                             activeOpacity={0.6}
@@ -514,10 +541,10 @@ const VideoCall = ({
                             <Ionicons name="call" size={32} color="white" style={{ transform: [{ rotate: '135deg' }] }} />
                           </TouchableOpacity>
                         </Animated.View>
-                        
+
                         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                          <TouchableOpacity 
-                            onPress={onAccept} 
+                          <TouchableOpacity
+                            onPress={onAccept}
                             style={[styles.btn, styles.btnAccept]}
                             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                             activeOpacity={0.6}
@@ -531,31 +558,37 @@ const VideoCall = ({
 
                     ) : (
                       <View style={styles.activeButtons}>
-                        <TouchableOpacity 
-                          onPress={onToggleMic} 
+                        <TouchableOpacity
+                          onPress={onToggleMic}
                           style={[styles.btnAction, !micOn && styles.btnOff]}
                           hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                           activeOpacity={0.7}
                         >
                           <Ionicons name={micOn ? "mic" : "mic-off"} size={22} color="white" />
                         </TouchableOpacity>
-                        
-                        <TouchableOpacity 
+
+                        <TouchableOpacity
                           onPress={() => {
-                            const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
-                            webViewRef.current?.injectJavaScript(script);
-                            onHangup();
-                          }} 
+                            requestAnimationFrame(() => {
+                              try {
+                                const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
+                                webViewRef.current?.injectJavaScript(script);
+                              } catch (err) {
+                                console.warn('[Agora] Failed to inject leave script:', err);
+                              }
+                              onHangup();
+                            });
+                          }}
                           style={[styles.btnAction, styles.btnHangup, styles.btnLarge]}
-                          hitSlop={{ top: 30, bottom: 30, left: 30, right: 30 }}
+                          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                           activeOpacity={0.5}
                         >
                           <Ionicons name="call" size={28} color="white" style={{ transform: [{ rotate: '135deg' }] }} />
                         </TouchableOpacity>
 
-                        
-                        <TouchableOpacity 
-                          onPress={onToggleCamera} 
+
+                        <TouchableOpacity
+                          onPress={onToggleCamera}
                           style={[styles.btnAction, !camOn && styles.btnOff]}
                           hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         >
@@ -569,7 +602,6 @@ const VideoCall = ({
             </View>
           </View>
         </View>
-      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -582,22 +614,22 @@ const styles = StyleSheet.create({
   audioOnlyBg: { ...StyleSheet.absoluteFillObject, backgroundColor: '#0f172a', zIndex: 1 },
   overlayContainer: { ...StyleSheet.absoluteFillObject, zIndex: 2 },
   overlay: { flex: 1, justifyContent: 'space-between', paddingVertical: 40, paddingHorizontal: 20 },
-  header: { 
-    width: '100%', 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'flex-start', 
+  header: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingTop: Platform.OS === 'ios' ? 50 : 30,
     paddingHorizontal: 10
   },
   headerInfo: { flex: 1 },
-  headerBadge: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: 'rgba(99, 102, 241, 0.15)', 
-    paddingHorizontal: 10, 
-    paddingVertical: 4, 
-    borderRadius: 12, 
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     gap: 4,
     marginBottom: 6,
     alignSelf: 'flex-start'
@@ -610,19 +642,9 @@ const styles = StyleSheet.create({
   recordDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#ef4444', marginRight: 6 },
   duration: { color: 'white', fontSize: 12, fontWeight: '600' },
   centerInfo: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  waitingCard: { 
-    backgroundColor: 'rgba(15, 23, 42, 0.7)', 
-    padding: 40, 
-    borderRadius: 50, 
-    borderWidth: 1.5, 
-    borderColor: 'rgba(255,255,255,0.15)',
+  waitingCard: {
     alignItems: 'center',
     width: width * 0.88,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 20,
   },
   singleParticipantInfo: { alignItems: 'center' },
   groupGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
@@ -638,11 +660,11 @@ const styles = StyleSheet.create({
   initialsText: { color: 'white', fontSize: 60, fontWeight: 'bold' },
   pulseRing: { position: 'absolute', width: 180, height: 180, borderRadius: 90, borderWidth: 1, borderColor: 'rgba(99, 102, 241, 0.4)' },
   callerName: { color: 'white', fontSize: 26, fontWeight: 'bold', textAlign: 'center' },
-  statusText: { 
-    color: '#6366f1', 
-    fontSize: 11, 
-    fontWeight: '900', 
-    marginTop: 15, 
+  statusText: {
+    color: '#6366f1',
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 15,
     textAlign: 'center',
     letterSpacing: 1.5,
     textTransform: 'uppercase'

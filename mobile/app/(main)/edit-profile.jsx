@@ -172,6 +172,7 @@ const EditProfileScreen = () => {
 
             {/* FIX: Chỉ hiển thị tên đã được lưu trong Redux, không hiển thị tên đang gõ */}
             <Text style={[styles.displayFullName, { color: colors.foreground }]}>{user?.firstName} {user?.lastName}</Text>
+
           </View>
 
 

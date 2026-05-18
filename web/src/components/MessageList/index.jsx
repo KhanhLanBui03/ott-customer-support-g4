@@ -1043,7 +1043,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                       )}>
                         {!isMe && msg.type !== 'VOTE' && (
                           <div className="w-9 h-9 flex-shrink-0 mb-1">
-                            {isLastInGroup ? (
+                            {(isLastInGroup || msg.type === 'CALL_LOG') ? (
                               <div className="w-full h-full rounded-[14px] bg-surface-200 overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform animate-in zoom-in duration-300">
                                 {(msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
                                   <img src={msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl} className="w-full h-full object-cover" alt="" />
@@ -1059,7 +1059,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           "flex flex-col relative group/bubble",
                           isMe ? "items-end" : "items-start"
                         )}>
-                          {isFirstInGroup && !isMe && msg.type !== 'VOTE' && currentConv?.type === 'GROUP' && (
+                          {(isFirstInGroup || msg.type === 'CALL_LOG') && !isMe && msg.type !== 'VOTE' && currentConv?.type === 'GROUP' && (
                             <p className={`text-[10px] font-black uppercase tracking-widest ml-3 mb-1.5 opacity-60 ${getMemberColor(msg.senderId, currentConv?.members)}`}>{msg.senderName || 'Thành viên'}</p>
                           )}
                           {isFirstInGroup && msg.type === 'VOTE' && (
@@ -1259,7 +1259,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       <div className="px-4 pb-4 mt-1">
                                         <button 
                                           onClick={() => {
-                                            const event = new CustomEvent('START_CALL_AGAIN', { detail: { type: cType } });
+                                            const event = new CustomEvent('START_CALL_AGAIN', { detail: { type: cType, startTime } });
                                             window.dispatchEvent(event);
                                           }} 
                                           className={cn(

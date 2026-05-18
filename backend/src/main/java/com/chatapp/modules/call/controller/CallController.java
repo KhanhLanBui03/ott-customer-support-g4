@@ -68,4 +68,14 @@ public class CallController {
             ));
         }
     }
+
+    /**
+     * GET /api/v1/call/time
+     *
+     * Trả về thời gian hiện tại của server (milliseconds) để đồng bộ hóa đồng hồ clients.
+     */
+    @GetMapping("/time")
+    public ResponseEntity<?> getServerTime() {
+        return ResponseEntity.ok(Map.of("serverTime", System.currentTimeMillis()));
+    }
 }
