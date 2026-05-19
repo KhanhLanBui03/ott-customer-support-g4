@@ -55,6 +55,8 @@ public class SecurityConfig {
                         "/api/v1/auth/check",
                         "/api/v1/auth/health",
                         "/api/v1/auth/restore/**",
+                        "/api/v1/auth/qr/generate",
+                        "/api/v1/auth/qr/status/**",
                         "/api/v1/media/**",
                         "/api/v1/public/**",
                         "/actuator/health",

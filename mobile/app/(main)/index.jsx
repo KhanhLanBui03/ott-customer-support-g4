@@ -330,6 +330,13 @@ const HomeScreen = () => {
           <View style={styles.headerButtons}>
             <TouchableOpacity 
               style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              onPress={() => router.push('/qr-scanner')}
+              title="Quét mã QR đăng nhập web"
+            >
+              <MaterialCommunityIcons name="qrcode-scan" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
               onPress={toggleTheme}
             >
               <Ionicons 
