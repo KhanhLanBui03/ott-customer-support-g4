@@ -378,10 +378,33 @@ const ChatBubble = ({
     );
   }
 
+  const handleAvatarPress = () => {
+    const currentConv = conversations.find(c => String(c.conversationId) === String(message.conversationId));
+    const isGroup = currentConv?.type === 'GROUP';
+
+    if (isGroup) {
+      const targetUser = senderInfo || {
+        userId: message.senderId,
+        id: message.senderId,
+        fullName: message.senderName || 'Người dùng',
+        name: message.senderName || 'Người dùng',
+        avatarUrl: message.senderAvatar,
+      };
+      setSelectedUserForAction({
+        ...targetUser,
+        userId: targetUser.userId || targetUser.id,
+        fullName: targetUser.fullName || targetUser.name,
+      });
+      setUserActionVisible(true);
+    } else {
+      router.push(`/chat-info/${encodeURIComponent(message.conversationId)}`);
+    }
+  };
+
   return (
     <Animated.View {...panResponder.panHandlers} style={[styles.container, isOwn ? styles.ownContainer : styles.otherContainer, { transform: [{ translateX }] }]}>
       {!isOwn && (
-        <TouchableOpacity style={styles.avatarContainer} onPress={() => router.push(`/chat-info/${encodeURIComponent(message.conversationId)}`)}>
+        <TouchableOpacity style={styles.avatarContainer} onPress={handleAvatarPress}>
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
         </TouchableOpacity>
       )}
@@ -714,7 +737,14 @@ const ChatBubble = ({
           onPressMessage?.({ action: 'MENTION', user: u });
         }}
         onMessage={(u) => {
-          router.push(`/chat/${encodeURIComponent(u.userId || u.id)}`);
+          router.push({
+            pathname: `/chat/${encodeURIComponent(u.userId || u.id)}`,
+            params: {
+              name: u.fullName || u.name,
+              avatar: u.avatarUrl || u.avatar || u.profilePic,
+              type: 'SINGLE'
+            }
+          });
         }}
         onCall={(u) => {
           onPressMessage?.({ action: 'CALL_BACK', callType: 'audio', targetUser: u });

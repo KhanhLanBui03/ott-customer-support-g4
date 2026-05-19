@@ -30,7 +30,7 @@ const ChatInfoScreen = () => {
   const insets = useSafeAreaInsets();
 
   const router = useRouter();
-  const { id: encodedId } = useLocalSearchParams();
+  const { id: encodedId, name: paramName, avatar: paramAvatar, type: paramType } = useLocalSearchParams();
   const conversationId = decodeURIComponent(encodedId || '');
 
   const chatState = useSelector((state) => state.chat);
@@ -52,9 +52,9 @@ const ChatInfoScreen = () => {
     return conversation.members.find(p => p.userId !== (currentUser?.userId || currentUser?.id));
   }, [conversation, currentUser]);
 
-  const isGroup = conversation?.type === 'GROUP';
-  const displayName = isGroup ? (conversation?.name || 'Nhóm chat') : (otherParticipant?.fullName || otherParticipant?.name || 'Thông tin hội thoại');
-  const avatarUrl = isGroup ? conversation?.avatarUrl : (otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic);
+  const isGroup = conversation?.type === 'GROUP' || paramType === 'GROUP';
+  const displayName = isGroup ? (conversation?.name || paramName || 'Nhóm chat') : (otherParticipant?.fullName || otherParticipant?.name || paramName || 'Thông tin hội thoại');
+  const avatarUrl = isGroup ? (conversation?.avatarUrl || paramAvatar) : (otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic || paramAvatar);
   const isOnline = !isGroup && (otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true);
 
   const handleWallpaperChange = async () => {
@@ -373,7 +373,19 @@ const ChatInfoScreen = () => {
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.replace(`/chat/${encodeURIComponent(realId)}`)} style={styles.backButton}>
+        <Pressable
+          onPress={() => {
+            router.replace({
+              pathname: `/chat/${encodeURIComponent(realId)}`,
+              params: {
+                name: displayName,
+                avatar: avatarUrl,
+                type: isGroup ? 'GROUP' : 'SINGLE'
+              }
+            });
+          }}
+          style={styles.backButton}
+        >
           <Ionicons name="close" size={28} color={colors.foreground} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông tin {isGroup ? 'nhóm' : 'hội thoại'}</Text>

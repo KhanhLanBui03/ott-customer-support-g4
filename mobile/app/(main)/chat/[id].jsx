@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
 import MessageModal from '../../../src/components/MessageModal';
-import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
+import { fetchMessages, fetchConversationDetail, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi, chatApi } from '../../../src/api/chatApi';
 import CreateVoteModal from '../../../src/components/CreateVoteModal';
@@ -25,7 +25,7 @@ const ChatDetailScreen = () => {
 
   const dispatch = useDispatch();
   const router = useRouter();
-  const { id: rawConversationId } = useLocalSearchParams();
+  const { id: rawConversationId, name: paramName, avatar: paramAvatar, type: paramType } = useLocalSearchParams();
   const conversationId = useMemo(() => decodeURIComponent(rawConversationId || ''), [rawConversationId]);
 
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -72,7 +72,8 @@ const ChatDetailScreen = () => {
       dispatch(fetchConversations());
     }
 
-    // Tải tin nhắn
+    // Tải chi tiết cuộc hội thoại và tin nhắn song song
+    dispatch(fetchConversationDetail(conversationId));
     dispatch(fetchMessages(conversationId));
   }, [conversationId, currentUser?.userId, currentUser?.id, dispatch]);
 
@@ -369,33 +370,33 @@ const ChatDetailScreen = () => {
   const displayName = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.name || 'Nhóm chat';
 
-    if (conversation?.type === 'SINGLE') {
+    if (conversation?.type === 'SINGLE' || paramType === 'SINGLE' || (!conversation && paramName)) {
       const currentUserId = String(currentUser?.userId || currentUser?.id || '');
-      const otherParticipant = (conversation.members || []).find(p => {
+      const otherParticipant = (conversation?.members || []).find(p => {
         const pId = String(p.userId || p.id || '');
         return pId !== '' && pId !== currentUserId;
       });
-      return otherParticipant?.fullName || otherParticipant?.name || otherParticipant?.username || 'Người dùng';
+      return otherParticipant?.fullName || otherParticipant?.name || otherParticipant?.username || paramName || 'Người dùng';
     }
 
-    return conversation?.name || 'Chat';
-  }, [conversation, currentUser]);
+    return conversation?.name || paramName || 'Chat';
+  }, [conversation, currentUser, paramName, paramType]);
 
   const otherMember = useMemo(() => {
-    if (conversation?.type !== 'SINGLE') return null;
+    if (conversation?.type !== 'SINGLE' && paramType !== 'SINGLE' && conversation) return null;
     const currentUserId = String(currentUser?.userId || currentUser?.id || '');
-    return (conversation.members || []).find(p => {
+    return (conversation?.members || []).find(p => {
       const pId = String(p.userId || p.id || '');
       return pId !== '' && pId !== currentUserId;
     });
-  }, [conversation, currentUser]);
+  }, [conversation, currentUser, paramType]);
 
   const friendshipStatus = otherMember?.friendshipStatus || 'NONE';
 
   const otherAvatar = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.avatarUrl || conversation.avatar;
-    return otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic;
-  }, [conversation, otherMember]);
+    return otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic || paramAvatar;
+  }, [conversation, otherMember, paramAvatar]);
 
   const isOnline = useMemo(() => {
     if (conversation?.type === 'GROUP') return false;
@@ -417,8 +418,21 @@ const ChatDetailScreen = () => {
 
   const handleLoadMore = async () => {
     if (realId) {
-      await dispatch(fetchMessages({ conversationId: realId, loadMore: true }));
+      try {
+        const result = await dispatch(fetchMessages({ conversationId: realId, loadMore: true })).unwrap();
+        // Check if the backend returned any messages that we don't already have
+        if (result?.messages && result.messages.length > 0) {
+          const currentMsgs = messagesRef.current || [];
+          const hasNew = result.messages.some(nm => !currentMsgs.some(em => em.messageId === nm.messageId));
+          return hasNew;
+        }
+        return false;
+      } catch (error) {
+        console.error('Load more error:', error);
+        return false;
+      }
     }
+    return false;
   };
 
   const handleLongPressMessage = (message) => {
@@ -506,7 +520,14 @@ const ChatDetailScreen = () => {
 
           <TouchableOpacity
             style={styles.headerContent}
-            onPress={() => router.push(`/chat-info/${encodeURIComponent(realId)}`)}
+            onPress={() => router.push({
+              pathname: `/chat-info/${encodeURIComponent(realId)}`,
+              params: {
+                name: displayName,
+                avatar: otherAvatar || headerAvatarUrl,
+                type: conversation?.type || paramType || 'SINGLE'
+              }
+            })}
           >
             <View style={styles.headerAvatarContainer}>
               <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200 }]} />
@@ -550,7 +571,14 @@ const ChatDetailScreen = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerActionButton}
-              onPress={() => router.push(`/chat-info/${encodeURIComponent(realId)}`)}
+              onPress={() => router.push({
+                pathname: `/chat-info/${encodeURIComponent(realId)}`,
+                params: {
+                  name: displayName,
+                  avatar: otherAvatar || headerAvatarUrl,
+                  type: conversation?.type || paramType || 'SINGLE'
+                }
+              })}
             >
               <MaterialIcons name="info-outline" size={24} color={colors.primary} />
             </TouchableOpacity>

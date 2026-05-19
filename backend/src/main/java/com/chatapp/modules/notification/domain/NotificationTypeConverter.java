@@ -12,6 +12,9 @@ public class NotificationTypeConverter implements DynamoDBTypeConverter<String, 
     @Override
     public NotificationType unconvert(String value) {
         try {
+            if (value != null && "FRIEND_ACCEPT".equalsIgnoreCase(value.trim())) {
+                return NotificationType.FRIEND_ACCEPTED;
+            }
             return NotificationType.valueOf(value.toUpperCase()); // handle case mismatch
         } catch (IllegalArgumentException e) {
             return null; // hoặc throw custom exception

@@ -104,7 +104,7 @@ const HomeScreen = () => {
     }
     
     return result;
-  }, [conversations, filterType, selectedTags]);
+  }, [conversations, filterType, selectedTags, searchQuery]);
 
   const handleUpdateTag = async (conversationId, tagKey) => {
     try {
@@ -258,7 +258,14 @@ const HomeScreen = () => {
             isUnread && { backgroundColor: isDark ? colors.surface200 : '#eef2ff' },
             item.isPinned && { backgroundColor: isDark ? colors.surface100 : colors.background }
           ]}
-          onPress={() => router.push(`/chat/${encodeURIComponent(item.conversationId)}`)}
+          onPress={() => router.push({
+            pathname: `/chat/${encodeURIComponent(item.conversationId)}`,
+            params: {
+              name: displayName,
+              avatar: avatarUrl,
+              type: item.type
+            }
+          })}
           onLongPress={() => {
             setSelectedConv(item);
             setActionModalType('menu');

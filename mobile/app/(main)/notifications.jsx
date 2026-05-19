@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  DeviceEventEmitter,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -18,6 +19,8 @@ import { friendApi } from '../../src/api/friendApi';
 import { conversationApi } from '../../src/api/chatApi';
 import { Alert } from 'react-native';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useRouter } from 'expo-router';
+import { notificationApi } from '../../src/api/userApi';
 
 
 const formatDate = (date) => {
@@ -41,16 +44,23 @@ const NotificationsScreen = () => {
   const { colors, isDark } = useTheme();
   const dispatch = useDispatch();
 
+  const currentUser = useSelector((state) => state.auth.user);
+  const router = useRouter();
   const { notifications, loading } = useSelector((state) => state.notifications);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+
   useEffect(() => {
-    dispatch(fetchNotifications());
-  }, [dispatch]);
+    const myId = currentUser?.userId || currentUser?.id;
+    dispatch(fetchNotifications(myId));
+  }, [dispatch, currentUser]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await dispatch(fetchNotifications());
+    const myId = currentUser?.userId || currentUser?.id;
+    await dispatch(fetchNotifications(myId));
     setRefreshing(false);
   };
 
@@ -58,7 +68,138 @@ const NotificationsScreen = () => {
     if (!(item.isRead || item.read)) {
       dispatch(markAsRead(item.id || item.notificationId));
     }
-    // Handle navigation if needed
+    if (item.type === 'FRIEND_ACCEPT' || item.type === 'FRIEND_ACCEPTED') {
+      router.push({
+        pathname: `/chat/SINGLE#${item.senderId}`,
+        params: {
+          name: item.fullName || item.message || 'Bạn bè',
+          avatar: item.avatarUrl || '',
+          type: 'SINGLE'
+        }
+      });
+    }
+  };
+
+  const handleItemLongPress = (item) => {
+    const id = item.id || item.notificationId;
+    if (!isSelectionMode) {
+      setIsSelectionMode(true);
+      setSelectedIds([id]);
+    }
+  };
+
+  const handleItemPress = (item) => {
+    const id = item.id || item.notificationId;
+    if (isSelectionMode) {
+      if (selectedIds.includes(id)) {
+        setSelectedIds(prev => prev.filter(x => x !== id));
+      } else {
+        setSelectedIds(prev => [...prev, id]);
+      }
+    } else {
+      handleNotificationPress(item);
+    }
+  };
+
+  const handleCancelSelection = () => {
+    setIsSelectionMode(false);
+    setSelectedIds([]);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.length === 0) return;
+    Alert.alert(
+      'Xóa thông báo',
+      `Bạn có chắc chắn muốn xóa ${selectedIds.length} thông báo đã chọn?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Xóa', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Extract real IDs
+              const realIds = selectedIds.filter(id => !id.startsWith('fr_') && !id.startsWith('gi_'));
+
+              // Delete general notifications from DB
+              if (realIds.length > 0) {
+                await Promise.all(realIds.map(id => notificationApi.deleteNotification(id)));
+              }
+
+              // Delete locally in Redux
+              for (const id of selectedIds) {
+                dispatch(removeNotification(id));
+              }
+
+              Alert.alert('Thành công', 'Đã xóa các thông báo đã chọn.');
+              onRefresh();
+              handleCancelSelection();
+            } catch (err) {
+              console.warn(err);
+              Alert.alert('Lỗi', 'Không thể xóa các thông báo lúc này.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteAll = () => {
+    Alert.alert(
+      'Xóa tất cả thông báo',
+      'Bạn có chắc chắn muốn xóa TOÀN BỘ thông báo?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Xóa tất cả', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const myId = currentUser?.userId || currentUser?.id;
+              if (myId) {
+                await notificationApi.deleteAllNotifications(myId);
+                // Also clear pending locally
+                notifications.forEach(n => {
+                  dispatch(removeNotification(n.id || n.notificationId));
+                });
+                Alert.alert('Thành công', 'Đã xóa toàn bộ thông báo.');
+                onRefresh();
+                handleCancelSelection();
+              }
+            } catch (err) {
+              console.warn(err);
+              Alert.alert('Lỗi', 'Không thể xóa thông báo lúc này.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const myId = currentUser?.userId || currentUser?.id;
+      if (myId) {
+        await notificationApi.markAllAsRead(myId);
+        dispatch(fetchNotifications(myId));
+        Alert.alert('Thành công', 'Đã đánh dấu đọc tất cả thông báo.');
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const showThreeDotMenu = () => {
+    Alert.alert(
+      'Tùy chọn thông báo',
+      'Chọn hành động bạn muốn thực hiện:',
+      [
+        { text: 'Chọn nhiều để xóa', onPress: () => setIsSelectionMode(true) },
+        { text: 'Đánh dấu đọc tất cả', onPress: handleMarkAllAsRead },
+        { text: 'Xóa toàn bộ thông báo', style: 'destructive', onPress: handleDeleteAll },
+        { text: 'Đóng', style: 'cancel' }
+      ]
+    );
   };
 
   const BASE_URL = useSelector(state => state.chat?.BASE_URL) || 'http://192.168.1.98:8080'; // Fallback if needed
@@ -76,6 +217,7 @@ const NotificationsScreen = () => {
       Alert.alert('Thành công', 'Bạn và người ấy đã trở thành bạn bè!');
       dispatch(markAsRead(notificationId));
       onRefresh(); 
+      DeviceEventEmitter.emit('friendship_changed');
     } catch (err) {
       Alert.alert('Lỗi', 'Không thể chấp nhận lời mời lúc này.');
     }
@@ -138,19 +280,37 @@ const NotificationsScreen = () => {
     const isUnread = !(item.isRead || item.read);
     const date = item.createdAt ? new Date(item.createdAt) : new Date();
     const isActionable = item.type === 'FRIEND_REQUEST' || item.type === 'GROUP_INVITE';
+    const itemId = item.id || item.notificationId;
+    const isSelected = selectedIds.includes(itemId);
+    const CardContainer = (isSelectionMode || !isActionable) ? TouchableOpacity : View;
 
     return (
-      <View style={[
-        styles.notificationItem, 
-        { backgroundColor: colors.background, borderBottomColor: colors.border },
-        isUnread && [styles.unreadItem, { backgroundColor: isDark ? colors.surface200 : '#f0f7ff' }]
-      ]}>
-
+      <CardContainer
+        onPress={() => handleItemPress(item)}
+        onLongPress={() => handleItemLongPress(item)}
+        activeOpacity={0.8}
+        style={[
+          styles.notificationItem, 
+          { backgroundColor: colors.background, borderBottomColor: colors.border },
+          isUnread && [styles.unreadItem, { backgroundColor: isDark ? colors.surface200 : '#f0f7ff' }],
+          isSelected && { backgroundColor: isDark ? colors.surface300 : '#e2f0fe' }
+        ]}
+      >
         <View style={styles.itemMainContent}>
+          {isSelectionMode && (
+            <View style={styles.checkboxContainer}>
+              <MaterialIcons 
+                name={isSelected ? 'check-box' : 'check-box-outline-blank'} 
+                size={24} 
+                color={isSelected ? colors.primary : colors.textSubtle} 
+              />
+            </View>
+          )}
+
           <View style={styles.iconContainer}>
-            {item.avatarUrl ? (
+            {(item.avatarUrl || item.type === 'FRIEND_REQUEST' || item.type === 'GROUP_INVITE' || item.type === 'FRIEND_ACCEPT' || item.type === 'FRIEND_ACCEPTED') ? (
               <Image 
-                source={{ uri: getAvatarUrl(item.avatarUrl, item.fullName) }} 
+                source={{ uri: getAvatarUrl(item.avatarUrl, item.fullName || item.message) }} 
                 style={[styles.senderAvatar, { backgroundColor: colors.surface200 }]} 
               />
             ) : (
@@ -159,7 +319,6 @@ const NotificationsScreen = () => {
               </View>
             )}
             {isUnread && <View style={[styles.unreadDot, { borderColor: isDark ? colors.surface200 : '#fff' }]} />}
-
           </View>
 
           <View style={styles.contentContainer}>
@@ -168,7 +327,6 @@ const NotificationsScreen = () => {
               <Text style={[styles.time, { color: colors.textSubtle }]}>{formatDate(date)}</Text>
             </View>
 
-            
             <Text style={[styles.message, { color: colors.textMuted }]}>
               <Text style={[styles.boldText, { color: colors.foreground }]}>{item.message}</Text>
               {item.subMessage ? ` ${item.subMessage}` : ''}
@@ -176,45 +334,42 @@ const NotificationsScreen = () => {
             
             {!(isActionable && isUnread) && <Text style={[styles.dateText, { color: colors.textSubtle }]}>{formatFullDate(date)}</Text>}
 
-            
-            {item.type === 'FRIEND_REQUEST' && isUnread && (
+            {item.type === 'FRIEND_REQUEST' && isUnread && !isSelectionMode && (
               <View style={styles.actionRow}>
                 <TouchableOpacity 
                   style={[styles.acceptButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
-                  onPress={() => handleAcceptFriendRequest(item.senderId, item.id || item.notificationId)}
+                  onPress={() => handleAcceptFriendRequest(item.senderId, itemId)}
                 >
                   <Text style={styles.acceptButtonText}>CHẤP NHẬN</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.rejectButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => handleRejectFriendRequest(item.senderId, item.id || item.notificationId, item.fullName)}
+                  onPress={() => handleRejectFriendRequest(item.senderId, itemId, item.fullName)}
                 >
                   <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>HỦY</Text>
                 </TouchableOpacity>
-
               </View>
             )}
 
-            {item.type === 'GROUP_INVITE' && isUnread && (
+            {item.type === 'GROUP_INVITE' && isUnread && !isSelectionMode && (
               <View style={styles.actionRow}>
                 <TouchableOpacity 
                   style={[styles.acceptButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
-                  onPress={() => handleAcceptGroupInvite(item.invitationId || item.id, item.id || item.notificationId)}
+                  onPress={() => handleAcceptGroupInvite(item.invitationId || item.id, itemId)}
                 >
                   <Text style={styles.acceptButtonText}>THAM GIA</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.rejectButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => handleRejectGroupInvite(item.invitationId || item.id, item.id || item.notificationId)}
+                  onPress={() => handleRejectGroupInvite(item.invitationId || item.id, itemId)}
                 >
                   <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>TỪ CHỐI</Text>
                 </TouchableOpacity>
-
               </View>
             )}
           </View>
         </View>
-      </View>
+      </CardContainer>
     );
   };
 
@@ -239,10 +394,32 @@ const NotificationsScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông báo</Text>
-        <TouchableOpacity style={styles.markAllBtn}>
-          <Text style={[styles.markAllText, { color: colors.primary }]}>Đánh dấu đã đọc</Text>
-        </TouchableOpacity>
+        {isSelectionMode ? (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity onPress={handleCancelSelection} style={{ padding: 5 }}>
+                <MaterialIcons name="close" size={24} color={colors.foreground} />
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { fontSize: 20, color: colors.foreground }]}>
+                Đã chọn {selectedIds.length}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              onPress={handleDeleteSelected} 
+              disabled={selectedIds.length === 0} 
+              style={{ padding: 5, opacity: selectedIds.length === 0 ? 0.4 : 1 }}
+            >
+              <MaterialIcons name="delete" size={24} color="#ef4444" />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông báo</Text>
+            <TouchableOpacity style={{ padding: 5 }} onPress={showThreeDotMenu}>
+              <MaterialIcons name="more-vert" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
 
@@ -364,6 +541,11 @@ const styles = StyleSheet.create({
   },
   emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100 },
   emptyText: { marginTop: 15, color: '#94a3b8', fontSize: 16 },
+  checkboxContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
 });
 
 export default NotificationsScreen;

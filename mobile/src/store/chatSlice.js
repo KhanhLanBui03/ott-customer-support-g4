@@ -41,6 +41,18 @@ export const fetchConversations = createAsyncThunk('chat/fetchConversations', as
   } catch (error) { return rejectWithValue(error.response?.data?.message); }
 });
 
+export const fetchConversationDetail = createAsyncThunk('chat/fetchConversationDetail', async (conversationId, { rejectWithValue, getState }) => {
+  try {
+    const state = getState().chat;
+    const myId = getState().auth.user?.userId || getState().auth.user?.id;
+    const realId = getRealId(state, conversationId, myId);
+    const response = await conversationApi.getConversation(realId);
+    return response.data.data || response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message);
+  }
+});
+
 export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, { rejectWithValue, getState }) => {
   try {
     const id = typeof arg === 'string' ? arg : arg.conversationId;
@@ -499,6 +511,16 @@ const chatSlice = createSlice({
           const dateB = new Date(b.updatedAt || 0);
           return dateB - dateA;
         });
+      })
+      .addCase(fetchConversationDetail.fulfilled, (state, action) => {
+        const conv = action.payload;
+        if (!conv) return;
+        const idx = state.conversations.findIndex(c => c.conversationId === conv.conversationId);
+        if (idx !== -1) {
+          state.conversations[idx] = { ...state.conversations[idx], ...conv };
+        } else {
+          state.conversations.push(conv);
+        }
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
         const { conversationId, messages, isLoadMore } = action.payload;

@@ -118,16 +118,17 @@ export const useChat = () => {
       try { console.debug('[useChat] normalized messages for', conversationId, messagesList); } catch(e){}
 
       // If loadMore, prepend new messages to existing ones
+      let filtered = messagesList;
       if (loadMore && messagesRef.current[conversationId]?.length > 0) {
         const existingMsgs = messagesRef.current[conversationId];
         // Filter out duplicates
-        const filtered = messagesList.filter(nm => !existingMsgs.some(em => em.messageId === nm.messageId));
+        filtered = messagesList.filter(nm => !existingMsgs.some(em => em.messageId === nm.messageId));
         messagesList = [...filtered, ...existingMsgs];
       }
 
       dispatch(setMessages({ conversationId, messages: messagesList }));
 
-      const hasMoreHistory = Array.isArray(messagesList) && messagesList.length >= DEFAULT_MESSAGE_PAGE_SIZE;
+      const hasMoreHistory = Array.isArray(filtered) && filtered.length > 0;
       return { messages: messagesList, hasMoreHistory };
     } catch (err) {
       console.error("Failed to fetch messages", err);

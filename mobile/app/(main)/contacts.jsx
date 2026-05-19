@@ -11,10 +11,11 @@ import {
   RefreshControl,
   TextInput,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import { MaterialIcons, Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { friendApi } from '../../src/api/friendApi';
 import { useTheme } from '../../src/context/ThemeContext';
 
@@ -41,7 +42,8 @@ const ContactsScreen = () => {
       }
       // axiosClient returns response.data directly due to interceptor
       const data = response.data || response;
-      setFriends(Array.isArray(data) ? data : []);
+      const friendsList = Array.isArray(data) ? data : [];
+      setFriends(friendsList.filter(f => f.status === 'ACCEPTED'));
     } catch (err) {
       console.error('Fetch friends error:', err);
     } finally {
@@ -49,8 +51,19 @@ const ContactsScreen = () => {
     }
   };
 
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchFriends();
+    }, [])
+  );
+
   useEffect(() => {
-    fetchFriends();
+    const subscription = DeviceEventEmitter.addListener('friendship_changed', () => {
+      fetchFriends();
+    });
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   const onRefresh = async () => {
@@ -79,7 +92,14 @@ const ContactsScreen = () => {
   const handleChat = (friend) => {
     // Navigating to chat with the friend's ID. 
     // The chat screen logic (getRealId) will handle finding or creating the SINGLE conversation.
-    router.push(`/chat/${friend.userId || friend.id}`);
+    router.push({
+      pathname: `/chat/${friend.userId || friend.id}`,
+      params: {
+        name: friend.fullName || friend.name,
+        avatar: friend.avatarUrl || friend.avatar,
+        type: 'SINGLE'
+      }
+    });
   };
 
   const handleUnfriend = (friend) => {

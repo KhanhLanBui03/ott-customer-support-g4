@@ -325,6 +325,13 @@ public class MessageService {
             message.setHiddenForUsers(hidden);
             log.info("[DEBUG] Saving message with updated hiddenForUsers: {}", hidden);
             messageRepository.save(message);
+            
+            // Recalculate last message for this user immediately!
+            try {
+                conversationService.recalculateLastMessageForUser(conversationId, userId, true);
+            } catch (Exception e) {
+                log.error("[DEBUG] Failed to recalculate last message: {}", e.getMessage());
+            }
         } else {
             log.info("[DEBUG] User already in hiddenForUsers for message {}", messageId);
         }
@@ -472,6 +479,13 @@ public class MessageService {
                     .map(Message::getCreatedAt)
                     .orElse(null);
             log.debug("Fetching messages before messageId: {}, createdAt: {}", fromMessageId, fromCreatedAt);
+            
+            // If fromMessageId is provided but not found, it means the client's anchor is invalid (e.g. message deleted).
+            // Return empty to stop the client from infinite looping by fetching from the beginning.
+            if (fromCreatedAt == null) {
+                log.warn("fromMessageId {} not found in DB, returning empty list to stop pagination loop", fromMessageId);
+                return new java.util.ArrayList<>();
+            }
         }
 
         final Long finalFromCreatedAt = fromCreatedAt;
@@ -486,12 +500,11 @@ public class MessageService {
                         m2.getCreatedAt() != null ? m2.getCreatedAt() : 0L,
                         m1.getCreatedAt() != null ? m1.getCreatedAt() : 0L)); // newest first
 
-        // Apply joinedAt filter only when limit > 0 (normal paginated fetch).
-        // If client requests limit == -1 we interpret as "fetch all" and skip joinedAt
-        var stream = baseStream;
+        // Always apply joinedAt filter to enforce chat history clearing and group join dates
+        var stream = baseStream.filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= finalJoinedAt);
+        
         if (limit > 0) {
-            stream = stream.filter(m -> m.getCreatedAt() >= finalJoinedAt)
-                    .limit(limit);
+            stream = stream.limit(limit);
         }
 
         return stream.sorted((m1, m2) -> Long.compare(

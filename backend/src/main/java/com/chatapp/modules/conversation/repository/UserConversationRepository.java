@@ -24,7 +24,10 @@ public class UserConversationRepository {
     }
 
     public Optional<UserConversation> findById(String userId, String conversationId) {
-        UserConversation userConversation = dynamoDBMapper.load(UserConversation.class, userId, conversationId);
+        com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapperConfig config = com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapperConfig.builder()
+                .withConsistentReads(com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapperConfig.ConsistentReads.CONSISTENT)
+                .build();
+        UserConversation userConversation = dynamoDBMapper.load(UserConversation.class, userId, conversationId, config);
         return Optional.ofNullable(userConversation);
     }
 

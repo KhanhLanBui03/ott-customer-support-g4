@@ -31,7 +31,8 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
     try {
       const response = await friendApi.getFriends();
       const data = response?.data || response || [];
-      setFriends(Array.isArray(data) ? data : []);
+      const validFriends = Array.isArray(data) ? data.filter(f => f.status === 'ACCEPTED') : [];
+      setFriends(validFriends);
     } catch (err) {
       console.error("Failed to fetch friends", err);
     }

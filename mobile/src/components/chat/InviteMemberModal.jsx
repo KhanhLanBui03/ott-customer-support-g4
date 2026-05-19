@@ -41,9 +41,9 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
       setLoading(true);
       const response = await friendApi.getFriends();
       const friendsData = response.data || response || [];
-      // Filter out friends who are already members
+      // Filter out friends who are already members and ensure they are accepted friends
       const availableFriends = friendsData.filter(
-        f => !existingMemberIds.includes(String(f.userId || f.id))
+        f => f.status === 'ACCEPTED' && !existingMemberIds.includes(String(f.userId || f.id))
       );
       setFriends(availableFriends);
     } catch (err) {

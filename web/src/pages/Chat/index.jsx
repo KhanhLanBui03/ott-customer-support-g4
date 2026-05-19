@@ -136,10 +136,10 @@ const Chat = () => {
     // Fetch initial notifications
     const loadNotifications = () => {
       friendApi.getPendingRequests().then(res => {
-        dispatch(setPendingRequests(res.data || []));
+        dispatch(setPendingRequests(Array.isArray(res) ? res : res?.data || []));
       }).catch(() => { });
       chatApi.getPendingInvitations().then(res => {
-        dispatch(setPendingGroups(res.data || []));
+        dispatch(setPendingGroups(Array.isArray(res) ? res : res?.data || []));
       }).catch(() => { });
       if (myId) {
         dispatch(fetchNotifications(myId));

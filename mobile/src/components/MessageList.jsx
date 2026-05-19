@@ -33,8 +33,13 @@ const MessageList = React.forwardRef(({
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = React.useState(false);
+  const [hasMore, setHasMore] = React.useState(true);
   const [isNearBottom, setIsNearBottom] = React.useState(true); // Track if user is near bottom
   const readMessageIds = useRef(new Set());
+
+  useEffect(() => {
+    setHasMore(true);
+  }, [conversationId]);
 
   // Đảo ngược danh sách tin nhắn để dùng với inverted FlatList
   // Tin nhắn mới nhất sẽ ở index 0 (đáy màn hình)
@@ -302,11 +307,17 @@ const MessageList = React.forwardRef(({
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         onEndReached={() => {
-          if (!isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0) {
+          if (!isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0 && hasMore) {
             setIsLoadingMoreMessages(true);
-            onLoadMore().finally(() => {
-              setIsLoadingMoreMessages(false);
-            });
+            onLoadMore()
+              .then((moreExist) => {
+                if (moreExist === false) {
+                  setHasMore(false);
+                }
+              })
+              .finally(() => {
+                setIsLoadingMoreMessages(false);
+              });
           }
         }}
         onEndReachedThreshold={0.5}
