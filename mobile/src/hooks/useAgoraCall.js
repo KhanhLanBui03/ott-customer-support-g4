@@ -281,22 +281,23 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
         // 1. Gửi tín hiệu Socket NGAY LẬP TỨC
         if (sendSignal && cid) {
             if (isActuallyGroup) {
-                // Nếu mình là người cuối cùng trong phòng, gửi HANGUP để thông báo cuộc gọi kết thúc hoàn toàn
-                if (isLastPerson) {
-                    console.log('📤 [useAgoraCall] Last person sending HANGUP (Group mode):', cid);
+                const isCancelingBeforeJoin = isInitiatorRef.current && !hasHadRemote;
+                if (isCancelingBeforeJoin) {
+                    console.log('📤 [useAgoraCall] Initiator canceling group call (Group mode):', cid);
                     emitCallSignal(cid, {
                         type: 'HANGUP',
                         reason: 'ENDED',
                         conversationType: 'GROUP'
                     });
-                } else {
-                    console.log('📤 [useAgoraCall] Participant sending LEAVE (Group mode):', cid);
+                } else if (callStatus === 'connected') {
+                    console.log('📤 [useAgoraCall] Participant leaving group call (Group mode):', cid);
                     emitCallSignal(cid, {
                         type: 'LEAVE',
                         senderName: myFullName,
                         conversationType: 'GROUP'
                     });
                 }
+                // Nếu callStatus là 'incoming' (người nghe từ chối cuộc gọi đến), ta không gửi bất kỳ tín hiệu nào để tránh tắt màn hình của người khác.
             } else {
                 console.log('📤 [useAgoraCall] Instant-sending HANGUP (1-1 mode):', cid);
                 emitCallSignal(cid, {
@@ -397,7 +398,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             dispatch(resetCall());
         }, 2000);
 
-    }, [activeConversationId, callStatus, callType, dispatch, incomingSignal, remoteUsers, activeConversation, user, hasHadRemote]);
+    }, [activeConversationId, callStatus, callType, dispatch, incomingSignal, remoteUsers, activeConversation, user, hasHadRemote, isInitiator, isGroup]);
 
 
 
@@ -564,7 +565,16 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
                 // Quy trình xử lý tia chớp: Chấp nhận nếu khớp CID HOẶC khớp ID người dùng (Partner/Self)
                 // isSelfSync (đồng bộ đa thiết bị) chỉ kích hoạt kết thúc nếu thực sự khớp CID cuộc gọi đang diễn ra
-                const shouldEnd = cidMatch || isPartnerSignal || (isSelfSync && cidMatch);
+                let shouldEnd = false;
+                if (isActuallyGroup) {
+                    const initiatorId = callerIdRef.current || callerInfo?.id || incomingSignal?.senderId || callerId;
+                    const isFromInitiator = initiatorId && cleanSenderId && String(cleanSenderId) === String(initiatorId);
+                    if (callStatusRef.current !== 'connected' && (isFromInitiator || (isSelfSync && cidMatch))) {
+                        shouldEnd = true;
+                    }
+                } else {
+                    shouldEnd = cidMatch || isPartnerSignal || (isSelfSync && cidMatch);
+                }
 
                 if (shouldEnd && callStatusRef.current !== 'idle' && callStatusRef.current !== 'ended') {
                     console.log('🛑 [useAgoraCall] Valid termination signal, ending call.');
