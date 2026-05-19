@@ -644,19 +644,6 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                   try {
                     const targetUserId = currentMember.userId || currentMember.id;
                     await friendApi.sendRequest(targetUserId);
-                    const myId = user?.userId || user?.id;
-                    if (myId && targetUserId) {
-                      try {
-                        await notificationApi.createNotification({
-                          senderId: myId,
-                          receiverId: targetUserId,
-                          type: 'FRIEND_REQUEST',
-                          message: `${user?.fullName || user?.phoneNumber || 'Ai đó'} đã gửi lời mời kết bạn cho bạn.`
-                        });
-                      } catch (e) {
-                        console.warn('Failed to create FRIEND_REQUEST notification', e);
-                      }
-                    }
                     dispatch(updateFriendStatus({
                       userId: targetUserId,
                       status: 'PENDING',

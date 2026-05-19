@@ -116,13 +116,17 @@ export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (_, { rejectWithValue }) => {
     try {
-      // Always clear local storage first
+      // 1. Try to notify backend first while tokens are still present in SecureStore
+      try {
+        await authApi.logout();
+      } catch (err) {
+        console.log('Logout API failed, but local state will be cleared:', err);
+      }
+
+      // 2. Clear local storage
       await SecureStore.deleteItemAsync('accessToken');
       await SecureStore.deleteItemAsync('refreshToken');
       await SecureStore.deleteItemAsync('user');
-
-      // Try to notify backend, but don't wait for it if it fails
-      authApi.logout().catch(err => console.log('Logout API failed, but local state cleared'));
       
       return null;
     } catch (error) {

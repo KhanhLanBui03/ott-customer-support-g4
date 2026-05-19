@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+
 import {
   View,
   Text,
@@ -10,7 +11,14 @@ import {
   Image,
   Alert,
   Modal,
+  Dimensions,
+  LayoutAnimation,
+  Keyboard,
+  ScrollView,
 } from 'react-native';
+
+
+
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { clearReplyingTo } from '../store/chatSlice';
@@ -20,18 +28,30 @@ import { mediaApi } from '../api/chatApi';
 import CONFIG from '../config';
 import { Audio } from 'expo-av';
 import PermissionModal from './common/PermissionModal';
+import { useTheme } from '../context/ThemeContext';
 
-const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conversationType, onOpenPoll }) => {
+
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingChange, conversationType, onOpenPoll, members = [] }, ref) => {
+
+
+
+  const { colors, isDark } = useTheme();
   const [message, setMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadType, setUploadType] = useState(null); // 'MEDIA' or 'FILE'
   const [isTyping, setIsTyping] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const typingTimeoutRef = useRef(null);
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
   const { replyingTo } = useSelector(state => state.chat);
   const currentUserId = user?.userId || user?.id;
+
 
   // Voice recording state
   const [recording, setRecording] = useState(null);
@@ -39,17 +59,36 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
   const [recordingDuration, setRecordingDuration] = useState(0);
   const recordingIntervalRef = useRef(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [permissionModal, setPermissionModal] = useState({ 
-    visible: false, 
-    type: 'camera', 
-    onConfirm: () => {},
+
+  // Mention states
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionResults, setMentionResults] = useState([]);
+  const [cursorPosition, setCursorPosition] = useState(0);
+
+  const [permissionModal, setPermissionModal] = useState({
+    visible: false,
+    type: 'camera',
+    onConfirm: () => { },
     onCancel: () => setPermissionModal(prev => ({ ...prev, visible: false }))
   });
   const isPickingRef = useRef(false);
 
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
 
+  useImperativeHandle(ref, () => ({
+    insertMention: (user) => {
+      const mentionText = `@${user.fullName || user.name} `;
+      setMessage(prev => {
+        // Nếu đã có nội dung, thêm dấu cách nếu cần
+        if (prev && !prev.endsWith(' ')) return prev + ' ' + mentionText;
+        return prev + mentionText;
+      });
+    }
+  }));
+
   useEffect(() => {
+
     return () => {
       if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
     };
@@ -93,11 +132,11 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
       };
 
       const { recording } = await Audio.Recording.createAsync(recordingOptions);
-      
+
       setRecording(recording);
       setIsRecording(true);
       setRecordingDuration(0);
-      
+
       recordingIntervalRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
@@ -165,13 +204,66 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
 
   const handleChange = (text) => {
     setMessage(text);
-    
+
+    // Logic detect mention (cả có @ và không có @)
+    if (conversationType === 'GROUP') {
+      const lastAtPos = text.lastIndexOf('@', cursorPosition - 1);
+
+      // Trường hợp 1: Có ký tự @ chủ động
+      if (lastAtPos !== -1 && !text.slice(lastAtPos, cursorPosition).includes(' ')) {
+        const textAfterAt = text.slice(lastAtPos + 1, cursorPosition);
+        if (textAfterAt.length < 20) {
+          setMentionQuery(textAfterAt);
+          const filtered = members.filter(m => {
+            const name = m.fullName || m.name || '';
+            const isAlreadyMentioned = text.includes(`@${name}`);
+            return (
+              name.toLowerCase().includes(textAfterAt.toLowerCase()) &&
+              String(m.userId || m.id) !== String(currentUserId) &&
+              !isAlreadyMentioned
+            );
+          });
+          setMentionResults(filtered);
+          setShowMentions(filtered.length > 0);
+          return; // Thoát sớm nếu đã xử lý theo @
+        }
+      }
+
+      // Trường hợp 2: Không có @ - Tự động gợi ý theo từ đang gõ
+      const words = text.slice(0, cursorPosition).split(/\s/);
+      const currentWord = words[words.length - 1];
+
+      if (currentWord.length >= 2) {
+        setMentionQuery(currentWord);
+        const filtered = members.filter(m => {
+          const name = m.fullName || m.name || '';
+          const isAlreadyMentioned = text.includes(`@${name}`);
+          return (
+            name.toLowerCase().includes(currentWord.toLowerCase()) &&
+            String(m.userId || m.id) !== String(currentUserId) &&
+            !isAlreadyMentioned
+          );
+
+        });
+        setMentionResults(filtered);
+        setShowMentions(filtered.length > 0);
+      } else {
+        setShowMentions(false);
+        setMentionQuery('');
+      }
+    } else {
+      setShowMentions(false);
+      setMentionQuery('');
+    }
+
+
+
     if (text.length > 0) {
       if (!isTyping) {
         setIsTyping(true);
         onTypingChange && onTypingChange(true);
       }
-      
+
       // Reset timeout
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
@@ -191,18 +283,42 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
     }
   };
 
+  const handleSelectMention = (member) => {
+    const lastAtPos = message.lastIndexOf('@', cursorPosition - 1);
+    const name = member.fullName || member.name;
+
+    if (lastAtPos !== -1 && !message.slice(lastAtPos, cursorPosition).includes(' ')) {
+      // Thay thế cho trường hợp có @
+      const beforeAt = message.slice(0, lastAtPos);
+      const afterCursor = message.slice(cursorPosition);
+      const newMessage = `${beforeAt}@${name} ${afterCursor}`;
+      setMessage(newMessage);
+    } else {
+      // Thay thế cho trường hợp gõ tên trực tiếp
+      const words = message.slice(0, cursorPosition).split(/\s/);
+      const currentWord = words[words.length - 1];
+      const beforeWord = message.slice(0, cursorPosition - currentWord.length);
+      const afterCursor = message.slice(cursorPosition);
+      const newMessage = `${beforeWord}@${name} ${afterCursor}`;
+      setMessage(newMessage);
+    }
+    setShowMentions(false);
+  };
+
+
+
   const requestPermission = async (type, nativeRequest) => {
     let checkFunc;
     if (type === 'camera') checkFunc = () => ImagePicker.getCameraPermissionsAsync();
     else if (type === 'gallery') checkFunc = () => ImagePicker.getMediaLibraryPermissionsAsync();
     else if (type === 'mic') checkFunc = () => Audio.getPermissionsAsync();
-    
+
     console.log(`[Permission] Requesting ${type}...`);
     if (checkFunc) {
       const { status, canAskAgain } = await checkFunc();
       console.log(`[Permission] Current status for ${type}: ${status}`);
       if (status === 'granted') return true;
-      
+
       if (status === 'denied' && !canAskAgain) {
         Alert.alert('Quyền bị từ chối', 'Bạn đã từ chối quyền này trước đó. Vui lòng vào Cài đặt để cấp quyền thủ công.');
         return false;
@@ -256,7 +372,7 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
         setIsUploading(true);
         setUploadType('MEDIA');
         const asset = result.assets[0];
-        
+
         let fileName = asset.fileName || (asset.type === 'video' ? 'video.mp4' : 'camera_image.jpg');
         const file = {
           uri: asset.uri,
@@ -332,7 +448,7 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
             type: asset.type === 'video' ? 'video/mp4' : 'image/jpeg',
             name: fileName,
           };
-          
+
           if (asset.type === 'video') messageType = 'VIDEO';
 
           // Retry logic: up to 3 attempts
@@ -365,7 +481,7 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
         if (uploadedUrls.length > 0) {
           onSendMessage('', replyingTo?.messageId, messageType, uploadedUrls);
           dispatch(clearReplyingTo());
-          
+
           if (failCount > 0) {
             Alert.alert('Thông báo', `Đã gửi ${uploadedUrls.length} ảnh. Có ${failCount} ảnh bị lỗi không gửi được.`);
           }
@@ -469,7 +585,7 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
     if (message.trim() && !isLoading && !isUploading) {
       onSendMessage(message.trim(), replyingTo?.messageId);
       setMessage('');
-      
+
       if (isTyping) {
         setIsTyping(false);
         onTypingChange && onTypingChange(false);
@@ -478,20 +594,20 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      
+
       dispatch(clearReplyingTo());
     }
   };
 
   const renderReplyContent = () => {
     if (!replyingTo) return null;
-    
+
     const isImage = replyingTo.type === 'IMAGE' || (replyingTo.type !== 'VIDEO' && replyingTo.type !== 'FILE' && replyingTo.mediaUrls && replyingTo.mediaUrls.length > 0);
     const isVideo = replyingTo.type === 'VIDEO';
     const isFile = replyingTo.type === 'FILE';
     const isVoice = replyingTo.type === 'VOICE';
-    
-    const thumbUrl = (isImage || isVideo) && replyingTo.mediaUrls?.[0] 
+
+    const thumbUrl = (isImage || isVideo) && replyingTo.mediaUrls?.[0]
       ? (replyingTo.mediaUrls[0].startsWith('http') ? replyingTo.mediaUrls[0] : `${BASE_URL}${replyingTo.mediaUrls[0].startsWith('/') ? '' : '/'}${replyingTo.mediaUrls[0]}`)
       : null;
 
@@ -507,7 +623,7 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
 
     let displayText = replyingTo.content;
     const isVoiceMsg = isVoice || (displayText && (displayText.includes('chat-media/') || displayText.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
-    
+
     if (isVoiceMsg) {
       displayText = 'Tin nhắn thoại';
     } else if (!displayText) {
@@ -521,17 +637,19 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
     }
 
     return (
-      <View style={styles.replyPreview}>
-        <View style={styles.replyPreviewLine} />
+      <View style={[styles.replyPreview, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <View style={[styles.replyPreviewLine, { backgroundColor: colors.primary }]} />
         <View style={styles.replyPreviewContent}>
-          <Text style={styles.replyPreviewSender}>
-            Trả lời {String(replyingTo.senderId) === String(user?.userId) || String(replyingTo.senderId) === String(user?.id) 
-              ? 'chính mình' 
+          <Text style={[styles.replyPreviewSender, { color: colors.foreground }]}>
+
+            Trả lời {String(replyingTo.senderId) === String(user?.userId) || String(replyingTo.senderId) === String(user?.id)
+              ? 'chính mình'
               : replyingTo.senderName}
           </Text>
-          <Text style={styles.replyPreviewText} numberOfLines={1}>
+          <Text style={[styles.replyPreviewText, { color: colors.textMuted }]} numberOfLines={1}>
             {displayText}
           </Text>
+
         </View>
 
         {isFile && replyingTo.mediaUrls?.[0] ? (
@@ -541,10 +659,11 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
         ) : thumbUrl ? (
           <Image source={{ uri: thumbUrl }} style={styles.replyThumbnail} resizeMode="cover" />
         ) : isVoice ? (
-          <View style={[styles.replyThumbnail, { backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }]}>
-            <MaterialIcons name="mic" size={20} color="#667eea" />
+          <View style={[styles.replyThumbnail, { backgroundColor: colors.surface200, alignItems: 'center', justifyContent: 'center' }]}>
+            <MaterialIcons name="mic" size={20} color={colors.primary} />
           </View>
         ) : null}
+
 
         <TouchableOpacity onPress={() => dispatch(clearReplyingTo())} style={styles.closeButton}>
           <MaterialIcons name="close" size={20} color="#9ca3af" />
@@ -554,86 +673,154 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
       {replyingTo && renderReplyContent()}
       <View style={styles.container}>
         {!isRecording ? (
+
           <>
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={() => setShowAttachMenu(true)}
-              disabled={isLoading || isUploading}
-            >
-              <MaterialIcons name="add-circle-outline" size={28} color="#6366f1" />
-            </TouchableOpacity>
+            {!isExpanded && (
+              <>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => setShowAttachMenu(true)}
+                  disabled={isLoading || isUploading}
+                >
+                  <MaterialIcons name="add-circle-outline" size={28} color={colors.primary} />
+                </TouchableOpacity>
 
-            {showAttachMenu && (
-              <TouchableOpacity 
-                style={styles.menuOverlay} 
-                activeOpacity={1} 
-                onPress={() => setShowAttachMenu(false)}
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={takePhoto}
+                  disabled={isLoading || isUploading}
+                >
+                  <MaterialIcons name="photo-camera" size={24} color={colors.primary} />
+                </TouchableOpacity>
+
+                {conversationType === 'GROUP' && (
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={onOpenPoll}
+                    disabled={isLoading || isUploading}
+                  >
+                    <MaterialCommunityIcons name="poll" size={24} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+
+            {isExpanded && (
+              <TouchableOpacity
+                style={[styles.actionButton, { marginRight: 4 }]}
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setIsExpanded(false);
+                  Keyboard.dismiss();
+                }}
               >
-                <View style={styles.menuContainer}>
-                  <Text style={styles.menuTitle}>Đính kèm</Text>
-                  <View style={styles.menuOptions}>
-                    <TouchableOpacity 
-                      style={styles.menuOption} 
-                      onPress={() => {
-                        setShowAttachMenu(false);
-                        setTimeout(pickMedia, 100);
-                      }}
-                    >
-                      <View style={[styles.menuIconBg, { backgroundColor: '#e0e7ff' }]}>
-                        <MaterialIcons name="image" size={24} color="#6366f1" />
-                      </View>
-                      <Text style={styles.menuOptionText}>Ảnh & Video</Text>
-                    </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={32} color={colors.textSubtle} />
+              </TouchableOpacity>
+            )}
 
-                    <TouchableOpacity 
-                      style={styles.menuOption} 
-                      onPress={() => {
-                        setShowAttachMenu(false);
-                        setTimeout(pickDocument, 100);
-                      }}
-                    >
-                      <View style={[styles.menuIconBg, { backgroundColor: '#fef3c7' }]}>
-                        <MaterialIcons name="description" size={24} color="#d97706" />
-                      </View>
-                      <Text style={styles.menuOptionText}>Tài liệu</Text>
-                    </TouchableOpacity>
+
+            <View style={{ flex: 1, position: 'relative' }}>
+              {showMentions && (
+                <View style={[styles.mentionList, { backgroundColor: isDark ? '#1e293b' : '#fff', borderColor: colors.border, left: isExpanded ? -10 : -110 }]}>
+
+                  <View style={[styles.mentionHeader, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}>
+                    <Text style={[styles.mentionHeaderText, { color: isDark ? '#94a3b8' : '#64748b' }]}>NHẮC TÊN THÀNH VIÊN</Text>
                   </View>
+
+                  <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="always">
+                    {/* Option @All - Báo cho cả nhóm */}
+                    {(mentionQuery === '' || 'tất cả'.includes(mentionQuery) || 'all'.includes(mentionQuery)) && (
+                      <TouchableOpacity
+                        style={[styles.mentionItem, styles.mentionItemAll, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
+                        onPress={() => handleSelectMention({ fullName: 'All' })}
+                      >
+                        <View style={styles.mentionAvatarWrapper}>
+                          <View style={[styles.mentionAvatarAll, { backgroundColor: '#6366f1' }]}>
+                            <MaterialIcons name="security" size={18} color="#fff" />
+                          </View>
+                        </View>
+                        <View style={styles.mentionTextContent}>
+                          <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>Báo cho cả nhóm</Text>
+                          <Text style={[styles.mentionSubName, { color: '#6366f1' }]}>@All</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+
+                    {mentionResults.map((member) => (
+                      <TouchableOpacity
+                        key={member.userId || member.id}
+                        style={[styles.mentionItem, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
+                        onPress={() => handleSelectMention(member)}
+                      >
+                        <View style={styles.mentionAvatarWrapper}>
+                          <Image
+                            source={{ uri: member.avatarUrl || member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.fullName || 'U')}&background=random&color=fff&size=64` }}
+                            style={styles.mentionAvatar}
+                          />
+                        </View>
+                        <View style={styles.mentionTextContent}>
+                          <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>{member.fullName}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
-              </TouchableOpacity>
-            )}
+              )}
 
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={takePhoto}
-              disabled={isLoading || isUploading}
-            >
-              <MaterialIcons name="photo-camera" size={24} color="#667eea" />
-            </TouchableOpacity>
 
-            {conversationType === 'GROUP' && (
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={onOpenPoll}
-                disabled={isLoading || isUploading}
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.input, color: colors.foreground }]}
+                placeholder="Type a message..."
+                placeholderTextColor={colors.textSubtle}
+                onChangeText={handleChange}
+                onSelectionChange={(event) => setCursorPosition(event.nativeEvent.selection.start)}
+                onFocus={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setIsExpanded(true);
+                }}
+                editable={!isLoading && !isUploading}
+                multiline
+                maxHeight={100}
               >
-                <MaterialCommunityIcons name="poll" size={24} color="#667eea" />
-              </TouchableOpacity>
-            )}
+                {(() => {
+                  if (!message) return null;
 
-            <TextInput
-              style={styles.input}
-              placeholder="Type a message..."
-              placeholderTextColor="#999"
-              value={message}
-              onChangeText={handleChange}
-              editable={!isLoading && !isUploading}
-              multiline
-              maxHeight={100}
-            />
+                  // Chỉ highlight nếu là GROUP chat
+                  if (conversationType !== 'GROUP') return <Text>{message}</Text>;
+
+                  // Tạo danh sách tên để regex
+
+                  const memberNames = members
+                    .map(m => (m.fullName || m.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                    .filter(Boolean);
+
+                  if (memberNames.length === 0 && !message.includes('@All')) return <Text>{message}</Text>;
+
+                  const allNames = [...memberNames, 'All'].join('|');
+                  const regex = new RegExp(`(@(?:${allNames}))`, 'g');
+                  const parts = message.split(regex);
+
+                  return parts.map((part, i) => {
+                    if (part.startsWith('@')) {
+                      return (
+                        <Text key={i} style={{ color: colors.primary, fontWeight: 'bold' }}>
+                          {part}
+                        </Text>
+                      );
+                    }
+                    return <Text key={i}>{part}</Text>;
+                  });
+                })()}
+              </TextInput>
+
+
+            </View>
+
+
 
             {message.trim() ? (
               <TouchableOpacity
@@ -648,33 +835,35 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
                 )}
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity 
-                style={styles.actionButton} 
+              <TouchableOpacity
+                style={styles.actionButton}
                 onPress={startRecording}
                 disabled={isLoading || isUploading}
               >
-                <MaterialIcons name="mic" size={24} color="#667eea" />
+                <MaterialIcons name="mic" size={24} color={colors.primary} />
               </TouchableOpacity>
+
             )}
           </>
         ) : (
-          <View style={styles.recordingContainer}>
+          <View style={[styles.recordingContainer, { backgroundColor: colors.input }]}>
             <View style={styles.recordingInfo}>
               <View style={styles.recordingDot} />
-              <Text style={styles.recordingTime}>{formatDuration(recordingDuration)}</Text>
+              <Text style={[styles.recordingTime, { color: colors.foreground }]}>{formatDuration(recordingDuration)}</Text>
             </View>
             <View style={styles.recordingActions}>
               <TouchableOpacity style={styles.cancelVoiceBtn} onPress={cancelRecording}>
                 <Text style={styles.cancelVoiceText}>Hủy</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.sendVoiceBtn} onPress={stopRecording}>
+              <TouchableOpacity style={[styles.sendVoiceBtn, { backgroundColor: colors.primary }]} onPress={stopRecording}>
                 <MaterialIcons name="send" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
+
         )}
 
-        <PermissionModal 
+        <PermissionModal
           visible={permissionModal.visible}
           type={permissionModal.type}
           onClose={permissionModal.onCancel || (() => setPermissionModal(prev => ({ ...prev, visible: false })))}
@@ -683,7 +872,8 @@ const MessageInput = ({ onSendMessage, isLoading = false, onTypingChange, conver
       </View>
     </View>
   );
-};
+});
+
 
 const styles = StyleSheet.create({
   root: {
@@ -858,6 +1048,72 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#475569',
   },
+  mentionList: {
+    position: 'absolute',
+    bottom: '100%',
+    left: -40,
+    width: SCREEN_WIDTH - 24,
+    maxHeight: 300,
+    borderWidth: 1,
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+    zIndex: 1000,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  mentionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  mentionHeaderText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  mentionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+  },
+  mentionItemAll: {
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+  },
+  mentionAvatarWrapper: {
+    marginRight: 14,
+  },
+  mentionAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  mentionAvatarAll: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mentionTextContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  mentionName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  mentionSubName: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
 });
+
 
 export default MessageInput;

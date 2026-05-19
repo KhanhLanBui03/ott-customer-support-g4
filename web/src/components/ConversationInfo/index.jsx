@@ -86,8 +86,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
       const response = await friendApi.getFriends();
       const inGroupIds = conversation.members?.map(m => m.userId) || [];
       const data = response?.data || response || [];
-      const friendsList = Array.isArray(data) ? data : [];
-      setSearchResults(friendsList.filter(f => !inGroupIds.includes(f.userId)));
+      const validFriends = Array.isArray(data) ? data.filter(f => f.status === 'ACCEPTED') : [];
+      setSearchResults(validFriends.filter(f => !inGroupIds.includes(f.userId)));
     } catch (err) {
       console.error(err);
     }

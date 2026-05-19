@@ -11,16 +11,21 @@ import {
   RefreshControl,
   TextInput,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import { MaterialIcons, Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { friendApi } from '../../src/api/friendApi';
+import { useTheme } from '../../src/context/ThemeContext';
+
 
 const ContactsScreen = () => {
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+
   const BASE_URL = useSelector(state => state.chat?.BASE_URL) || 'http://192.168.1.98:8080';
   
   const [friends, setFriends] = useState([]);
@@ -37,7 +42,8 @@ const ContactsScreen = () => {
       }
       // axiosClient returns response.data directly due to interceptor
       const data = response.data || response;
-      setFriends(Array.isArray(data) ? data : []);
+      const friendsList = Array.isArray(data) ? data : [];
+      setFriends(friendsList.filter(f => f.status === 'ACCEPTED'));
     } catch (err) {
       console.error('Fetch friends error:', err);
     } finally {
@@ -45,8 +51,19 @@ const ContactsScreen = () => {
     }
   };
 
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchFriends();
+    }, [])
+  );
+
   useEffect(() => {
-    fetchFriends();
+    const subscription = DeviceEventEmitter.addListener('friendship_changed', () => {
+      fetchFriends();
+    });
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   const onRefresh = async () => {
@@ -75,7 +92,14 @@ const ContactsScreen = () => {
   const handleChat = (friend) => {
     // Navigating to chat with the friend's ID. 
     // The chat screen logic (getRealId) will handle finding or creating the SINGLE conversation.
-    router.push(`/chat/${friend.userId || friend.id}`);
+    router.push({
+      pathname: `/chat/${friend.userId || friend.id}`,
+      params: {
+        name: friend.fullName || friend.name,
+        avatar: friend.avatarUrl || friend.avatar,
+        type: 'SINGLE'
+      }
+    });
   };
 
   const handleUnfriend = (friend) => {
@@ -102,39 +126,40 @@ const ContactsScreen = () => {
   };
 
   const renderFriendItem = ({ item }) => (
-    <View style={styles.friendItem}>
+    <View style={[styles.friendItem, { backgroundColor: colors.card }]}>
       <Image 
         source={{ uri: getAvatarUrl(item.avatarUrl, item.fullName) }} 
         style={styles.avatar} 
       />
       <View style={styles.infoContainer}>
-        <Text style={styles.name}>{item.fullName || item.username || 'Người dùng'}</Text>
-        <Text style={styles.phone}>{item.phoneNumber || 'Không có số điện thoại'}</Text>
+        <Text style={[styles.name, { color: colors.foreground }]}>{item.fullName || item.username || 'Người dùng'}</Text>
+        <Text style={[styles.phone, { color: colors.textMuted }]}>{item.phoneNumber || 'Không có số điện thoại'}</Text>
       </View>
       <View style={styles.actions}>
         <TouchableOpacity 
-          style={styles.actionButton} 
+          style={[styles.actionButton, { backgroundColor: colors.surface200 }]} 
           onPress={() => handleChat(item)}
         >
-          <MaterialIcons name="chat" size={24} color="#667eea" />
+          <MaterialIcons name="chat" size={24} color={colors.primary} />
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.actionButton, styles.unfriendButton]} 
+          style={[styles.actionButton, styles.unfriendButton, { backgroundColor: colors.card, borderColor: colors.border }]} 
           onPress={() => handleUnfriend(item)}
         >
-          <MaterialIcons name="person-remove" size={24} color="#94a3b8" />
+          <MaterialIcons name="person-remove" size={24} color={colors.textSubtle} />
         </TouchableOpacity>
       </View>
     </View>
+
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>Danh sách bạn bè</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Danh sách bạn bè</Text>
           <TouchableOpacity 
-            style={styles.requestButton}
+            style={[styles.requestButton, { backgroundColor: colors.primary }]}
             onPress={() => router.push('/notifications')}
           >
             <MaterialIcons name="notifications" size={18} color="#fff" />
@@ -142,27 +167,29 @@ const ContactsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.searchContainer}>
-          <MaterialIcons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
+        <View style={[styles.searchContainer, { backgroundColor: colors.input }]}>
+          <MaterialIcons name="search" size={20} color={colors.textSubtle} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="Tìm kiếm bạn bè trong danh sách..."
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textSubtle}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <MaterialIcons name="close" size={20} color="#94a3b8" />
+              <MaterialIcons name="close" size={20} color={colors.textSubtle} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
+
       {loading && !refreshing ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#667eea" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
+
       ) : (
         <FlatList
           data={filteredFriends}

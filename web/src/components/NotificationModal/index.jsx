@@ -48,17 +48,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
         user: other,
         message: `Bạn đã trở thành bạn bè của ${otherName}`
       }));
-      try {
-        const myId = currentUser?.userId || currentUser?.id;
-        await notificationApi.createNotification({
-          senderId: myId,
-          receiverId: userId,
-          type: 'FRIEND_ACCEPTED',
-          message: `Bạn đã trở thành bạn bè của ${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'}.`
-        });
-      } catch (e) {
-        console.warn('Failed to create FRIEND_ACCEPTED notification', e);
-      }
+
     } catch (err) {
       console.error("Failed to accept friend request", err);
     }

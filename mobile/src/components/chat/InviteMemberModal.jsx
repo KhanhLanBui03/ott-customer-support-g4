@@ -16,9 +16,13 @@ import { friendApi } from '../../api/friendApi';
 import { userApi } from '../../api/userApi';
 import { conversationApi } from '../../api/chatApi';
 import { Alert } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
+
 
 const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds = [] }) => {
+  const { colors, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
+
   const [friends, setFriends] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -37,9 +41,9 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
       setLoading(true);
       const response = await friendApi.getFriends();
       const friendsData = response.data || response || [];
-      // Filter out friends who are already members
+      // Filter out friends who are already members and ensure they are accepted friends
       const availableFriends = friendsData.filter(
-        f => !existingMemberIds.includes(String(f.userId || f.id))
+        f => f.status === 'ACCEPTED' && !existingMemberIds.includes(String(f.userId || f.id))
       );
       setFriends(availableFriends);
     } catch (err) {
@@ -102,23 +106,24 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
     const isInviting = invitingIds.has(userId);
 
     return (
-      <View style={styles.userItem}>
+      <View style={[styles.userItem, { borderBottomColor: colors.border }]}>
         <Image
           source={{ uri: item.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.fullName || 'U')}&background=667eea&color=fff&size=128&bold=true` }}
           style={styles.avatar}
         />
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.fullName || item.phoneNumber}</Text>
-          {item.phoneNumber && <Text style={styles.userPhone}>{item.phoneNumber}</Text>}
+          <Text style={[styles.userName, { color: colors.foreground }]}>{item.fullName || item.phoneNumber}</Text>
+          {item.phoneNumber && <Text style={[styles.userPhone, { color: colors.textMuted }]}>{item.phoneNumber}</Text>}
         </View>
         <TouchableOpacity
-          style={[styles.inviteButton, isInviting && styles.invitedButton]}
+          style={[styles.inviteButton, { backgroundColor: colors.primary }, isInviting && [styles.invitedButton, { backgroundColor: isDark ? colors.surface300 : '#e2e8f0' }]]}
           onPress={() => handleInvite(item)}
           disabled={isInviting}
         >
-          <Text style={styles.inviteButtonText}>{isInviting ? 'Đã mời' : 'Mời'}</Text>
+          <Text style={[styles.inviteButtonText, isInviting && { color: colors.textMuted }]}>{isInviting ? 'Đã mời' : 'Mời'}</Text>
         </TouchableOpacity>
       </View>
+
     );
   };
 
@@ -132,40 +137,43 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
       onRequestClose={onClose}
     >
       <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>MỜI BẠN BÈ</Text>
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>MỜI BẠN BÈ</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#94a3b8" />
+              <Ionicons name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
+
           {/* Search Input */}
           <View style={styles.searchContainer}>
-            <View style={styles.searchInputWrapper}>
-              <MaterialIcons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
+            <View style={[styles.searchInputWrapper, { backgroundColor: colors.input, borderColor: colors.border }]}>
+              <MaterialIcons name="search" size={20} color={colors.textSubtle} style={styles.searchIcon} />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: colors.foreground }]}
                 placeholder="Tìm theo SĐT..."
-                placeholderTextColor="#64748b"
+                placeholderTextColor={colors.textSubtle}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 keyboardType="phone-pad"
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                  <Ionicons name="close-circle" size={18} color={colors.textSubtle} />
                 </TouchableOpacity>
               )}
             </View>
           </View>
 
+
           {/* List */}
           {loading && displayedData.length === 0 ? (
             <View style={styles.centerContainer}>
-              <ActivityIndicator color="#6366f1" size="large" />
+              <ActivityIndicator color={colors.primary} size="large" />
             </View>
+
           ) : (
             <FlatList
               data={displayedData}
@@ -174,13 +182,14 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <MaterialIcons name="person-search" size={48} color="#475569" />
-                  <Text style={styles.emptyText}>
+                  <MaterialIcons name="person-search" size={48} color={colors.textSubtle} />
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                     {searchQuery.length > 0
                       ? 'Không tìm thấy người dùng này'
                       : 'Bạn chưa có bạn bè nào để mời'}
                   </Text>
                 </View>
+
               }
             />
           )}

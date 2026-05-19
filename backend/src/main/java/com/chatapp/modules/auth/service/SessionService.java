@@ -24,16 +24,40 @@ public class SessionService {
     private final ConcurrentHashMap<String, String> deviceToSession = new ConcurrentHashMap<>();
 
     /**
-     * Create a new session
+     * Create a new session (default to web)
      */
     public String createSession(String userId) {
-        String sessionId = UUID.randomUUID().toString();
+        return createSession(userId, "web");
+    }
 
+    /**
+     * Create a new session with device type ("web" or "mobile")
+     */
+    public String createSession(String userId, String deviceType) {
+        String type = (deviceType != null && deviceType.toLowerCase().contains("mobile")) ? "mobile" : "web";
+        
+        // Enforce single active session per deviceType
+        Set<String> activeSessions = userToSessions.get(userId);
+        if (activeSessions != null) {
+            for (String activeId : activeSessions) {
+                SessionEntry activeEntry = sessionToUser.get(activeId);
+                if (activeEntry != null && activeEntry.expiresAt > System.currentTimeMillis()) {
+                    if (activeEntry.deviceType.equalsIgnoreCase(type)) {
+                        String errorMsg = "web".equals(type) 
+                            ? "Tài khoản đang đăng nhập trên một trình duyệt Web khác!" 
+                            : "Tài khoản đang đăng nhập trên một thiết bị di động khác!";
+                        throw new com.chatapp.common.exception.ValidationException(errorMsg);
+                    }
+                }
+            }
+        }
+
+        String sessionId = UUID.randomUUID().toString();
         long expiresAt = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(SESSION_TTL_HOURS);
-        sessionToUser.put(sessionId, new SessionEntry(userId, expiresAt));
+        sessionToUser.put(sessionId, new SessionEntry(userId, expiresAt, type));
         userToSessions.computeIfAbsent(userId, __ -> ConcurrentHashMap.newKeySet()).add(sessionId);
 
-        log.info("Session created: {} for user: {}", sessionId, userId);
+        log.info("Session created: {} ({}) for user: {}", sessionId, type, userId);
         return sessionId;
     }
 
@@ -107,13 +131,33 @@ public class SessionService {
         return sessions.size();
     }
 
+    /**
+     * Check if user has an active session of specific device type
+     */
+    public boolean hasActiveSessionType(String userId, String deviceType) {
+        Set<String> activeSessions = userToSessions.get(userId);
+        if (activeSessions != null) {
+            for (String activeId : activeSessions) {
+                SessionEntry activeEntry = sessionToUser.get(activeId);
+                if (activeEntry != null && activeEntry.expiresAt > System.currentTimeMillis()) {
+                    if (activeEntry.deviceType.equalsIgnoreCase(deviceType)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private static class SessionEntry {
         final String userId;
         final long expiresAt;
+        final String deviceType;
 
-        SessionEntry(String userId, long expiresAt) {
+        SessionEntry(String userId, long expiresAt, String deviceType) {
             this.userId = userId;
             this.expiresAt = expiresAt;
+            this.deviceType = deviceType;
         }
     }
 }

@@ -19,9 +19,13 @@ import { clearChatState } from '../../src/store/chatSlice';
 import { userApi } from '../../src/api/userApi';
 import * as SecureStore from 'expo-secure-store';
 import DeleteAccountModal from '../../src/components/DeleteAccountModal';
+import { useTheme } from '../../src/context/ThemeContext';
+
 
 const ProfileScreen = () => {
+  const { colors, isDark } = useTheme();
   const dispatch = useDispatch();
+
   const router = useRouter();
 
   const user = useSelector((state) => state.auth.user);
@@ -65,13 +69,14 @@ const ProfileScreen = () => {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#0f172a" />
-          <Text style={{marginTop: 10}}>Đang tải hồ sơ...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 10, color: colors.foreground }}>Đang tải hồ sơ...</Text>
         </View>
       </SafeAreaView>
     );
+
   }
 
   const displayUser = {
@@ -92,67 +97,70 @@ const ProfileScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0f172a" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
+
         {/* Profile Card */}
-        <View style={styles.headerCard}>
+        <View style={[styles.headerCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity
-            style={styles.editIconBtn}
+            style={[styles.editIconBtn, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}
             onPress={() => router.push('/(main)/edit-profile')}
           >
-            <MaterialIcons name="edit" size={22} color="#64748b" />
+            <MaterialIcons name="edit" size={22} color={colors.textMuted} />
           </TouchableOpacity>
 
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: displayUser.avatar }} style={styles.avatar} />
+            <Image source={{ uri: displayUser.avatar }} style={[styles.avatar, { borderColor: colors.border, backgroundColor: colors.surface200 }]} />
           </View>
 
-          <Text style={styles.userName}>{displayUser.fullName}</Text>
-          <Text style={styles.userPhone}>{displayUser.phoneNumber}</Text>
+          <Text style={[styles.userName, { color: colors.foreground }]}>{displayUser.fullName}</Text>
+          <Text style={[styles.userPhone, { color: colors.textMuted }]}>{displayUser.phoneNumber}</Text>
 
-          <View style={styles.statusBadge}>
-            <View style={[styles.statusDot, { backgroundColor: displayUser.status === 'online' ? '#10b981' : '#9ca3af' }]} />
-            <Text style={styles.statusText}>{displayUser.status === 'online' ? 'Online' : 'Offline'}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}>
+            <View style={[styles.statusDot, { backgroundColor: displayUser.status === 'online' ? '#10b981' : colors.textSubtle }]} />
+            <Text style={[styles.statusText, { color: colors.textMuted }]}>{displayUser.status === 'online' ? 'Online' : 'Offline'}</Text>
           </View>
         </View>
+
 
         {/* Details Section - Khôi phục đầy đủ */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Thông tin tài khoản</Text>
-          <View style={styles.infoCard}>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Thông tin tài khoản</Text>
+          <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Tiểu sử</Text>
-              <Text style={styles.infoValue}>{displayUser.bio}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>Tiểu sử</Text>
+              <Text style={[styles.infoValue, { color: colors.foreground }]}>{displayUser.bio}</Text>
             </View>
-            <View style={styles.infoDivider} />
+            <View style={[styles.infoDivider, { backgroundColor: colors.border }]} />
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>{displayUser.email}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>Email</Text>
+              <Text style={[styles.infoValue, { color: colors.foreground }]}>{displayUser.email}</Text>
             </View>
-            <View style={styles.infoDivider} />
+            <View style={[styles.infoDivider, { backgroundColor: colors.border }]} />
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>ID Người dùng</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{displayUser.userId}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>ID Người dùng</Text>
+              <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{displayUser.userId}</Text>
             </View>
           </View>
         </View>
 
+
         {/* Settings & Support */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bảo mật & Hỗ trợ</Text>
-          <View style={styles.menuCard}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/change-password')}>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Bảo mật & Hỗ trợ</Text>
+          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
+            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => router.push('/(main)/change-password')}>
               <View style={styles.menuItemLeft}>
-                <Ionicons name="lock-closed-outline" size={20} color="#475569" />
-                <Text style={styles.menuItemText}>Đổi mật khẩu</Text>
+                <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Đổi mật khẩu</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color="#cbd5e1" />
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
@@ -164,10 +172,11 @@ const ProfileScreen = () => {
           </View>
         </View>
 
+
         {/* Danger Zone */}
         <View style={[styles.section, { marginBottom: 30 }]}>
           <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>Vùng nguy hiểm</Text>
-          <View style={styles.menuCard}>
+          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
             <TouchableOpacity style={styles.menuItem} onPress={() => setShowDeleteModal(true)}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="trash-outline" size={20} color="#ef4444" />
@@ -176,6 +185,7 @@ const ProfileScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+
       </ScrollView>
 
       <DeleteAccountModal

@@ -18,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.chatapp.common.util.JwtUtil;
 import java.util.Map;
 
 /**
@@ -30,6 +31,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Check user registration status
@@ -115,6 +117,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             Authentication authentication) {
         String authUserId = userId != null ? userId
                 : (authentication != null ? String.valueOf(authentication.getPrincipal()) : null);
@@ -122,8 +125,18 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Unauthorized", HttpStatus.UNAUTHORIZED.value()));
         }
+        
+        // Extract sessionId from JWT token if not provided in header
+        if ((sessionId == null || sessionId.trim().isEmpty() || "unknown".equals(sessionId)) 
+                && authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            if (jwtUtil.validateToken(token)) {
+                sessionId = jwtUtil.extractSessionId(token);
+            }
+        }
+        
         String authSessionId = sessionId != null ? sessionId : "unknown";
-        log.info("Logout request for user: {}", authUserId);
+        log.info("Logout request for user: {}, sessionId: {}", authUserId, authSessionId);
         authService.logout(authSessionId, authUserId);
 
         return ResponseEntity.ok(ApiResponse.success(null, "Logout successful"));

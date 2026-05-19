@@ -48,8 +48,10 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
   const filteredFriends = useMemo(() => {
     const uniqueFriends = Array.from(new Map(friends.map(f => [f.userId, f])).values());
     return uniqueFriends.filter(f =>
-      String(f.fullName || f.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(f.phoneNumber || '').includes(searchTerm)
+      f.status === 'ACCEPTED' && (
+        String(f.fullName || f.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(f.phoneNumber || '').includes(searchTerm)
+      )
     );
   }, [friends, searchTerm]);
 
@@ -110,19 +112,6 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
         user: other,
         message: `Bạn đã trở thành bạn bè của ${otherName}`
       }));
-      // Create a notification for the requester to inform them their request was accepted
-      try {
-        const myId = currentUser?.userId || currentUser?.id;
-        await notificationApi.createNotification({
-          senderId: myId,
-          receiverId: userId,
-          type: 'FRIEND_ACCEPTED',
-          message: `Bạn đã trở thành bạn bè của ${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'}.`
-        });
-      } catch (e) {
-        // Non-blocking: log and continue
-        console.warn('Failed to create FRIEND_ACCEPTED notification', e);
-      }
     } catch (err) {
       console.error("Failed to accept", err);
     } finally {
@@ -160,19 +149,6 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
     setLoading(true);
     try {
       await friendApi.sendRequest(foundUser.userId);
-      const myId = currentUser?.userId || currentUser?.id;
-      if (myId && foundUser?.userId) {
-        try {
-          await notificationApi.createNotification({
-            senderId: myId,
-            receiverId: foundUser.userId,
-            type: 'FRIEND_REQUEST',
-            message: `${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'} đã gửi lời mời kết bạn cho bạn.`
-          });
-        } catch (e) {
-          console.warn('Failed to create FRIEND_REQUEST notification', e);
-        }
-      }
       setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING' }));
     } catch (err) {
       setError('Gửi lời mời thất bại');

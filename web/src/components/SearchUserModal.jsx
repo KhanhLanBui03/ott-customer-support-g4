@@ -60,19 +60,6 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
     setLoading(true);
     try {
       await friendApi.sendRequest(foundUser.userId);
-      const myId = user?.userId || user?.id;
-      if (myId && foundUser?.userId) {
-        try {
-          await notificationApi.createNotification({
-            senderId: myId,
-            receiverId: foundUser.userId,
-            type: 'FRIEND_REQUEST',
-            message: `${user?.fullName || user?.phoneNumber || 'Ai đó'} đã gửi lời mời kết bạn cho bạn.`
-          });
-        } catch (e) {
-          console.warn('Failed to create FRIEND_REQUEST notification', e);
-        }
-      }
       setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING', isRequester: true }));
     } catch (err) {
       setError('Gửi lời mời kết bạn thất bại');

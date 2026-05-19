@@ -17,9 +17,13 @@ import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
 import { authApi } from '../../src/api/authApi';
 import { logoutUser } from '../../src/store/authSlice';
+import { useTheme } from '../../src/context/ThemeContext';
+
 
 const ChangePasswordScreen = () => {
+  const { colors, isDark } = useTheme();
   const router = useRouter();
+
   const dispatch = useDispatch();
 
   const [oldPassword, setOldPassword] = useState('');
@@ -87,56 +91,62 @@ const ChangePasswordScreen = () => {
       <Ionicons
         name={isValid ? "checkmark-circle" : "ellipse-outline"}
         size={18}
-        color={isValid ? "#10b981" : "#cbd5e1"}
+        color={isValid ? "#10b981" : colors.textSubtle}
       />
-      <Text style={[styles.validationText, isValid && { color: '#10b981' }]}>{label}</Text>
+      <Text style={[styles.validationText, { color: colors.textSubtle }, isValid && { color: '#10b981' }]}>{label}</Text>
     </View>
   );
 
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>ĐỔI MẬT KHẨU</Text>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>ĐỔI MẬT KHẨU</Text>
           <TouchableOpacity onPress={() => router.push('/profile')} style={styles.closeButton}>
-            <Ionicons name="close" size={26} color="#64748b" />
+            <Ionicons name="close" size={26} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
+
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {/* Mật khẩu cũ */}
           <View style={styles.inputGroup}>
             <View style={styles.labelWithIcon}>
-              <MaterialIcons name="lock-outline" size={16} color="#94a3b8" />
-              <Text style={styles.label}>MẬT KHẨU CŨ</Text>
+              <MaterialIcons name="lock-outline" size={16} color={colors.textSubtle} />
+              <Text style={[styles.label, { color: colors.textSubtle }]}>MẬT KHẨU CŨ</Text>
             </View>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
               value={oldPassword}
               onChangeText={setOldPassword}
               placeholder="Nhập mật khẩu cũ..."
+              placeholderTextColor={colors.textSubtle}
               secureTextEntry
             />
           </View>
+
 
           {/* Mật khẩu mới */}
           <View style={styles.inputGroup}>
             <View style={styles.labelWithIcon}>
-              <MaterialIcons name="lock-open" size={16} color="#94a3b8" />
-              <Text style={styles.label}>MẬT KHẨU MỚI</Text>
+              <MaterialIcons name="lock-open" size={16} color={colors.textSubtle} />
+              <Text style={[styles.label, { color: colors.textSubtle }]}>MẬT KHẨU MỚI</Text>
             </View>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder="Nhập mật khẩu mới..."
+              placeholderTextColor={colors.textSubtle}
               secureTextEntry
             />
           </View>
 
+
           {/* Bảng yêu cầu bảo mật */}
-          <View style={styles.validationCard}>
-            <Text style={styles.validationTitle}>YÊU CẦU BẢO MẬT:</Text>
+          <View style={[styles.validationCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.validationTitle, { color: colors.textSubtle }]}>YÊU CẦU BẢO MẬT:</Text>
             <ValidationItem label="Ít nhất 8 ký tự" isValid={validations.length} />
             <ValidationItem label="Chứa chữ cái in thường" isValid={validations.lowercase} />
             <ValidationItem label="Chứa chữ cái in hoa" isValid={validations.uppercase} />
@@ -144,27 +154,31 @@ const ChangePasswordScreen = () => {
             <ValidationItem label="Chứa ký tự đặc biệt (@$!%*?&)" isValid={validations.special} />
           </View>
 
+
           {/* Xác nhận mật khẩu mới */}
           <View style={styles.inputGroup}>
             <View style={styles.labelWithIcon}>
-              <MaterialIcons name="verified-user" size={16} color="#94a3b8" />
-              <Text style={styles.label}>XÁC NHẬN MẬT KHẨU</Text>
+              <MaterialIcons name="verified-user" size={16} color={colors.textSubtle} />
+              <Text style={[styles.label, { color: colors.textSubtle }]}>XÁC NHẬN MẬT KHẨU</Text>
             </View>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Nhập lại mật khẩu mới..."
+              placeholderTextColor={colors.textSubtle}
               secureTextEntry
             />
           </View>
 
+
           {/* Nút xác nhận */}
           <TouchableOpacity
-            style={[styles.saveBtn, (!isFormValid || loading) && { backgroundColor: '#94a3b8' }]}
+            style={[styles.saveBtn, { backgroundColor: colors.primary }, (!isFormValid || loading) && { backgroundColor: isDark ? colors.surface300 : '#94a3b8' }]}
             onPress={handleChangePassword}
             disabled={!isFormValid || loading}
           >
+
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (

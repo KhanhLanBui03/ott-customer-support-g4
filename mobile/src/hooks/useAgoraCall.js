@@ -270,11 +270,13 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
     const endCall = useCallback(async (sendSignal = true, reason = 'ENDED') => {
         const cid = activeChannelRef.current || activeConversationId || callState.activeConversationId;
         // Phân biệt chính xác Nhóm vs 1-1 để gửi đúng loại tín hiệu
-        const isActuallyGroup = isGroupRef.current ||
-            isGroup ||
-            (cid && String(cid).includes('GROUP')) ||
-            (activeConversation && activeConversation.type === 'GROUP') ||
-            (activeConversationId && String(activeConversationId).includes('GROUP'));
+        const isActuallyGroup = (cid && (String(cid).includes('SINGLE') || String(cid).includes('SINGLE#')))
+            ? false
+            : (isGroupRef.current ||
+               isGroup ||
+               (cid && String(cid).includes('GROUP')) ||
+               (activeConversation && activeConversation.type === 'GROUP') ||
+               (activeConversationId && String(activeConversationId).includes('GROUP')));
 
         const isLastPerson = remoteUsers.length === 0;
 
@@ -541,11 +543,13 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
                 const reason = signal.reason || actualData.reason || 'ENDED';
 
-                const isActuallyGroup = isGroupRef.current ||
-                    callState.isGroup ||
-                    activeCid.includes('GROUP') ||
-                    signalConvId.includes('GROUP') ||
-                    actualData.conversationType === 'GROUP';
+                const isActuallyGroup = (activeCid && (String(activeCid).includes('SINGLE') || String(activeCid).includes('SINGLE#')))
+                    ? false
+                    : (isGroupRef.current ||
+                       callState.isGroup ||
+                       activeCid.includes('GROUP') ||
+                       signalConvId.includes('GROUP') ||
+                       actualData.conversationType === 'GROUP');
 
                 if (isActuallyGroup && callStatusRef.current === 'connected') {
                     console.log('ℹ️ [useAgoraCall] Group call active, ignoring HANGUP/LEAVE signal.');
@@ -653,7 +657,12 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
             await getPermissions();
 
-            const isGroupCall = activeConversation?.type === 'GROUP' || cid.startsWith('GROUP#') || cid.includes('GROUP');
+            const isGroupCall = receiverInfo?.isGroup !== undefined
+                ? receiverInfo.isGroup
+                : (activeConversation?.type === 'GROUP' ||
+                   cid.startsWith('GROUP#') ||
+                   cid.includes('GROUP') ||
+                   (!cid.includes('SINGLE') && !cid.includes('SINGLE#')));
             isGroupRef.current = isGroupCall;
             dispatch(setIsGroup(isGroupCall));
 

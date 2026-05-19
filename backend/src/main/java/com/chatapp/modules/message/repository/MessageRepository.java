@@ -29,8 +29,7 @@ public class MessageRepository {
         partitionKey.setConversationId(conversationId);
 
         DynamoDBQueryExpression<Message> query = new DynamoDBQueryExpression<Message>()
-                .withHashKeyValues(partitionKey)
-                .withScanIndexForward(false); // Newest first by default range key (but range key is UUID here)
+                .withHashKeyValues(partitionKey);
 
         if (beforeCreatedAt != null) {
             Map<String, AttributeValue> eav = new HashMap<>();
@@ -40,12 +39,8 @@ public class MessageRepository {
         }
 
         // Note: DynamoDB Query limit applies to scanned items, not filtered items.
-        // For simplicity and correctness with FilterExpression, we fetch and then limit in Service.
-        // We need to fetch more items since some will be filtered out (joinedAt, hiddenForUsers).
-        // If limit == -1, fetch all messages. Otherwise use multiplier to account for filtering.
-        if (limit != null && limit > 0 && beforeCreatedAt == null) {
-             query.withLimit(limit * 5); // Multiplier to account for filtering in service layer
-        }
+        // Since the range key is messageId (UUID), sorting is random. We must fetch
+        // all items and let the service layer sort them by createdAt chronologically.
         // If limit == -1 or null, will fetch all items (no withLimit call)
 
         return dynamoDBMapper.query(Message.class, query);

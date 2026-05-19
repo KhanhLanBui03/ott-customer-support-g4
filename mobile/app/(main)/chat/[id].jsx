@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
 import MessageModal from '../../../src/components/MessageModal';
-import { fetchMessages, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
+import { fetchMessages, fetchConversationDetail, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi, chatApi } from '../../../src/api/chatApi';
 import CreateVoteModal from '../../../src/components/CreateVoteModal';
@@ -15,13 +15,17 @@ import { formatLastSeen } from '../../../src/utils/dateUtils';
 import ForwardModal from '../../../src/components/ForwardModal';
 import { useAgoraCall } from '../../../src/hooks/useAgoraCall';
 import CallCountdownModal from '../../../src/components/CallCountdownModal';
+import { useTheme } from '../../../src/context/ThemeContext';
+
 
 
 const ChatDetailScreen = () => {
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+
   const dispatch = useDispatch();
   const router = useRouter();
-  const { id: rawConversationId } = useLocalSearchParams();
+  const { id: rawConversationId, name: paramName, avatar: paramAvatar, type: paramType } = useLocalSearchParams();
   const conversationId = useMemo(() => decodeURIComponent(rawConversationId || ''), [rawConversationId]);
 
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -47,8 +51,8 @@ const ChatDetailScreen = () => {
 
   const wallpaperUrl = conversation?.wallpaperUrl || null;
   const isLoading = chatState.loading;
-  
-  const myRole = useMemo(() => 
+
+  const myRole = useMemo(() =>
     conversation?.members?.find(m => String(m.userId || m.id) === String(currentUser?.userId || currentUser?.id))?.role || 'MEMBER',
     [conversation, currentUser]
   );
@@ -68,7 +72,8 @@ const ChatDetailScreen = () => {
       dispatch(fetchConversations());
     }
 
-    // Tải tin nhắn
+    // Tải chi tiết cuộc hội thoại và tin nhắn song song
+    dispatch(fetchConversationDetail(conversationId));
     dispatch(fetchMessages(conversationId));
   }, [conversationId, currentUser?.userId, currentUser?.id, dispatch]);
 
@@ -119,19 +124,35 @@ const ChatDetailScreen = () => {
   );
 
   // Call Actions
-  const { 
-    startCall, acceptCall, endCall, cancelCountdown, 
-    callStatus, callType, countdown, showCountdown 
+  const {
+    startCall, acceptCall, endCall, cancelCountdown,
+    callStatus, callType, countdown, showCountdown
   } = useAgoraCall(realId, conversation, false);
 
-  const handleStartCall = (type, isJoin = false, startTime = null) => {
-
-    startCall(type, { 
-      isJoin, 
-      startTime,
-      name: conversation?.name || displayName || 'Nhóm chat', 
-      avatar: conversation?.avatar || conversation?.avatarUrl || headerAvatarUrl 
-    });
+  const handleStartCall = (type, isJoin = false, startTime = null, targetUser = null) => {
+    if (targetUser) {
+      const myId = currentUser?.userId || currentUser?.id;
+      const peerId = targetUser?.userId || targetUser?.id;
+      const sorted = [String(myId), String(peerId)].sort();
+      const singleCid = `SINGLE#${sorted[0]}#${sorted[1]}`;
+      
+      startCall(type, {
+        isJoin: false,
+        isGroup: false,
+        name: targetUser.fullName || targetUser.name || 'Người dùng',
+        avatar: targetUser.avatarUrl || targetUser.avatar || targetUser.profilePic,
+        conversationId: singleCid
+      }, singleCid);
+    } else {
+      const isGroupCall = conversation?.type === 'GROUP' || (realId && !realId.includes('SINGLE#'));
+      startCall(type, {
+        isJoin,
+        startTime,
+        isGroup: isGroupCall,
+        name: conversation?.name || displayName || 'Nhóm chat',
+        avatar: conversation?.avatar || conversation?.avatarUrl || headerAvatarUrl
+      });
+    }
   };
 
   const lastCallMsgRaw = useMemo(() => {
@@ -197,7 +218,9 @@ const ChatDetailScreen = () => {
   };
 
   const flatListRef = useRef(null);
+  const messageInputRef = useRef(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+
 
   const handleScrollToMessage = (messageId) => {
     if (!messages || messages.length === 0 || !flatListRef.current) return;
@@ -223,8 +246,8 @@ const ChatDetailScreen = () => {
   const handleUnpinAll = () => {
     Alert.alert('Bỏ ghim tất cả', 'Bạn có chắc chắn muốn bỏ ghim tất cả tin nhắn trong cuộc hội thoại này?', [
       { text: 'Hủy', style: 'cancel' },
-      { 
-        text: 'Bỏ ghim hết', 
+      {
+        text: 'Bỏ ghim hết',
         style: 'destructive',
         onPress: async () => {
           for (const pin of conversation.pinnedMessages) {
@@ -238,8 +261,8 @@ const ChatDetailScreen = () => {
   const handleUnpinSingle = (messageId) => {
     Alert.alert('Bỏ ghim', 'Bỏ ghim tin nhắn này?', [
       { text: 'Hủy', style: 'cancel' },
-      { 
-        text: 'Bỏ ghim', 
+      {
+        text: 'Bỏ ghim',
         style: 'destructive',
         onPress: () => dispatch(unpinMessage({ messageId, conversationId: realId }))
       }
@@ -278,7 +301,7 @@ const ChatDetailScreen = () => {
         // Vote đơn thì chỉ gửi 1 optionId duy nhất
         optionIds = [message.optionId];
       }
-      
+
       chatApi.submitVote(realId, message.messageId, { optionIds }).catch(e => {
         console.error('Submit vote error:', e);
         Alert.alert('Lỗi', 'Không thể gửi bình chọn. Vui lòng thử lại.');
@@ -286,14 +309,20 @@ const ChatDetailScreen = () => {
       return;
     }
 
+    if (message.action === 'MENTION') {
+      messageInputRef.current?.insertMention(message.user);
+      return;
+    }
+
     if (message.action === 'CLOSE_VOTE') {
+
       Alert.alert(
         'Xác nhận',
         'Bạn có chắc chắn muốn kết thúc cuộc bình chọn này?',
         [
           { text: 'Hủy', style: 'cancel' },
-          { 
-            text: 'Kết thúc', 
+          {
+            text: 'Kết thúc',
             style: 'destructive',
             onPress: () => chatApi.closeVote(realId, message.messageId).catch(e => {
               console.error('Close vote error:', e);
@@ -308,7 +337,7 @@ const ChatDetailScreen = () => {
     // Xử lý nút "Gọi lại" từ CALL_LOG
     if (message.action === 'CALL_BACK') {
       const isOngoing = message.isOngoing === true;
-      handleStartCall(message.callType || 'audio', isOngoing, isOngoing ? message.startTime : null);
+      handleStartCall(message.callType || 'audio', isOngoing, isOngoing ? message.startTime : null, message.targetUser);
       return;
     }
 
@@ -372,34 +401,34 @@ const ChatDetailScreen = () => {
 
   const displayName = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.name || 'Nhóm chat';
-    
-    if (conversation?.type === 'SINGLE') {
+
+    if (conversation?.type === 'SINGLE' || paramType === 'SINGLE' || (!conversation && paramName)) {
       const currentUserId = String(currentUser?.userId || currentUser?.id || '');
-      const otherParticipant = (conversation.members || []).find(p => {
+      const otherParticipant = (conversation?.members || []).find(p => {
         const pId = String(p.userId || p.id || '');
         return pId !== '' && pId !== currentUserId;
       });
-      return otherParticipant?.fullName || otherParticipant?.name || otherParticipant?.username || 'Người dùng';
+      return otherParticipant?.fullName || otherParticipant?.name || otherParticipant?.username || paramName || 'Người dùng';
     }
-    
-    return conversation?.name || 'Chat';
-  }, [conversation, currentUser]);
+
+    return conversation?.name || paramName || 'Chat';
+  }, [conversation, currentUser, paramName, paramType]);
 
   const otherMember = useMemo(() => {
-    if (conversation?.type !== 'SINGLE') return null;
+    if (conversation?.type !== 'SINGLE' && paramType !== 'SINGLE' && conversation) return null;
     const currentUserId = String(currentUser?.userId || currentUser?.id || '');
-    return (conversation.members || []).find(p => {
+    return (conversation?.members || []).find(p => {
       const pId = String(p.userId || p.id || '');
       return pId !== '' && pId !== currentUserId;
     });
-  }, [conversation, currentUser]);
+  }, [conversation, currentUser, paramType]);
 
   const friendshipStatus = otherMember?.friendshipStatus || 'NONE';
 
   const otherAvatar = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.avatarUrl || conversation.avatar;
-    return otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic;
-  }, [conversation, otherMember]);
+    return otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic || paramAvatar;
+  }, [conversation, otherMember, paramAvatar]);
 
   const isOnline = useMemo(() => {
     if (conversation?.type === 'GROUP') return false;
@@ -421,8 +450,21 @@ const ChatDetailScreen = () => {
 
   const handleLoadMore = async () => {
     if (realId) {
-      await dispatch(fetchMessages({ conversationId: realId, loadMore: true }));
+      try {
+        const result = await dispatch(fetchMessages({ conversationId: realId, loadMore: true })).unwrap();
+        // Check if the backend returned any messages that we don't already have
+        if (result?.messages && result.messages.length > 0) {
+          const currentMsgs = messagesRef.current || [];
+          const hasNew = result.messages.some(nm => !currentMsgs.some(em => em.messageId === nm.messageId));
+          return hasNew;
+        }
+        return false;
+      } catch (error) {
+        console.error('Load more error:', error);
+        return false;
+      }
     }
+    return false;
   };
 
   const handleLongPressMessage = (message) => {
@@ -442,10 +484,10 @@ const ChatDetailScreen = () => {
           if (Clipboard && Clipboard.setString) {
             Clipboard.setString(message.content);
           } else {
-             const { NativeModules } = require('react-native');
-             if (NativeModules.Clipboard) {
-               NativeModules.Clipboard.setString(message.content);
-             }
+            const { NativeModules } = require('react-native');
+            if (NativeModules.Clipboard) {
+              NativeModules.Clipboard.setString(message.content);
+            }
           }
         } catch (e) {
           console.log('Clipboard not available');
@@ -454,30 +496,30 @@ const ChatDetailScreen = () => {
       case 'delete':
         Alert.alert('Xác nhận', 'Bạn có muốn xóa tin nhắn này ở phía bạn?', [
           { text: 'Hủy', style: 'cancel' },
-          { 
-            text: 'Xóa', 
+          {
+            text: 'Xóa',
             style: 'destructive',
             onPress: () => {
-              dispatch(deleteMessage({ 
-                messageId: message.messageId, 
-                conversationId: realId 
+              dispatch(deleteMessage({
+                messageId: message.messageId,
+                conversationId: realId
               }));
-            } 
-          } 
+            }
+          }
         ]);
         break;
       case 'recall':
         Alert.alert('Thu hồi tin nhắn', 'Tin nhắn này sẽ bị thu hồi với tất cả mọi người. Bạn có chắc chắn?', [
           { text: 'Hủy', style: 'cancel' },
-          { 
-            text: 'Thu hồi', 
+          {
+            text: 'Thu hồi',
             style: 'destructive',
             onPress: () => {
-              dispatch(recallMessage({ 
-                messageId: message.messageId, 
-                conversationId: realId 
+              dispatch(recallMessage({
+                messageId: message.messageId,
+                conversationId: realId
               }));
-            } 
+            }
           }
         ]);
         break;
@@ -497,49 +539,56 @@ const ChatDetailScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <View style={styles.messagesHeader}>
+        <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={28} color="#6366f1" />
+            <Ionicons name="chevron-back" size={28} color={colors.primary} />
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.headerContent} 
-            onPress={() => router.push(`/chat-info/${encodeURIComponent(realId)}`)}
+
+          <TouchableOpacity
+            style={styles.headerContent}
+            onPress={() => router.push({
+              pathname: `/chat-info/${encodeURIComponent(realId)}`,
+              params: {
+                name: displayName,
+                avatar: otherAvatar || headerAvatarUrl,
+                type: conversation?.type || paramType || 'SINGLE'
+              }
+            })}
           >
             <View style={styles.headerAvatarContainer}>
-              <Image source={{ uri: headerAvatarUrl }} style={styles.headerAvatar} />
-              {isOnline && <View style={styles.headerOnlineBadge} />}
+              <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200 }]} />
+              {isOnline && <View style={[styles.headerOnlineBadge, { borderColor: colors.background }]} />}
             </View>
             <View style={styles.headerInfo}>
               <View style={styles.nameRow}>
-                <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
+                <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
                 {conversation?.type === 'SINGLE' && (
                   <View style={[
-                    styles.miniTag, 
-                    friendshipStatus === 'ACCEPTED' ? styles.friendMiniTag : styles.strangerMiniTag
+                    styles.miniTag,
+                    friendshipStatus === 'ACCEPTED' ? styles.friendMiniTag : [styles.strangerMiniTag, isDark && { backgroundColor: colors.surface200, borderColor: colors.border }]
                   ]}>
                     <Text style={[
                       styles.miniTagText,
-                      friendshipStatus === 'ACCEPTED' ? styles.friendMiniTagText : styles.strangerMiniTagText
+                      friendshipStatus === 'ACCEPTED' ? styles.friendMiniTagText : [styles.strangerMiniTagText, isDark && { color: colors.textSubtle }]
                     ]}>
                       {friendshipStatus === 'ACCEPTED' ? 'BẠN' : 'LẠ'}
                     </Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : styles.statusOffline]} numberOfLines={1}>
-                {otherMember 
-                  ? formatLastSeen(otherMember.status || otherMember.presence, otherMember.lastSeenAt || otherMember.last_seen_at) 
-                  : (conversation?.type === 'GROUP' 
-                      ? `${conversation?.members?.length || 0} thành viên` 
-                      : (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')
-                    )
+              <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : [styles.statusOffline, { color: colors.textSubtle }]]} numberOfLines={1}>
+                {otherMember
+                  ? formatLastSeen(otherMember.status || otherMember.presence, otherMember.lastSeenAt || otherMember.last_seen_at)
+                  : (conversation?.type === 'GROUP'
+                    ? `${conversation?.members?.length || 0} thành viên`
+                    : (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')
+                  )
                 }
               </Text>
             </View>
@@ -547,23 +596,31 @@ const ChatDetailScreen = () => {
 
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('audio')}>
-              <MaterialIcons name="call" size={24} color="#6366f1" />
+              <MaterialIcons name="call" size={24} color={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('video')}>
-              <MaterialIcons name="videocam" size={24} color="#6366f1" />
+              <MaterialIcons name="videocam" size={24} color={colors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.headerActionButton}
-              onPress={() => router.push(`/chat-info/${encodeURIComponent(realId)}`)}
+              onPress={() => router.push({
+                pathname: `/chat-info/${encodeURIComponent(realId)}`,
+                params: {
+                  name: displayName,
+                  avatar: otherAvatar || headerAvatarUrl,
+                  type: conversation?.type || paramType || 'SINGLE'
+                }
+              })}
             >
-              <MaterialIcons name="info-outline" size={24} color="#6366f1" />
+              <MaterialIcons name="info-outline" size={24} color={colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
- 
+
+
         {/* Ongoing Group Call Banner (Tham gia ngay) */}
         {showOngoingBanner && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.ongoingCallContainer}
             onPress={() => handleStartCall(lastCallMsg?.callType || 'video', true, lastCallMsg?.startTime)}
           >
@@ -577,7 +634,7 @@ const ChatDetailScreen = () => {
                 <Text style={styles.ongoingCallSub}>Nhấn để tham gia cùng mọi người</Text>
               </View>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.joinButton}
               onPress={() => handleStartCall(lastCallMsg?.callType || 'video', true, lastCallMsg?.startTime)}
             >
@@ -589,21 +646,22 @@ const ChatDetailScreen = () => {
 
 
         {conversation?.pinnedMessages?.length > 0 && (
-          <View style={styles.pinnedContainer}>
+          <View style={[styles.pinnedContainer, { backgroundColor: isDark ? colors.surface200 : '#1e293b' }]}>
+
             {!showAllPins ? (
               <View style={styles.pinnedMain}>
                 <View style={styles.pinnedLeftIcon}>
                   <MaterialCommunityIcons name="comment-text-outline" size={20} color="#6366f1" />
                 </View>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={styles.pinnedInfo}
                   onPress={() => handleScrollToMessage(conversation.pinnedMessages[conversation.pinnedMessages.length - 1].messageId)}
                 >
                   <Text style={styles.pinnedTypeLabel}>TIN NHẮN</Text>
                   <Text style={styles.pinnedPreview} numberOfLines={1}>
                     <Text style={styles.pinnedSenderName}>
-                      {conversation.pinnedMessages[conversation.pinnedMessages.length - 1].senderName}: 
+                      {conversation.pinnedMessages[conversation.pinnedMessages.length - 1].senderName}:
                     </Text>
                     {" "}{getPinnedPreviewText(conversation.pinnedMessages[conversation.pinnedMessages.length - 1])}
                   </Text>
@@ -611,7 +669,7 @@ const ChatDetailScreen = () => {
 
                 <View style={styles.pinnedRightActions}>
                   {conversation.pinnedMessages.length > 1 && (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.webMoreBadge}
                       onPress={() => setShowAllPins(true)}
                     >
@@ -619,7 +677,7 @@ const ChatDetailScreen = () => {
                       <Ionicons name="chevron-down" size={14} color="#fff" />
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.pinnedMoreButton}
                     onPress={() => handleUnpinSingle(conversation.pinnedMessages[conversation.pinnedMessages.length - 1].messageId)}
                   >
@@ -631,7 +689,7 @@ const ChatDetailScreen = () => {
               <View style={styles.expandedContainer}>
                 <View style={styles.expandedHeader}>
                   <Text style={styles.expandedHeaderText}>DANH SÁCH GHIM ({conversation.pinnedMessages.length})</Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.collapseButton}
                     onPress={() => setShowAllPins(false)}
                   >
@@ -646,7 +704,7 @@ const ChatDetailScreen = () => {
                       <View style={styles.pinnedLeftIcon}>
                         <MaterialCommunityIcons name="comment-text-outline" size={18} color="#6366f1" />
                       </View>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.pinnedInfo}
                         onPress={() => handleScrollToMessage(pin.messageId)}
                       >
@@ -656,7 +714,7 @@ const ChatDetailScreen = () => {
                           {getPinnedPreviewText(pin)}
                         </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.pinnedMoreButton}
                         onPress={() => handleUnpinSingle(pin.messageId)}
                       >
@@ -666,7 +724,7 @@ const ChatDetailScreen = () => {
                   ))}
                 </View>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.viewAllFooter}
                   onPress={() => {
                     Alert.alert('Thông báo', 'Tính năng đang được phát triển. Đây sẽ là nơi hiển thị toàn bộ lịch sử tin nhắn ghim của nhóm.');
@@ -679,11 +737,12 @@ const ChatDetailScreen = () => {
             )}
           </View>
         )}
-        <View style={styles.chatArea}>
+        <View style={[styles.chatArea, { backgroundColor: colors.background }]}>
           {isLoading && messages.length === 0 ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#667eea" />
+            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
+
           ) : wallpaperUrl ? (
             <View style={{ flex: 1, backgroundColor: '#000' }}>
               <ImageBackground
@@ -716,7 +775,9 @@ const ChatDetailScreen = () => {
               conversationId={realId}
               currentUserId={currentUser?.userId || currentUser?.id}
               onlineUsers={onlineUsers}
+              members={conversation?.members || []}
               typingUsers={chatState.typingUsers?.[realId] || []}
+
               sendReadReceipt={guardedSendReadReceipt}
               onPressMessage={handlePressMessage}
               onLoadMore={handleLoadMore}
@@ -728,17 +789,22 @@ const ChatDetailScreen = () => {
           )}
         </View>
 
-        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: '#fff' }}>
+        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.background }}>
           {isRestricted ? (
-            <View style={styles.restrictedContainer}>
-              <MaterialIcons name="lock-outline" size={20} color="#64748b" />
-              <Text style={styles.restrictedText}>Chỉ quản trị viên mới có thể gửi tin nhắn</Text>
+            <View style={[styles.restrictedContainer, { backgroundColor: isDark ? colors.surface100 : '#f8fafc', borderTopColor: colors.border }]}>
+              <MaterialIcons name="lock-outline" size={20} color={colors.textMuted} />
+              <Text style={[styles.restrictedText, { color: colors.textMuted }]}>Chỉ quản trị viên mới có thể gửi tin nhắn</Text>
             </View>
+
           ) : (
-            <MessageInput 
+            <MessageInput
+              ref={messageInputRef}
               conversationType={conversation?.type}
-              onSendMessage={handleSendMessage} 
+              members={conversation?.members || []}
+              onSendMessage={handleSendMessage}
               onOpenPoll={handleOpenPoll}
+
+
               onTypingChange={(isTyping) => {
                 if (isTyping) {
                   sendTypingStart(realId);
@@ -772,7 +838,7 @@ const ChatDetailScreen = () => {
           messageToForward={selectedMessage}
         />
 
-        <CallCountdownModal 
+        <CallCountdownModal
           visible={showCountdown}
           countdown={countdown}
           callType={callType}

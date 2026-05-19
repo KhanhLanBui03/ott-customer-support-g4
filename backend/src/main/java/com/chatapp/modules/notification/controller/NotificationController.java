@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/notifications")
+@RequestMapping({"/api/notifications", "/api/v1/notifications"})
 @RequiredArgsConstructor
 public class NotificationController {
     private final NotificationService notificationService;
@@ -58,4 +58,19 @@ public class NotificationController {
         }
     }
 
+    @DeleteMapping("/delete-multiple")
+    public ResponseEntity<ApiResponse<String>> deleteMultipleNotifications(@RequestBody List<String> ids) {
+        boolean deleted = notificationService.deleteNotifications(ids);
+        if (deleted) {
+            return ResponseEntity.ok(ApiResponse.success("Notifications deleted successfully"));
+        } else {
+            return ResponseEntity.status(404).body(ApiResponse.error("Some notifications not found", 404));
+        }
+    }
+
+    @DeleteMapping("/clean/receiver/{receiverId}")
+    public ResponseEntity<ApiResponse<String>> deleteAllNotifications(@PathVariable String receiverId) {
+        notificationService.deleteAllByReceiverId(receiverId);
+        return ResponseEntity.ok(ApiResponse.success("All notifications deleted successfully"));
+    }
 }

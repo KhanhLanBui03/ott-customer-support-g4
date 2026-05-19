@@ -107,25 +107,52 @@ export const notificationApi = {
     return axiosClient.delete(`/notifications/device-token/${token}`);
   },
 
-  // Get notifications
-  getNotifications: (params) => {
-    // Expected params: { offset, limit }
-    return axiosClient.get('/notifications', { params });
+  // Get notifications by receiver ID
+  getNotificationsByReceiver: (receiverId) => {
+    return axiosClient.get(`/notifications/receiver/${encodeURIComponent(receiverId)}`);
   },
 
   // Mark notification as read
   markNotificationAsRead: (notificationId) => {
-    return axiosClient.put(`/notifications/${notificationId}/read`);
+    return axiosClient.put(`/notifications/update/isread`, null, {
+      params: { id: notificationId, isRead: true }
+    });
   },
 
-  // Mark all notifications as read
-  markAllAsRead: () => {
-    return axiosClient.put('/notifications/read-all');
+  // Mark all notifications as read for a receiver
+  markAllAsRead: async (receiverId) => {
+    try {
+      const res = await axiosClient.get(`/notifications/receiver/${encodeURIComponent(receiverId)}`);
+      const list = res.data || res || [];
+      const listData = Array.isArray(list) ? list : (list.data || []);
+      const unread = listData.filter(item => !item.isRead && !item.read);
+      await Promise.all(unread.map(item => 
+        axiosClient.put(`/notifications/update/isread`, null, {
+          params: { id: item.id || item.notificationId, isRead: true }
+        })
+      ));
+    } catch (e) {
+      console.warn('Failed to mark all as read', e);
+    }
   },
 
   // Delete notification
   deleteNotification: (notificationId) => {
-    return axiosClient.delete(`/notifications/${notificationId}`);
+    return axiosClient.delete(`/notifications/delete`, {
+      params: { id: notificationId }
+    });
+  },
+
+  // Delete multiple notifications
+  deleteMultipleNotifications: (ids) => {
+    return axiosClient.delete(`/notifications/delete-multiple`, {
+      data: ids
+    });
+  },
+
+  // Delete all notifications for a receiver
+  deleteAllNotifications: (receiverId) => {
+    return axiosClient.delete(`/notifications/clean/receiver/${encodeURIComponent(receiverId)}`);
   },
 };
 

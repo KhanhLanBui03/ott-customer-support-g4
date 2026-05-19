@@ -14,6 +14,7 @@ import { MaterialIcons, Ionicons, FontAwesome5, Feather, MaterialCommunityIcons 
 
 import { useSelector } from 'react-redux';
 import CONFIG from '../config';
+import { getCallLogText } from '../utils/messageUtils';
 
 const { width, height } = Dimensions.get('window');
 
@@ -59,15 +60,15 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isP
               {/* Message Focus Area */}
               <View style={[styles.focusContainer, isOwn ? styles.ownFocus : styles.otherFocus]}>
                 <View style={[
-                  styles.bubble, 
-                  isOwn ? styles.ownBubble : styles.otherBubble, 
+                  styles.bubble,
+                  isOwn ? styles.ownBubble : styles.otherBubble,
                   (message.type === 'IMAGE' || message.type === 'VIDEO') && styles.mediaBubble,
                   message.type === 'FILE' && styles.fileBubbleModal
                 ]}>
                   {/* Image/Video Preview */}
                   {message.type === 'IMAGE' && message.mediaUrls?.[0] && (
-                    <Image 
-                      source={{ uri: message.mediaUrls[0].startsWith('http') ? message.mediaUrls[0] : `${BASE_URL}${message.mediaUrls[0].startsWith('/') ? '' : '/'}${message.mediaUrls[0]}` }} 
+                    <Image
+                      source={{ uri: message.mediaUrls[0].startsWith('http') ? message.mediaUrls[0] : `${BASE_URL}${message.mediaUrls[0].startsWith('/') ? '' : '/'}${message.mediaUrls[0]}` }}
                       style={styles.focusMedia}
                       resizeMode="cover"
                     />
@@ -111,11 +112,13 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isP
                   {/* Text Content - Hidden for VOICE to avoid showing raw URLs */}
                   {message.content && message.type !== 'VOICE' ? (
                     <Text style={[
-                      styles.messageText, 
-                      isOwn ? styles.ownText : styles.otherText, 
+                      styles.messageText,
+                      isOwn ? styles.ownText : styles.otherText,
                       (message.type === 'IMAGE' || message.type === 'VIDEO' || message.type === 'FILE') && { marginTop: 8 }
                     ]}>
-                      {message.content}
+                      {message.type === 'CALL_LOG'
+                        ? getCallLogText(message.content, isOwn)
+                        : message.content}
                     </Text>
                   ) : null}
                 </View>
@@ -148,12 +151,12 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isP
                 <MenuButton icon="g-translate" label="Dịch" type="translate" color="#10b981" />
 
                 {/* Row 2: Management & Tools */}
-                <MenuButton 
-                  icon={isPinned ? "pin-off" : "pin"} 
-                  label={isPinned ? "Bỏ ghim" : "Ghim"} 
-                  type={isPinned ? "unpin" : "pin"} 
-                  color="#f59e0b" 
-                  iconType="material-community" 
+                <MenuButton
+                  icon={isPinned ? "pin-off" : "pin"}
+                  label={isPinned ? "Bỏ ghim" : "Ghim"}
+                  type={isPinned ? "unpin" : "pin"}
+                  color="#f59e0b"
+                  iconType="material-community"
                 />
                 <MenuButton icon="folder-open" label="Lưu tin" type="save" color="#0d9488" />
                 <MenuButton icon="notifications" label="Nhắc hẹn" type="remind" color="#ec4899" />

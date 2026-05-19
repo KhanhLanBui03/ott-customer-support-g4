@@ -24,6 +24,8 @@ public class FriendshipService {
     private final UserRepository userRepository;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     private final com.chatapp.modules.conversation.service.ConversationService conversationService;
+    private final com.chatapp.modules.notification.service.NotificationService notificationService;
+    private final com.chatapp.modules.notification.repository.NotificationRepository notificationRepository;
 
     public void sendFriendRequest(String requesterId, String addresseeId) {
         log.info("Sending friend request from {} to {}", requesterId, addresseeId);
@@ -62,9 +64,45 @@ public class FriendshipService {
         
         // Notify addressee
         publishNotification(addresseeId, "FRIEND_REQUEST", mapToResponse(requesterId, "PENDING", false, friendship.getCreatedAt()));
+
+        // Create persistent notification
+        try {
+            User requester = userRepository.findById(requesterId).orElse(null);
+            String requesterName = requester != null ? requester.getFullName() : "Ai đó";
+            com.chatapp.modules.notification.dto.NotificationRequest notifReq = com.chatapp.modules.notification.dto.NotificationRequest.builder()
+                .senderId(requesterId)
+                .receiverId(addresseeId)
+                .type("FRIEND_REQUEST")
+                .message(requesterName + " đã gửi lời mời kết bạn.")
+                .build();
+            notificationService.createNotification(notifReq);
+        } catch (Exception e) {
+            log.error("Failed to create persistent notification for friend request", e);
+        }
     }
 
     public void acceptFriendRequest(String requesterId, String addresseeId) {
+        log.info("Accepting friend request from {} to {}", requesterId, addresseeId);
+        
+        // Clean up original FRIEND_REQUEST persistent notification (DELETE it completely) - do this ALWAYS
+        try {
+            log.info("Deleting original FRIEND_REQUEST notification for receiver {} from sender {}", addresseeId, requesterId);
+            List<com.chatapp.modules.notification.domain.Notification> notifications = 
+                notificationRepository.findNotificationsByReceiverId(addresseeId);
+            log.info("Found {} notifications for receiver {}", notifications.size(), addresseeId);
+            for (com.chatapp.modules.notification.domain.Notification notif : notifications) {
+                log.info("Checking notification: id={}, type={}, senderId={}, isRead={}", 
+                    notif.getId(), notif.getType(), notif.getSenderId(), notif.isRead());
+                if (com.chatapp.modules.notification.domain.NotificationType.FRIEND_REQUEST.equals(notif.getType()) 
+                        && requesterId.equals(notif.getSenderId())) {
+                    log.info("Matching FRIEND_REQUEST notification found! Deleting completely: id={}", notif.getId());
+                    notificationRepository.delete(notif);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to delete original FRIEND_REQUEST notification", e);
+        }
+
         Optional<Friendship> friendshipOpt = friendshipRepository.find(requesterId, addresseeId);
         if (friendshipOpt.isPresent()) {
             Friendship friendship = friendshipOpt.get();
@@ -74,6 +112,21 @@ public class FriendshipService {
             
             // Notify the requester that their request was accepted
             publishNotification(requesterId, "FRIEND_ACCEPT", mapToResponse(addresseeId, "ACCEPTED", true, friendship.getCreatedAt()));
+
+            // Create persistent notification
+            try {
+                User accepter = userRepository.findById(addresseeId).orElse(null);
+                String accepterName = accepter != null ? accepter.getFullName() : "Ai đó";
+                com.chatapp.modules.notification.dto.NotificationRequest notifReq = com.chatapp.modules.notification.dto.NotificationRequest.builder()
+                    .senderId(addresseeId)
+                    .receiverId(requesterId)
+                    .type("FRIEND_ACCEPTED")
+                    .message(accepterName + " đã chấp nhận lời mời kết bạn.")
+                    .build();
+                notificationService.createNotification(notifReq);
+            } catch (Exception e) {
+                log.error("Failed to create persistent notification for friend accept", e);
+            }
 
             // Automatically create a single conversation between them
             try {
@@ -85,6 +138,8 @@ public class FriendshipService {
             } catch (Exception e) {
                 log.error("Failed to auto-create conversation after friend acceptance", e);
             }
+        } else {
+            log.warn("Friendship record not found for requester {} and addressee {}", requesterId, addresseeId);
         }
     }
     
@@ -105,24 +160,54 @@ public class FriendshipService {
     public void deleteFriend(String userId, String friendId) {
         log.info("Deleting friendship between {} and {}", userId, friendId);
         
-        // Find user info before deleting if possible, to notify the other party
+        // Find user info before deleting if possible, to notify both parties
         com.chatapp.modules.auth.domain.User performer = userRepository.findById(userId).orElse(null);
+        com.chatapp.modules.auth.domain.User removedFriend = userRepository.findById(friendId).orElse(null);
         
         friendshipRepository.find(userId, friendId).ifPresent(friendshipRepository::delete);
         friendshipRepository.find(friendId, userId).ifPresent(friendshipRepository::delete);
         
-        // Notify the other person that they have been unfriended
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("userId", userId);
+        // 1. Notify the other person that they have been unfriended
+        Map<String, Object> payloadForFriend = new HashMap<>();
+        payloadForFriend.put("userId", userId);
         if (performer != null) {
-            payload.put("fullName", performer.getFullName());
-            payload.put("avatarUrl", performer.getAvatarUrl());
+            payloadForFriend.put("fullName", performer.getFullName());
+            payloadForFriend.put("avatarUrl", performer.getAvatarUrl());
         }
-        publishNotification(friendId, "FRIEND_DELETE", payload);
+        publishNotification(friendId, "FRIEND_DELETE", payloadForFriend);
+
+        // 2. Notify the performer's other active sessions (e.g. Web) to sync state
+        Map<String, Object> payloadForPerformer = new HashMap<>();
+        payloadForPerformer.put("userId", friendId);
+        if (removedFriend != null) {
+            payloadForPerformer.put("fullName", removedFriend.getFullName());
+            payloadForPerformer.put("avatarUrl", removedFriend.getAvatarUrl());
+        }
+        publishNotification(userId, "FRIEND_DELETE", payloadForPerformer);
     }
 
     public void rejectFriendRequest(String requesterId, String addresseeId) {
         log.info("Rejecting friend request from {} to {}", requesterId, addresseeId);
+        
+        // Clean up original FRIEND_REQUEST persistent notification (DELETE it completely) - do this ALWAYS
+        try {
+            log.info("Deleting original FRIEND_REQUEST notification on reject for receiver {} from sender {}", addresseeId, requesterId);
+            List<com.chatapp.modules.notification.domain.Notification> notifications = 
+                notificationRepository.findNotificationsByReceiverId(addresseeId);
+            log.info("Found {} notifications for receiver {}", notifications.size(), addresseeId);
+            for (com.chatapp.modules.notification.domain.Notification notif : notifications) {
+                log.info("Checking notification: id={}, type={}, senderId={}, isRead={}", 
+                    notif.getId(), notif.getType(), notif.getSenderId(), notif.isRead());
+                if (com.chatapp.modules.notification.domain.NotificationType.FRIEND_REQUEST.equals(notif.getType()) 
+                        && requesterId.equals(notif.getSenderId())) {
+                    log.info("Matching FRIEND_REQUEST notification found! Deleting completely: id={}", notif.getId());
+                    notificationRepository.delete(notif);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to delete original FRIEND_REQUEST notification on reject", e);
+        }
+
         Optional<Friendship> friendshipOpt = friendshipRepository.find(requesterId, addresseeId);
         if (friendshipOpt.isPresent()) {
             Friendship friendship = friendshipOpt.get();
@@ -130,11 +215,51 @@ public class FriendshipService {
             
             // Notify the requester that their request was rejected
             publishNotification(requesterId, "FRIEND_REQUEST_REJECTED", mapToResponse(addresseeId, "NONE", false, friendship.getCreatedAt()));
+
+            // Create persistent notification for the requester (mobile user) and broadcast it in real-time
+            try {
+                User rejecter = userRepository.findById(addresseeId).orElse(null);
+                String rejecterName = rejecter != null ? rejecter.getFullName() : "Đối phương";
+                com.chatapp.modules.notification.dto.NotificationRequest notifReq = com.chatapp.modules.notification.dto.NotificationRequest.builder()
+                    .senderId(addresseeId)
+                    .receiverId(requesterId)
+                    .type("OTHER")
+                    .message(rejecterName + " đã từ chối lời mời kết bạn.")
+                    .build();
+                com.chatapp.modules.notification.dto.NotificationResponse notifResponse = notificationService.createNotification(notifReq);
+                
+                // Real-time broadcast to the requester
+                publishNotification(requesterId, "NOTIFICATION", notifResponse);
+            } catch (Exception e) {
+                log.error("Failed to create and broadcast persistent notification for friend reject", e);
+            }
+        } else {
+            log.warn("Friendship record not found on reject for requester {} and addressee {}", requesterId, addresseeId);
         }
     }
 
     public void cancelFriendRequest(String requesterId, String addresseeId) {
         log.info("Cancelling friend request from {} to {}", requesterId, addresseeId);
+        
+        // Clean up original FRIEND_REQUEST persistent notification (DELETE it completely) - do this ALWAYS
+        try {
+            log.info("Deleting original FRIEND_REQUEST notification on cancel for receiver {} from sender {}", addresseeId, requesterId);
+            List<com.chatapp.modules.notification.domain.Notification> notifications = 
+                notificationRepository.findNotificationsByReceiverId(addresseeId);
+            log.info("Found {} notifications for receiver {}", notifications.size(), addresseeId);
+            for (com.chatapp.modules.notification.domain.Notification notif : notifications) {
+                log.info("Checking notification: id={}, type={}, senderId={}, isRead={}", 
+                    notif.getId(), notif.getType(), notif.getSenderId(), notif.isRead());
+                if (com.chatapp.modules.notification.domain.NotificationType.FRIEND_REQUEST.equals(notif.getType()) 
+                        && requesterId.equals(notif.getSenderId())) {
+                    log.info("Matching FRIEND_REQUEST notification found! Deleting completely: id={}", notif.getId());
+                    notificationRepository.delete(notif);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to delete original FRIEND_REQUEST notification on cancel", e);
+        }
+
         Optional<Friendship> friendshipOpt = friendshipRepository.find(requesterId, addresseeId);
         if (friendshipOpt.isPresent()) {
             Friendship friendship = friendshipOpt.get();
@@ -144,6 +269,8 @@ public class FriendshipService {
                 // Notify the addressee that the request was cancelled
                 publishNotification(addresseeId, "FRIEND_REQUEST_CANCELLED", mapToResponse(requesterId, "NONE", true, friendship.getCreatedAt()));
             }
+        } else {
+            log.warn("Friendship record not found on cancel for requester {} and addressee {}", requesterId, addresseeId);
         }
     }
 

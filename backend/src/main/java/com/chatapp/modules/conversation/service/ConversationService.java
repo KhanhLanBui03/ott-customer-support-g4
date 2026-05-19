@@ -140,6 +140,81 @@ public class ConversationService {
         });
     }
 
+    public void recalculateLastMessageForUser(String conversationId, String userId, boolean shouldBroadcast) {
+        log.info("[DEBUG] Recalculating last message for user {} in conversation {}, shouldBroadcast={}", userId, conversationId, shouldBroadcast);
+        try {
+            UserConversation uc = userConversationRepository.findById(userId, conversationId).orElse(null);
+            if (uc == null) {
+                log.warn("[DEBUG] UserConversation not found for user {} in conversation {}", userId, conversationId);
+                return;
+            }
+
+            List<Message> history = new java.util.ArrayList<>(messageRepository.findByConversationId(conversationId));
+            
+            // Filter out messages that are hidden for this user or created before they joined (if applicable)
+            long joinedAt = uc.getJoinedAt() != null ? uc.getJoinedAt() : 0L;
+            List<Message> visibleMessages = history.stream()
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= joinedAt)
+                .filter(m -> m.getHiddenForUsers() == null || !m.getHiddenForUsers().contains(userId))
+                .sorted((m1, m2) -> Long.compare(m2.getCreatedAt() != null ? m2.getCreatedAt() : 0, 
+                                                      m1.getCreatedAt() != null ? m1.getCreatedAt() : 0))
+                .collect(Collectors.toList());
+
+            if (!visibleMessages.isEmpty()) {
+                Message last = visibleMessages.get(0);
+                
+                // Format friendly text for CALL_LOG to match other last message formatting!
+                String lastMessageText = last.getContent();
+                if ("CALL_LOG".equals(last.getType()) && lastMessageText != null) {
+                    if (lastMessageText.contains("video")) {
+                        lastMessageText = "[Cuộc gọi video]";
+                    } else if (lastMessageText.contains("audio") || lastMessageText.contains("thoại")) {
+                        lastMessageText = "[Cuộc gọi thoại]";
+                    } else {
+                        lastMessageText = "[Cuộc gọi]";
+                    }
+                } else if (lastMessageText == null || lastMessageText.isBlank()) {
+                    lastMessageText = switch (last.getType() != null ? last.getType() : "TEXT") {
+                        case "IMAGE" -> "[Hình ảnh]";
+                        case "VIDEO" -> "[Video]";
+                        case "FILE" -> "[Tệp tin]";
+                        case "VOICE" -> "[Tin nhắn thoại]";
+                        case "LOCATION" -> "[Vị trí]";
+                        case "CONTACT" -> "[Danh thiếp]";
+                        case "POLL" -> "[Bình chọn]";
+                        default -> "";
+                    };
+                }
+                
+                uc.setLastMessage(lastMessageText);
+                uc.setLastMessageSenderId(last.getSenderId());
+                uc.setUpdatedAt(last.getCreatedAt());
+            } else {
+                // Setting it to empty string instead of null prevents the auto-recovery infinite loop in list fetch
+                uc.setLastMessage("");
+                uc.setLastMessageSenderId(null);
+                uc.setUpdatedAt(uc.getJoinedAt());
+            }
+
+            userConversationRepository.save(uc);
+            log.info("[DEBUG] Successfully recalculated last message to: '{}'", uc.getLastMessage());
+            
+            // Broadcast conversation update to this user to refresh their conversation list immediately!
+            if (shouldBroadcast) {
+                try {
+                    ConversationResponse updatedConv = getConversationDetail(conversationId, userId);
+                    messagingTemplate.convertAndSendToUser(userId, "/queue/messages", 
+                        MessageEvent.of("CONVERSATION_UPDATE", conversationId, updatedConv));
+                    log.info("[DEBUG] Broadcasted CONVERSATION_UPDATE to user {} after message deletion", userId);
+                } catch (Exception e) {
+                    log.warn("[DEBUG] Failed to broadcast CONVERSATION_UPDATE to user {}: {}", userId, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("[DEBUG] Failed to recalculate last message for user {} in conversation {}", userId, conversationId, e);
+        }
+    }
+
     public void markAsRead(String userId, String conversationId) {
         userConversationRepository.findById(userId, conversationId).ifPresent(uc -> {
             boolean changed = false;
@@ -181,6 +256,30 @@ public class ConversationService {
         Optional<Conversation> existing = conversationRepository.findById(convId);
         if (existing.isPresent()) {
             log.info("Conversation {} already exists, skipping creation", convId);
+            
+            // Ensure UserConversation mappings exist (they might have been deleted if a user clicked "Delete Chat")
+            for (String memberId : existing.get().getMemberIds()) {
+                if (userConversationRepository.findById(memberId, convId).isEmpty()) {
+                    log.info("Recreating missing UserConversation for user {} in conversation {}", memberId, convId);
+                    String role = memberId.equals(existing.get().getCreatorId()) && "GROUP".equals(existing.get().getType()) ? "OWNER" : "MEMBER";
+                    UserConversation uc = UserConversation.builder()
+                            .userId(memberId)
+                            .conversationId(convId)
+                            .role(role)
+                            .joinedAt(now)
+                            .type(existing.get().getType())
+                            .name(existing.get().getName())
+                            .avatarUrl(existing.get().getAvatarUrl())
+                            .unreadCount(0)
+                            .updatedAt(now)
+                            .build();
+                    userConversationRepository.save(uc);
+                    
+                    // Immediately recalculate last message for this user conversation to avoid showing deleted messages
+                    recalculateLastMessageForUser(convId, memberId, false);
+                }
+            }
+            
             return getConversationDetail(convId, currentUserId);
         }
 
@@ -315,37 +414,36 @@ public class ConversationService {
             }
 
             // Auto-recover last message if missing (ONLY if null)
+            final UserConversation finalUc;
             if (uc.getLastMessage() == null) {
-                try {
-                    long start = System.currentTimeMillis();
-                    List<Message> history = new java.util.ArrayList<>(messageRepository.findByConversationId(convId));
-                    if (history != null && !history.isEmpty()) {
-                        history.sort((m1, m2) -> Long.compare(m2.getCreatedAt() != null ? m2.getCreatedAt() : 0, 
-                                                              m1.getCreatedAt() != null ? m1.getCreatedAt() : 0));
-                        Message last = history.get(0);
-                        uc.setLastMessage(last.getContent());
-                        uc.setLastMessageSenderId(last.getSenderId());
-                        uc.setUpdatedAt(last.getCreatedAt());
-                        userConversationRepository.save(uc);
-                        log.debug("Recovered last message for {} in {}ms", convId, (System.currentTimeMillis() - start));
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to recover last message for {}", convId, e);
-                }
+                recalculateLastMessageForUser(convId, userId, false);
+                finalUc = userConversationRepository.findById(userId, convId).orElse(uc);
+            } else {
+                finalUc = uc;
             }
 
             // Fetch full conversation object once
             Conversation fullConv = conversationRepository.findById(convId).orElse(null);
             if (fullConv == null) return null;
 
+            // Create a final copy of type to use inside the lambda
+            final String finalType = type;
             // Fetch member info for status
             List<ConversationResponse.MemberInfo> members = new ArrayList<>();
             for (String mId : fullConv.getMemberIds()) {
                 userRepository.findById(mId).ifPresent(u -> {
                     UserConversation memberUc = userConversationRepository.findById(mId, convId).orElse(null);
                     
-                    // Fast-track friendship status for list view
-                    String fStatus = mId.equals(userId) ? "SELF" : "NONE";
+                    // Fast-track friendship status for list view: only check for SINGLE chats to optimize performance
+                    String fStatus = "NONE";
+                    if (mId.equals(userId)) {
+                        fStatus = "SELF";
+                    } else if ("SINGLE".equals(finalType)) {
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
+                        Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
+                        if (f1.isPresent()) fStatus = f1.get().getStatus();
+                        else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                    }
 
                     members.add(ConversationResponse.MemberInfo.builder()
                             .userId(u.getUserId())
@@ -368,16 +466,16 @@ public class ConversationService {
                     .name(finalName != null ? finalName : "Direct Message")
                     .avatarUrl(finalAvatar)
                     .wallpaperUrl(fullConv != null ? fullConv.getWallpaperUrl() : null)
-                    .lastMessage(uc.getLastMessage())
-                    .lastMessageSenderId(uc.getLastMessageSenderId())
-                    .lastMessageTime(uc.getUpdatedAt())
-                    .updatedAt(uc.getUpdatedAt())
-                    .unreadCount(uc.getUnreadCount())
-                    .hasUnreadMention(Boolean.TRUE.equals(uc.getUnreadMention()))
+                    .lastMessage(finalUc.getLastMessage())
+                    .lastMessageSenderId(finalUc.getLastMessageSenderId())
+                    .lastMessageTime(finalUc.getUpdatedAt())
+                    .updatedAt(finalUc.getUpdatedAt())
+                    .unreadCount(finalUc.getUnreadCount())
+                    .hasUnreadMention(Boolean.TRUE.equals(finalUc.getUnreadMention()))
                     .members(members)
                     .pinnedMessages(fullConv != null ? fetchPinnedMessages(fullConv) : new ArrayList<>())
-                    .isPinned(uc.getIsPinned() != null && uc.getIsPinned())
-                    .tag(uc.getTag())
+                    .isPinned(finalUc.getIsPinned() != null && finalUc.getIsPinned())
+                    .tag(finalUc.getTag())
                     .onlyAdminsCanChat(fullConv != null && Boolean.TRUE.equals(fullConv.getOnlyAdminsCanChat()))
                     .build();
         }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
