@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowRight, Lock, Mail, Shield } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 const ForgotPassword = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { forgotPassword, resetPassword } = useAuth();
   const COOLDOWN_MS = 3 * 60 * 1000;
@@ -74,7 +76,7 @@ const ForgotPassword = () => {
 
     const normalizedEmail = email.trim();
     if (!normalizedEmail) {
-      setError('Please enter your email');
+      setError(t('auth.errors.please_enter_email'));
       return;
     }
 
@@ -83,9 +85,9 @@ const ForgotPassword = () => {
       await forgotPassword(normalizedEmail);
       setStep('reset');
       applyCooldown(normalizedEmail);
-      setSuccess('OTP has been sent to your email.');
+      setSuccess(t('auth.success.otp_sent_to_email'));
     } catch (err) {
-      setError(extractMessage(err, 'Unable to send OTP'));
+      setError(extractMessage(err, t('auth.errors.unable_to_send_otp')));
     } finally {
       setLoading(false);
     }
@@ -97,7 +99,7 @@ const ForgotPassword = () => {
 
     const normalizedEmail = email.trim();
     if (!normalizedEmail) {
-      setError('Please enter your email');
+      setError(t('auth.errors.please_enter_email'));
       return;
     }
 
@@ -105,9 +107,9 @@ const ForgotPassword = () => {
       setLoading(true);
       await forgotPassword(normalizedEmail);
       applyCooldown(normalizedEmail);
-      setSuccess('OTP has been resent to your email.');
+      setSuccess(t('auth.success.otp_resent_to_email'));
     } catch (err) {
-      setError(extractMessage(err, 'Unable to resend OTP'));
+      setError(extractMessage(err, t('auth.errors.unable_to_resend_otp')));
     } finally {
       setLoading(false);
     }
@@ -119,17 +121,17 @@ const ForgotPassword = () => {
     setSuccess('');
 
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters');
+      setError(t('auth.errors.password_too_short'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Password confirmation does not match');
+      setError(t('auth.errors.password_mismatch'));
       return;
     }
 
     if (!otpCode.trim()) {
-      setError('Please enter the OTP code');
+      setError(t('auth.errors.otp_required'));
       return;
     }
 
@@ -144,7 +146,7 @@ const ForgotPassword = () => {
       await resetPassword(payload);
       navigate('/login');
     } catch (err) {
-      setError(extractMessage(err, 'Password reset failed'));
+      setError(extractMessage(err, t('auth.errors.reset_failed')));
     } finally {
       setLoading(false);
     }
@@ -165,9 +167,9 @@ const ForgotPassword = () => {
 
       <div className="max-w-md w-full p-12 space-y-10 relative z-10 animate-fade-in">
         <div className="text-center space-y-2">
-          <h2 className="text-4xl font-black text-white tracking-tighter">Khôi phục mật khẩu</h2>
+          <h2 className="text-4xl font-black text-white tracking-tighter">{t('auth.recover_password_title')}</h2>
           <p className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-white/20">
-            {step === 'request' ? 'Gửi mã OTP' : 'Đặt lại mật khẩu'}
+            {step === 'request' ? t('auth.send_otp_label') : t('auth.reset_password_label')}
           </p>
         </div>
 
@@ -196,7 +198,7 @@ const ForgotPassword = () => {
                 required
                 disabled={step !== 'request'}
                 className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium disabled:opacity-50"
-                placeholder="Email"
+                placeholder={t('auth.email_placeholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -205,7 +207,7 @@ const ForgotPassword = () => {
             {step === 'reset' && (
               <div className="rounded-3xl border border-cursor-accent/20 bg-cursor-accent/5 p-4 space-y-3">
                 <p className="text-xs leading-6 text-white/50">
-                  Enter the OTP sent to your email and set a new password.
+                  {t('auth.otp_instruction_forgot')}
                 </p>
               </div>
             )}
@@ -219,7 +221,7 @@ const ForgotPassword = () => {
                   type="text"
                   required
                   className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                  placeholder="OTP code"
+                  placeholder={t('auth.otp_placeholder_forgot')}
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
                 />
@@ -236,7 +238,7 @@ const ForgotPassword = () => {
                     type="password"
                     required
                     className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="New password"
+                    placeholder={t('auth.new_password_placeholder')}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                   />
@@ -250,7 +252,7 @@ const ForgotPassword = () => {
                     type="password"
                     required
                     className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Confirm new password"
+                    placeholder={t('auth.confirm_new_password_placeholder')}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
@@ -266,12 +268,12 @@ const ForgotPassword = () => {
           >
             <span>
               {loading
-                ? 'Processing...'
+                ? t('auth.processing')
                 : step === 'request'
                   ? isCooldownActive
-                    ? `Wait ${formatCooldown(cooldownRemainingSeconds)}`
-                    : 'Gửi OTP'
-                  : 'Reset Password'}
+                    ? t('auth.wait_time', { time: formatCooldown(cooldownRemainingSeconds) })
+                    : t('auth.send_otp_label')
+                  : t('auth.reset_password_button')}
             </span>
             <ArrowRight size={20} />
           </button>
@@ -283,21 +285,21 @@ const ForgotPassword = () => {
               onClick={handleResendOtp}
               className="w-full py-3 text-white/70 hover:text-cursor-accent transition-colors text-xs font-mono uppercase tracking-[0.2em] disabled:opacity-60"
             >
-              {isCooldownActive ? `Resend in ${formatCooldown(cooldownRemainingSeconds)}` : 'Resend OTP'}
+              {isCooldownActive ? t('auth.can_resend_after', { time: formatCooldown(cooldownRemainingSeconds) }) : t('auth.resend_otp')}
             </button>
           )}
 
           {step === 'request' && isCooldownActive && (
             <p className="text-center text-[10px] font-mono font-black uppercase tracking-[0.2em] text-white/35">
-              You can resend after {formatCooldown(cooldownRemainingSeconds)}
+              {t('auth.can_resend_after', { time: formatCooldown(cooldownRemainingSeconds) })}
             </p>
           )}
         </form>
 
         <p className="text-center text-[11px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
-          Back to{' '}
+          {t('auth.back_to')}{' '}
           <Link to="/login" className="text-cursor-accent hover:underline">
-            Đăng nhập
+            {t('auth.login')}
           </Link>
         </p>
       </div>

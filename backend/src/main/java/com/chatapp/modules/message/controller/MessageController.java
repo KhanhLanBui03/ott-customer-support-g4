@@ -52,10 +52,16 @@ public class MessageController {
             Authentication authentication
     ) {
         String currentUserId = getAuthUserId(authentication);
-        List<MessageResponse> messages = messageService
-                .getConversationMessages(conversationId, limit, currentUserId, fromMessageId)
-                .stream()
-                .map(this::toResponse)
+        List<Message> messageList = messageService
+                .getConversationMessages(conversationId, limit, currentUserId, fromMessageId);
+
+        // Pre-fetch users to avoid N+1 queries
+        List<String> userIds = messageList.stream().map(Message::getSenderId).distinct().collect(Collectors.toList());
+        Map<String, User> userCache = userRepository.findAllByIds(userIds).stream()
+                .collect(Collectors.toMap(User::getUserId, user -> user));
+
+        List<MessageResponse> messages = messageList.stream()
+                .map(msg -> toResponse(msg, userCache))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(ApiResponse.success(
@@ -96,7 +102,8 @@ public class MessageController {
                 .build();
 
         Message message = messageService.sendMessage(command);
-        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Message sent successfully"));
+        User sender = userRepository.findById(userId).orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message, sender != null ? Map.of(userId, sender) : Map.of()), "Message sent successfully"));
     }
 
     @PutMapping("/{messageId}")
@@ -257,7 +264,8 @@ public class MessageController {
             Authentication authentication
     ) {
         Message message = messageService.createVoteMessage(conversationId, getAuthUserId(authentication), request);
-        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote created successfully"));
+        User sender = userRepository.findById(getAuthUserId(authentication)).orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message, sender != null ? Map.of(getAuthUserId(authentication), sender) : Map.of()), "Vote created successfully"));
     }
 
     @PutMapping("/{conversationId}/vote/{messageId}")
@@ -268,7 +276,8 @@ public class MessageController {
             Authentication authentication
     ) {
         Message message = messageService.submitVote(conversationId, messageId, getAuthUserId(authentication), request);
-        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote submitted successfully"));
+        User sender = userRepository.findById(getAuthUserId(authentication)).orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message, sender != null ? Map.of(getAuthUserId(authentication), sender) : Map.of()), "Vote submitted successfully"));
     }
 
     @PutMapping("/{conversationId}/vote/{messageId}/close")
@@ -278,7 +287,8 @@ public class MessageController {
             Authentication authentication
     ) {
         Message message = messageService.closeVote(conversationId, messageId, getAuthUserId(authentication));
-        return ResponseEntity.ok(ApiResponse.success(toResponse(message), "Vote closed successfully"));
+        User sender = userRepository.findById(getAuthUserId(authentication)).orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(message, sender != null ? Map.of(getAuthUserId(authentication), sender) : Map.of()), "Vote closed successfully"));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -324,12 +334,16 @@ public class MessageController {
         return String.valueOf(authentication.getPrincipal());
     }
 
-    private MessageResponse toResponse(Message message) {
+    private MessageResponse toResponse(Message message, Map<String, User> userCache) {
+        User sender = userCache.get(message.getSenderId());
+        String senderLang = sender != null ? sender.getPreferredLanguage() : null;
+
         return MessageResponse.builder()
                 .messageId(message.getMessageId())
                 .conversationId(message.getConversationId())
                 .senderId(message.getSenderId())
                 .senderName(message.getSenderName())
+                .senderPreferredLanguage(senderLang)
                 .content(message.getContent())
                 .type(message.getType())
                 .mediaUrls(message.getMediaUrls())

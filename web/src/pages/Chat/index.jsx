@@ -13,6 +13,7 @@ import FriendManagementModal from '../../components/FriendManagementModal';
 import CreateGroupModal from '../../components/CreateGroupModal';
 import NotificationModal from '../../components/NotificationModal';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
+import LanguageSettingsModal from '../../components/LanguageSettingsModal';
 import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
 import MediaLightbox from '../../components/MediaLightbox';
@@ -54,6 +55,7 @@ const Chat = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isLanguageSettingsOpen, setIsLanguageSettingsOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
@@ -619,7 +621,10 @@ const Chat = () => {
 
           {!isMobile && (
             <div className="flex flex-col space-y-4 items-center">
-              <button className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 rounded-2xl transition-all active:scale-95">
+              <button
+                onClick={() => setIsLanguageSettingsOpen(true)}
+                className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 rounded-2xl transition-all active:scale-95"
+              >
                 <Settings size={24} />
               </button>
               <button
@@ -996,6 +1001,7 @@ const Chat = () => {
       <CreateGroupModal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} />
       <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
       <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />
+      <LanguageSettingsModal isOpen={isLanguageSettingsOpen} onClose={() => setIsLanguageSettingsOpen(false)} />
       <FriendManagementModal
         isOpen={isFriendsOpen}
         onClose={() => setIsFriendsOpen(false)}

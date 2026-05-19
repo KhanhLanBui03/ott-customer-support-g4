@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
 import { authApi } from '../../api/authApi';
 import { Zap, User, Phone, Lock, ArrowRight, Shield, CheckCircle2 } from 'lucide-react';
 
 const Register = () => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     phoneNumber: '',
     email: '',
@@ -119,24 +121,24 @@ const Register = () => {
 
   const validatePhone = async (phone) => {
     if (!phone) {
-      setPhoneError('Số điện thoại không được để trống');
+      setPhoneError(t('auth.errors.phone_empty'));
       return false;
     }
     if (!/^0(3|5|7|8|9)\d{8}$/.test(phone)) {
-      setPhoneError('Số điện thoại không hợp lệ (ví dụ: 0912345678)');
+      setPhoneError(t('auth.errors.phone_invalid'));
       return false;
     }
     try {
       const statusRes = await authApi.checkUserStatus(phone);
       const statusData = statusRes.data?.data || statusRes.data || statusRes;
       if (statusData.exists) {
-        setPhoneError('Số điện thoại này đã được sử dụng');
+        setPhoneError(t('auth.errors.phone_taken'));
         return false;
       }
       setPhoneError('');
       return true;
     } catch (err) {
-      console.error('Lỗi kiểm tra SĐT:', err);
+      console.error('Phone check error:', err);
       // Nếu API lỗi 401 hoặc lỗi khác, có thể tạm thời bỏ qua kiểm tra trùng lặp nhưng vẫn báo log
       return true;
     }
@@ -152,17 +154,17 @@ const Register = () => {
 
     const email = formData.email.trim().toLowerCase();
     if (!email) {
-      setError('Vui lòng nhập địa chỉ Gmail của bạn');
+      setError(t('auth.errors.email_empty'));
       return;
     }
 
     if (!/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
-      setError('Vui lòng nhập đúng định dạng Gmail (ví dụ: user@gmail.com)');
+      setError(t('auth.errors.email_invalid'));
       return;
     }
 
     if (isOtpCooldownActive) {
-      setError(`Vui lòng đợi ${formatOtpCooldown(otpRemainingSeconds)} trước khi yêu cầu mã mới`);
+      setError(t('auth.errors.otp_cooldown', { seconds: formatOtpCooldown(otpRemainingSeconds) }));
       return;
     }
 
@@ -172,13 +174,13 @@ const Register = () => {
       setFormData((prev) => ({ ...prev, email }));
       setVerificationCodeSent(true);
       startOtpCooldown(email);
-      setSuccess(`Mã xác thực đã được gửi đến ${email}. Mã có hiệu lực trong 2 phút.`);
+      setSuccess(t('auth.success.otp_sent', { email }));
     } catch (err) {
       const message = err?.response?.data?.message;
       if (message && (message.includes('already exists') || message.includes('đã tồn tại'))) {
-        setError('Gmail này đã được đăng ký. Vui lòng sử dụng Gmail khác hoặc đăng nhập.');
+        setError(t('auth.errors.email_taken'));
       } else {
-        setError(message || 'Không thể gửi mã xác thực. Vui lòng thử lại sau.');
+        setError(message || t('auth.errors.generic_error'));
       }
     } finally {
       setLoading(false);
@@ -192,12 +194,12 @@ const Register = () => {
 
     const email = formData.email.trim().toLowerCase();
     if (!email) {
-      setError('Vui lòng nhập địa chỉ Gmail của bạn');
+      setError(t('auth.errors.email_empty'));
       return;
     }
 
     if (!otpCode.trim()) {
-      setError('Vui lòng nhập mã OTP');
+      setError(t('auth.errors.otp_required'));
       return;
     }
 
@@ -214,9 +216,9 @@ const Register = () => {
 
       setVerifiedEmail(email);
       setStep('register');
-      setSuccess('Xác thực Gmail thành công. Vui lòng hoàn tất thông tin tài khoản.');
+      setSuccess(t('auth.success.email_verified'));
     } catch (err) {
-      setError(err?.response?.data?.message || 'Mã xác thực không chính xác hoặc đã hết hạn');
+      setError(err?.response?.data?.message || t('auth.errors.otp_invalid'));
     } finally {
       setLoading(false);
     }
@@ -227,7 +229,7 @@ const Register = () => {
     setSuccess('');
 
     if (isOtpCooldownActive) {
-      setError(`Vui lòng đợi ${formatOtpCooldown(otpRemainingSeconds)} trước khi gửi lại mã`);
+      setError(t('auth.errors.otp_cooldown', { seconds: formatOtpCooldown(otpRemainingSeconds) }));
       return;
     }
 
@@ -236,9 +238,9 @@ const Register = () => {
       const email = formData.email.trim().toLowerCase();
       await sendOtp(email, 'REGISTRATION');
       startOtpCooldown(email);
-      setSuccess(`Mã xác thực đã được gửi lại đến ${email}.`);
+      setSuccess(t('auth.success.otp_sent', { email }));
     } catch (err) {
-      setError(err?.response?.data?.message || 'Không thể gửi lại mã OTP');
+      setError(err?.response?.data?.message || t('auth.errors.otp_resend_error'));
     } finally {
       setLoading(false);
     }
@@ -251,38 +253,38 @@ const Register = () => {
     setSuccess('');
 
     if (!verifiedEmail) {
-      setError('Vui lòng xác thực Gmail của bạn trước');
+      setError(t('auth.errors.email_not_verified'));
       setStep('verify-email');
       return;
     }
 
     if (!formData.phoneNumber) {
-      setPhoneError('Số điện thoại không được để trống');
+      setPhoneError(t('auth.errors.phone_empty'));
       return;
     }
 
     if (!/^0(3|5|7|8|9)\d{8}$/.test(formData.phoneNumber)) {
-      setPhoneError('Số điện thoại không hợp lệ. Vui lòng nhập định dạng 0XXXXXXXXX (10 chữ số)');
+      setPhoneError(t('auth.errors.phone_invalid'));
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
+      setError(t('auth.errors.password_mismatch'));
       return;
     }
 
     if (formData.password.length < 8) {
-      setError('Mật khẩu phải có ít nhất 8 ký tự');
+      setError(t('auth.errors.password_too_short'));
       return;
     }
 
     if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(formData.password)) {
-      setError('Mật khẩu không đáp ứng đủ yêu cầu bảo mật');
+      setError(t('auth.errors.password_weak'));
       return;
     }
 
     if (!agreedToPolicies) {
-      setError('Bạn cần đồng ý với các điều khoản và chính sách');
+      setError(t('auth.errors.policy_agreement_required'));
       return;
     }
 
@@ -305,20 +307,20 @@ const Register = () => {
         confirmPassword: formData.confirmPassword,
       });
 
-      setSuccess('Tài khoản đã tạo thành công! Đang chuyển hướng về trang đăng nhập...');
+      setSuccess(t('auth.success.account_created'));
 
       // Đợi 3 giây trước khi chuyển hướng
       setTimeout(() => {
         navigate('/login', {
           state: {
             email: verifiedEmail,
-            message: 'Đăng ký tài khoản thành công. Bạn có thể đăng nhập ngay bây giờ.',
+            message: t('auth.success.register_success'),
           },
         });
       }, 3000);
 
     } catch (err) {
-      setError(err?.response?.data?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.');
+      setError(err?.response?.data?.message || t('auth.errors.register_failed'));
     } finally {
       setLoading(false);
     }
@@ -340,7 +342,7 @@ const Register = () => {
           <div className="text-center space-y-2">
             <h2 className="text-4xl font-black text-white tracking-tighter">Chat app</h2>
             <p className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-white/20">
-              KHỞI TẠO ĐĂNG KÝ TÀI KHOẢN
+              {t('auth.register_init')}
             </p>
           </div>
         </div>
@@ -369,7 +371,7 @@ const Register = () => {
                     type="email"
                     required
                     className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Nhập Gmail của bạn"
+                    placeholder={t('auth.email_input_placeholder')}
                     value={formData.email}
                     onChange={handleChange}
                   />
@@ -378,7 +380,7 @@ const Register = () => {
                 {verificationCodeSent && (
                   <>
                     <p className="text-[11px] font-mono text-white/60 px-1">
-                      Nhập mã xác thực đã được gửi đến hộp thư Gmail của bạn.
+                      {t('auth.otp_instruction')}
                     </p>
                     <div className="relative group">
                       <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent">
@@ -388,7 +390,7 @@ const Register = () => {
                         type="text"
                         required
                         className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                        placeholder="Mã xác thực"
+                        placeholder={t('auth.otp_placeholder')}
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value)}
                       />
@@ -406,7 +408,7 @@ const Register = () => {
                     type="email"
                     disabled
                     className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white/50 text-sm focus:outline-none"
-                    placeholder="Gmail đã xác thực"
+                    placeholder={t('auth.verified_email_placeholder')}
                     value={verifiedEmail}
                   />
                 </div>
@@ -420,7 +422,7 @@ const Register = () => {
                     type="text"
                     required
                     className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Tên"
+                    placeholder={t('auth.first_name_placeholder')}
                     value={formData.firstName}
                     onChange={handleChange}
                   />
@@ -435,7 +437,7 @@ const Register = () => {
                     type="text"
                     required
                     className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Họ"
+                    placeholder={t('auth.last_name_placeholder')}
                     value={formData.lastName}
                     onChange={handleChange}
                   />
@@ -451,7 +453,7 @@ const Register = () => {
                     required
                     onBlur={handlePhoneBlur}
                     className={`w-full pl-16 pr-6 py-4 bg-white/5 border ${phoneError ? 'border-red-500' : 'border-white/10'} rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium`}
-                    placeholder="Số điện thoại (0XXXXXXXXX)"
+                    placeholder={t('auth.phone_placeholder')}
                     value={formData.phoneNumber}
                     onChange={handleChange}
                   />
@@ -469,7 +471,7 @@ const Register = () => {
                       type="password"
                       required
                       className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                      placeholder="Mật khẩu"
+                      placeholder={t('auth.password_placeholder')}
                       value={formData.password}
                       onChange={handleChange}
                     />
@@ -480,7 +482,7 @@ const Register = () => {
                       type="password"
                       required
                       className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                      placeholder="Xác nhận"
+                      placeholder={t('auth.confirm_password')}
                       value={formData.confirmPassword}
                       onChange={handleChange}
                     />
@@ -489,27 +491,27 @@ const Register = () => {
 
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <p className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-white/45">
-                    Yêu cầu mật khẩu
+                    {t('auth.password_reqs')}
                   </p>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.minLength ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.minLength ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Ít nhất 8 ký tự</span>
+                    <span>{t('auth.req_min_chars')}</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.lower ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.lower ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Chứa chữ cái thường</span>
+                    <span>{t('auth.req_lower')}</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.upper ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.upper ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Chứa chữ cái in hoa</span>
+                    <span>{t('auth.req_upper')}</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.number ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.number ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Chứa ít nhất một chữ số</span>
+                    <span>{t('auth.req_number')}</span>
                   </div>
                   <div className={`text-[11px] font-mono flex items-center gap-2 ${passwordChecks.special ? 'text-green-400' : 'text-white/45'}`}>
                     {passwordChecks.special ? <CheckCircle2 size={12} /> : <span className="h-3 w-3 rounded-full border border-current opacity-60" />}
-                    <span>Chứa ký tự đặc biệt (@$!%*?&)</span>
+                    <span>{t('auth.req_special')}</span>
                   </div>
                 </div>
 
@@ -521,7 +523,7 @@ const Register = () => {
                     className="mt-0.5 h-4 w-4 rounded border-white/30 bg-transparent"
                   />
                   <span>
-                    Tôi đồng ý với các Điều khoản Dịch vụ và Chính sách Bảo mật thông tin cá nhân.
+                    {t('auth.policy_agreement')}
                   </span>
                 </label>
               </>
@@ -537,10 +539,10 @@ const Register = () => {
             >
               <span>
                 {loading
-                  ? 'Đang xử lý...'
+                  ? t('auth.processing')
                   : isOtpCooldownActive
-                    ? `Yêu cầu lại sau ${formatOtpCooldown(otpRemainingSeconds)}`
-                    : 'Gửi mã xác thực'}
+                    ? t('auth.request_again_after', { time: formatOtpCooldown(otpRemainingSeconds) })
+                    : t('auth.send_otp')}
               </span>
               <ArrowRight size={20} />
             </button>
@@ -552,7 +554,7 @@ const Register = () => {
               disabled={loading}
               className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-4xl font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3 disabled:opacity-60"
             >
-              <span>{loading ? 'Đang xử lý...' : step === 'register' ? 'Tạo tài khoản' : 'Xác thực mã Gmail'}</span>
+              <span>{loading ? t('auth.processing') : step === 'register' ? t('auth.create_account') : t('auth.verify_otp_button')}</span>
               <ArrowRight size={20} />
             </button>
           )}
@@ -564,27 +566,27 @@ const Register = () => {
               onClick={handleResendOtp}
               className="w-full py-4 bg-white/10 text-white rounded-2xl font-black tracking-tight text-sm border border-white/10 hover:bg-white/20 transition-all disabled:opacity-50"
             >
-              {isOtpCooldownActive ? `Gửi lại sau ${formatOtpCooldown(otpRemainingSeconds)}` : 'Gửi lại mã OTP'}
+              {isOtpCooldownActive ? t('auth.request_again_after', { time: formatOtpCooldown(otpRemainingSeconds) }) : t('auth.resend_otp_button')}
             </button>
           )}
 
           {step === 'verify-email' && (
             <p className="text-center text-[10px] font-mono font-black uppercase tracking-widest text-white/30">
-              Bước 1/2: Xác thực Gmail bằng OTP
+              {t('auth.step_1')}
             </p>
           )}
 
           {step === 'register' && (
             <p className="text-center text-[10px] font-mono font-black uppercase tracking-widest text-white/30">
-              Bước 2/2: Hoàn tất thông tin tài khoản
+              {t('auth.step_2')}
             </p>
           )}
         </form>
 
         <p className="text-center text-[11px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
-          Đã có tài khoản?{' '}
+          {t('auth.already_have_account')}{' '}
           <Link to="/login" className="text-cursor-accent hover:underline">
-            Đăng nhập ngay
+            {t('auth.login_now')}
           </Link>
         </p>
       </div>

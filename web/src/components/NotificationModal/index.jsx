@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { X, CheckCircle2, UserMinus, Bell, User, Users } from 'lucide-react';
 import { friendApi } from '../../api/friendApi';
 import { notificationApi } from '../../api/notificationApi';
@@ -12,6 +13,7 @@ import { UserCheck, UserX } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
 const NotificationModal = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   const { pendingFriends, pendingGroups, activities } = useSelector(state => state.notification);
   const { friends } = useSelector(state => state.chat);
   const { isDark } = useTheme();
@@ -36,7 +38,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
   const handleAcceptFriend = async (userId) => {
     try {
       const other = pendingFriends.find(p => String(p.userId) === String(userId)) || {};
-      const otherName = other.fullName || other.name || other.phoneNumber || `Người dùng ${String(userId).slice(0,8)}`;
+      const otherName = other.fullName || other.name || other.phoneNumber || `${t('notifications.user_fallback')} ${String(userId).slice(0,8)}`;
       await friendApi.acceptRequest(userId);
       dispatch(removePendingFriend(userId));
       dispatch(fetchConversations());
@@ -46,7 +48,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
         senderId: userId,
         receiverId: currentUser?.userId || currentUser?.id,
         user: other,
-        message: `Bạn đã trở thành bạn bè của ${otherName}`
+        message: t('friends.accepted_notif', { name: otherName })
       }));
       try {
         const myId = currentUser?.userId || currentUser?.id;
@@ -54,7 +56,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
           senderId: myId,
           receiverId: userId,
           type: 'FRIEND_ACCEPTED',
-          message: `Bạn đã trở thành bạn bè của ${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'}.`
+          message: t('friends.accepted_notif', { name: currentUser?.fullName || currentUser?.phoneNumber || t('notifications.someone') })
         });
       } catch (e) {
         console.warn('Failed to create FRIEND_ACCEPTED notification', e);
@@ -104,9 +106,9 @@ const NotificationModal = ({ isOpen, onClose }) => {
               <Bell size={20} />
             </div>
             <div>
-              <h2 className={`text-lg font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>Thông báo</h2>
+              <h2 className={`text-lg font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('notifications.title')}</h2>
               <p className={`text-[10px] font-bold uppercase tracking-widest leading-none ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                {totalPending} yêu cầu chờ • {activities.length} hoạt động
+                {t('notifications.subtitle', { pending: totalPending, activity: activities.length })}
               </p>
             </div>
           </div>
@@ -121,14 +123,14 @@ const NotificationModal = ({ isOpen, onClose }) => {
               <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center">
                 <Bell size={32} className="text-slate-200" />
               </div>
-              <p className="text-sm font-bold text-slate-300 italic">Không có thông báo mới nào</p>
+              <p className="text-sm font-bold text-slate-300 italic">{t('notifications.no_notifications')}</p>
             </div>
           ) : (
             <>
               {/* Friend Requests Section */}
               {pendingFriends.length > 0 && (
                 <div className="space-y-3">
-                  <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Lời mời kết bạn</p>
+                  <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{t('notifications.friend_requests')}</p>
                   {pendingFriends.map((req) => (
                     <div key={req.userId} className={`p-4 border rounded-2xl transition-all group shadow-sm hover:shadow-md ${isDark ? 'bg-white/5 hover:bg-white/10 border-transparent hover:border-white/5' : 'bg-slate-50/50 hover:bg-white border-transparent hover:border-slate-100'}`}>
                       <div className="flex items-center space-x-4">
@@ -144,7 +146,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
                         <div className="min-w-0 flex-1">
                           <div className="flex justify-between items-start">
                             <p className={`text-[15px] leading-tight ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
-                              <span className={`font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{req.fullName}</span> muốn kết bạn với bạn
+                              <span className={`font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{req.fullName}</span> {t('notifications.want_to_be_friend')}
                             </p>
                             {req.createdAt && (
                               <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap ml-2">
@@ -161,7 +163,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
                           onClick={() => handleAcceptFriend(req.userId)}
                           className="flex-1 py-3 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
                         >
-                          Chấp nhận
+                          {t('friends.accept')}
                         </button>
                         <button
                           onClick={() => handleRejectFriend(req.userId)}
@@ -171,7 +173,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
                               : 'bg-white text-slate-400 hover:bg-slate-50 border-slate-100'
                           }`}
                         >
-                          Hủy
+                          {t('delete_account.btn_cancel')}
                         </button>
                       </div>
                     </div>
@@ -182,7 +184,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
               {/* Group Invitations Section */}
               {pendingGroups.length > 0 && (
                 <div className="space-y-3">
-                  <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Lời mời vào nhóm</p>
+                  <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{t('notifications.group_invites')}</p>
                   {pendingGroups.map((invite) => (
                     <div key={invite.invitationId} className={`p-4 border rounded-2xl transition-all group shadow-sm hover:shadow-md ${
                       isDark 
@@ -196,15 +198,15 @@ const NotificationModal = ({ isOpen, onClose }) => {
                           <Users size={24} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-slate-800'}`}>Nhóm: {invite.groupName}</p>
+                          <p className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('notifications.group_prefix')} {invite.groupName}</p>
                           <p className={`text-[10px] font-bold uppercase tracking-tighter ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                            Từ: {
+                            {t('notifications.inviter_prefix')} {
                               invite.inviterName || 
                               invite.inviterFullName || 
                               invite.inviter?.fullName || 
                               invite.inviter?.name ||
                               friends.find(f => String(f.userId || f.id) === String(invite.inviterId))?.fullName ||
-                              `Người dùng #${invite.inviterId.substring(0, 8)}`
+                              `${t('notifications.user_fallback')} #${invite.inviterId.substring(0, 8)}`
                             }
                           </p>
                         </div>
@@ -215,7 +217,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
                           onClick={() => handleAcceptGroup(invite.invitationId)}
                           className="flex-1 py-2.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
                         >
-                          Tham gia ngay
+                          {t('friends.accept')}
                         </button>
                         <button
                           onClick={() => handleRejectGroup(invite.invitationId)}
@@ -235,7 +237,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
               {/* Activities Section */}
               {activities.length > 0 && (
                 <div className="space-y-3">
-                  <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Hoạt động gần đây</p>
+                  <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{t('notifications.recent_activity')}</p>
                   {activities.map((activity) => (
                     <div key={activity.id} className={`p-4 rounded-2xl border transition-all flex items-center space-x-4 ${
                       activity.isRead 

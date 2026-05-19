@@ -4,6 +4,7 @@ import {
   ChevronLeft, ChevronRight, Maximize2, User, Clock,
   PlayCircle
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const getFullUrl = (url) => {
   if (!url || typeof url !== 'string') return url;
@@ -15,6 +16,7 @@ const getFullUrl = (url) => {
 };
 
 const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndexChange }) => {
+  const { t } = useTranslation();
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -63,7 +65,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
     if (!dateStr) return '';
     try {
       const date = new Date(dateStr);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Hôm nay';
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + t('media.today');
     } catch (e) { return ''; }
   };
 
@@ -97,7 +99,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
             className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-indigo-600 rounded-xl transition-all font-bold text-xs"
           >
             <Download size={16} />
-            <span className="hidden sm:inline">Tải về</span>
+            <span className="hidden sm:inline">{t('media.download')}</span>
           </button>
           <button onClick={() => setShowSidebar(!showSidebar)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
             <Maximize2 size={20} className={showSidebar ? 'rotate-180 opacity-50' : ''} />
@@ -160,7 +162,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
               </div>
               <div className="flex flex-col pr-4">
                 <h4 className="text-base font-black text-white/90 leading-tight">
-                   {currentImage.senderName || 'Người dùng'}
+                   {currentImage.senderName || t('common.user')}
                 </h4>
                 <div className="flex items-center space-x-2 text-white/40 mt-1">
                    <Clock size={12} />
@@ -181,8 +183,8 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
         {showSidebar && (
           <div className="w-80 border-l border-white/10 bg-black/40 backdrop-blur-xl flex flex-col animate-in slide-in-from-right duration-500">
             <div className="p-6 border-b border-white/5">
-              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white/30">Bộ sưu tập media</h4>
-              <p className="text-[10px] font-bold text-indigo-500 mt-1 uppercase">Toàn bộ kho lưu trữ hội thoại</p>
+              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white/30">{t('media.collection')}</h4>
+              <p className="text-[10px] font-bold text-indigo-500 mt-1 uppercase">{t('media.archive')}</p>
             </div>
             <div className="flex-1 overflow-y-auto no-scrollbar">
               <div className="p-4 grid grid-cols-2 gap-3 content-start">
@@ -217,7 +219,7 @@ const MediaLightbox = ({ isOpen, onClose, images = [], currentIndex = 0, onIndex
                  onClick={() => window.open(getFullUrl(currentImage.url), '_blank')}
                  className="w-full py-4 bg-white text-black rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all shadow-xl active:scale-95"
                >
-                 Tải ảnh chất lượng cao
+                 {t('media.download_hd')}
                </button>
             </div>
           </div>

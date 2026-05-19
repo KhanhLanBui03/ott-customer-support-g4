@@ -20,6 +20,7 @@ public class MessageResponse {
     private String conversationId;
     private String senderId;
     private String senderName;
+    private String senderPreferredLanguage;
     private String content;
     private String type;
     private List<String> mediaUrls;

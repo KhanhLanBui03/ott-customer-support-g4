@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import {
   PhoneOff,
   Shield,
@@ -45,6 +46,7 @@ const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 // Voice Player Component
 const VoicePlayer = ({ url }) => {
+  const { t } = useTranslation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -110,7 +112,7 @@ const VoicePlayer = ({ url }) => {
 
   const handleTranscribe = async () => {
     setIsTranscribing(true);
-    setTranscript('Đang biên dịch...');
+    setTranscript(t('chat.transcribing'));
 
     try {
       const response = await chatApi.transcribeVoiceUrl(url);
@@ -120,12 +122,12 @@ const VoicePlayer = ({ url }) => {
       if (payload?.success && transcriptText) {
         setTranscript(transcriptText);
       } else {
-        setTranscript(`Lỗi: ${payload?.message || 'Không thể biên dịch'}`);
+        setTranscript(`${t('chat.error')}: ${payload?.message || t('chat.cannot_transcribe')}`);
       }
     } catch (error) {
       console.error('Transcription error:', error);
-      const message = error?.response?.data?.message || error?.message || 'Biên dịch thất bại';
-      setTranscript(`Lỗi: ${message}`);
+      const message = error?.response?.data?.message || error?.message || t('chat.transcribe_failed');
+      setTranscript(`${t('chat.error')}: ${message}`);
     } finally {
       setIsTranscribing(false);
     }
@@ -181,7 +183,7 @@ const VoicePlayer = ({ url }) => {
           disabled={isTranscribing}
           className="text-[11px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 transition-all disabled:opacity-60 disabled:cursor-not-allowed z-10"
         >
-          {isTranscribing ? 'Đang biên dịch...' : 'Biên dịch'}
+          {isTranscribing ? t('chat.transcribing') : t('chat.transcribe')}
         </button>
       </div>
 
@@ -229,7 +231,7 @@ const getFullUrl = (url) => {
 
 
 const MessageList = ({ messages, loading, conversationId, onRefresh, conversations, onReply, onForward, onStartCall, onScrollToMessage, openLightbox, allChatImages, onLoadMore }) => {
-
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
@@ -247,8 +249,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
 
-    if (date.toDateString() === now.toDateString()) return 'Hôm nay';
-    if (date.toDateString() === yesterday.toDateString()) return 'Hôm qua';
+    if (date.toDateString() === now.toDateString()) return t('common.today');
+    if (date.toDateString() === yesterday.toDateString()) return t('common.yesterday');
 
     return date.toLocaleDateString('en-US', {
       day: 'numeric',
@@ -638,7 +640,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
               {content.split('\n').map((_, i) => <div key={i}>{i + 1}</div>)}
             </div>
             <div className="p-3 overflow-x-auto whitespace-pre">
-              {loading ? 'Đang tải nội dung...' : (content || 'Không có nội dung')}
+              {loading ? t('chat.loading_content') : (content || t('chat.no_content'))}
             </div>
           </div>
         ) : (
@@ -952,14 +954,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
             {(loading || isLoadingMoreRef.current) && messages.length > 0 && (
               <div className="flex items-center justify-center py-4 gap-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-300 dark:border-slate-600 border-t-slate-600 dark:border-t-slate-300" />
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Đang tải tin nhắn cũ hơn...</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t('chat.loading_more')}</span>
               </div>
             )}
             {messages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[40px] opacity-60">
                 <Shield size={32} className="text-slate-200 dark:text-slate-700 mb-4" />
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 text-center leading-loose">
-                  Chưa có tin nhắn nào<br />Hãy bắt đầu trò chuyện!
+                  {t('chat.no_messages_title')}<br />{t('chat.no_messages_subtitle')}
                 </p>
               </div>
             ) : (
@@ -1060,17 +1062,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           isMe ? "items-end" : "items-start"
                         )}>
                           {(isFirstInGroup || msg.type === 'CALL_LOG') && !isMe && msg.type !== 'VOTE' && currentConv?.type === 'GROUP' && (
-                            <p className={`text-[10px] font-black uppercase tracking-widest ml-3 mb-1.5 opacity-60 ${getMemberColor(msg.senderId, currentConv?.members)}`}>{msg.senderName || 'Thành viên'}</p>
+                            <p className={`text-[10px] font-black uppercase tracking-widest ml-3 mb-1.5 opacity-60 ${getMemberColor(msg.senderId, currentConv?.members)}`}>{msg.senderName || t('chat.member')}</p>
                           )}
                           {isFirstInGroup && msg.type === 'VOTE' && (
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400/80 mb-2 text-center w-full">{msg.senderName || 'Thành viên'} đã tạo một bình chọn</p>
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400/80 mb-2 text-center w-full">{msg.senderName || t('chat.member')} {t('chat.created_poll')}</p>
                           )}
 
                           <div className="relative group/bubble-content">
                             {msg.forwardedFrom && isFirstInGroup && (
                               <div className={`flex items-center space-x-1 mb-1 opacity-60 ${isMe ? 'justify-end pr-1' : 'justify-start pl-1'}`}>
                                 <Forward size={12} className="text-indigo-500" />
-                                <span className="text-[10px] font-bold italic text-foreground/60">Được chuyển tiếp</span>
+                                <span className="text-[10px] font-bold italic text-foreground/60">{t('chat.forwarded')}</span>
                               </div>
                             )}
                             {msg.replyTo && (
@@ -1114,13 +1116,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               (content && (content.includes('chat-media/') || content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
                                               (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
 
-                                            if (isVoice) return 'Tin nhắn thoại';
+                                            if (isVoice) return t('chat.voice_message');
                                             if (content && content !== '[Attachment]' && !content.startsWith('http')) return content;
 
                                             if (originalMsg) {
-                                              if (originalMsg.type === 'IMAGE') return '[Hình ảnh]';
-                                              if (originalMsg.type === 'VIDEO') return '[Video]';
-                                              if (originalMsg.type === 'STICKER') return '[Nhãn dán]';
+                                              if (originalMsg.type === 'IMAGE') return `[${t('chat.image')}]`;
+                                              if (originalMsg.type === 'VIDEO') return `[${t('chat.video')}]`;
+                                              if (originalMsg.type === 'STICKER') return `[${t('chat.sticker')}]`;
                                               if (originalMsg.type === 'FILE' && originalMsg.mediaUrls?.length > 0) {
                                                 try {
                                                   const url = originalMsg.mediaUrls[0];
@@ -1128,13 +1130,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                   let name = decoded.split('/').pop().split('?')[0];
                                                   name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
                                                   name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
-                                                  return `[Tệp] ${name}`;
+                                                  return `[${t('chat.file')}] ${name}`;
                                                 } catch (e) {
-                                                  return '[Tệp đính kèm]';
+                                                  return `[${t('chat.attachment')}]`;
                                                 }
                                               }
                                             }
-                                            return content || '[Tệp đính kèm]';
+                                            return content || `[${t('chat.attachment')}]`;
                                           })()}
                                         </p>
                                       </div>
@@ -1147,7 +1149,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                             {isRecalled ? (
                               <div className="px-6 py-3.5 bg-surface-200/80 text-foreground/40 rounded-[22px] border border-border flex items-center space-x-3 italic">
                                 <Trash2 size={14} className="opacity-50" />
-                                <span className="text-[13px] font-medium">Tin nhắn đã bị thu hồi</span>
+                                <span className="text-[13px] font-medium">{t('chat.message_recalled')}</span>
                               </div>
                             ) : isCall ? ((() => {
                               let callData = null;
@@ -1170,17 +1172,17 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                               let iconColor = 'text-slate-400';
 
                               if (isOngoing) {
-                                title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
+                                title = cType === 'video' ? t('chat.video_call_ongoing') : t('chat.voice_call_ongoing');
                                 iconColor = 'text-indigo-500 animate-pulse';
                                 if (startTime) {
                                     const elapsed = Math.floor((Date.now() - startTime) / 1000);
                                     const mins = Math.floor(elapsed / 60);
-                                    subtitle = elapsed < 60 ? 'Vừa bắt đầu' : `Đang diễn ra (${mins} phút)`;
+                                    subtitle = elapsed < 60 ? t('chat.just_started') : t('chat.ongoing_mins', { count: mins });
                                 } else {
-                                    subtitle = 'Đang diễn ra';
+                                    subtitle = t('chat.ongoing');
                                 }
                               } else if (isMe) {
-                                title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
+                                title = cType === 'video' ? t('chat.outgoing_video_call') : t('chat.outgoing_voice_call');
                                 ArrowIcon = ArrowUpRight;
                                 if (cStatus === 'SUCCESS') {
                                   const mins = Math.floor(duration / 60);
@@ -1188,25 +1190,25 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                                   iconColor = 'text-blue-400';
                                 } else {
-                                  subtitle = cStatus === 'BUSY' ? 'Máy bận' : 
-                                            (cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 
-                                            (cStatus === 'ONGOING' ? 'Cuộc gọi đã kết thúc' : 'Cuộc gọi nhỡ'));
+                                  subtitle = cStatus === 'BUSY' ? t('chat.busy') : 
+                                            (cStatus === 'REJECTED' ? t('chat.rejected') : 
+                                            (cStatus === 'ONGOING' ? t('chat.ended') : t('chat.missed_call')));
                                   iconColor = 'text-red-400';
                                   isMissed = true;
                                 }
                               } else {
                                 ArrowIcon = ArrowDownLeft;
                                 if (cStatus === 'SUCCESS') {
-                                    title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
+                                    title = cType === 'video' ? t('chat.incoming_video_call') : t('chat.incoming_voice_call');
                                     const mins = Math.floor(duration / 60);
                                     const secs = duration % 60;
                                     subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                                     iconColor = 'text-emerald-500';
                                   } else {
-                                    title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
-                                    subtitle = cStatus === 'BUSY' ? 'Máy bận' : 
-                                              (cStatus === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 
-                                              (cStatus === 'ONGOING' ? 'Cuộc gọi đã kết thúc' : 'Cuộc gọi nhỡ'));
+                                    title = cType === 'video' ? t('chat.missed_video_call') : t('chat.missed_voice_call');
+                                    subtitle = cStatus === 'BUSY' ? t('chat.busy') : 
+                                              (cStatus === 'REJECTED' ? t('chat.rejected') : 
+                                              (cStatus === 'ONGOING' ? t('chat.ended') : t('chat.missed_call')));
                                     iconColor = 'text-red-500';
                                     isMissed = true;
                                   }
@@ -1271,7 +1273,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                   : (isDark ? "bg-slate-700/50 hover:bg-slate-700 text-slate-300 border-white/5" : "bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200"))
                                           )}
                                         >
-                                          <span>{isOngoing ? "Tham gia ngay" : "Gọi lại"}</span>
+                                          <span>{isOngoing ? t('chat.join_now') : t('chat.call_back')}</span>
                                         </button>
                                       </div>
                                   </div>
@@ -1295,7 +1297,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     <p className={cn(
                                       "text-[10px] font-black uppercase tracking-[0.2em]",
                                       isDark ? "text-indigo-400/80" : "text-indigo-600"
-                                    )}>Biểu quyết</p>
+                                    )}>{t('chat.poll')}</p>
                                   </div>
                                   <h4 className={cn(
                                     "text-[16px] font-bold leading-snug",
@@ -1376,7 +1378,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       isDark ? "text-indigo-400 hover:text-indigo-300" : "text-indigo-600 hover:text-indigo-700"
                                     )}
                                   >
-                                    <span>Xem chi tiết</span>
+                                    <span>{t('chat.view_details')}</span>
                                     <ChevronRight size={14} className="group-hover/details:translate-x-1 transition-transform" />
                                   </button>
 
@@ -1390,14 +1392,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           : "bg-red-50 text-red-600 border-red-100 hover:bg-red-100"
                                       )}
                                     >
-                                      Kết thúc
+                                      {t('chat.end')}
                                     </button>
                                   )}
                                   {msg.vote.isClosed && (
                                     <span className={cn(
                                       "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
                                       isDark ? "bg-white/5 text-white/40" : "bg-slate-100 text-slate-400"
-                                    )}>Đã đóng</span>
+                                    )}>{t('chat.closed')}</span>
                                   )}
                                 </div>
                               </div>
@@ -1413,9 +1415,9 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
                                   {/* Action Buttons (Reply, Forward, More) */}
                                   <div className={cn("absolute top-0 flex items-center space-x-1 opacity-0 group-hover/bubble-main:opacity-100 transition-all z-10", isMe ? "-left-28" : "-right-28")}>
-                                    <button onClick={() => onReply(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all" title="Trả lời"><Reply size={18} /></button>
-                                    <button onClick={() => onForward(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-blue-500 transition-all" title="Chuyển tiếp"><Forward size={18} className="text-blue-500" /></button>
-                                    <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === msg.messageId ? null : msg.messageId); }} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-foreground transition-all" title="Thêm"><MoreHorizontal size={18} /></button>
+                                    <button onClick={() => onReply(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all" title={t('chat.reply')}><Reply size={18} /></button>
+                                    <button onClick={() => onForward(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-blue-500 transition-all" title={t('chat.forward')}><Forward size={18} className="text-blue-500" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === msg.messageId ? null : msg.messageId); }} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-foreground transition-all" title={t('chat.more')}><MoreHorizontal size={18} /></button>
                                   </div>
 
                                   {/* Context Menu */}
@@ -1423,12 +1425,12 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                     <>
                                       <div className="fixed inset-0 z-[90]" onMouseDown={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
                                       <div className={`absolute bottom-full mb-3 ${isMe ? 'right-0' : 'left-0'} w-52 bg-sidebar border border-border shadow-2xl rounded-[24px] p-2 z-[9999]`}>
-                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Reply size={18} className="text-indigo-400" /> <span>Trả lời</span></button>
-                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('TRANSLATE', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Languages size={18} className="text-indigo-400" /> <span>Dịch tin nhắn</span></button>
-                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /><span>{isPinned ? 'Gỡ ghim' : 'Ghim tin nhắn'}</span></button>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('REPLY', msg); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Reply size={18} className="text-indigo-400" /> <span>{t('chat.reply')}</span></button>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction('TRANSLATE', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Languages size={18} className="text-indigo-400" /> <span>{t('chat.translate')}</span></button>
+                                        <button onMouseDown={(e) => { e.stopPropagation(); handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-2xl transition-all"><Pin size={18} className={isPinned ? 'text-indigo-500' : 'text-foreground/40'} fill={isPinned ? 'currentColor' : 'none'} /><span>{isPinned ? t('chat.unpin_message') : t('chat.pin_message')}</span></button>
                                         <div className="h-px bg-border my-1.5 mx-2" />
-                                        <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Xóa tin nhắn ở phía tôi?')) handleAction('DELETE_ME', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Xóa phía tôi</span></button>
-                                        {isMe && <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm('Thu hồi tin nhắn này với tất cả mọi người?')) handleAction('RECALL', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>Thu hồi</span></button>}
+                                        <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm(t('chat.delete_for_me_confirm'))) handleAction('DELETE_ME', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>{t('chat.delete_for_me')}</span></button>
+                                        {isMe && <button onMouseDown={(e) => { e.stopPropagation(); if (window.confirm(t('chat.recall_confirm'))) handleAction('RECALL', msg.messageId); }} className="w-full flex items-center space-x-3 px-4 py-3 text-[13px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"><Trash2 size={18} /> <span>{t('chat.recall')}</span></button>}
                                       </div>
                                     </>
                                   )}
@@ -1457,7 +1459,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                         const fullUrl = getFullUrl(voiceUrl);
                                         return (
                                           <div className="p-2 min-w-[260px]">
-                                            {fullUrl ? <VoicePlayer url={fullUrl} /> : <div className="p-3 text-xs opacity-50 italic text-center">Âm thanh lỗi...</div>}
+                                            {fullUrl ? <VoicePlayer url={fullUrl} /> : <div className="p-3 text-xs opacity-50 italic text-center">{t('chat.audio_error')}</div>}
                                           </div>
                                         );
                                       }
@@ -1614,7 +1616,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           {translationLoading[msg.messageId] && (
                                             <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
                                               <Loader2 size={12} className="animate-spin" />
-                                              <span>AI đang dịch...</span>
+                                              <span>{t('chat.ai_translating')}</span>
                                             </div>
                                           )}
                                           {translatedMessages[msg.messageId] && (
@@ -1624,7 +1626,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             )}>
                                               <div className="flex items-center space-x-1.5 mb-1 opacity-60">
                                                 <SparklesIcon size={10} className="text-indigo-400" />
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Bản dịch AI</span>
+                                                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">{t('chat.ai_translation')}</span>
                                               </div>
                                               <p className="text-[13px] leading-relaxed italic">{translatedMessages[msg.messageId]}</p>
                                             </div>
@@ -1693,7 +1695,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             return (
                                               <div className="flex items-center space-x-1 ml-1 opacity-50">
                                                 <Clock size={11} className="text-indigo-400 animate-pulse" />
-                                                <span className="text-[10px] font-bold text-foreground/40 uppercase tracking-tighter">Đang gửi</span>
+                                                <span className="text-[10px] font-bold text-foreground/40 uppercase tracking-tighter">{t('chat.sending')}</span>
                                               </div>
                                             );
                                           }
@@ -1707,14 +1709,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             return (
                                               <div className="flex items-center space-x-1 px-2 py-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full border border-indigo-500/20 shadow-sm animate-in fade-in zoom-in duration-300">
                                                 <CheckCheck size={12} className="text-indigo-500" />
-                                                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-tight">Đã nhận</span>
+                                                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-tight">{t('chat.received')}</span>
                                               </div>
                                             );
                                           } else {
                                             return (
                                               <div className="flex items-center space-x-1 px-2 py-0.5 bg-slate-100 dark:bg-white/5 rounded-full border border-border/50 opacity-60">
                                                 <Check size={12} className="text-slate-400 dark:text-slate-500" />
-                                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">Đã gửi</span>
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">{t('chat.sent')}</span>
                                               </div>
                                             );
                                           }
@@ -1748,9 +1750,9 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                       if (others.length === 0) return null;
                       if (others.length === 1) {
                         const memberName = conversations?.find(c => c.conversationId === conversationId)?.members?.find(m => m.userId === others[0].userId)?.fullName;
-                        return (memberName || 'Ai đó') + ' đang soạn tin...';
+                        return (memberName || t('chat.someone')) + ' ' + t('chat.is_typing');
                       }
-                      return `${others.length} người đang soạn tin...`;
+                      return t('chat.are_typing', { count: others.length });
                     })()}
                   </span>
                 </div>
@@ -1772,7 +1774,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           <button
             onClick={() => scrollToBottom(true)}
             className="fixed bottom-32 right-8 z-40 p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-all hover:scale-110 active:scale-95 flex items-center justify-center"
-            title="Kéo về tin nhắn mới nhất"
+            title={t('chat.jump_to_latest')}
           >
             <ArrowDownLeft size={20} />
           </button>
@@ -1785,7 +1787,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
               <button
                 onClick={() => window.open(selectedFile.url, '_blank')}
                 className="p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
-                title="Tải về"
+                title={t('chat.download')}
               >
                 <Download size={20} />
               </button>
@@ -1803,7 +1805,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                 {isFileModalLoading && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#222] z-50">
                     <Loader2 size={48} className="text-indigo-500 animate-spin mb-4" />
-                    <p className="text-white/40 font-bold text-sm animate-pulse tracking-widest uppercase">Đang chuẩn bị tài liệu...</p>
+                    <p className="text-white/40 font-bold text-sm animate-pulse tracking-widest uppercase">{t('chat.preparing_document')}</p>
                   </div>
                 )}
                 <iframe
@@ -1841,7 +1843,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
               </div>
               <div className="hidden sm:flex items-center space-x-2">
                 <button className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs transition-all">
-                  Chia sẻ
+                  {t('chat.share')}
                 </button>
               </div>
             </div>
@@ -1853,14 +1855,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
             <div className="w-full max-w-3xl rounded-3xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl">
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 bg-slate-900/95">
                 <div>
-                  <div className="text-xs uppercase text-slate-400 tracking-[0.18em]">Biểu cảm</div>
-                  <div className="text-lg font-semibold text-white mt-1">{detailEmoji} · {selectedDetailGroups[detailEmoji] || 0} lượt</div>
+                  <div className="text-xs uppercase text-slate-400 tracking-[0.18em]">{t('chat.reaction')}</div>
+                  <div className="text-lg font-semibold text-white mt-1">{detailEmoji} · {selectedDetailGroups[detailEmoji] || 0} {t('chat.times')}</div>
                 </div>
                 <button
                   type="button"
                   onClick={closeReactionDetail}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition"
-                >Đóng</button>
+                >{t('chat.close')}</button>
               </div>
               <div className="grid grid-cols-4 gap-4 p-4">
                 <div className="col-span-4 md:col-span-1 bg-slate-900/90 rounded-3xl p-4 space-y-3">
@@ -1879,14 +1881,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                   ))}
                 </div>
                 <div className="col-span-4 md:col-span-3 bg-slate-900/90 rounded-3xl p-4">
-                  <div className="mb-4 text-sm text-slate-400">Danh sách người đã chọn biểu cảm này</div>
+                  <div className="mb-4 text-sm text-slate-400">{t('chat.reaction_list')}</div>
                   <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2">
                     {selectedDetailNames.length > 0 ? selectedDetailNames.map((name, index) => (
                       <div key={`${name}-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
                         {name}
                       </div>
                     )) : (
-                      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">Chưa có ai phản ứng.</div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">{t('chat.no_reactions')}</div>
                     )}
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Search, X, UserPlus, MessageSquare, User, Trash2,
@@ -16,6 +17,7 @@ import { useTheme } from '../hooks/useTheme';
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const { friends, conversations } = useSelector(state => state.chat);
   const { pendingFriends } = useSelector(state => state.notification);
@@ -84,7 +86,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
   };
 
   const handleUnfriend = async (friendId) => {
-    if (window.confirm('Bạn có chắc chắn muốn hủy kết bạn với người này?')) {
+    if (window.confirm(t('friends.unfriend_confirm'))) {
       try {
         await friendApi.deleteFriend(friendId);
         dispatch(fetchFriends());
@@ -98,7 +100,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
     setLoading(true);
     try {
       const other = pendingFriends.find(p => String(p.userId) === String(userId)) || {};
-      const otherName = other.fullName || other.name || other.phoneNumber || `Người dùng ${String(userId).slice(0, 8)}`;
+      const otherName = other.fullName || other.name || other.phoneNumber || `User ${String(userId).slice(0, 8)}`;
       await friendApi.acceptRequest(userId);
       dispatch(removePendingFriend(userId));
       dispatch(fetchFriends());
@@ -108,7 +110,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
         senderId: userId,
         receiverId: currentUser?.userId || currentUser?.id,
         user: other,
-        message: `Bạn đã trở thành bạn bè của ${otherName}`
+        message: t('friends.accepted_notif', { name: otherName })
       }));
       // Create a notification for the requester to inform them their request was accepted
       try {
@@ -117,7 +119,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
           senderId: myId,
           receiverId: userId,
           type: 'FRIEND_ACCEPTED',
-          message: `Bạn đã trở thành bạn bè của ${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'}.`
+          message: t('friends.accepted_notif', { name: currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó' })
         });
       } catch (e) {
         // Non-blocking: log and continue
@@ -149,7 +151,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
       const res = await userApi.searchUser(searchPhone);
       setFoundUser(res.data || res);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không tìm thấy người dùng');
+      setError(err.response?.data?.message || t('friends.not_found'));
     } finally {
       setLoading(false);
     }
@@ -167,7 +169,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
             senderId: myId,
             receiverId: foundUser.userId,
             type: 'FRIEND_REQUEST',
-            message: `${currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó'} đã gửi lời mời kết bạn cho bạn.`
+            message: t('search.friend_request_notification', { name: currentUser?.fullName || currentUser?.phoneNumber || 'Ai đó' })
           });
         } catch (e) {
           console.warn('Failed to create FRIEND_REQUEST notification', e);
@@ -175,7 +177,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
       }
       setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING' }));
     } catch (err) {
-      setError('Gửi lời mời thất bại');
+      setError(t('friends.add_friend_failed'));
     } finally {
       setLoading(false);
     }
@@ -191,7 +193,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
           }`}>
           <div className="flex items-center space-x-4">
             <h2 className={`text-xl font-black tracking-tighter ${isDark ? 'text-white' : 'text-slate-800'}`}>
-              {view === 'list' ? 'Danh sách bạn bè' : view === 'requests' ? 'Lời mời kết bạn' : 'Tìm kiếm bạn bè'}
+              {view === 'list' ? t('friends.title_list') : view === 'requests' ? t('friends.title_requests') : t('friends.title_search')}
             </h2>
             {view === 'list' && (
               <button
@@ -199,7 +201,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                 className="flex items-center space-x-2 px-3 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-full hover:bg-indigo-500/20 transition-all group"
               >
                 <Bell size={14} className="group-hover:rotate-12 transition-transform" />
-                <span className="text-[10px] font-black uppercase tracking-wider">Lời mời</span>
+                <span className="text-[10px] font-black uppercase tracking-wider">{t('friends.tabs.requests')}</span>
                 {pendingFriends.length > 0 && (
                   <span className="bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold">
                     {pendingFriends.length}
@@ -224,7 +226,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                   }`} size={18} />
                 <input
                   type="text"
-                  placeholder="Tìm kiếm bạn bè trong danh sách..."
+                  placeholder={t('friends.search_placeholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${isDark
@@ -239,7 +241,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                 {filteredFriends.length === 0 ? (
                   <div className="py-20 text-center opacity-20">
                     <User size={48} className="mx-auto mb-4" />
-                    <p className="text-xs font-black uppercase tracking-[0.2em]">Danh sách trống</p>
+                    <p className="text-xs font-black uppercase tracking-[0.2em]">{t('friends.no_friends')}</p>
                   </div>
                 ) : (
                   filteredFriends.map((friend) => (
@@ -285,12 +287,12 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
 
           {view === 'requests' && (
             <div className="space-y-6">
-              <p className={`text-[11px] font-black uppercase tracking-widest px-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>Yêu cầu đang chờ</p>
+              <p className={`text-[11px] font-black uppercase tracking-widest px-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>{t('friends.title_requests')}</p>
               <div className="space-y-4">
                 {pendingFriends.length === 0 ? (
                   <div className="py-20 text-center opacity-20">
                     <Bell size={48} className="mx-auto mb-4" />
-                    <p className="text-xs font-black uppercase tracking-[0.2em]">Không có lời mời nào</p>
+                    <p className="text-xs font-black uppercase tracking-[0.2em]">{t('friends.no_requests')}</p>
                   </div>
                 ) : (
                   pendingFriends.map((req) => (
@@ -301,7 +303,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                         </div>
                         <div className="flex-1">
                           <p className={`text-[15px] leading-tight ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
-                            <span className={`font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{req.fullName}</span> muốn kết bạn
+                            <span className={`font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{req.fullName}</span> {t('friends.request_received')}
                           </p>
                           <p className={`text-[11px] font-bold mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>{req.phoneNumber}</p>
                         </div>
@@ -311,14 +313,14 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                           onClick={() => handleAcceptRequest(req.userId)}
                           className="flex-1 py-4 bg-indigo-600 text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-indigo-700 transition-all active:scale-95"
                         >
-                          Chấp nhận
+                          {t('friends.accept')}
                         </button>
                         <button
                           onClick={() => handleRejectRequest(req.userId)}
                           className={`px-6 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all active:scale-95 border ${isDark ? 'bg-white/5 text-white/40 hover:bg-white/10 border-white/5' : 'bg-white text-slate-400 hover:bg-slate-50 border-slate-100'
                             }`}
                         >
-                          Từ chối
+                          {t('friends.reject')}
                         </button>
                       </div>
                     </div>
@@ -332,7 +334,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
             <div className="space-y-8 animate-fade-in">
               <div className="space-y-6">
                 <p className={`text-[11px] font-black uppercase tracking-[0.2em] italic text-center ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
-                  Tìm kiếm bạn bè qua số điện thoại
+                  {t('friends.search_user_hint')}
                 </p>
 
                 <form onSubmit={handleSearchUser} className="flex space-x-3">
@@ -341,7 +343,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                       }`} size={18} />
                     <input
                       type="text"
-                      placeholder="Nhập số điện thoại..."
+                      placeholder={t('search.placeholder')}
                       value={searchPhone}
                       onChange={(e) => setSearchPhone(e.target.value)}
                       className={`w-full pl-12 pr-4 py-4 rounded-2xl text-sm font-medium transition-all focus:outline-none focus:border-indigo-500/50 border ${isDark
@@ -355,7 +357,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                     disabled={loading || !searchPhone.trim()}
                     className="px-8 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-[0.1em] text-[11px] hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-xl shadow-indigo-600/20"
                   >
-                    {loading ? '...' : 'TÌM'}
+                    {loading ? '...' : t('search.btn')}
                   </button>
                 </form>
 
@@ -393,18 +395,18 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                           className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
                         >
                           <MessageSquare size={18} />
-                          <span>Nhắn tin</span>
+                          <span>{t('search.message')}</span>
                         </button>
 
                         {foundUser.friendshipStatus === 'ACCEPTED' ? (
                           <div className="w-full py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
                             <Check size={18} />
-                            <span>Bạn bè</span>
+                            <span>{t('friends.is_friend')}</span>
                           </div>
                         ) : foundUser.friendshipStatus === 'PENDING' ? (
                           <div className="w-full py-4 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3">
                             <Check size={18} />
-                            <span>Đã gửi lời mời</span>
+                            <span>{t('friends.sent_request')}</span>
                           </div>
                         ) : (
                           <button
@@ -413,7 +415,7 @@ const FriendManagementModal = ({ isOpen, onClose, initialView = 'list' }) => {
                               }`}
                           >
                             <UserPlus size={18} />
-                            <span>Kết bạn</span>
+                            <span>{t('friends.add_friend')}</span>
                           </button>
                         )}
                       </div>

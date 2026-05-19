@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, BarChart2, Calendar, CheckSquare, Square } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const CreateVoteModal = ({ isOpen, onClose, onCreate }) => {
+  const { t } = useTranslation();
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [allowMultiple, setAllowMultiple] = useState(false);
@@ -55,7 +57,7 @@ const CreateVoteModal = ({ isOpen, onClose, onCreate }) => {
             <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
               <BarChart2 size={18} />
             </div>
-            <h2 className="font-bold text-foreground">Tạo cuộc bình chọn</h2>
+            <h2 className="font-bold text-foreground">{t('poll.create_title')}</h2>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-surface-200 rounded-full transition-colors">
             <X size={20} className="text-foreground/60" />
@@ -64,20 +66,20 @@ const CreateVoteModal = ({ isOpen, onClose, onCreate }) => {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           <div className="space-y-2">
-            <label className="text-[11px] font-black uppercase tracking-wider text-foreground/40 px-1">Câu hỏi</label>
+            <label className="text-[11px] font-black uppercase tracking-wider text-foreground/40 px-1">{t('poll.question_label')}</label>
             <input
               autoFocus
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Nhập nội dung bình chọn..."
+              placeholder={t('poll.question_placeholder')}
               className="w-full bg-surface-200 border-none rounded-xl px-4 py-3 text-foreground placeholder:text-foreground/30 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
               required
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[11px] font-black uppercase tracking-wider text-foreground/40 px-1">Các lựa chọn</label>
+            <label className="text-[11px] font-black uppercase tracking-wider text-foreground/40 px-1">{t('poll.options_label')}</label>
             {options.map((opt, index) => (
               <div key={index} className="flex items-center space-x-2 group">
                 <div className="flex-1 relative">
@@ -85,7 +87,7 @@ const CreateVoteModal = ({ isOpen, onClose, onCreate }) => {
                     type="text"
                     value={opt}
                     onChange={(e) => handleOptionChange(index, e.target.value)}
-                    placeholder={`Lựa chọn ${index + 1}`}
+                    placeholder={t('poll.option_placeholder', { index: index + 1 })}
                     className="w-full bg-surface-200 border-none rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-foreground/20 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     required={index < 2}
                   />
@@ -109,7 +111,7 @@ const CreateVoteModal = ({ isOpen, onClose, onCreate }) => {
                 className="w-full py-3 border-2 border-dashed border-border hover:border-indigo-500/50 hover:bg-indigo-500/5 rounded-xl flex items-center justify-center space-x-2 text-foreground/40 hover:text-indigo-500 transition-all text-sm font-bold"
               >
                 <Plus size={16} />
-                <span>Thêm lựa chọn</span>
+                <span>{t('poll.add_option')}</span>
               </button>
             )}
           </div>
@@ -123,13 +125,13 @@ const CreateVoteModal = ({ isOpen, onClose, onCreate }) => {
               <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${allowMultiple ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-surface-200 text-foreground/20'}`}>
                 {allowMultiple ? <CheckSquare size={14} /> : <Square size={14} />}
               </div>
-              <span className="text-sm font-bold text-foreground/70 group-hover:text-foreground transition-colors">Cho phép chọn nhiều phương án</span>
+              <span className="text-sm font-bold text-foreground/70 group-hover:text-foreground transition-colors">{t('poll.allow_multiple')}</span>
             </button>
 
             <div className="space-y-2">
               <label className="text-[11px] font-black uppercase tracking-wider text-foreground/40 px-1 flex items-center space-x-1">
                 <Calendar size={12} />
-                <span>Thời hạn (Không bắt buộc)</span>
+                <span>{t('poll.deadline_label')}</span>
               </label>
               <input
                 type="datetime-local"
@@ -147,14 +149,14 @@ const CreateVoteModal = ({ isOpen, onClose, onCreate }) => {
             onClick={onClose}
             className="flex-1 py-3.5 rounded-xl font-bold text-sm text-foreground/60 hover:bg-surface-200 transition-all"
           >
-            Hủy
+            {t('poll.cancel')}
           </button>
           <button
             onClick={handleSubmit}
             disabled={!question.trim() || options.filter(o => o.trim()).length < 2}
             className="flex-2 py-3.5 px-8 rounded-xl font-bold text-sm bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-600 disabled:opacity-50 disabled:shadow-none transition-all"
           >
-            Tạo bình chọn
+            {t('poll.create_btn')}
           </button>
         </div>
       </div>

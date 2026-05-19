@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { X, Users, Check, Search, User, ShieldCheck } from 'lucide-react';
 import { friendApi } from '../api/friendApi';
 import { useChat } from '../hooks/useChat';
+import { useTranslation } from 'react-i18next';
 
 const CreateGroupModal = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   const [groupName, setGroupName] = useState('');
   const [friends, setFriends] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -69,7 +71,7 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
              <div className="w-10 h-10 rounded-2xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                 <Users size={20} className="text-white" />
              </div>
-             <h2 className="text-xl font-black text-foreground tracking-tight">Tạo nhóm mới</h2>
+             <h2 className="text-xl font-black text-foreground tracking-tight">{t('group.create_title')}</h2>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-surface-200 rounded-xl text-foreground/40 transition-colors">
             <X size={24} />
@@ -79,10 +81,10 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
         <div className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar">
           {/* Group Info */}
           <div className="space-y-4">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/40 px-1">Tên nhóm</label>
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/40 px-1">{t('group.name_label')}</label>
             <input
               type="text"
-              placeholder="Nhập tên nhóm..."
+              placeholder={t('group.name_placeholder')}
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               className="w-full px-6 py-4 bg-surface-200 border-none rounded-2xl text-sm font-bold text-foreground placeholder:text-foreground/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
@@ -94,15 +96,15 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/40">
-                Thêm thành viên ({selectedIds.length})
+                {t('group.add_members', { count: selectedIds.length })}
               </label>
-              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic">Tối thiểu 2 người</span>
+              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic">{t('group.min_members_hint')}</span>
             </div>
             <div className="relative">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-foreground/30" size={18} />
               <input
                 type="text"
-                placeholder="Tìm bạn bè để mời..."
+                placeholder={t('group.search_placeholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-14 pr-6 py-4 bg-surface-200 border-none rounded-2xl text-sm font-bold text-foreground placeholder:text-foreground/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
@@ -160,7 +162,7 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
               ))}
               {friends.length === 0 && (
                 <div className="py-12 text-center">
-                   <p className="text-xs font-bold text-foreground/30">Chưa có bạn bè nào trong danh sách</p>
+                   <p className="text-xs font-bold text-foreground/30">{t('group.no_friends')}</p>
                 </div>
               )}
             </div>
@@ -179,12 +181,12 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
             ) : selectedIds.length < 2 ? (
               <>
                 <Users size={18} />
-                <span>Chọn thêm {2 - selectedIds.length} người</span>
+                <span>{t('group.add_more', { count: 2 - selectedIds.length })}</span>
               </>
             ) : (
               <>
                 <Users size={18} />
-                <span>Tạo nhóm</span>
+                <span>{t('group.create_btn')}</span>
               </>
             )}
           </button>
