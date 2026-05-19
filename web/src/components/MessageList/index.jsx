@@ -1271,7 +1271,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                       <div className="px-4 pb-4 mt-1">
                                         <button 
                                           onClick={() => {
-                                            const event = new CustomEvent('START_CALL_AGAIN', { detail: { type: cType, startTime } });
+                                            const event = new CustomEvent('START_CALL_AGAIN', { detail: { type: cType, isOngoing, startTime } });
                                             window.dispatchEvent(event);
                                           }} 
                                           className={cn(

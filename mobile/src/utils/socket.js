@@ -32,7 +32,6 @@ export const clearAllHandlers = () => {
   wallpaperUpdateHandlers.clear();
   conversationUpdateHandlers.clear();
   globalHandlers.clear();
-  callHandlers.clear(); // Thêm cho Calling
   console.log('🧹 All socket handlers cleared');
 };
 
@@ -56,7 +55,7 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
     connectHeaders: { Authorization: `Bearer ${token}` },
     forceBinaryWSFrames: true,
     appendMissingNULLonIncoming: true,
-    reconnectDelay: 5000,
+    reconnectDelay: 2000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
     
@@ -234,6 +233,7 @@ export const disconnectSocket = () => {
     console.log('🛑 Mobile socket deactivated');
   }
   clearAllHandlers();
+  callHandlers.clear();
 };
 
 export default {

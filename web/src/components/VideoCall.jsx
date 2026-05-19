@@ -709,11 +709,11 @@ const VideoCall = ({
                 </div>
             )}
 
-            {/* User Left Toast Notification */}
+            {/* User Left/Join Toast Notification */}
             {userLeftMsg && (
                 <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-full animate-in fade-in slide-in-from-top-4 duration-300">
                     <p className="text-white text-sm font-bold flex items-center space-x-2">
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        <span className={`w-2 h-2 rounded-full animate-pulse ${userLeftMsg.includes('tham gia') ? 'bg-green-500' : 'bg-red-500'}`} />
                         <span>{userLeftMsg}</span>
                     </p>
                 </div>

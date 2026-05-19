@@ -4,8 +4,9 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "build": "eas build --platform android"
+    "android": "expo run:android",
+    "build": "eas build --platform android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "^9.1.0",

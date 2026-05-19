@@ -101,6 +101,7 @@ const Chat = () => {
     callStatus,
     callerId,
     callerName,
+    callerAvatar,
     incomingSignal,
     callType,
     cameraError,
@@ -128,6 +129,14 @@ const Chat = () => {
   } = useAgoraCall(activeConversationId, activeConversation);
 
   const myId = user?.userId || user?.id;
+  const [outgoingTarget, setOutgoingTarget] = useState(null);
+
+  // Dọn dẹp thông tin người nhận cuộc gọi cũ khi cuộc gọi kết thúc (idle)
+  useEffect(() => {
+    if (callStatus === 'idle') {
+      setOutgoingTarget(null);
+    }
+  }, [callStatus]);
 
 
   useEffect(() => {
@@ -161,7 +170,37 @@ const Chat = () => {
     return () => disconnect?.();
   }, [connect]);
 
-  const handleStartCall = (type = 'video', options = {}) => startCall(type, options);
+  const handleStartCall = (type = 'video', options = {}) => {
+    if (options.targetName) {
+      setOutgoingTarget({
+        name: options.targetName,
+        avatar: options.targetAvatar || null,
+        isGroup: options.isGroup || activeConversation?.type === 'GROUP'
+      });
+    } else if (activeConversation) {
+      const isGroup = activeConversation.type === 'GROUP';
+      if (isGroup) {
+        setOutgoingTarget({
+          name: activeConversation.name || 'Nhóm trò chuyện',
+          avatar: activeConversation.avatar || null,
+          isGroup: true
+        });
+      } else {
+        const other = activeConversation.members?.find(m => {
+          const mid = m.userId || m.id || m._id;
+          return mid && String(mid).trim() !== String(myId).trim();
+        });
+        setOutgoingTarget({
+          name: other?.fullName || other?.name || activeConversation.name || 'Người dùng',
+          avatar: other?.avatar || other?.avatarUrl || null,
+          isGroup: false
+        });
+      }
+    } else {
+      setOutgoingTarget(null);
+    }
+    startCall(type, options);
+  };
 
   const handleAcceptCall = () => acceptCall(incomingSignal);
 
@@ -170,51 +209,64 @@ const Chat = () => {
     if (callStatus === 'incoming') reason = 'REJECTED';
     else if (callStatus === 'outgoing') reason = 'MISSED';
     endCall(true, reason);
+    setOutgoingTarget(null);
   };
 
 
   // ─── Thông tin người nghe/gọi (phải đặt SAU activeConversation) ──────────
   const remoteInfo = React.useMemo(() => {
-    // 1. Ưu tiên xử lý cuộc gọi NHÓM dựa trên flag từ Hook
-    if (isGroupCall) {
-      const cid = activeCallCid || incomingSignal?.conversationId;
-      const callConv = conversations.find(c => 
-        String(c.conversationId) === String(cid) || 
-        String(c.id) === String(cid)
-      );
+    // Tìm conversation liên quan đến cuộc gọi đang diễn ra
+    const currentCallCid = activeCallCid || incomingSignal?.conversationId;
+    const callConv = currentCallCid ? conversations.find(c => 
+      String(c.conversationId) === String(currentCallCid) || 
+      String(c.id) === String(currentCallCid)
+    ) : null;
+
+    // Xác định xem cuộc gọi này có phải là cuộc gọi nhóm hay không (hoàn toàn đồng bộ)
+    const isActuallyGroup = isGroupCall || 
+      (callConv ? (callConv.type === 'GROUP' || callConv.isGroup) : false) || 
+      String(currentCallCid).includes('GROUP') || 
+      incomingSignal?.isGroup === true || 
+      outgoingTarget?.isGroup === true;
+
+    // 1. Ưu tiên xử lý cuộc gọi NHÓM
+    if (isActuallyGroup) {
       return {
-        name: callConv?.name || incomingSignal?.conversationName || 'Nhóm trò chuyện',
-        avatar: callConv?.avatar || callConv?.avatarUrl || incomingSignal?.conversationAvatar || null
+        name: callConv?.name || outgoingTarget?.name || incomingSignal?.conversationName || 'Nhóm trò chuyện',
+        avatar: callConv?.avatar || callConv?.avatarUrl || outgoingTarget?.avatar || incomingSignal?.conversationAvatar || null
       };
     }
 
     // 2. Xử lý cuộc gọi CÁ NHÂN khi có người gọi đến (Incoming)
-    if (callerId) {
-      const signalConvId = incomingSignal?.conversationId;
-      const callConv = conversations.find(c => 
-        String(c.conversationId) === String(signalConvId) || 
-        String(c.id) === String(signalConvId)
-      );
-
+    const cleanCallerId = callerId && callerId !== 'undefined' && callerId !== 'null' ? String(callerId).trim() : null;
+    if (callStatus === 'incoming' && cleanCallerId) {
       // Nếu là cuộc gọi Cá nhân (SINGLE), hiển thị người gọi
-      let avatar = incomingSignal?.signal?.senderAvatar || null;
-      let name = callerName;
+      let avatar = incomingSignal?.signal?.senderAvatar || incomingSignal?.senderAvatar || null;
+      let name = incomingSignal?.senderName || callerName;
 
-      // Tìm trong cuộc hội thoại 1-1 trước
-      if (callConv) {
-        const found = callConv.members?.find(m => String(m.userId) === String(callerId));
-        if (found) {
-          avatar = found.avatar || found.avatarUrl || avatar;
-          if (found.fullName || found.name) {
-            name = found.fullName || found.name;
+      // Tìm trong cuộc hội thoại liên quan đến cuộc gọi trước
+      if (!avatar || !name || name === 'Người dùng' || name === cleanCallerId) {
+        if (callConv) {
+          const found = callConv.members?.find(m => {
+            const mid = m.userId || m.id || m._id;
+            return mid && mid !== 'undefined' && mid !== 'null' && String(mid).trim() === cleanCallerId;
+          });
+          if (found) {
+            avatar = found.avatar || found.avatarUrl || avatar;
+            if (found.fullName || found.name) {
+              name = found.fullName || found.name;
+            }
           }
         }
       }
 
       // FALLBACK: Tìm trong toàn bộ danh sách
-      if (!avatar || name === callerName) {
+      if (!avatar || !name || name === 'Người dùng' || name === cleanCallerId) {
         for (const conv of conversations) {
-          const found = conv.members?.find(m => String(m.userId) === String(callerId));
+          const found = conv.members?.find(m => {
+            const mid = m.userId || m.id || m._id;
+            return mid && mid !== 'undefined' && mid !== 'null' && String(mid).trim() === cleanCallerId;
+          });
           if (found) {
             avatar = found.avatar || found.avatarUrl || avatar;
             if (found.fullName || found.name) {
@@ -228,7 +280,38 @@ const Chat = () => {
       return { name, avatar };
     }
 
-    // 2. Nếu không có callerId, nghĩa là mình đang GỌI ĐI (Outgoing)
+    // 3. Nếu đang trong cuộc gọi ĐƠN (Outgoing hoặc Connected hoặc Ended)
+    if (callStatus !== 'idle') {
+      if (outgoingTarget?.name) {
+        return {
+          name: outgoingTarget.name,
+          avatar: outgoingTarget.avatar || null
+        };
+      }
+
+      if (callConv) {
+        const other = callConv.members?.find(m => {
+          const mid = m.userId || m.id || m._id;
+          return mid && mid !== 'undefined' && mid !== 'null' && String(mid).trim() !== String(myId).trim();
+        });
+        if (other) {
+          return {
+            name: other.fullName || other.name || callConv.name || 'Người dùng',
+            avatar: other.avatar || other.avatarUrl || null
+          };
+        }
+      }
+
+      // FALLBACK cực kỳ mạnh mẽ cho cuộc gọi đến khi không tìm thấy cuộc hội thoại trong danh sách
+      if (callerName) {
+        return {
+          name: callerName,
+          avatar: callerAvatar || null
+        };
+      }
+    }
+
+    // 4. FALLBACK khi ở trạng thái idle/chưa có cuộc gọi: Dựa trên activeConversation hiện tại
     if (!activeConversation) return { name: 'Người dùng', avatar: null };
 
     // Nếu là cuộc gọi Nhóm
@@ -240,12 +323,15 @@ const Chat = () => {
     }
 
     // Nếu là cuộc gọi Cá nhân
-    const other = activeConversation.members?.find(m => String(m.userId) !== String(myId));
+    const other = activeConversation.members?.find(m => {
+      const mid = m.userId || m.id || m._id;
+      return mid && mid !== 'undefined' && mid !== 'null' && String(mid).trim() !== String(myId).trim();
+    });
     return {
       name: other?.fullName || other?.name || activeConversation.name || 'Người dùng',
       avatar: other?.avatar || other?.avatarUrl || null,
     };
-  }, [callerId, callerName, conversations, activeConversation, myId, incomingSignal]);
+  }, [callerId, callerName, callerAvatar, conversations, activeConversation, myId, incomingSignal, outgoingTarget, isGroupCall, activeCallCid, callStatus]);
 
   // ─── Danh sách Remote Streams cho Group Call ─────────────────────────────
   const remoteStreams = React.useMemo(() => {
@@ -261,7 +347,10 @@ const Chat = () => {
 
       // Tìm trong danh sách hội thoại hiện tại (SINGLE)
       if (activeConversation?.type === 'SINGLE') {
-        const other = activeConversation.members?.find(m => String(m.userId) !== String(myId));
+        const other = activeConversation.members?.find(m => {
+          const mid = m.userId || m.id;
+          return mid && mid !== 'undefined' && mid !== 'null' && String(mid).trim() !== String(myId).trim();
+        });
         if (other) {
           memberName = other.fullName || other.name || memberName;
           memberAvatar = other.avatar || other.avatarUrl || memberAvatar;
@@ -1015,7 +1104,10 @@ const Chat = () => {
                  sanitize(cid) === sanitize(incomingCid);
         }) || activeConversation}
         ringDuration={ringDuration}
-        onClose={() => setCallStatus('idle')}
+        onClose={() => {
+          setCallStatus('idle');
+          setOutgoingTarget(null);
+        }}
       />
     </div >
   );

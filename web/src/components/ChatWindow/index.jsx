@@ -79,9 +79,19 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
       setPendingCallType(type);
       setCountdown(3);
     } else {
-      onStartCall(type, { isJoin: skipCountdown, startTime });
+      let targetName = null;
+      let targetAvatar = null;
+      if (currentConv?.type === 'SINGLE') {
+        const other = currentConv.members?.find(m => {
+          const mid = m.userId || m.id;
+          return mid && String(mid).trim() !== String(user?.id || user?.userId).trim();
+        });
+        targetName = other?.fullName || other?.name || currentConv.name;
+        targetAvatar = other?.avatar || other?.avatarUrl;
+      }
+      onStartCall(type, { isJoin: skipCountdown, startTime, targetName, targetAvatar });
     }
-  }, [currentConv, onStartCall]);
+  }, [currentConv, onStartCall, user]);
 
 
   const onStartCallRef = useRef(onStartCall);
@@ -101,17 +111,28 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
 
   useEffect(() => {
     const handleStartCallAgain = (e) => {
-      const { type, isSingle, startTime } = e.detail || {};
+      const { type, isSingle, isOngoing, startTime, targetName, targetAvatar } = e.detail || {};
       if (isSingle) {
-        onStartCall(type || 'audio');
+        onStartCall(type || 'audio', { targetName, targetAvatar });
       } else {
-        // Tham gia cuộc gọi đang diễn ra thì không cần đếm ngược
-        handleCallClick(type || 'audio', true, startTime);
+        const isGroupMode = currentConv?.type === 'GROUP';
+        if (isGroupMode) {
+          if (isOngoing) {
+            // Tham gia cuộc gọi nhóm đang diễn ra thì không cần đếm ngược
+            handleCallClick(type || 'audio', true, startTime);
+          } else {
+            // Gọi lại cuộc gọi nhóm đã kết thúc: Khởi tạo cuộc gọi mới (có đếm ngược)
+            handleCallClick(type || 'audio', false, null);
+          }
+        } else {
+          // Cuộc gọi 1-1: Khởi tạo cuộc gọi mới hoàn toàn
+          onStartCall(type || 'audio', { targetName, targetAvatar });
+        }
       }
     };
     window.addEventListener('START_CALL_AGAIN', handleStartCallAgain);
     return () => window.removeEventListener('START_CALL_AGAIN', handleStartCallAgain);
-  }, [onStartCall, handleCallClick]);
+  }, [onStartCall, handleCallClick, currentConv]);
 
   useEffect(() => {
     if (replyingTo) {
@@ -163,7 +184,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
     }
   }
 
-  const isOngoingInChat = lastCallMsg?.status === 'ONGOING' && currentConv?.type === 'GROUP';
+  const isOngoingInChat = lastCallMsg?.status === 'ONGOING' && (currentConv?.type === 'GROUP' || (conversationId && !String(conversationId).includes('SINGLE')));
   const showOngoingBanner = isOngoingInChat && callStatus === 'idle';
 
   const scrollToMessage = (messageId) => {
