@@ -129,15 +129,30 @@ const ChatDetailScreen = () => {
     callStatus, callType, countdown, showCountdown
   } = useAgoraCall(realId, conversation, false);
 
-  const handleStartCall = (type, isJoin = false, startTime = null) => {
-
-    startCall(type, {
-      isJoin,
-      startTime,
-      name: conversation?.name || displayName || 'Nhóm chat',
-      avatar: conversation?.avatar || conversation?.avatarUrl || headerAvatarUrl
-
-    });
+  const handleStartCall = (type, isJoin = false, startTime = null, targetUser = null) => {
+    if (targetUser) {
+      const myId = currentUser?.userId || currentUser?.id;
+      const peerId = targetUser?.userId || targetUser?.id;
+      const sorted = [String(myId), String(peerId)].sort();
+      const singleCid = `SINGLE#${sorted[0]}#${sorted[1]}`;
+      
+      startCall(type, {
+        isJoin: false,
+        isGroup: false,
+        name: targetUser.fullName || targetUser.name || 'Người dùng',
+        avatar: targetUser.avatarUrl || targetUser.avatar || targetUser.profilePic,
+        conversationId: singleCid
+      }, singleCid);
+    } else {
+      const isGroupCall = conversation?.type === 'GROUP' || (realId && !realId.includes('SINGLE#'));
+      startCall(type, {
+        isJoin,
+        startTime,
+        isGroup: isGroupCall,
+        name: conversation?.name || displayName || 'Nhóm chat',
+        avatar: conversation?.avatar || conversation?.avatarUrl || headerAvatarUrl
+      });
+    }
   };
 
   const lastCallMsgRaw = useMemo(() => {
@@ -322,7 +337,7 @@ const ChatDetailScreen = () => {
     // Xử lý nút "Gọi lại" từ CALL_LOG
     if (message.action === 'CALL_BACK') {
       const isOngoing = message.isOngoing === true;
-      handleStartCall(message.callType || 'audio', isOngoing, isOngoing ? message.startTime : null);
+      handleStartCall(message.callType || 'audio', isOngoing, isOngoing ? message.startTime : null, message.targetUser);
       return;
     }
 

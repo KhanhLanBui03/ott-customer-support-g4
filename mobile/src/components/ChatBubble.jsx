@@ -635,39 +635,42 @@ const ChatBubble = ({
                               color={isOngoing && !isOwn ? '#6366f1' : iconColor}
                             />
                           </View>
-                          <View style={styles.callLogTextGroup}>
-                            <Text style={[
-                              styles.callLogTitle,
-                              isMissedIncoming && styles.missedCallTitle,
-                              isOwn ? styles.ownText : styles.otherText
-                            ]} numberOfLines={1}>
-                              {title}
-                            </Text>
-                            <Text style={[styles.callLogStatus, isOwn ? styles.ownText : styles.otherText, { opacity: 0.7 }]}>
-                              {subtitle} • {formatTime(message.createdAt)}
-                            </Text>
+                            <View style={styles.callLogTextGroup}>
+                              <Text style={[
+                                styles.callLogTitle,
+                                isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }],
+                                isMissedIncoming && styles.missedCallTitle
+                              ]} numberOfLines={1}>
+                                {title}
+                              </Text>
+                              <Text style={[
+                                styles.callLogStatus,
+                                isOwn ? styles.ownText : [styles.otherText, { color: colors.textMuted }]
+                              ]}>
+                                {subtitle} • {formatTime(message.createdAt)}
+                              </Text>
+                            </View>
                           </View>
+  
+                          <View style={[styles.callLogDivider, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : colors.border }]} />
+                          <TouchableOpacity
+                            style={styles.callBackBtn}
+                            onPress={() => onPressMessage?.({ 
+                              ...message, 
+                              action: 'CALL_BACK', 
+                              callType: callData.callType || 'video', 
+                              startTime: callData.startTime,
+                              isOngoing: callData.status === 'ONGOING'
+                            })}
+                          >
+                            <Text style={[styles.callBackText, { color: isOwn ? '#fff' : colors.primary }]}>
+                              {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}
+                            </Text>
+  
+                          </TouchableOpacity>
                         </View>
-
-                        <View style={[styles.callLogDivider, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : colors.border }]} />
-                        <TouchableOpacity
-                          style={styles.callBackBtn}
-                          onPress={() => onPressMessage?.({ 
-                            ...message, 
-                            action: 'CALL_BACK', 
-                            callType: callData.callType || 'video', 
-                            startTime: callData.startTime,
-                            isOngoing: callData.status === 'ONGOING'
-                          })}
-                        >
-                          <Text style={[styles.callBackText, { color: isOwn ? '#fff' : '#6366f1' }]}>
-                            {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}
-                          </Text>
-
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  } catch (e) { return <Text style={[styles.text, isOwn ? styles.ownText : styles.otherText]}>{message.content}</Text>; }
+                      );
+                    } catch (e) { return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{message.content}</Text>; }
                 }
 
 

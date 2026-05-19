@@ -1,12 +1,14 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { chatApi, conversationApi } from '../api/chatApi';
 import { sendMessageViaSocket } from '../utils/socket';
+import { getPreviewText, isVoiceMessage } from '../utils/messageUtils';
+
 
 // FIX: Logic lấy ID chuẩn - Ưu tiên ID từ Server
 export const getRealId = (state, id, currentUserId = null) => {
   if (!id) return id;
   const decodedId = decodeURIComponent(id);
-  
+
   // 1. Nếu ID đã chứa '#', đó là ID chuẩn từ Database, dùng luôn.
   if (decodedId.includes('#')) return decodedId;
 
@@ -60,7 +62,7 @@ export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, 
     const state = getState().chat;
     const myId = getState().auth.user?.userId || getState().auth.user?.id;
     const realId = getRealId(state, id, myId);
-    
+
     const params = { ...arg?.params, limit: -1 };
     if (isLoadMore && state.messages[realId]?.length > 0) {
       params.fromMessageId = state.messages[realId][0].messageId;
@@ -79,7 +81,7 @@ export const recallMessage = createAsyncThunk('chat/recallMessage', async ({ mes
     const state = getState().chat;
     const myId = getState().auth.user?.userId || getState().auth.user?.id;
     const realId = getRealId(state, conversationId, myId);
-    
+
     const response = await chatApi.recallMessage(messageId, realId);
     return { messageId, conversationId: realId };
   } catch (error) {
@@ -92,7 +94,7 @@ export const deleteMessage = createAsyncThunk('chat/deleteMessage', async ({ mes
     const state = getState().chat;
     const myId = getState().auth.user?.userId || getState().auth.user?.id;
     const realId = getRealId(state, conversationId, myId);
-    
+
     await chatApi.deleteMessage(messageId, realId);
     return { messageId, conversationId: realId };
   } catch (error) {
@@ -107,8 +109,8 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
     const realId = getRealId(state.chat, messageData.conversationId, myId);
 
     // Chuẩn hóa content: Nếu là VOICE, content nên chứa URL để đồng bộ với Web
-    const finalContent = (messageData.type === 'VOICE' && !messageData.content && messageData.mediaUrls?.length > 0) 
-      ? messageData.mediaUrls[0] 
+    const finalContent = (messageData.type === 'VOICE' && !messageData.content && messageData.mediaUrls?.length > 0)
+      ? messageData.mediaUrls[0]
       : messageData.content;
 
     const payload = {
@@ -122,7 +124,7 @@ export const sendMessage = createAsyncThunk('chat/sendMessage', async (messageDa
     };
 
     sendMessageViaSocket(payload);
-    return null; 
+    return null;
   } catch (error) { return rejectWithValue(error.response?.data?.message); }
 });
 
@@ -174,16 +176,6 @@ export const unpinConversation = createAsyncThunk('chat/unpinConversation', asyn
   }
 });
 
-const isVoiceMessage = (message) => {
-  if (!message) return false;
-  if (message.type === 'VOICE') return true;
-  const content = message.content || '';
-  if (typeof content !== 'string') return false;
-  return content.includes('voice-messages/') || 
-         content.includes('s3.ap-southeast-1') ||
-         content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i);
-};
-
 const chatSlice = createSlice({
   name: 'chat',
   initialState: { conversations: [], messages: {}, typingUsers: {}, currentConversationId: null, currentUserId: null, loading: false, replyingTo: null },
@@ -196,7 +188,7 @@ const chatSlice = createSlice({
     setTyping: (state, action) => {
       const { conversationId, userId, isTyping } = action.payload;
       const realId = getRealId(state, conversationId, state.currentUserId);
-      
+
       if (!state.typingUsers[realId]) {
         state.typingUsers[realId] = [];
       }
@@ -208,7 +200,7 @@ const chatSlice = createSlice({
           const conv = state.conversations.find(c => c.conversationId === realId);
           const member = conv?.members?.find(m => String(m.userId || m.id) === String(userId));
           const name = member?.fullName || member?.name || 'Ai đó';
-          
+
           state.typingUsers[realId].push({ userId, name });
         }
       } else {
@@ -345,6 +337,8 @@ const chatSlice = createSlice({
             preview = "[Tệp tin]";
           } else if (message.type === 'VOTE') {
             preview = "[Bình chọn]";
+          } else if (message.type === 'CALL_LOG') {
+            preview = getPreviewText(message.content);
           }
 
           // Cập nhật thông tin tin nhắn cuối
@@ -374,7 +368,7 @@ const chatSlice = createSlice({
       // Update member status in all conversations that include this user
       state.conversations = state.conversations.map(conv => {
         if (!conv.members) return conv;
-        
+
         const memberIdx = conv.members.findIndex(m => String(m.userId || m.id) === String(userId));
         if (memberIdx === -1) return conv;
 
@@ -389,7 +383,7 @@ const chatSlice = createSlice({
 
         // Nếu là SINGLE chat, cập nhật luôn trạng thái của hội thoại
         const isOtherMember = conv.type === 'SINGLE' && String(userId) !== String(state.currentUserId);
-        
+
         return {
           ...conv,
           members: updatedMembers,
@@ -495,7 +489,7 @@ const chatSlice = createSlice({
           if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
             lastMessage = "Tin nhắn thoại";
           }
-          
+
           return {
             ...conv,
             lastMessage,
@@ -544,7 +538,7 @@ const chatSlice = createSlice({
               isRecalled: true,
               content: 'Tin nhắn đã bị thu hồi'
             };
-            
+
             // Cập nhật cả lastMessage trong danh sách hội thoại
             const convIdx = state.conversations.findIndex(c => c.conversationId === realId);
             if (convIdx !== -1) {

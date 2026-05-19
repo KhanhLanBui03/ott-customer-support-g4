@@ -20,6 +20,8 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const UserActionModal = ({ visible, onClose, user, onMention, onMessage, onCall }) => {
   const { colors, isDark } = useTheme();
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const isUserOnline = user?.isOnline === true || 
+                       String(user?.status || user?.presence || '').toUpperCase() === 'ONLINE';
 
   React.useEffect(() => {
     if (visible) {
@@ -78,11 +80,11 @@ const UserActionModal = ({ visible, onClose, user, onMention, onMessage, onCall 
                 }}
                 style={styles.avatar}
               />
-              <View style={[styles.statusDot, { backgroundColor: user?.isOnline ? '#10b981' : '#9ca3af', borderColor: colors.card }]} />
+              <View style={[styles.statusDot, { backgroundColor: isUserOnline ? '#10b981' : '#9ca3af', borderColor: colors.card }]} />
             </View>
             <Text style={[styles.userName, { color: colors.foreground }]}>{user?.fullName || 'Người dùng'}</Text>
             <Text style={[styles.userStatus, { color: colors.textSubtle }]}>
-              {user?.isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
+              {isUserOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
             </Text>
           </View>
 

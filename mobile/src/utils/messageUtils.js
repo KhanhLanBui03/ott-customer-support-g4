@@ -1,12 +1,21 @@
-export const isAudioUrl = (value) => 
-  typeof value === 'string' && /\.(mp3|m4a|webm|wav|ogg|opus)(\?|$)/i.test(value);
+export const isVoiceMessage = (message) => {
+  if (!message) return false;
+  if (message.type === 'VOICE') return true;
+  const content = typeof message === 'string' ? message : (message.content || '');
+  if (typeof content !== 'string') return false;
+  return content.includes('voice-messages/') || 
+         content.includes('s3.ap-southeast-1') ||
+         content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i);
+};
 
 export const getPreviewText = (lastMessage) => {
-  const raw = String(lastMessage || '').trim();
+  const raw = String(typeof lastMessage === 'string' ? lastMessage : (lastMessage?.content || '')).trim();
   if (!raw) return 'Chưa có tin nhắn';
 
   // Handle recalled messages
   if (raw === '[Tin nhắn đã bị thu hồi]') return raw;
+
+  if (isVoiceMessage(lastMessage)) return 'Tin nhắn thoại';
 
   // Handle call JSON
   if (raw.startsWith('{') && raw.includes('callType')) {
@@ -20,7 +29,7 @@ export const getPreviewText = (lastMessage) => {
 
   // Handle URLs
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    if (isAudioUrl(raw)) return '[Tin nhắn thoại]';
+    if (isVoiceMessage(raw)) return 'Tin nhắn thoại';
     return '[Đính kèm]';
   }
 
@@ -31,4 +40,39 @@ export const getPreviewText = (lastMessage) => {
   }
 
   return raw;
+};
+
+export const getCallLogText = (messageContent, isOwn) => {
+  try {
+    const callData = typeof messageContent === 'string' ? JSON.parse(messageContent) : (messageContent || {});
+    const cType = callData.callType || 'audio';
+    const status = callData.status;
+    const duration = callData.duration || 0;
+    const isOngoing = status === 'ONGOING';
+
+    const mins = Math.floor(duration / 60);
+    const secs = duration % 60;
+    const durationStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+    if (isOngoing) {
+      return cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
+    }
+
+    if (isOwn) {
+      if (status === 'SUCCESS') {
+        return cType === 'video' ? `Cuộc gọi video đi (${durationStr})` : `Cuộc gọi thoại đi (${durationStr})`;
+      } else {
+        const statusText = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
+        return cType === 'video' ? `Cuộc gọi video đi (${statusText})` : `Cuộc gọi thoại đi (${statusText})`;
+      }
+    } else {
+      if (status === 'SUCCESS') {
+        return cType === 'video' ? `Cuộc gọi video đến (${durationStr})` : `Cuộc gọi thoại đến (${durationStr})`;
+      } else {
+        return cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+      }
+    }
+  } catch (e) {
+    return 'Cuộc gọi';
+  }
 };

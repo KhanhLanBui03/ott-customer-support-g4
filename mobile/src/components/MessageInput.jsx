@@ -14,6 +14,7 @@ import {
   Dimensions,
   LayoutAnimation,
   Keyboard,
+  ScrollView,
 } from 'react-native';
 
 
@@ -58,17 +59,17 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
   const [recordingDuration, setRecordingDuration] = useState(0);
   const recordingIntervalRef = useRef(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  
+
   // Mention states
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentions, setShowMentions] = useState(false);
   const [mentionResults, setMentionResults] = useState([]);
   const [cursorPosition, setCursorPosition] = useState(0);
 
-  const [permissionModal, setPermissionModal] = useState({ 
-    visible: false, 
-    type: 'camera', 
-    onConfirm: () => {},
+  const [permissionModal, setPermissionModal] = useState({
+    visible: false,
+    type: 'camera',
+    onConfirm: () => { },
     onCancel: () => setPermissionModal(prev => ({ ...prev, visible: false }))
   });
   const isPickingRef = useRef(false);
@@ -131,11 +132,11 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
       };
 
       const { recording } = await Audio.Recording.createAsync(recordingOptions);
-      
+
       setRecording(recording);
       setIsRecording(true);
       setRecordingDuration(0);
-      
+
       recordingIntervalRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
@@ -203,15 +204,16 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
   const handleChange = (text) => {
     setMessage(text);
-    
+
     // Logic detect mention (cả có @ và không có @)
     if (conversationType === 'GROUP') {
       const lastAtPos = text.lastIndexOf('@', cursorPosition - 1);
-      
+
       // Trường hợp 1: Có ký tự @ chủ động
       if (lastAtPos !== -1 && !text.slice(lastAtPos, cursorPosition).includes(' ')) {
         const textAfterAt = text.slice(lastAtPos + 1, cursorPosition);
         if (textAfterAt.length < 20) {
+          setMentionQuery(textAfterAt);
           const filtered = members.filter(m => {
             const name = m.fullName || m.name || '';
             const isAlreadyMentioned = text.includes(`@${name}`);
@@ -230,8 +232,9 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
       // Trường hợp 2: Không có @ - Tự động gợi ý theo từ đang gõ
       const words = text.slice(0, cursorPosition).split(/\s/);
       const currentWord = words[words.length - 1];
-      
+
       if (currentWord.length >= 2) {
+        setMentionQuery(currentWord);
         const filtered = members.filter(m => {
           const name = m.fullName || m.name || '';
           const isAlreadyMentioned = text.includes(`@${name}`);
@@ -246,9 +249,11 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         setShowMentions(filtered.length > 0);
       } else {
         setShowMentions(false);
+        setMentionQuery('');
       }
     } else {
       setShowMentions(false);
+      setMentionQuery('');
     }
 
 
@@ -258,7 +263,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         setIsTyping(true);
         onTypingChange && onTypingChange(true);
       }
-      
+
       // Reset timeout
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
@@ -281,7 +286,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
   const handleSelectMention = (member) => {
     const lastAtPos = message.lastIndexOf('@', cursorPosition - 1);
     const name = member.fullName || member.name;
-    
+
     if (lastAtPos !== -1 && !message.slice(lastAtPos, cursorPosition).includes(' ')) {
       // Thay thế cho trường hợp có @
       const beforeAt = message.slice(0, lastAtPos);
@@ -307,13 +312,13 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
     if (type === 'camera') checkFunc = () => ImagePicker.getCameraPermissionsAsync();
     else if (type === 'gallery') checkFunc = () => ImagePicker.getMediaLibraryPermissionsAsync();
     else if (type === 'mic') checkFunc = () => Audio.getPermissionsAsync();
-    
+
     console.log(`[Permission] Requesting ${type}...`);
     if (checkFunc) {
       const { status, canAskAgain } = await checkFunc();
       console.log(`[Permission] Current status for ${type}: ${status}`);
       if (status === 'granted') return true;
-      
+
       if (status === 'denied' && !canAskAgain) {
         Alert.alert('Quyền bị từ chối', 'Bạn đã từ chối quyền này trước đó. Vui lòng vào Cài đặt để cấp quyền thủ công.');
         return false;
@@ -367,7 +372,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         setIsUploading(true);
         setUploadType('MEDIA');
         const asset = result.assets[0];
-        
+
         let fileName = asset.fileName || (asset.type === 'video' ? 'video.mp4' : 'camera_image.jpg');
         const file = {
           uri: asset.uri,
@@ -443,7 +448,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             type: asset.type === 'video' ? 'video/mp4' : 'image/jpeg',
             name: fileName,
           };
-          
+
           if (asset.type === 'video') messageType = 'VIDEO';
 
           // Retry logic: up to 3 attempts
@@ -476,7 +481,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         if (uploadedUrls.length > 0) {
           onSendMessage('', replyingTo?.messageId, messageType, uploadedUrls);
           dispatch(clearReplyingTo());
-          
+
           if (failCount > 0) {
             Alert.alert('Thông báo', `Đã gửi ${uploadedUrls.length} ảnh. Có ${failCount} ảnh bị lỗi không gửi được.`);
           }
@@ -580,7 +585,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
     if (message.trim() && !isLoading && !isUploading) {
       onSendMessage(message.trim(), replyingTo?.messageId);
       setMessage('');
-      
+
       if (isTyping) {
         setIsTyping(false);
         onTypingChange && onTypingChange(false);
@@ -589,20 +594,20 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      
+
       dispatch(clearReplyingTo());
     }
   };
 
   const renderReplyContent = () => {
     if (!replyingTo) return null;
-    
+
     const isImage = replyingTo.type === 'IMAGE' || (replyingTo.type !== 'VIDEO' && replyingTo.type !== 'FILE' && replyingTo.mediaUrls && replyingTo.mediaUrls.length > 0);
     const isVideo = replyingTo.type === 'VIDEO';
     const isFile = replyingTo.type === 'FILE';
     const isVoice = replyingTo.type === 'VOICE';
-    
-    const thumbUrl = (isImage || isVideo) && replyingTo.mediaUrls?.[0] 
+
+    const thumbUrl = (isImage || isVideo) && replyingTo.mediaUrls?.[0]
       ? (replyingTo.mediaUrls[0].startsWith('http') ? replyingTo.mediaUrls[0] : `${BASE_URL}${replyingTo.mediaUrls[0].startsWith('/') ? '' : '/'}${replyingTo.mediaUrls[0]}`)
       : null;
 
@@ -618,7 +623,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
     let displayText = replyingTo.content;
     const isVoiceMsg = isVoice || (displayText && (displayText.includes('chat-media/') || displayText.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
-    
+
     if (isVoiceMsg) {
       displayText = 'Tin nhắn thoại';
     } else if (!displayText) {
@@ -637,8 +642,8 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         <View style={styles.replyPreviewContent}>
           <Text style={[styles.replyPreviewSender, { color: colors.foreground }]}>
 
-            Trả lời {String(replyingTo.senderId) === String(user?.userId) || String(replyingTo.senderId) === String(user?.id) 
-              ? 'chính mình' 
+            Trả lời {String(replyingTo.senderId) === String(user?.userId) || String(replyingTo.senderId) === String(user?.id)
+              ? 'chính mình'
               : replyingTo.senderName}
           </Text>
           <Text style={[styles.replyPreviewText, { color: colors.textMuted }]} numberOfLines={1}>
@@ -676,16 +681,16 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
           <>
             {!isExpanded && (
               <>
-                <TouchableOpacity 
-                  style={styles.actionButton} 
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => setShowAttachMenu(true)}
                   disabled={isLoading || isUploading}
                 >
                   <MaterialIcons name="add-circle-outline" size={28} color={colors.primary} />
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={styles.actionButton} 
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={takePhoto}
                   disabled={isLoading || isUploading}
                 >
@@ -693,8 +698,8 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                 </TouchableOpacity>
 
                 {conversationType === 'GROUP' && (
-                  <TouchableOpacity 
-                    style={styles.actionButton} 
+                  <TouchableOpacity
+                    style={styles.actionButton}
                     onPress={onOpenPoll}
                     disabled={isLoading || isUploading}
                   >
@@ -705,8 +710,8 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             )}
 
             {isExpanded && (
-              <TouchableOpacity 
-                style={[styles.actionButton, { marginRight: 4 }]} 
+              <TouchableOpacity
+                style={[styles.actionButton, { marginRight: 4 }]}
                 onPress={() => {
                   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   setIsExpanded(false);
@@ -725,42 +730,44 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   <View style={[styles.mentionHeader, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}>
                     <Text style={[styles.mentionHeaderText, { color: isDark ? '#94a3b8' : '#64748b' }]}>NHẮC TÊN THÀNH VIÊN</Text>
                   </View>
-                  
-                  {/* Option @All - Báo cho cả nhóm */}
-                  {(mentionQuery === '' || 'tất cả'.includes(mentionQuery) || 'all'.includes(mentionQuery)) && (
-                    <TouchableOpacity
-                      style={[styles.mentionItem, styles.mentionItemAll, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
-                      onPress={() => handleSelectMention({ fullName: 'All' })}
-                    >
-                      <View style={styles.mentionAvatarWrapper}>
-                        <View style={[styles.mentionAvatarAll, { backgroundColor: '#6366f1' }]}>
-                          <MaterialIcons name="security" size={18} color="#fff" />
-                        </View>
-                      </View>
-                      <View style={styles.mentionTextContent}>
-                        <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>Báo cho cả nhóm</Text>
-                        <Text style={[styles.mentionSubName, { color: '#6366f1' }]}>@All</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
 
-                  {mentionResults.map((member) => (
-                    <TouchableOpacity
-                      key={member.userId || member.id}
-                      style={[styles.mentionItem, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
-                      onPress={() => handleSelectMention(member)}
-                    >
-                      <View style={styles.mentionAvatarWrapper}>
-                        <Image
-                          source={{ uri: member.avatarUrl || member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.fullName || 'U')}&background=random&color=fff&size=64` }}
-                          style={styles.mentionAvatar}
-                        />
-                      </View>
-                      <View style={styles.mentionTextContent}>
-                        <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>{member.fullName}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                  <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="always">
+                    {/* Option @All - Báo cho cả nhóm */}
+                    {(mentionQuery === '' || 'tất cả'.includes(mentionQuery) || 'all'.includes(mentionQuery)) && (
+                      <TouchableOpacity
+                        style={[styles.mentionItem, styles.mentionItemAll, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
+                        onPress={() => handleSelectMention({ fullName: 'All' })}
+                      >
+                        <View style={styles.mentionAvatarWrapper}>
+                          <View style={[styles.mentionAvatarAll, { backgroundColor: '#6366f1' }]}>
+                            <MaterialIcons name="security" size={18} color="#fff" />
+                          </View>
+                        </View>
+                        <View style={styles.mentionTextContent}>
+                          <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>Báo cho cả nhóm</Text>
+                          <Text style={[styles.mentionSubName, { color: '#6366f1' }]}>@All</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+
+                    {mentionResults.map((member) => (
+                      <TouchableOpacity
+                        key={member.userId || member.id}
+                        style={[styles.mentionItem, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
+                        onPress={() => handleSelectMention(member)}
+                      >
+                        <View style={styles.mentionAvatarWrapper}>
+                          <Image
+                            source={{ uri: member.avatarUrl || member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.fullName || 'U')}&background=random&color=fff&size=64` }}
+                            style={styles.mentionAvatar}
+                          />
+                        </View>
+                        <View style={styles.mentionTextContent}>
+                          <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>{member.fullName}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
@@ -781,7 +788,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
               >
                 {(() => {
                   if (!message) return null;
-                  
+
                   // Chỉ highlight nếu là GROUP chat
                   if (conversationType !== 'GROUP') return <Text>{message}</Text>;
 
@@ -790,13 +797,13 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   const memberNames = members
                     .map(m => (m.fullName || m.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
                     .filter(Boolean);
-                  
+
                   if (memberNames.length === 0 && !message.includes('@All')) return <Text>{message}</Text>;
-                  
+
                   const allNames = [...memberNames, 'All'].join('|');
                   const regex = new RegExp(`(@(?:${allNames}))`, 'g');
                   const parts = message.split(regex);
-                  
+
                   return parts.map((part, i) => {
                     if (part.startsWith('@')) {
                       return (
@@ -828,8 +835,8 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                 )}
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity 
-                style={styles.actionButton} 
+              <TouchableOpacity
+                style={styles.actionButton}
                 onPress={startRecording}
                 disabled={isLoading || isUploading}
               >
@@ -856,7 +863,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
         )}
 
-        <PermissionModal 
+        <PermissionModal
           visible={permissionModal.visible}
           type={permissionModal.type}
           onClose={permissionModal.onCancel || (() => setPermissionModal(prev => ({ ...prev, visible: false })))}

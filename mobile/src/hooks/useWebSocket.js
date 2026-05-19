@@ -17,6 +17,7 @@ import {
   fetchMessages,
 } from '../store/chatSlice';
 import { setInAppNotification } from '../store/notificationSlice';
+import { getPreviewText, isVoiceMessage } from '../utils/messageUtils';
 import {
   onMessageReceive,
   offMessageReceive,
@@ -68,7 +69,7 @@ export const useWebSocket = () => {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
-  
+
   const conversationsRef = useRef(conversations);
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -111,11 +112,26 @@ export const useWebSocket = () => {
         // Nếu nhận tin nhắn từ hội thoại KHÁC hội thoại đang mở
         const conversations = conversationsRef.current;
         const conv = conversations.find(c => c.conversationId === message.conversationId);
-        
+
+        let displayMessage = message.content || "Đã gửi một tệp đính kèm";
+        if (message.type === 'CALL_LOG') {
+          displayMessage = getPreviewText(displayMessage);
+        } else if (message.type === 'VOICE' || isVoiceMessage(message)) {
+          displayMessage = "Tin nhắn thoại";
+        } else if (message.type === 'IMAGE') {
+          displayMessage = "[Hình ảnh]";
+        } else if (message.type === 'VIDEO') {
+          displayMessage = "[Video]";
+        } else if (message.type === 'FILE') {
+          displayMessage = "[Tệp tin]";
+        } else if (message.type === 'VOTE') {
+          displayMessage = "[Bình chọn]";
+        }
+
         dispatch(setInAppNotification({
           conversationId: message.conversationId,
           title: conv?.name || message.senderName || message.fullName || "Tin nhắn mới",
-          message: message.content || "Đã gửi một tệp đính kèm",
+          message: displayMessage,
           avatarUrl: conv?.avatarUrl || message.avatarUrl || null,
         }));
       }
@@ -234,9 +250,9 @@ export const useWebSocket = () => {
     const handleConversationUpdate = (payload) => {
       if (!payload || !payload.conversationId) return;
       console.log('[WS] Mobile received conversation update:', payload.eventType);
-      
+
       const { conversationId, eventType, payload: data } = payload;
-      
+
       if (eventType === 'CONVERSATION_RECREATED' || eventType === 'GROUP_INVITE') {
         dispatch(fetchConversations());
       } else if (eventType === 'CONVERSATION_UPDATE') {
