@@ -547,9 +547,21 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       }
       isLoadingMoreRef.current = true;
       lastLoadMoreTimeRef.current = now;
-      Promise.resolve(onLoadMore()).finally(() => {
-        // keep loading flag until we restore position after the DOM update
-      });
+      Promise.resolve(onLoadMore())
+        .then((result) => {
+          if (result && result.hasMoreHistory === false) {
+            // No more history, array reference might not change, so useLayoutEffect won't run.
+            // Reset the flag manually.
+            isLoadingMoreRef.current = false;
+            loadMoreSnapshotRef.current = null;
+            restoreAfterLoadMoreRef.current = false;
+          }
+        })
+        .catch(() => {
+          isLoadingMoreRef.current = false;
+          loadMoreSnapshotRef.current = null;
+          restoreAfterLoadMoreRef.current = false;
+        });
     }
   };
 

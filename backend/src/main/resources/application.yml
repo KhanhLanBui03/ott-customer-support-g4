@@ -194,6 +194,6 @@ twilio:
 
 # Agora Configuration (Video Call)
 agora:
-  app-id: a9968a8d01f34eccbfd782049ef6cd0f
-  app-certificate: ""
-  token-expiry-seconds: 3600
+  app-id: ${AGORA_APP_ID:71fffdd590e54202bc1ea70e751324ce}
+  app-certificate: ${AGORA_APP_CERTIFICATE:}
+  token-expiry-seconds: ${AGORA_TOKEN_EXPIRY_SECONDS:3600}

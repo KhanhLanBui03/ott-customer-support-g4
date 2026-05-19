@@ -5,13 +5,21 @@ import { conversationApi } from '../api/chatApi';
 
 export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
-  async (_, { rejectWithValue }) => {
+  async (userId, { getState, rejectWithValue }) => {
     try {
-      // Fetch both friend requests and group invitations in parallel
-      const [friendRes, groupRes] = await Promise.all([
+      const state = getState();
+      const myId = userId || state.auth.user?.userId || state.auth.user?.id;
+
+      const promises = [
         friendApi.getPendingRequests(),
         conversationApi.getPendingInvitations()
-      ]);
+      ];
+
+      if (myId) {
+        promises.push(notificationApi.getNotificationsByReceiver(myId));
+      }
+
+      const [friendRes, groupRes, generalRes] = await Promise.all(promises);
 
       const friendRequests = (friendRes.data || friendRes || []).map(fr => ({
         id: `fr_${fr.userId}_${fr.createdAt}`,
@@ -37,15 +45,60 @@ export const fetchNotifications = createAsyncThunk(
         type: 'GROUP_INVITE',
         conversationId: gi.conversationId,
         senderId: gi.inviterId,
-        avatarUrl: gi.groupAvatar || gi.inviterAvatar,
-        fullName: gi.groupName,
+        avatarUrl: gi.inviterAvatar || gi.groupAvatar,
+        fullName: gi.inviterName || gi.groupName || 'Ai đó',
         createdAt: gi.createdAt,
         isRead: false
       }));
 
+      const generalData = generalRes ? (generalRes.data || generalRes || []) : [];
+      const generalList = Array.isArray(generalData) ? generalData : (generalData.data || []);
+      const generalNotifications = generalList.map(item => {
+        const type = item.type || 'OTHER';
+        let title = 'Thông báo';
+        let subMessage = '';
+        if (type === 'FRIEND_ACCEPT' || type === 'FRIEND_ACCEPTED') {
+          title = 'Chấp nhận kết bạn';
+          if (!item.message) {
+            subMessage = 'đã chấp nhận lời mời kết bạn';
+          }
+        } else if (type === 'SYSTEM') {
+          title = 'Hệ thống';
+        }
+
+        return {
+          id: item.notificationId || item.id || `gen_${Date.now()}_${Math.random()}`,
+          notificationId: item.notificationId || item.id,
+          title: item.title || title,
+          message: item.message || '',
+          subMessage: item.subMessage || subMessage,
+          type: type,
+          senderId: item.senderId,
+          avatarUrl: item.senderAvatar || item.avatarUrl || (item.sender ? (item.sender.avatarUrl || item.sender.avatar) : null),
+          fullName: item.senderName || item.fullName || (item.sender ? (item.sender.fullName || item.sender.name) : ''),
+          createdAt: item.createdAt || item.timestamp,
+          isRead: Boolean(item.isRead || item.read)
+        };
+      });
+
       // Combine and sort by date descending
-      const allNotifications = [...friendRequests, ...groupInvites].sort((a, b) => b.createdAt - a.createdAt);
-      
+      // Deduplicate general notifications that are already present in pending friendRequests or groupInvites
+      const filteredGeneral = generalNotifications.filter(gn => {
+        if (gn.type === 'FRIEND_REQUEST') {
+          return !friendRequests.some(fr => String(fr.senderId) === String(gn.senderId));
+        }
+        if (gn.type === 'GROUP_INVITE') {
+          return !groupInvites.some(gi => String(gi.conversationId) === String(gn.conversationId));
+        }
+        return true;
+      });
+
+      const allNotifications = [...friendRequests, ...groupInvites, ...filteredGeneral].sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA;
+      });
+
       return allNotifications;
     } catch (error) {
       console.error('Fetch notifications error:', error);

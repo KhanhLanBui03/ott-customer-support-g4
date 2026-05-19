@@ -24,6 +24,7 @@ import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
 let _globalSubscriptions = [];
 let _presenceSubscription = null;
 let _activeConvId = null; // Lưu trữ ID hội thoại đang mở toàn cục để các callback cũ cũng nhận được
+let _isSubscribed = false;
 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
@@ -231,6 +232,8 @@ export const useWebSocket = () => {
         const client = initSocket(token);
 
         const setupSubscription = () => {
+            if (_isSubscribed) return;
+
             if (_globalSubscriptions.length > 0) {
                 console.log('[STOMP] Cleaning up old subscriptions...');
                 _globalSubscriptions.forEach(sub => sub.unsubscribe());
@@ -257,6 +260,7 @@ export const useWebSocket = () => {
             }
 
             _globalSubscriptions = [messagesSub, conversationsSub];
+            _isSubscribed = true;
         };
 
         if (client.connected) {
@@ -274,6 +278,7 @@ export const useWebSocket = () => {
             if (originalOnClose) originalOnClose(evt);
             _presenceSubscription = null;
             _globalSubscriptions = [];
+            _isSubscribed = false;
         };
 
     }, [token, handleIncomingMessage, handlePresenceUpdate]);

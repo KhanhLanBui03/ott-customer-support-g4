@@ -89,7 +89,14 @@ const SearchModal = ({ visible, onClose }) => {
       if (response.success || response.data) {
         const conversationId = response.data.conversationId || response.data.id;
         onClose();
-        router.push(`/chat/${encodeURIComponent(conversationId)}`);
+        router.push({
+          pathname: `/chat/${encodeURIComponent(conversationId)}`,
+          params: {
+            name: searchResult.fullName || searchResult.name,
+            avatar: searchResult.avatarUrl || searchResult.avatar,
+            type: 'SINGLE'
+          }
+        });
       }
     } catch (err) {
       console.error('Create conversation error:', err);

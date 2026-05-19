@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
-import { View, Text, Platform, Animated, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, Platform, Animated, Dimensions, TouchableOpacity, DeviceEventEmitter } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { initializeSocket, disconnectSocket } from '../../src/utils/socket';
 import { addMessage, setCurrentUserId, fetchConversations } from '../../src/store/chatSlice';
-import { addNotification } from '../../src/store/notificationSlice';
+import { addNotification, setInAppNotification } from '../../src/store/notificationSlice';
 import { useAgoraCall } from '../../src/hooks/useAgoraCall';
 import VideoCall from '../../src/components/VideoCall';
 
@@ -30,14 +30,23 @@ export default function MainLayout() {
           dispatch(addMessage({ conversationId, message: payload, myId }));
         } else if (eventType === 'CONVERSATION_UPDATE') {
           dispatch(fetchConversations());
+        } else if (['FRIEND_DELETE', 'FRIEND_BLOCK', 'FRIEND_UNBLOCK', 'FRIEND_REQUEST_REJECTED', 'FRIEND_REQUEST_CANCELLED'].includes(eventType)) {
+          dispatch(fetchConversations());
+          DeviceEventEmitter.emit('friendship_changed');
         } else if (eventType === 'NOTIFICATION' || eventType === 'FRIEND_REQUEST' || eventType === 'FRIEND_ACCEPT' || eventType === 'GROUP_INVITE') {
           let finalPayload = payload;
           if (eventType === 'FRIEND_REQUEST') {
             finalPayload = { id: `fr_${Date.now()}`, title: 'Lời mời kết bạn', message: payload.fullName || 'Ai đó', subMessage: 'muốn kết bạn với bạn', type: 'FRIEND_REQUEST', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
+            dispatch(setInAppNotification(finalPayload));
+            DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'FRIEND_ACCEPT') {
             finalPayload = { id: `fa_${Date.now()}`, title: 'Chấp nhận kết bạn', message: payload.fullName || 'Ai đó', subMessage: 'đã chấp nhận lời mời kết bạn', type: 'FRIEND_ACCEPT', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
+            dispatch(setInAppNotification(finalPayload));
+            dispatch(fetchConversations()); // Sync friend status immediately
+            DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'GROUP_INVITE') {
             finalPayload = { id: `gi_${Date.now()}`, title: 'Lời mời vào nhóm', message: payload.groupName || 'Nhóm mới', subMessage: `được mời bởi ${payload.inviterName || 'ai đó'}`, type: 'GROUP_INVITE', invitationId: payload.invitationId, conversationId: payload.conversationId, senderId: payload.inviterId, avatarUrl: payload.groupAvatar, fullName: payload.groupName, createdAt: new Date().toISOString(), isRead: false };
+            dispatch(setInAppNotification(finalPayload));
           }
           dispatch(addNotification(finalPayload));
         }
@@ -94,6 +103,7 @@ export default function MainLayout() {
       <Tabs.Screen name="chat-info/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
         <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+        <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       </Tabs>
 
       <VideoCall

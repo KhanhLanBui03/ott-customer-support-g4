@@ -10,13 +10,16 @@ import {
 } from 'react-native';
 import ChatBubble from './ChatBubble';
 import { formatMessageDateSeparator } from '../utils/dateUtils';
+import { useTheme } from '../context/ThemeContext';
 
 const MessageList = React.forwardRef(({
+
   messages = [],
   conversationId,
   currentUserId,
   typingUsers = [],
   onlineUsers = [],
+  members = [],
   isLoading = false,
   onLoadMore,
   onReact,
@@ -26,10 +29,17 @@ const MessageList = React.forwardRef(({
   sendReadReceipt,
   highlightedMessageId = null,
 }, ref) => {
+  const { colors, isDark } = useTheme();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = React.useState(false);
+  const [hasMore, setHasMore] = React.useState(true);
   const [isNearBottom, setIsNearBottom] = React.useState(true); // Track if user is near bottom
   const readMessageIds = useRef(new Set());
+
+  useEffect(() => {
+    setHasMore(true);
+  }, [conversationId]);
 
   // Đảo ngược danh sách tin nhắn để dùng với inverted FlatList
   // Tin nhắn mới nhất sẽ ở index 0 (đáy màn hình)
@@ -218,7 +228,9 @@ const MessageList = React.forwardRef(({
           }}
           isHighlighted={highlightedMessageId === (item.messageId || item.id)}
           allMessages={messages}
+          members={members}
         />
+
       </View>
     );
   };
@@ -236,15 +248,16 @@ const MessageList = React.forwardRef(({
 
     return (
       <View style={styles.typingContainer}>
-        <View style={styles.typingBubble}>
+        <View style={[styles.typingBubble, { backgroundColor: colors.surface200 }]}>
           <View style={styles.dotsContainer}>
-            <View style={styles.typingDot} />
-            <View style={styles.typingDot} />
-            <View style={styles.typingDot} />
+            <View style={[styles.typingDot, { backgroundColor: colors.textSubtle }]} />
+            <View style={[styles.typingDot, { backgroundColor: colors.textSubtle }]} />
+            <View style={[styles.typingDot, { backgroundColor: colors.textSubtle }]} />
           </View>
-          <Text style={styles.typingText}>{typingText}</Text>
+          <Text style={[styles.typingText, { color: colors.textMuted }]}>{typingText}</Text>
         </View>
       </View>
+
     );
   };
 
@@ -252,19 +265,21 @@ const MessageList = React.forwardRef(({
     if (!isLoadingMoreMessages || messages.length === 0) return null;
     return (
       <View style={styles.loadingMoreContainer}>
-        <ActivityIndicator size="small" color="#667eea" />
-        <Text style={styles.loadingMoreText}>Đang tải tin nhắn cũ hơn...</Text>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.loadingMoreText, { color: colors.textSubtle }]}>Đang tải tin nhắn cũ hơn...</Text>
       </View>
     );
+
   };
 
   if (isLoading && messages.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#667eea" />
-        <Text style={styles.loadingText}>Đang tải tin nhắn...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.primary }]}>Đang tải tin nhắn...</Text>
       </View>
     );
+
   }
 
   return (
@@ -292,11 +307,17 @@ const MessageList = React.forwardRef(({
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         onEndReached={() => {
-          if (!isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0) {
+          if (!isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0 && hasMore) {
             setIsLoadingMoreMessages(true);
-            onLoadMore().finally(() => {
-              setIsLoadingMoreMessages(false);
-            });
+            onLoadMore()
+              .then((moreExist) => {
+                if (moreExist === false) {
+                  setHasMore(false);
+                }
+              })
+              .finally(() => {
+                setIsLoadingMoreMessages(false);
+              });
           }
         }}
         onEndReachedThreshold={0.5}
@@ -398,6 +419,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
+
   loadingMoreContainer: {
     justifyContent: 'center',
     alignItems: 'center',

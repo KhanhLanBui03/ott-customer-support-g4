@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
-import { Zap, Shield, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Zap, Shield, Mail, Lock, ArrowRight, QrCode, KeyRound } from 'lucide-react';
 import { getAuthPersist, getRememberedEmail, setRememberedEmail } from '../../utils/storage';
 import AccountRestoreModal from '../../components/AccountRestore/AccountRestoreModal';
+import QrLogin from './QrLogin';
 
 const Login = () => {
   const { t } = useTranslation();
@@ -14,6 +15,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [lockedAt, setLockedAt] = useState(null);
+  const [loginMode, setLoginMode] = useState('password'); // 'password' or 'qr'
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -69,7 +71,7 @@ const Login = () => {
         <div className="absolute bottom-[-10%] left-[-5%] w-[40%] h-[40%] bg-blue-500/5 blur-[120px] rounded-full" />
       </div>
 
-      <div className="max-w-md w-full p-12 space-y-12 relative z-10 animate-fade-in">
+      <div className="max-w-md w-full p-12 space-y-8 relative z-10 animate-fade-in">
         <div className="flex flex-col items-center space-y-6">
           <div className="w-20 h-20 bg-white/5 border border-white/10 rounded-[28px] flex items-center justify-center shadow-2xl relative group">
             <div className="absolute inset-0 bg-cursor-accent/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -77,78 +79,97 @@ const Login = () => {
           </div>
           <div className="text-center space-y-2">
             <h2 className="text-4xl font-black text-white tracking-tighter">Chat app</h2>
-
           </div>
         </div>
 
-        <form className="space-y-8" onSubmit={handleSubmit}>
-          {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl text-[10px] font-mono font-black uppercase tracking-widest flex items-center space-x-3">
-              <Shield size={14} />
-              <span>{error}</span>
-            </div>
-          )}
+        {loginMode === 'password' ? (
+          <>
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl text-[10px] font-mono font-black uppercase tracking-widest flex items-center space-x-3">
+                  <Shield size={14} />
+                  <span>{error}</span>
+                </div>
+              )}
 
-          <div className="space-y-6">
-            <div className="relative group">
-              <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent transition-colors">
-                <Mail size={18} />
+              <div className="space-y-5">
+                <div className="relative group">
+                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent transition-colors">
+                    <Mail size={18} />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
+                    placeholder={t('auth.email_placeholder')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+
+                <div className="relative group">
+                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent transition-colors">
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
+                    placeholder={t('auth.password_placeholder')}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
               </div>
-              <input
-                type="email"
-                required
-                className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                placeholder={t('auth.email_placeholder')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
 
-            <div className="relative group">
-              <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cursor-accent transition-colors">
-                <Lock size={18} />
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-[10px] font-mono font-black uppercase tracking-widest text-white/40 hover:text-white/70 transition-colors cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/30 bg-transparent"
+                  />
+                  {t('auth.remember_me')}
+                </label>
+                <Link to="/forgot-password" size={18} className="text-[10px] font-mono font-black uppercase tracking-widest text-white/20 hover:text-white transition-colors">
+                  {t('auth.forgot_password')}
+                </Link>
               </div>
-              <input
-                type="password"
-                required
-                className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                placeholder={t('auth.password_placeholder')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+
+              <button
+                type="submit"
+                className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-4xl font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
+              >
+                <span>{t('auth.login_button')}</span>
+                <ArrowRight size={20} />
+              </button>
+            </form>
+
+            <div className="relative flex items-center py-2">
+              <div className="flex-grow border-t border-white/10"></div>
+              <span className="flex-shrink-0 mx-4 text-white/20 text-xs font-bold uppercase">{t('common.or')}</span>
+              <div className="flex-grow border-t border-white/10"></div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-[10px] font-mono font-black uppercase tracking-widest text-white/40 hover:text-white/70 transition-colors cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-white/30 bg-transparent"
-              />
-              {t('auth.remember_me')}
-            </label>
-            <Link to="/forgot-password" size={18} className="text-[10px] font-mono font-black uppercase tracking-widest text-white/20 hover:text-white transition-colors">
-              {t('auth.forgot_password')}
-            </Link>
-          </div>
+            <button
+              onClick={() => setLoginMode('qr')}
+              className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-full font-bold text-sm hover:bg-white/10 transition-all flex items-center justify-center space-x-3 group"
+            >
+              <QrCode size={20} className="text-white/50 group-hover:text-cursor-accent transition-colors" />
+              <span>{t('auth.login_qr')}</span>
+            </button>
 
-          <button
-            type="submit"
-            className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-4xl font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
-          >
-            <span>{t('auth.login_button')}</span>
-            <ArrowRight size={20} />
-          </button>
-        </form>
-
-        <p className="text-center text-[11px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
-          {t('auth.no_account')}{' '}
-          <Link to="/register" className="text-cursor-accent hover:underline">
-            {t('auth.register_link')}
-          </Link>
-        </p>
+            <p className="text-center pt-2 text-[11px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
+              {t('auth.no_account')}{' '}
+              <Link to="/register" className="text-cursor-accent hover:underline">
+                {t('auth.register_link')}
+              </Link>
+            </p>
+          </>
+        ) : (
+          <QrLogin onBack={() => setLoginMode('password')} />
+        )}
       </div>
 
       {showRestoreModal && (

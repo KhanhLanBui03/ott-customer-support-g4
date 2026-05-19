@@ -253,7 +253,7 @@ const VideoCall = ({
           setNotificationType('join');
           setTimeout(() => {
             setNotificationMsg(prev => (prev && prev.includes(userName) && prev.includes('tham gia') ? null : prev));
-          }, 3000);
+          }, 1200);
         }
 
         dispatch(addRemoteUser({ uid: data.uid, mediaType: data.mediaType || 'audio' }));
@@ -273,7 +273,7 @@ const VideoCall = ({
         setNotificationType('leave');
         setTimeout(() => {
           setNotificationMsg(prev => (prev && prev.includes(userName) && prev.includes('rời phòng') ? null : prev));
-        }, 3000);
+        }, 1200);
 
         dispatch(removeRemoteUser(data.uid));
         if (!isGroup && remoteUsers.length <= 1 && callStatus === 'connected') {
@@ -575,15 +575,13 @@ const VideoCall = ({
                         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                           <TouchableOpacity
                             onPress={() => {
-                              requestAnimationFrame(() => {
-                                try {
-                                  const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
-                                  webViewRef.current?.injectJavaScript(script);
-                                } catch (err) {
-                                  console.warn('[Agora] Failed to inject leave script:', err);
-                                }
-                                onHangup();
-                              });
+                              try {
+                                const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
+                                webViewRef.current?.injectJavaScript(script);
+                              } catch (err) {
+                                console.warn('[Agora] Failed to inject leave script:', err);
+                              }
+                              onHangup();
                             }}
                             style={[styles.btn, styles.btnHangup]}
                             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
@@ -620,15 +618,13 @@ const VideoCall = ({
 
                         <TouchableOpacity
                           onPress={() => {
-                            requestAnimationFrame(() => {
-                              try {
-                                const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
-                                webViewRef.current?.injectJavaScript(script);
-                              } catch (err) {
-                                console.warn('[Agora] Failed to inject leave script:', err);
-                              }
-                              onHangup();
-                            });
+                            try {
+                              const script = `window.handleAction && window.handleAction({ type: 'leave' });`;
+                              webViewRef.current?.injectJavaScript(script);
+                            } catch (err) {
+                              console.warn('[Agora] Failed to inject leave script:', err);
+                            }
+                            onHangup();
                           }}
                           style={[styles.btnAction, styles.btnHangup, styles.btnLarge]}
                           hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}

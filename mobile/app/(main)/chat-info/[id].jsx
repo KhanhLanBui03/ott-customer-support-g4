@@ -14,18 +14,23 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter, useLocalSearchParams } from 'expo-router';  
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { getRealId, updateConversationWallpaper, updateConversation, removeMemberLocal, updateMemberRoleLocal } from '../../../src/store/chatSlice';
 import { conversationApi } from '../../../src/api/chatApi';
 import { mediaApi } from '../../../src/api/mediaApi';
 import InviteMemberModal from '../../../src/components/chat/InviteMemberModal';
+import AIAssistantPanel from '../../../src/components/chat/AIAssistantPanel';
+import { useTheme } from '../../../src/context/ThemeContext';
+
 
 const ChatInfoScreen = () => {
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+
   const router = useRouter();
-  const { id: encodedId } = useLocalSearchParams();
+  const { id: encodedId, name: paramName, avatar: paramAvatar, type: paramType } = useLocalSearchParams();
   const conversationId = decodeURIComponent(encodedId || '');
 
   const chatState = useSelector((state) => state.chat);
@@ -47,9 +52,9 @@ const ChatInfoScreen = () => {
     return conversation.members.find(p => p.userId !== (currentUser?.userId || currentUser?.id));
   }, [conversation, currentUser]);
 
-  const isGroup = conversation?.type === 'GROUP';
-  const displayName = isGroup ? (conversation?.name || 'Nhóm chat') : (otherParticipant?.fullName || otherParticipant?.name || 'Thông tin hội thoại');
-  const avatarUrl = isGroup ? conversation?.avatarUrl : (otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic);
+  const isGroup = conversation?.type === 'GROUP' || paramType === 'GROUP';
+  const displayName = isGroup ? (conversation?.name || paramName || 'Nhóm chat') : (otherParticipant?.fullName || otherParticipant?.name || paramName || 'Thông tin hội thoại');
+  const avatarUrl = isGroup ? (conversation?.avatarUrl || paramAvatar) : (otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic || paramAvatar);
   const isOnline = !isGroup && (otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true);
 
   const handleWallpaperChange = async () => {
@@ -332,6 +337,7 @@ const ChatInfoScreen = () => {
     <Pressable
       style={({ pressed }) => [
         styles.infoItem,
+        { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : colors.surface100, borderBottomColor: colors.border },
         disabled && styles.disabledOpacity,
         { opacity: (pressed && !disabled) ? 0.6 : 1 }
       ]}
@@ -340,19 +346,21 @@ const ChatInfoScreen = () => {
       <View style={styles.infoItemLeft}>
         <View style={styles.iconContainer}>{icon}</View>
         <View style={styles.privacyTextContainer}>
-          <Text style={[styles.infoItemLabel, { color: disabled ? "#4b5563" : color, marginLeft: 0 }]}>{label}</Text>
-          {description && <Text style={styles.disabledText}>{description}</Text>}
+          <Text style={[styles.infoItemLabel, { color: disabled ? colors.textSubtle : (color === '#fff' ? colors.foreground : color), marginLeft: 0 }]}>{label}</Text>
+          {description && <Text style={[styles.disabledText, { color: colors.textSubtle }]}>{description}</Text>}
         </View>
       </View>
-      {rightElement ? rightElement : (showArrow && <MaterialIcons name="chevron-right" size={24} color={disabled ? "#374151" : (color !== '#fff' ? color : "#4b5563")} />)}
+      {rightElement ? rightElement : (showArrow && <MaterialIcons name="chevron-right" size={24} color={disabled ? colors.textSubtle : (color !== '#fff' ? color : colors.textMuted)} />)}
     </Pressable>
+
   );
 
   const SectionHeader = ({ title }) => (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>{title}</Text>
+      <Text style={[styles.sectionHeaderText, { color: colors.textSubtle }]}>{title}</Text>
     </View>
   );
+
 
   const finalAvatarUrl = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=256&bold=true`;
 
@@ -362,15 +370,28 @@ const ChatInfoScreen = () => {
   const isAdmin = myRole === 'ADMIN' || isOwner;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.replace(`/chat/${encodeURIComponent(realId)}`)} style={styles.backButton}>
-          <Ionicons name="close" size={28} color="#fff" />
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Pressable
+          onPress={() => {
+            router.replace({
+              pathname: `/chat/${encodeURIComponent(realId)}`,
+              params: {
+                name: displayName,
+                avatar: avatarUrl,
+                type: isGroup ? 'GROUP' : 'SINGLE'
+              }
+            });
+          }}
+          style={styles.backButton}
+        >
+          <Ionicons name="close" size={28} color={colors.foreground} />
         </Pressable>
-        <Text style={styles.headerTitle}>Thông tin {isGroup ? 'nhóm' : 'hội thoại'}</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông tin {isGroup ? 'nhóm' : 'hội thoại'}</Text>
         <View style={{ width: 48 }} />
       </View>
+
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Card */}
@@ -380,12 +401,14 @@ const ChatInfoScreen = () => {
             onPress={handleAvatarChange}
             disabled={!isGroup || !isAdmin || isAvatarLoading}
           >
-            <Image source={{ uri: finalAvatarUrl }} style={[styles.avatar, isAvatarLoading && { opacity: 0.5 }]} />
-            {isOnline && <View style={styles.onlineBadge} />}
+            <Image source={{ uri: finalAvatarUrl }} style={[styles.avatar, { borderColor: colors.border }, isAvatarLoading && { opacity: 0.5 }]} />
+            {isOnline && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
+
             {isGroup && isAdmin && (
-              <View style={styles.avatarEditBadge}>
+              <View style={[styles.avatarEditBadge, { borderColor: colors.background, backgroundColor: colors.primary }]}>
                 <MaterialIcons name="camera-alt" size={16} color="#fff" />
               </View>
+
             )}
             {isAvatarLoading && (
               <View style={styles.avatarLoadingOverlay}>
@@ -393,15 +416,24 @@ const ChatInfoScreen = () => {
               </View>
             )}
           </TouchableOpacity>
-          <Text style={styles.userName}>{displayName}</Text>
+          <Text style={[styles.userName, { color: colors.foreground }]}>{displayName}</Text>
           {isGroup ? (
-            <Text style={styles.memberCountText}>{conversation?.members?.length || 0} thành viên</Text>
+            <Text style={[styles.memberCountText, { color: colors.textMuted }]}>{conversation?.members?.length || 0} thành viên</Text>
           ) : (
+
             <View style={[styles.statusBadge, isOnline ? styles.statusActive : styles.statusInactive]}>
               <Text style={styles.statusText}>{isOnline ? 'ĐANG HOẠT ĐỘNG' : 'NGOẠI TUYẾN'}</Text>
             </View>
           )}
         </View>
+
+        {/* AI Assistant Section for Group */}
+        {isGroup && (
+          <>
+            <View style={[styles.separator, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : colors.surface100 }]} />
+            <AIAssistantPanel conversationId={realId} />
+          </>
+        )}
 
         {/* Members Section for Group */}
         {isGroup && (
@@ -423,7 +455,7 @@ const ChatInfoScreen = () => {
                     style={styles.memberAvatar}
                   />
                   <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>{member.fullName}</Text>
+                    <Text style={[styles.memberName, { color: colors.foreground }]}>{member.fullName}</Text>
                     <View style={styles.roleContainer}>
                       {member.role === 'OWNER' && <Text style={styles.roleBadgeOwner}>Trưởng nhóm</Text>}
                       {member.role === 'ADMIN' && <Text style={styles.roleBadgeAdmin}>Phó nhóm</Text>}
@@ -431,9 +463,10 @@ const ChatInfoScreen = () => {
                   </View>
                   {isAdmin && String(member.userId || member.id) !== myId && (
                     <TouchableOpacity onPress={() => handleMemberAction(member)}>
-                      <MaterialIcons name="more-vert" size={24} color="#94a3b8" />
+                      <MaterialIcons name="more-vert" size={24} color={colors.textSubtle} />
                     </TouchableOpacity>
                   )}
+
                 </View>
               ))}
             </View>
@@ -444,15 +477,16 @@ const ChatInfoScreen = () => {
         <SectionHeader title="DỮ LIỆU CHIA SẺ" />
         <View style={styles.section}>
           <InfoItem
-            icon={<MaterialIcons name="image" size={22} color="#94a3b8" />}
+            icon={<MaterialIcons name="image" size={22} color={colors.textMuted} />}
             label="ẢNH/VIDEO ĐÃ CHIA SẺ"
             onPress={() => router.push(`/shared-media/${encodeURIComponent(realId || conversationId)}`)}
           />
           <InfoItem
-            icon={<MaterialIcons name="insert-drive-file" size={22} color="#94a3b8" />}
+            icon={<MaterialIcons name="insert-drive-file" size={22} color={colors.textMuted} />}
             label="FILE ĐÃ CHIA SẺ"
             onPress={() => router.push(`/shared-files/${encodeURIComponent(realId || conversationId)}`)}
           />
+
         </View>
 
         {/* Interface Customization */}
@@ -475,19 +509,21 @@ const ChatInfoScreen = () => {
             disabled={isWallpaperLoading}
             style={({ pressed }) => [
               styles.customActionCard,
+              { backgroundColor: colors.card },
               { opacity: (pressed || isWallpaperLoading) ? 0.7 : 1 }
             ]}
           >
-            <View style={[styles.customActionIcon, { backgroundColor: '#4f46e5' }]}>
+            <View style={[styles.customActionIcon, { backgroundColor: colors.primary }]}>
               <MaterialIcons name="wallpaper" size={22} color="#fff" />
             </View>
             <View style={styles.customActionContent}>
-              <Text style={styles.customActionTitle}>Thay đổi ảnh nền</Text>
-              <Text style={styles.customActionSub}>
+              <Text style={[styles.customActionTitle, { color: colors.foreground }]}>Thay đổi ảnh nền</Text>
+              <Text style={[styles.customActionSub, { color: colors.textMuted }]}>
                 {isWallpaperLoading ? 'Đang tải...' : 'Tùy chỉnh hình nền cho cuộc trò chuyện'}
               </Text>
             </View>
           </Pressable>
+
 
           <Pressable
             onPress={handleClearWallpaper}
@@ -497,14 +533,15 @@ const ChatInfoScreen = () => {
               { opacity: (pressed || !wallpaperUrl) ? 0.5 : 1 }
             ]}
           >
-            <View style={styles.deleteActionIcon}>
+            <View style={[styles.deleteActionIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)' }]}>
               <MaterialIcons name="delete-outline" size={22} color="#ef4444" />
             </View>
             <View style={styles.deleteActionContent}>
               <Text style={styles.deleteActionTitle}>Xóa ảnh nền</Text>
-              <Text style={styles.deleteActionSub}>Quay về giao diện mặc định</Text>
+              <Text style={[styles.deleteActionSub, { color: colors.textMuted }]}>Quay về giao diện mặc định</Text>
             </View>
           </Pressable>
+
         </View>
 
         {/* Privacy & Danger Zone */}
@@ -534,10 +571,11 @@ const ChatInfoScreen = () => {
 
               {/* Chỉ Admin có thể chat - Chủ nhóm và Phó nhóm thấy */}
               <InfoItem
-                icon={<MaterialIcons name="chat-bubble-outline" size={22} color={isAdmin ? "#fff" : "#4b5563"} />}
+                icon={<MaterialIcons name="chat-bubble-outline" size={22} color={isAdmin ? colors.foreground : colors.textSubtle} />}
                 label="Chỉ Admin mới có thể chat"
                 description={isAdmin ? 'Cho phép Trưởng/ Phó nhóm gửi tin nhắn' : 'Chỉ quản trị viên mới có quyền'}
                 disabled={!isAdmin}
+
                 showArrow={false}
                 rightElement={
                   <View style={styles.switchContainer}>
@@ -545,9 +583,10 @@ const ChatInfoScreen = () => {
                       value={isRestrictedLocal}
                       onValueChange={handleToggleChatRestriction}
                       disabled={!isAdmin}
-                      trackColor={{ false: '#334155', true: '#4f46e5' }}
-                      thumbColor={Platform.OS === 'ios' ? '#fff' : (isRestrictedLocal ? '#818cf8' : '#94a3b8')}
+                      trackColor={{ false: isDark ? colors.surface300 : '#cbd5e1', true: colors.primary }}
+                      thumbColor={Platform.OS === 'ios' ? '#fff' : (isRestrictedLocal ? colors.primary : '#94a3b8')}
                     />
+
                   </View>
                 }
               />
@@ -582,6 +621,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
   backButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
+  separator: { height: 8, marginTop: 10 },
   profileCard: { alignItems: 'center', paddingVertical: 40 },
   avatarWrapper: { position: 'relative', marginBottom: 20 },
   avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: '#1e293b' },

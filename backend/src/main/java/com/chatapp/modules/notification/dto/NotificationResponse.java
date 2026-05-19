@@ -18,4 +18,6 @@ public class NotificationResponse {
      private String message;
      private boolean isRead;
      private Long createdAt;
+     private String senderName;
+     private String senderAvatar;
 }

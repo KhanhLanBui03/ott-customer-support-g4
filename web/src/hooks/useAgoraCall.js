@@ -79,6 +79,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
     const [callerId, setCallerId] = useState(null);
     const callerIdRef = useRef(null);
     const [callerName, setCallerName] = useState(null);
+    const [callerAvatar, setCallerAvatar] = useState(null);
     const [error, setError] = useState(null);
     const [endCallReason, setEndCallReason] = useState(null);
     const [callType, setCallType] = useState('video');
@@ -103,6 +104,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
     const [localVideoTrack, setLocalVideoTrack] = useState(null);
     const [localAudioTrack, setLocalAudioTrack] = useState(null);
 
+    const [activeCallCid, setActiveCallCid] = useState(null);
     const activeChannelRef = useRef(null);
     const timerRef = useRef(null);
     const localVideoTrackRef = useRef(null);
@@ -123,6 +125,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
     const callIsGroupRef = useRef(false);
     const remoteUserIdRef = useRef(null);
     const leftUsersRef = useRef(new Set());
+    const joinTimeRef = useRef(0);
 
     useEffect(() => {
         calibrateServerTime();
@@ -251,20 +254,22 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             String(cid).startsWith('GROUP#') ||
             String(cid).includes('GROUP');
 
-        const isLastPerson = isGroup ? (remoteUsers.length === 0) : true;
+        const isLastPerson = isActuallyGroup ? (remoteUsers.length === 0) : true;
 
         if (emit && cid) {
             if (isActuallyGroup) {
-                if (isLastPerson) {
-                    console.log('[Agora] Last person sending HANGUP for group:', cid);
+                const isCancelingBeforeJoin = isInitiatorRef.current && !hasHadRemoteRef.current;
+                if (isCancelingBeforeJoin) {
+                    console.log('[Agora] Initiator canceling group call:', cid);
                     emitCallSignal(cid, { type: 'HANGUP', reason: 'ENDED' });
-                } else {
-                    console.log('[Agora] Participant sending LEAVE for group:', cid);
+                } else if (callStatus === 'connected') {
+                    console.log('[Agora] Participant leaving group call:', cid);
                     emitCallSignal(cid, {
                         type: 'LEAVE',
                         senderName: user?.fullName || 'Thành viên'
                     });
                 }
+                // Nếu callStatus là 'incoming' (người nghe từ chối cuộc gọi đến), ta không gửi bất kỳ tín hiệu nào để tránh tắt màn hình của người khác.
             } else {
                 console.log('[Agora] Sending HANGUP signal for session:', cid);
                 emitCallSignal(cid, { type: 'HANGUP', reason });
@@ -334,6 +339,9 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             setDuration(0);
             setMicOn(true);
             setCamOn(true);
+            setCallerId(null);
+            setCallerName(null);
+            setCallerAvatar(null);
             isEndingRef.current = false;
 
             // Reset Refs
@@ -341,12 +349,13 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             isInitiatorRef.current = false;
             callIsGroupRef.current = false;
             activeChannelRef.current = null;
+            setActiveCallCid(null);
             ongoingLogSentRef.current = false;
             terminalLogSentRef.current = false;
             hasHadRemoteRef.current = false;
         }, delay);
 
-    }, [conversationId, cleanupTracks, callStatus, callType, incomingSignal, remoteUsers]);
+    }, [conversationId, cleanupTracks, callStatus, callType, incomingSignal, remoteUsers, user, isGroup]);
 
 
     endCallRef.current = endCall;
@@ -413,10 +422,13 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
             const userName = member?.fullName || member?.name || 'Một thành viên';
             
-            setUserLeftMsg(`${userName} đã tham gia phòng`);
-            setTimeout(() => {
-                setUserLeftMsg(prev => (prev && prev.includes(userName) && prev.includes('tham gia') ? null : prev));
-            }, 3000);
+            const timeSinceJoin = Date.now() - (joinTimeRef.current || 0);
+            if (timeSinceJoin > 2000) {
+                setUserLeftMsg(`${userName} đã tham gia phòng`);
+                setTimeout(() => {
+                    setUserLeftMsg(prev => (prev && prev.includes(userName) && prev.includes('tham gia') ? null : prev));
+                }, 3000);
+            }
         };
 
         const handleUserPublished = async (remoteUser, mediaType) => {
@@ -438,7 +450,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 console.log(`[Agora] Subscribed successfully to ${remoteUser.uid} (${mediaType})`);
 
                 if (mediaType === 'audio' && remoteUser.audioTrack) {
-                    remoteUser.audioTrack.setVolume(100);
+                    remoteUser.audioTrack.setVolume(150);
                     remoteUser.audioTrack.play().catch(err => {
                         console.error('[Agora] Play audio failed:', err);
                         if (err.name === 'NotAllowedError' || err.message?.includes('autoplay')) {
@@ -551,6 +563,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                     return;
                 }
                 activeChannelRef.current = cid;
+                setActiveCallCid(cid);
                 const isGroup = cid.startsWith('GROUP#') || cid.includes('GROUP') ||
                     actualData.conversationType === 'GROUP' ||
                     signal.conversationType === 'GROUP' ||
@@ -572,6 +585,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 isInitiatorRef.current = false;
                 setCallerName(actualData.senderName || senderId);
                 setCallerId(senderId);
+                setCallerAvatar(signal.senderAvatar || actualData.senderAvatar || null);
                 callerIdRef.current = senderId;
                 remoteUserIdRef.current = senderId;
                 setCallType(signal.callType || 'video');
@@ -629,7 +643,9 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                     if (isGroupMode) {
                         // Nếu đang trong cuộc gọi nhóm (connected), ta lờ đi tín hiệu HANGUP/LEAVE từ initiator
                         // Chỉ kết thúc nếu mình chưa vào phòng (đang chờ/đổ chuông)
-                        if (callStatusRef.current !== 'connected' && String(senderId) === String(callerIdRef.current)) {
+                        const initiatorId = callerIdRef.current || incomingSignal?.senderId || callerId;
+                        const isFromInitiator = initiatorId && String(senderId) === String(initiatorId);
+                        if (callStatusRef.current !== 'connected' && (isFromInitiator || (isSelfSync && cidMatch))) {
                             endCallRef.current?.(false, 'ENDED');
                         }
                     } else {
@@ -684,37 +700,54 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             hasHadRemoteRef.current = false;
             setError(null);
             setEndCallReason(null);
+            setCallerId(null);
+            setCallerName(null);
+            setCallerAvatar(null);
             leftUsersRef.current.clear();
             setCallType(type);
             setMicOn(true);
             setCamOn(type === 'video');
             activeChannelRef.current = conversationId;
+            setActiveCallCid(conversationId);
             const isGroupMode = activeConversation?.type === 'GROUP' || String(conversationId).includes('GROUP');
             callIsGroupRef.current = isGroupMode;
             setIsGroup(isGroupMode);
 
-            // Không set status ở đây, để set 1 lần sau khi có Token
+            // Đảm bảo dọn dẹp kết nối cũ nếu có trước khi bắt đầu cuộc gọi mới
+            if (agoraClient.connectionState !== 'DISCONNECTED') {
+                console.log('[Agora] Previous connection state is', agoraClient.connectionState, ', forcing leave...');
+                try {
+                    await agoraClient.leave();
+                } catch (e) {
+                    console.warn('[Agora] Force leave error:', e);
+                }
+            }
 
+            const joinUid = toNumericUid(user?.userId || user?.id);
             const safeChannelId = sanitizeChannelId(conversationId);
-            const res = await callApi.getAgoraToken(safeChannelId);
-            const { token, appId, uid: originalUid } = res;
-            // setAgoraConfig(config); // Web không dùng hàm này, ta dùng trực tiếp appId/token bên dưới
+            const res = await callApi.getAgoraToken(safeChannelId, joinUid);
+            const { token, appId } = res;
+
+            // Race Condition Guard 1: Cuộc gọi bị hủy trong khi lấy token
+            if (isEndingRef.current || callStatusRef.current === 'ended') {
+                console.warn('[Agora] Call ended during token fetch, aborting.');
+                await cleanupTracks();
+                return;
+            }
 
             // Gửi tín hiệu mời - CHỈ gửi nếu KHÔNG phải là tham gia vào cuộc gọi đang diễn ra
             if (!options.isJoin) {
                 emitCallSignal(conversationId, {
                     type: 'CALL_INVITE',
                     callType: type,
-                    isGroup: isGroupMode, // Thêm flag tường minh
+                    isGroup: isGroupMode,
                     senderAvatar: user?.avatar || user?.avatarUrl,
                     conversationName: activeConversation?.name,
                     conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
                     conversationType: activeConversation?.type || (isGroupMode ? 'GROUP' : 'SINGLE'),
                     inviteTime: getTrueTime()
                 }, user?.fullName || (user?.lastName && user?.firstName ? `${user.lastName} ${user.firstName}` : '') || user?.name || 'Người dùng');
-
             }
-
 
             // Đối với cuộc gọi NHÓM, người gọi vào phòng luôn để chờ mọi người
             if (isGroupMode) {
@@ -722,7 +755,6 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 if (!startTimeRef.current) {
                     startTimeRef.current = options.startTime || getTrueTime();
                 }
-
 
                 // CHỈ gửi tin nhắn log "đang diễn ra" nếu KHÔNG phải là tham gia vào cuộc gọi đã có
                 if (!options.isJoin) {
@@ -741,7 +773,6 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             } else {
                 // Đối với cuộc gọi ĐƠN, ta vẫn giữ ở trạng thái OUTGOING cho đến khi người kia nghe máy
                 setCallStatus('outgoing');
-                // 1-1: Xác định đối phương để theo dõi tín hiệu ngắt máy
                 const other = activeConversation?.members?.find(m => String(m.userId) !== String(myId));
                 remoteUserIdRef.current = other?.userId || other?.id;
             }
@@ -749,15 +780,28 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             if (isGroupMode) {
                 if (!startTimeRef.current) startTimeRef.current = options.startTime || getTrueTime();
             }
-            const joinUid = toNumericUid(originalUid);
             currentJoinUidRef.current = joinUid;
 
-            const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+            const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+                AEC: true,
+                AGC: true,
+                ANS: true,
+                encoderConfig: 'speech_standard'
+            });
             let videoTrack = null;
             if (type === 'video') {
                 videoTrack = await AgoraRTC.createCameraVideoTrack({
-                    encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                    encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 500, bitrateMax: 2000 }
                 }).catch(e => { setCameraError(e.message); return null; });
+            }
+
+            // Race Condition Guard 2: Cuộc gọi bị hủy trong lúc đang tạo track
+            if (isEndingRef.current || callStatusRef.current === 'ended') {
+                console.warn('[Agora] Call ended during track creation, aborting.');
+                if (audioTrack) { audioTrack.stop(); audioTrack.close(); }
+                if (videoTrack) { videoTrack.stop(); videoTrack.close(); }
+                await cleanupTracks();
+                return;
             }
 
             localAudioTrackRef.current = audioTrack;
@@ -765,10 +809,16 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             setLocalAudioTrack(audioTrack);
             setLocalVideoTrack(videoTrack);
 
-            if (videoTrack) await videoTrack.setEnabled(true);
-            if (audioTrack) await audioTrack.setEnabled(true);
-
             await agoraClient.join(appId, safeChannelId, token || null, joinUid);
+            joinTimeRef.current = Date.now();
+
+            // Race Condition Guard 3: Cuộc gọi bị hủy trong lúc đang join phòng
+            if (isEndingRef.current || callStatusRef.current === 'ended') {
+                console.warn('[Agora] Call ended during join, aborting publish.');
+                await cleanupTracks();
+                return;
+            }
+
             if (agoraClient.remoteUsers.length > 0) hasHadRemoteRef.current = true;
             updateRemoteUsers();
             await agoraClient.publish([audioTrack, videoTrack].filter(Boolean));
@@ -778,7 +828,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             setError(e.message);
             await endCallRef.current?.(false);
         } finally { joiningRef.current = false; }
-    }, [conversationId, user]);
+    }, [conversationId, user, activeConversation, myId]);
 
     const acceptCall = useCallback(async (signalData) => {
         if (joiningRef.current) return;
@@ -798,8 +848,8 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
             if (!channelId) throw new Error('Missing conversationId');
             activeChannelRef.current = channelId;
+            setActiveCallCid(channelId);
 
-            // Ưu tiên flag isGroup từ signalData nếu có
             const isGroupMode = signalData?.isGroup ||
                 convType === 'GROUP' ||
                 String(channelId).includes('GROUP');
@@ -818,28 +868,68 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 startTimeRef.current = getTrueTime();
             }
 
+            // Đảm bảo dọn dẹp kết nối cũ nếu có trước khi chấp nhận cuộc gọi mới
+            if (agoraClient.connectionState !== 'DISCONNECTED') {
+                console.log('[Agora] Previous connection state is', agoraClient.connectionState, ', forcing leave...');
+                try {
+                    await agoraClient.leave();
+                } catch (e) {
+                    console.warn('[Agora] Force leave error in acceptCall:', e);
+                }
+            }
+
             emitCallSignal(channelId, { type: 'CALL_ACCEPTED', startTime: getTrueTime() }, user?.fullName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : '') || user?.name || 'Người dùng');
             setCallStatus('connected');
 
-            const res = await callApi.getAgoraToken(safeChannelId);
-            const joinUid = toNumericUid(res.uid);
+            const joinUid = toNumericUid(user?.userId || user?.id);
+            const res = await callApi.getAgoraToken(safeChannelId, joinUid);
             currentJoinUidRef.current = joinUid;
 
-            await agoraClient.join(res.appId, safeChannelId, res.token || null, joinUid);
-            if (agoraClient.remoteUsers.length > 0) hasHadRemoteRef.current = true;
-            updateRemoteUsers();
-            const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+            // Race Condition Guard 1: Cuộc gọi bị hủy trước khi join/tạo track
+            if (isEndingRef.current || callStatusRef.current === 'ended') {
+                console.warn('[Agora] Call ended before accept connection setup, aborting.');
+                await cleanupTracks();
+                return;
+            }
+
+            const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+                AEC: true,
+                AGC: true,
+                ANS: true,
+                encoderConfig: 'speech_standard'
+            });
             let videoTrack = null;
             if (actualCallType === 'video') {
                 videoTrack = await AgoraRTC.createCameraVideoTrack({
-                    encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                    encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 500, bitrateMax: 2000 }
                 }).catch(e => { setCameraError(e.message); return null; });
+            }
+
+            // Race Condition Guard 2: Cuộc gọi bị hủy trong lúc đang tạo track ở đầu nhận
+            if (isEndingRef.current || callStatusRef.current === 'ended') {
+                console.warn('[Agora] Call ended during track creation in acceptCall, aborting.');
+                if (audioTrack) { audioTrack.stop(); audioTrack.close(); }
+                if (videoTrack) { videoTrack.stop(); videoTrack.close(); }
+                await cleanupTracks();
+                return;
             }
 
             localAudioTrackRef.current = audioTrack;
             localVideoTrackRef.current = videoTrack;
             setLocalAudioTrack(audioTrack);
             setLocalVideoTrack(videoTrack);
+
+            await agoraClient.join(res.appId, safeChannelId, res.token || null, joinUid);
+            joinTimeRef.current = Date.now();
+            if (agoraClient.remoteUsers.length > 0) hasHadRemoteRef.current = true;
+            updateRemoteUsers();
+
+            // Race Condition Guard 3: Cuộc gọi bị hủy trong lúc đang join phòng ở đầu nhận
+            if (isEndingRef.current || callStatusRef.current === 'ended') {
+                console.warn('[Agora] Call ended during join in acceptCall, aborting publish.');
+                await cleanupTracks();
+                return;
+            }
 
             if (videoTrack) await videoTrack.setEnabled(true);
             if (audioTrack) await audioTrack.setEnabled(true);
@@ -848,10 +938,11 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             setCamOn(actualCallType === 'video' && !!videoTrack);
             setIncomingSignal(null);
         } catch (e) {
+            console.error('❌ [useAgoraCall] acceptCall ERROR:', e);
             setError(e.message);
             await endCallRef.current?.(false);
         } finally { joiningRef.current = false; }
-    }, [user, callType]);
+    }, [user, activeConversation]);
 
     const toggleMic = useCallback(async (enabled) => {
         setMicOn(enabled);
@@ -865,7 +956,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 // Nếu chưa có track thì tạo mới và publish
                 if (!localVideoTrackRef.current) {
                     const videoTrack = await AgoraRTC.createCameraVideoTrack({
-                        encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                        encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 500, bitrateMax: 2000 }
                     });
                     localVideoTrackRef.current = videoTrack;
                     setLocalVideoTrack(videoTrack);
@@ -899,11 +990,11 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
     }, [remoteUsers]);
 
     return {
-        callStatus, callerName, callerId, incomingSignal, callType, cameraError, error, duration,
+        callStatus, callerName, callerId, callerAvatar, incomingSignal, callType, cameraError, error, duration,
         formatDuration, audioBlocked, endCallReason, localVideoTrack, localAudioTrack, remoteUsers,
         startCall, acceptCall, endCall, connect, toggleMic, toggleCamera, resumeAudio, micOn, camOn,
         userLeftMsg, isGroupCall: isGroup, ringDuration,
-        activeCallCid: activeChannelRef.current
+        activeCallCid
     };
 };
 

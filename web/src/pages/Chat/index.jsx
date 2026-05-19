@@ -14,6 +14,7 @@ import CreateGroupModal from '../../components/CreateGroupModal';
 import NotificationModal from '../../components/NotificationModal';
 import DeleteAccountModal from '../../components/DeleteAccountModal';
 import LanguageSettingsModal from '../../components/LanguageSettingsModal';
+import LogoutModal from '../../components/LogoutModal';
 import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
 import MediaLightbox from '../../components/MediaLightbox';
@@ -59,6 +60,7 @@ const Chat = () => {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [filterType, setFilterType] = useState('all'); // 'all', 'unread'
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
@@ -101,6 +103,7 @@ const Chat = () => {
     callStatus,
     callerId,
     callerName,
+    callerAvatar,
     incomingSignal,
     callType,
     cameraError,
@@ -130,6 +133,13 @@ const Chat = () => {
   const myId = user?.userId || user?.id;
   const [outgoingTarget, setOutgoingTarget] = useState(null);
 
+  // Dọn dẹp thông tin người nhận cuộc gọi cũ khi cuộc gọi kết thúc (idle)
+  useEffect(() => {
+    if (callStatus === 'idle') {
+      setOutgoingTarget(null);
+    }
+  }, [callStatus]);
+
 
   useEffect(() => {
     fetchConversations();
@@ -137,10 +147,10 @@ const Chat = () => {
     // Fetch initial notifications
     const loadNotifications = () => {
       friendApi.getPendingRequests().then(res => {
-        dispatch(setPendingRequests(res.data || []));
+        dispatch(setPendingRequests(Array.isArray(res) ? res : res?.data || []));
       }).catch(() => { });
       chatApi.getPendingInvitations().then(res => {
-        dispatch(setPendingGroups(res.data || []));
+        dispatch(setPendingGroups(Array.isArray(res) ? res : res?.data || []));
       }).catch(() => { });
       if (myId) {
         dispatch(fetchNotifications(myId));
@@ -166,8 +176,28 @@ const Chat = () => {
     if (options.targetName) {
       setOutgoingTarget({
         name: options.targetName,
-        avatar: options.targetAvatar || null
+        avatar: options.targetAvatar || null,
+        isGroup: options.isGroup || activeConversation?.type === 'GROUP'
       });
+    } else if (activeConversation) {
+      const isGroup = activeConversation.type === 'GROUP';
+      if (isGroup) {
+        setOutgoingTarget({
+          name: activeConversation.name || 'Nhóm trò chuyện',
+          avatar: activeConversation.avatar || null,
+          isGroup: true
+        });
+      } else {
+        const other = activeConversation.members?.find(m => {
+          const mid = m.userId || m.id || m._id;
+          return mid && String(mid).trim() !== String(myId).trim();
+        });
+        setOutgoingTarget({
+          name: other?.fullName || other?.name || activeConversation.name || 'Người dùng',
+          avatar: other?.avatar || other?.avatarUrl || null,
+          isGroup: false
+        });
+      }
     } else {
       setOutgoingTarget(null);
     }
@@ -187,35 +217,36 @@ const Chat = () => {
 
   // ─── Thông tin người nghe/gọi (phải đặt SAU activeConversation) ──────────
   const remoteInfo = React.useMemo(() => {
-    // 1. Ưu tiên xử lý cuộc gọi NHÓM dựa trên flag từ Hook
-    if (isGroupCall) {
-      const cid = activeCallCid || incomingSignal?.conversationId;
-      const callConv = conversations.find(c => 
-        String(c.conversationId) === String(cid) || 
-        String(c.id) === String(cid)
-      );
+    // Tìm conversation liên quan đến cuộc gọi đang diễn ra
+    const currentCallCid = activeCallCid || incomingSignal?.conversationId;
+    const callConv = currentCallCid ? conversations.find(c => 
+      String(c.conversationId) === String(currentCallCid) || 
+      String(c.id) === String(currentCallCid)
+    ) : null;
+
+    // Xác định xem cuộc gọi này có phải là cuộc gọi nhóm hay không (hoàn toàn đồng bộ)
+    const isActuallyGroup = isGroupCall || 
+      (callConv ? (callConv.type === 'GROUP' || callConv.isGroup) : false) || 
+      String(currentCallCid).includes('GROUP') || 
+      incomingSignal?.isGroup === true || 
+      outgoingTarget?.isGroup === true;
+
+    // 1. Ưu tiên xử lý cuộc gọi NHÓM
+    if (isActuallyGroup) {
       return {
-        name: callConv?.name || incomingSignal?.conversationName || 'Nhóm trò chuyện',
-        avatar: callConv?.avatar || callConv?.avatarUrl || incomingSignal?.conversationAvatar || null
+        name: callConv?.name || outgoingTarget?.name || incomingSignal?.conversationName || 'Nhóm trò chuyện',
+        avatar: callConv?.avatar || callConv?.avatarUrl || outgoingTarget?.avatar || incomingSignal?.conversationAvatar || null
       };
     }
 
     // 2. Xử lý cuộc gọi CÁ NHÂN khi có người gọi đến (Incoming)
     const cleanCallerId = callerId && callerId !== 'undefined' && callerId !== 'null' ? String(callerId).trim() : null;
-    if (cleanCallerId) {
-      const signalConvId = incomingSignal?.conversationId;
-      const callConv = conversations.find(c => 
-        c.conversationId && (
-          String(c.conversationId) === String(signalConvId) || 
-          String(c.id) === String(signalConvId)
-        )
-      );
-
+    if (callStatus === 'incoming' && cleanCallerId) {
       // Nếu là cuộc gọi Cá nhân (SINGLE), hiển thị người gọi
       let avatar = incomingSignal?.signal?.senderAvatar || incomingSignal?.senderAvatar || null;
       let name = incomingSignal?.senderName || callerName;
 
-      // Tìm trong cuộc hội thoại 1-1 trước
+      // Tìm trong cuộc hội thoại liên quan đến cuộc gọi trước
       if (!avatar || !name || name === 'Người dùng' || name === cleanCallerId) {
         if (callConv) {
           const found = callConv.members?.find(m => {
@@ -251,14 +282,38 @@ const Chat = () => {
       return { name, avatar };
     }
 
-    // 3. Nếu không có callerId, nghĩa là mình đang GỌI ĐI (Outgoing)
-    if (outgoingTarget?.name) {
-      return {
-        name: outgoingTarget.name,
-        avatar: outgoingTarget.avatar || null
-      };
+    // 3. Nếu đang trong cuộc gọi ĐƠN (Outgoing hoặc Connected hoặc Ended)
+    if (callStatus !== 'idle') {
+      if (outgoingTarget?.name) {
+        return {
+          name: outgoingTarget.name,
+          avatar: outgoingTarget.avatar || null
+        };
+      }
+
+      if (callConv) {
+        const other = callConv.members?.find(m => {
+          const mid = m.userId || m.id || m._id;
+          return mid && mid !== 'undefined' && mid !== 'null' && String(mid).trim() !== String(myId).trim();
+        });
+        if (other) {
+          return {
+            name: other.fullName || other.name || callConv.name || 'Người dùng',
+            avatar: other.avatar || other.avatarUrl || null
+          };
+        }
+      }
+
+      // FALLBACK cực kỳ mạnh mẽ cho cuộc gọi đến khi không tìm thấy cuộc hội thoại trong danh sách
+      if (callerName) {
+        return {
+          name: callerName,
+          avatar: callerAvatar || null
+        };
+      }
     }
 
+    // 4. FALLBACK khi ở trạng thái idle/chưa có cuộc gọi: Dựa trên activeConversation hiện tại
     if (!activeConversation) return { name: 'Người dùng', avatar: null };
 
     // Nếu là cuộc gọi Nhóm
@@ -278,7 +333,7 @@ const Chat = () => {
       name: other?.fullName || other?.name || activeConversation.name || 'Người dùng',
       avatar: other?.avatar || other?.avatarUrl || null,
     };
-  }, [callerId, callerName, conversations, activeConversation, myId, incomingSignal, outgoingTarget]);
+  }, [callerId, callerName, callerAvatar, conversations, activeConversation, myId, incomingSignal, outgoingTarget, isGroupCall, activeCallCid, callStatus]);
 
   // ─── Danh sách Remote Streams cho Group Call ─────────────────────────────
   const remoteStreams = React.useMemo(() => {
@@ -609,7 +664,7 @@ const Chat = () => {
             {isMobile && (
               <div className="relative group">
                 <button
-                  onClick={logout}
+                  onClick={() => setIsLogoutModalOpen(true)}
                   className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-[22px] transition-all group active:scale-95"
                   title="Đăng xuất"
                 >
@@ -628,7 +683,7 @@ const Chat = () => {
                 <Settings size={24} />
               </button>
               <button
-                onClick={logout}
+                onClick={() => setIsLogoutModalOpen(true)}
                 className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all active:scale-95"
               >
                 <LogOut size={24} />
@@ -1002,6 +1057,7 @@ const Chat = () => {
       <NotificationModal isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
       <DeleteAccountModal isOpen={isDeleteAccountOpen} onClose={() => setIsDeleteAccountOpen(false)} />
       <LanguageSettingsModal isOpen={isLanguageSettingsOpen} onClose={() => setIsLanguageSettingsOpen(false)} />
+      <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} />
       <FriendManagementModal
         isOpen={isFriendsOpen}
         onClose={() => setIsFriendsOpen(false)}

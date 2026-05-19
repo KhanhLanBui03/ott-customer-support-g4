@@ -253,7 +253,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
             if (action.enabled) {
               if (!localTracks.videoTrack) {
                 localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                    encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                    encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 500, bitrateMax: 2000 }
                 });
                 await client.publish(localTracks.videoTrack);
                 localTracks.videoTrack.play('local-player', { fit: 'contain' });
@@ -319,23 +319,25 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
             document.getElementById('local-player').style.display = 'block';
           }
 
-          client.on("user-joined", (user) => {
-                log("User joined channel: " + user.uid);
-                window.ReactNativeWebView.postMessage(JSON.stringify({ 
-                    type: 'user-joined', 
-                    uid: user.uid 
-                }));
-          });
+          const subscribedKeys = new Set();
 
-          client.on("user-published", async (user, mediaType) => {
-                log("User published media: " + user.uid + " (" + mediaType + ")");
+          async function subscribeAndRender(user, mediaType) {
+                const key = user.uid + '_' + mediaType;
+                if (subscribedKeys.has(key)) {
+                    log("Already subscribing/subscribed to: " + key);
+                    return;
+                }
+                subscribedKeys.add(key);
+
+                log("Subscribe and render remote user: " + user.uid + " (" + mediaType + ")");
                 try {
+                    // Tạo tile trước để UI cập nhật ngay lập tức
+                    const tile = getOrCreateTile(user.uid);
+
                     await client.subscribe(user, mediaType);
                     log("Subscribed to: " + user.uid + " " + mediaType);
                     
-                    const tile = getOrCreateTile(user.uid);
                     if (mediaType === "video") {
-                        const tile = getOrCreateTile(user.uid);
                         const player = tile.querySelector('.video-view');
                         if (player) {
                           player.style.display = 'block';
@@ -351,7 +353,12 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
                         document.body.classList.add('has-remote-video');
                         log("Playing remote video for: " + user.uid);
                     }
-                    if (mediaType === "audio") {
+                    if (mediaType === "audio" && user.audioTrack) {
+                        try {
+                            user.audioTrack.setVolume(150);
+                        } catch (e) {
+                            log("Failed to set audio volume: " + e.message);
+                        }
                         user.audioTrack.play().catch(err => {
                             log("Audio play error: " + err.message);
                             if (err.code === 'AUTOPLAY_NOT_ALLOWED') {
@@ -367,11 +374,27 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
                     }));
                 } catch (err) {
                     log("Subscribe error: " + err.message);
+                    subscribedKeys.delete(key);
                 }
+          }
+
+          client.on("user-joined", (user) => {
+                log("User joined channel: " + user.uid);
+                getOrCreateTile(user.uid);
+                window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                    type: 'user-joined', 
+                    uid: user.uid 
+                }));
+          });
+
+          client.on("user-published", async (user, mediaType) => {
+                log("User published media: " + user.uid + " (" + mediaType + ")");
+                await subscribeAndRender(user, mediaType);
           });
 
           client.on("user-unpublished", (user, mediaType) => {
                 log("User unpublished: " + user.uid + " (" + mediaType + ")");
+                subscribedKeys.delete(user.uid + '_' + mediaType);
                 if (mediaType === "video") {
                   document.body.classList.remove('has-remote-video');
                   const tile = document.getElementById(user.uid.toString());
@@ -389,6 +412,8 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
 
           client.on("user-left", (user) => {
                 log("User left channel: " + user.uid);
+                subscribedKeys.delete(user.uid + '_audio');
+                subscribedKeys.delete(user.uid + '_video');
                 const el = document.getElementById(user.uid.toString());
                 if (el) el.remove();
                 updateGridLayout();
@@ -405,17 +430,34 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
           // Kiểm tra những người đã ở sẵn trong phòng
           client.remoteUsers.forEach(user => {
               log("Existing user found: " + user.uid);
+              
+              // Gửi tin nhắn tham gia về React Native
               window.ReactNativeWebView.postMessage(JSON.stringify({ 
                   type: 'user-joined', 
                   uid: user.uid 
               }));
-              // Nếu họ đã publish thì Agora sẽ tự bắn user-published sau đó
+
+              // Vẽ ngay tile cho người dùng hiện tại
+              getOrCreateTile(user.uid);
+
+              // Đăng ký nhận tracks của họ ngay lập tức nếu họ đã publish
+              if (user.hasAudio) {
+                  subscribeAndRender(user, "audio");
+              }
+              if (user.hasVideo) {
+                  subscribeAndRender(user, "video");
+              }
           });
 
           let tracksToPublish = [];
 
           try {
-            localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+            localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+                AEC: true,
+                AGC: true,
+                ANS: true,
+                encoderConfig: 'speech_standard'
+            });
             tracksToPublish.push(localTracks.audioTrack);
             log("Local audio track created");
           } catch (audioError) {
@@ -425,7 +467,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
           if ("${callType}" === "video") {
             try {
               localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                  encoderConfig: { width: 640, height: 480, frameRate: 15, bitrateMin: 200, bitrateMax: 500 }
+                  encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 500, bitrateMax: 2000 }
               });
               localTracks.videoTrack.play(localBox, { fit: 'contain' });
               tracksToPublish.push(localTracks.videoTrack);

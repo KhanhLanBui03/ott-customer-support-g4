@@ -15,7 +15,11 @@ import { getPreviewText } from '../utils/messageUtils';
  * Displays a single conversation item with avatar, name, and last message
  */
 
+import { useTheme } from '../context/ThemeContext';
+
 const ConversationItem = ({ conversation, onPress, isActive }) => {
+  const { colors, isDark } = useTheme();
+  
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -29,24 +33,34 @@ const ConversationItem = ({ conversation, onPress, isActive }) => {
 
   return (
     <TouchableOpacity
-      style={[styles.container, isActive && styles.active]}
+      style={[
+        styles.container, 
+        { 
+          backgroundColor: colors.background, 
+          borderBottomColor: colors.border 
+        },
+        isActive && { 
+          backgroundColor: isDark ? colors.surface200 : '#f0f2ff',
+          borderLeftColor: colors.primary 
+        }
+      ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
       <Image
         source={{ uri: conversation.avatar || 'https://via.placeholder.com/48' }}
-        style={styles.avatar}
+        style={[styles.avatar, { backgroundColor: colors.surface200 }]}
       />
 
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
             {conversation.name}
           </Text>
-          <Text style={styles.time}>{formatTime(conversation.lastMessageTime)}</Text>
+          <Text style={[styles.time, { color: colors.textSubtle }]}>{formatTime(conversation.lastMessageTime)}</Text>
         </View>
 
-        <Text style={styles.preview} numberOfLines={1}>
+        <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={1}>
           {getPreviewText(conversation.lastMessage)}
         </Text>
       </View>

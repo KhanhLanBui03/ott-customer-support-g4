@@ -99,13 +99,16 @@ public class AuthService {
         // Reset login attempts
         clearLoginAttempts(cleanEmail);
 
-        // Single Session Login: Invalidate all existing sessions
-        sessionService.invalidateAllUserSessions(user.getUserId());
+        // Determine device type
+        String deviceType = "web";
+        if (request.getDeviceId() != null && (request.getDeviceId().toLowerCase().contains("device") || request.getDeviceId().toLowerCase().contains("mobile"))) {
+            deviceType = "mobile";
+        }
 
-        // Generate new session/token
-        LoginResponse response = generateLoginResponse(user, user.getPhoneNumber());
+        // Generate new session/token (will throw ValidationException if already logged in on same device type)
+        LoginResponse response = generateLoginResponse(user, user.getPhoneNumber(), deviceType);
 
-        // Notify other devices to logout via WebSocket (if they don't match the new session)
+        // Notify other devices (if we want, but since we block, this is mostly fallback)
         eventPublisher.publishEvent(MessageEvent.of("FORCE_LOGOUT", "SYSTEM", Map.of(
                 "userId", user.getUserId(),
                 "newSessionId", response.getSessionId(),
@@ -262,9 +265,13 @@ public class AuthService {
     /**
      * Generate login response with tokens
      */
-    private LoginResponse generateLoginResponse(User user, String phoneNumber) {
-        String sessionId = sessionService.createSession(user.getUserId());
-        String accessToken = jwtUtil.generateToken(user.getUserId(), phoneNumber, sessionId, "web");
+    public LoginResponse generateLoginResponse(User user, String phoneNumber) {
+        return generateLoginResponse(user, phoneNumber, "web");
+    }
+
+    public LoginResponse generateLoginResponse(User user, String phoneNumber, String deviceType) {
+        String sessionId = sessionService.createSession(user.getUserId(), deviceType);
+        String accessToken = jwtUtil.generateToken(user.getUserId(), phoneNumber, sessionId, deviceType);
         String refreshToken = jwtUtil.generateRefreshToken(user.getUserId());
 
         return LoginResponse.builder()

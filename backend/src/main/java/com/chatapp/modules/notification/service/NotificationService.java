@@ -1,5 +1,7 @@
 package com.chatapp.modules.notification.service;
 
+import com.chatapp.modules.auth.domain.User;
+import com.chatapp.modules.auth.repository.UserRepository;
 import com.chatapp.modules.notification.domain.Notification;
 import com.chatapp.modules.notification.domain.NotificationType;
 import com.chatapp.modules.notification.dto.NotificationRequest;
@@ -17,6 +19,7 @@ import java.util.List;
 @Slf4j
 public class NotificationService {
     private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
 
     public NotificationResponse createNotification(NotificationRequest notificationRequest) {
         // Convert NotificationRequest to Notification entity
@@ -33,15 +36,26 @@ public class NotificationService {
         // Save the notification using the repository
         log.info("Notification created: {}", notification.toString());
         notificationRepository.save(notification);
+        String senderName = "";
+        String senderAvatar = "";
+        if (notification.getSenderId() != null) {
+            User sender = userRepository.findById(notification.getSenderId()).orElse(null);
+            if (sender != null) {
+                senderName = sender.getFullName();
+                senderAvatar = sender.getAvatarUrl();
+            }
+        }
         // Convert the saved entity to NotificationResponse and return
         return NotificationResponse.builder()
                 .id(notification.getId())
                 .senderId(notification.getSenderId())
                 .receiverId(notification.getReceiverId())
-                .type(notification.getType().name())
+                .type(notification.getType() != null ? notification.getType().name() : "OTHER")
                 .message(notification.getMessage())
                 .isRead(notification.isRead())
                 .createdAt(notification.getCreatedAt())
+                .senderName(senderName)
+                .senderAvatar(senderAvatar)
                 .build(); // Placeholder for actual implementation
     }
 
@@ -56,14 +70,25 @@ public class NotificationService {
 
         List<NotificationResponse> notificationResponseList = new ArrayList<>();
         for (Notification notification : notifications) {
+            String senderName = "";
+            String senderAvatar = "";
+            if (notification.getSenderId() != null) {
+                User sender = userRepository.findById(notification.getSenderId()).orElse(null);
+                if (sender != null) {
+                    senderName = sender.getFullName();
+                    senderAvatar = sender.getAvatarUrl();
+                }
+            }
             NotificationResponse notificationResponse = NotificationResponse.builder()
                     .id(notification.getId())
                     .senderId(notification.getSenderId())
                     .receiverId(notification.getReceiverId())
-                    .type(notification.getType().name())
+                    .type(notification.getType() != null ? notification.getType().name() : "OTHER")
                     .message(notification.getMessage())
                     .isRead(notification.isRead())
                     .createdAt(notification.getCreatedAt())
+                    .senderName(senderName)
+                    .senderAvatar(senderAvatar)
                     .build();
             notificationResponseList.add(notificationResponse);
         }
@@ -85,17 +110,45 @@ public class NotificationService {
         List<NotificationResponse> notificationResponseList = new ArrayList<>();
 
         for (Notification notification : notifications) {
+            String senderName = "";
+            String senderAvatar = "";
+            if (notification.getSenderId() != null) {
+                User sender = userRepository.findById(notification.getSenderId()).orElse(null);
+                if (sender != null) {
+                    senderName = sender.getFullName();
+                    senderAvatar = sender.getAvatarUrl();
+                }
+            }
             NotificationResponse notificationResponse = NotificationResponse.builder()
                     .id(notification.getId())
                     .senderId(notification.getSenderId())
                     .receiverId(notification.getReceiverId())
-                    .type(notification.getType().name())
+                    .type(notification.getType() != null ? notification.getType().name() : "OTHER")
                     .message(notification.getMessage())
                     .isRead(notification.isRead())
                     .createdAt(notification.getCreatedAt())
+                    .senderName(senderName)
+                    .senderAvatar(senderAvatar)
                     .build();
             notificationResponseList.add(notificationResponse);
         }
         return notificationResponseList;
+    }
+
+    public boolean deleteNotifications(List<String> ids) {
+        boolean allSuccess = true;
+        for (String id : ids) {
+            boolean success = notificationRepository.deleteById(id);
+            if (!success) allSuccess = false;
+        }
+        return allSuccess;
+    }
+
+    public boolean deleteAllByReceiverId(String receiverId) {
+        List<Notification> notifications = notificationRepository.findNotificationsByReceiverId(receiverId);
+        for (Notification n : notifications) {
+            notificationRepository.delete(n);
+        }
+        return true;
     }
 }

@@ -58,7 +58,8 @@ const CreateGroupModal = ({ visible, onClose }) => {
     try {
       const response = await friendApi.getFriends();
       const data = response.data || response;
-      setFriends(Array.isArray(data) ? data : []);
+      const friendsList = Array.isArray(data) ? data : [];
+      setFriends(friendsList.filter(f => f.status === 'ACCEPTED'));
     } catch (err) {
       console.error('Load friends error:', err);
     } finally {
