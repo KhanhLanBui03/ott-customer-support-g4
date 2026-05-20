@@ -40,6 +40,8 @@ public class MessageResponse {
     @JsonProperty("isEncrypted")
     private Boolean isEncrypted;
 
+    private String language;
+
     private VoteInfoDTO vote;
 
     // Transcript for voice message (speech-to-text)

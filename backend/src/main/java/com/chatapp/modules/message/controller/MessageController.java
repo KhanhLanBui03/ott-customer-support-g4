@@ -365,6 +365,7 @@ public class MessageController {
                 .reactions(message.getReactions())
                 .createdAt(message.getCreatedAt())
                 .isEncrypted(message.getIsEncrypted())
+                .language(message.getLanguage())
                 .vote(message.getVote() == null ? null : MessageResponse.VoteInfoDTO.builder()
                         .question(message.getVote().getQuestion())
                         .allowMultiple(message.getVote().getAllowMultiple())

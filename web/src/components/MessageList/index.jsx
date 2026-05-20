@@ -29,6 +29,7 @@ import {
   Pause,
   Volume2,
   Languages,
+  RefreshCw,
   Sparkles as SparklesIcon,
   Video as VideoIcon,
   Phone,
@@ -286,6 +287,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
 
   const { sendRead } = useWebSocket();
   const meId = user?.userId || user?.id;
+  const preferredLanguage = user?.preferredLanguage;
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
 
   const handleMentionClick = (mentionText) => {
@@ -335,6 +337,11 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       return part;
     });
   };
+
+  // Clear translations ONLY when the target language setting changes or conversation changes
+  useEffect(() => {
+    setTranslatedMessages({});
+  }, [preferredLanguage, conversationId]);
 
   // Synchronize optimistic reactions with server state
   useEffect(() => {
@@ -807,14 +814,26 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         const msg = messages.find(m => m.messageId === messageId);
         if (!msg || !msg.content) return;
 
+        // 1. Target language: From user settings, default to Vietnamese
+        const tgtLang = preferredLanguage || 'vie_Latn';
+        
+        // 2. Source language: 
+        // - Priority 1: msg.language (the specific language of this message)
+        // - Priority 2: Default to Vietnamese (vie_Latn) if language is null
+        // - Priority 3: msg.senderPreferredLanguage (sender's preference)
+        // - Priority 4: Lookup in member list
+        const sender = currentConv?.members?.find(m => String(m.userId || m.id) === String(msg.senderId));
+        const srcLang = msg.language || 'vie_Latn';
+
         setTranslationLoading(prev => ({ ...prev, [messageId]: true }));
         setActiveMenu(null);
         try {
-          const res = await chatApi.translateText(msg.content);
-          setTranslatedMessages(prev => ({ ...prev, [messageId]: res.data.translation }));
+          const res = await chatApi.translateMessage(messageId, conversationId, srcLang, tgtLang);
+          const translatedText = res.data?.data?.translated || res.data?.translated;
+          setTranslatedMessages(prev => ({ ...prev, [messageId]: translatedText }));
         } catch (err) {
           console.error("Translation failed:", err);
-          alert("Không thể dịch tin nhắn này.");
+          alert(t('chat.translation_failed') + ": " + (err.response?.data?.message || err.message));
         } finally {
           setTranslationLoading(prev => ({ ...prev, [messageId]: false }));
         }
@@ -1624,6 +1643,24 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           )}
                                           {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{renderContentWithMentions(msg.content, isMe)}</p>}
 
+                                          {/* Manual Translate Button */}
+                                          {msg.type === 'TEXT' && 
+                                           !isMe && 
+                                           !translatedMessages[msg.messageId] && 
+                                           !translationLoading[msg.messageId] && (
+                                            <div className="px-4 pb-1">
+                                              <button
+                                                onMouseDown={(e) => { e.stopPropagation(); handleAction('TRANSLATE', msg.messageId); }}
+                                                className={cn(
+                                                  "text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all z-10",
+                                                  isMe ? "bg-white/20 text-white" : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
+                                                )}
+                                              >
+                                                {t('chat.translate_btn')}
+                                              </button>
+                                            </div>
+                                          )}
+
                                           {/* Translation Display */}
                                           {translationLoading[msg.messageId] && (
                                             <div className="px-4 py-2 flex items-center space-x-2 text-[11px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">
@@ -1633,12 +1670,30 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                           )}
                                           {translatedMessages[msg.messageId] && (
                                             <div className={cn(
-                                              "mt-1 mx-2 mb-2 p-3 rounded-xl border flex flex-col",
+                                              "mt-1 mx-2 mb-2 p-3 rounded-xl border flex flex-col relative group/trans",
                                               isMe ? "bg-white/10 border-white/10" : "bg-indigo-500/5 border-indigo-500/10"
                                             )}>
-                                              <div className="flex items-center space-x-1.5 mb-1 opacity-60">
-                                                <SparklesIcon size={10} className="text-indigo-400" />
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">{t('chat.ai_translation')}</span>
+                                              <div className="flex items-center justify-between mb-1">
+                                                <div className="flex items-center space-x-1.5 opacity-60">
+                                                  <SparklesIcon size={10} className="text-indigo-400" />
+                                                  <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">{t('chat.ai_translation')}</span>
+                                                </div>
+                                                <button 
+                                                  onClick={(e) => { 
+                                                    e.preventDefault();
+                                                    e.stopPropagation(); 
+                                                    setTranslatedMessages(prev => {
+                                                      const next = { ...prev };
+                                                      delete next[msg.messageId];
+                                                      return next;
+                                                    });
+                                                    handleAction('TRANSLATE', msg.messageId); 
+                                                  }}
+                                                  className="p-1 hover:bg-indigo-500/10 rounded-full transition-all text-indigo-400"
+                                                  title={t('chat.reload_translation')}
+                                                >
+                                                  <RefreshCw size={10} />
+                                                </button>
                                               </div>
                                               <p className="text-[13px] leading-relaxed italic">{translatedMessages[msg.messageId]}</p>
                                             </div>

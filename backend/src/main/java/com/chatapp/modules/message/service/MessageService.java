@@ -213,6 +213,10 @@ public class MessageService {
                 message.setIsEncrypted(true);
             }
 
+            if (command.getLanguage() != null) {
+                message.setLanguage(command.getLanguage());
+            }
+
             log.debug("Saving message to database...");
             Message savedMessage = messageRepository.save(message);
             log.info("Message sent: {} in conversation: {}", messageId, command.getConversationId());

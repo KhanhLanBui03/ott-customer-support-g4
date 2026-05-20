@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { useDispatch } from "react-redux";
 import axiosClient from "../api/axiosClient";
 import i18n, { LANGUAGE_MAP } from "../i18n";
+import { updateUser } from "../store/authSlice";
 
 const LANGUAGES = [
     { code: "vie_Latn", label: "Tiếng Việt", flag: "🇻🇳" },
@@ -12,6 +14,7 @@ const LANGUAGES = [
 ];
 
 export const useLanguageSettings = (isOpen) => {
+    const dispatch = useDispatch();
     const [preferredLanguage, setPreferredLanguage] = useState(null);
     const [selectedLanguage, setSelectedLanguage] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -33,13 +36,11 @@ export const useLanguageSettings = (isOpen) => {
                     
                     const normalized = (langData === "" || langData === undefined || langData === "null") ? null : langData;
                     
-                    console.log("=== DEBUG LANGUAGE SETTINGS ===");
-                    console.log("Full res.data:", responseBody);
-                    console.log("Extracted langData:", langData);
-                    console.log("Normalized value:", normalized);
-                    
                     setPreferredLanguage(normalized);
                     setSelectedLanguage(normalized);
+
+                    // Đồng bộ với Redux
+                    dispatch(updateUser({ preferredLanguage: normalized }));
 
                     // Thay đổi ngôn ngữ i18n nếu có trong map
                     if (normalized && LANGUAGE_MAP[normalized]) {
@@ -50,13 +51,16 @@ export const useLanguageSettings = (isOpen) => {
                     console.error("Failed to fetch language settings", err);
                 });
         }
-    }, [isOpen]);
+    }, [isOpen, dispatch]);
 
     const updateLanguage = async () => {
         setLoading(true);
         try {
             await axiosClient.put("/settings/language", { preferredLanguage: selectedLanguage });
             setPreferredLanguage(selectedLanguage);
+            
+            // Cập nhật Redux ngay lập tức
+            dispatch(updateUser({ preferredLanguage: selectedLanguage }));
             
             // Cập nhật i18n ngay lập tức khi lưu thành công
             if (selectedLanguage && LANGUAGE_MAP[selectedLanguage]) {

@@ -67,7 +67,7 @@ export const chatApi = {
     });
   },
   transcribeVoiceUrl: (url) => axiosClient.post('/messages/speech-to-text-url', null, {
-    params: { url },
+    params: { url }
   }),
   sendMessage: (data) => axiosClient.post('/messages/send', data),
   addReaction: (conversationId, messageId, emoji) => axiosClient.post(`/messages/${messageId}/reactions?conversationId=${encodeURIComponent(conversationId)}`, { emoji }),
@@ -104,6 +104,11 @@ export const chatApi = {
   },
   askAI: (conversationId, question) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/ask`, { question }),
   translateText: (content, targetLang = 'Tiếng Việt') => axiosClient.post('/ai/translate', { content, targetLang }),
+  translateMessage: (messageId, conversationId, srcLang, tgtLang) => 
+    axiosClient.post(`/messages/${messageId}/translate`, { conversationId, srcLang, tgtLang }),
+  translateMessagesBatch: (conversationId, messageIds, srcLang, tgtLang) =>
+    axiosClient.post('/messages/translate-batch', { conversationId, messageIds, srcLang, tgtLang }),
+  getLanguageSetting: () => axiosClient.get('/settings/language'),
   getSmartReplies: (conversationId) => axiosClient.post(`/ai/group/${encodeURIComponent(conversationId)}/suggest-replies`),
   extractTasks: (conversationId, timeRange = 0, startTime = null, endTime = null) => {
     let url = `/ai/group/${encodeURIComponent(conversationId)}/extract-tasks?timeRange=${timeRange}`;

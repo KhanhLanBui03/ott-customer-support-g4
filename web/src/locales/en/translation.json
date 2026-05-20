@@ -131,6 +131,7 @@
       "closed": "Closed",
       "reply": "Reply",
       "translate": "Translate message",
+      "translate_btn": "Translate",
       "pin_message": "Pin message",
       "unpin_message": "Unpin message",
       "delete_for_me": "Delete for me",

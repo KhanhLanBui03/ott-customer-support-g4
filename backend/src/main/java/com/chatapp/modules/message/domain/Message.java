@@ -95,6 +95,10 @@ public class Message {
     @DynamoDBAttribute(attributeName = "isEncrypted")
     private Boolean isEncrypted;
 
+    @DynamoDBAttribute(attributeName = "language")
+    @com.fasterxml.jackson.annotation.JsonProperty("language")
+    private String language;
+
     // Không bắt buộc lưu DB, chỉ dùng tạm cho trả về client
     @DynamoDBIgnore
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)

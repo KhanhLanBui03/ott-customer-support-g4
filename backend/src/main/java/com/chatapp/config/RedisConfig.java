@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import jakarta.annotation.PreDestroy;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
@@ -13,6 +16,7 @@ import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
@@ -29,8 +33,11 @@ import java.util.Map;
  * OtpService and SessionService now use in-memory stores only.
  */
 @Configuration
+@RequiredArgsConstructor
 @Slf4j
 public class RedisConfig {
+    @Autowired
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
@@ -115,5 +122,17 @@ public class RedisConfig {
                         LaissezFaireSubTypeValidator.instance,
                         ObjectMapper.DefaultTyping.NON_FINAL
                 );
+    }
+
+    @PreDestroy
+    public void ClearRedisCache() {
+        try{
+            stringRedisTemplate.delete("translations");
+            stringRedisTemplate.delete("messages");
+            stringRedisTemplate.delete("conversations");
+            log.info("Redis cache cleared on shutdown");
+        }catch (Exception e){
+            log.error("Lỗi khi xóa cache Redis lúc shutdown: ", e);
+        }
     }
 }
