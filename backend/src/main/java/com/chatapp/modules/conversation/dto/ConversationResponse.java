@@ -36,6 +36,7 @@ public class ConversationResponse {
         private String role;
         private Long joinedAt;
         private String friendshipStatus;
+        private Boolean isRequester;
     }
 
     @Data

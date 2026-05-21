@@ -34,6 +34,26 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+const emojiCategories = [
+  { id: 'smileys', label: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'] },
+  { id: 'gestures', label: '👋', emojis: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦿', '🦶', '👂', '🦻', '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄'] },
+  { id: 'animals', label: '🐶', emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦢', '🦉', '🦩', '🦚', '🦜', '🐸', '🐊', '🐢', '🦎', '🐍', '🐲', '🐉', '🦕', '🦖', '🐳', '🐋', '🐬', '🐟', '🐠', '🐡', '🦈', '🐙', '🐚', '🦀', '🦞', '🦐', '🦑'] },
+  { id: 'food', label: '🍏', emojis: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌽', '🥕', '👝', '🍟', '🍔', '🍕', '🌭', '🥪', '🌮', '🌯', '🥗', '🥘', '🍲', '🍱', '🥣', '🍛', '🍜', '🍜', '🍝', '🍠', '🍤', '🍣', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🍼', '☕', '🍵', '🍶', '🍷', '🍸', '🍹', '🍺', '🍻', '🥂', '🥃'] },
+  { id: 'activities', label: '⚽', emojis: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '⛸️', '🎿', '🛷', '🥌', '🎯', '🪀', '🎮', '🕹️', '🎰', '🎲', '🧩', '🧸', '♠️', '♥️', '♦️', '♣️', '♟️', '🃏', '🀄', '🎴', '🎭', '🎨', '🧵', '🧶'] },
+  { id: 'objects', label: '💡', emojis: ['⌚', '📱', '📲', '💻', '⌨️', '🖱️', '🖲️', '🕹️', '🗜️', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽️', '🎞️', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙️', '🎚️', '🎛️', '🧭', '⏱️', '⏲️', '⏰', '🕰️', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯️', '🪔', '🧯', '🛢️', '💸', '💵', '💴', '💶', '💷', '💰', '💳', '💎', '⚖️', '🧰', '🔧', '🔨', '⚒️', '🛠️', '⛏️', '🔩', '⚙️', '🧱', '⛓️', '🧲', '🔫', '💣', '🧨', '🪓', '🔪', '🗡️', '⚔️', '🛡️', '🚬', '⚰️', '⚱️', '🏺', '🔮', '📿', '🧿', '💈', '⚗️', '🔭', '🔬', '🕳️', '🩺', '💊', '💉', '🩸', '🧬', '🦠', '🧼', '🧽', '🪒', '🧺', '🧹', '🌡️', '🏷️', '🔖'] },
+  { id: 'symbols', label: '❤️', emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️', '🆘', '❌', '⭕', '🛑', '⛔', '📛', '🚫', '💯', '💢', '🤖', '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗', '❕', '❓', '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️', '🔰', '♻️', '✅', '🈯', '💹', '❇️', '✳️', '❎', '🌐', '💠', 'Ⓜ️', '🌀', '💤'] }
+];
+
+const stickerSets = [
+  { id: 'trending', label: '🔥' },
+  { id: 'cute', label: '🐱' },
+  { id: 'funny', label: '🤣' },
+  { id: 'love', label: '❤️' },
+  { id: 'cry', label: '😢' },
+  { id: 'angry', label: '😡' },
+  { id: 'pepe', label: '🐸' }
+];
+
 const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingChange, conversationType, onOpenPoll, members = [] }, ref) => {
 
 
@@ -72,6 +92,298 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
     onConfirm: () => { },
     onCancel: () => setPermissionModal(prev => ({ ...prev, visible: false }))
   });
+
+  // Emoji/Sticker/GIF states
+  const [showEmojis, setShowEmojis] = useState(false);
+  const [isEmojiExpanded, setIsEmojiExpanded] = useState(false);
+  const [emojiSearchTerm, setEmojiSearchTerm] = useState('');
+  const [gifs, setGifs] = useState([]);
+  const [gifsLoading, setGifsLoading] = useState(false);
+  const [stickers, setStickers] = useState([]);
+  const [stickersLoading, setStickersLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('emoji'); // 'emoji', 'sticker', 'gif'
+  const [activeCategory, setActiveCategory] = useState('smileys');
+
+  // Dismiss emojis on system keyboard open
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setShowEmojis(false);
+      setIsEmojiExpanded(false);
+    });
+    return () => {
+      keyboardDidShowListener.remove();
+    };
+  }, []);
+
+  // Fetch Stickers from Tenor API
+  useEffect(() => {
+    if (!showEmojis || activeTab !== 'sticker') return;
+
+    let isMounted = true;
+    const fetchStickers = async () => {
+      setStickersLoading(true);
+      try {
+        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&searchfilter=sticker';
+        const query = emojiSearchTerm.trim() || activeCategory;
+        if (query && query !== 'trending') {
+          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=LIVDSRZULELA&limit=20&searchfilter=sticker`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        if (isMounted && data.results) {
+          const formatted = data.results.map(item => ({
+            id: item.id,
+            url: item.media[0]?.gif?.url || item.url,
+            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
+            title: item.title || item.content_description || 'Sticker'
+          }));
+          setStickers(formatted);
+        }
+      } catch (err) {
+        console.error('Failed to fetch Tenor stickers on mobile:', err);
+      } finally {
+        if (isMounted) setStickersLoading(false);
+      }
+    };
+
+    const timer = setTimeout(fetchStickers, emojiSearchTerm.trim() ? 500 : 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [showEmojis, activeTab, emojiSearchTerm, activeCategory]);
+
+  // Fetch GIFs from Tenor API
+  useEffect(() => {
+    if (!showEmojis || activeTab !== 'gif') return;
+
+    let isMounted = true;
+    const fetchGifs = async () => {
+      setGifsLoading(true);
+      try {
+        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20';
+        if (emojiSearchTerm.trim()) {
+          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(emojiSearchTerm.trim())}&key=LIVDSRZULELA&limit=20`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        if (isMounted && data.results) {
+          const formatted = data.results.map(item => ({
+            id: item.id,
+            url: item.media[0]?.gif?.url || item.url,
+            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
+            title: item.title || item.content_description || 'GIF'
+          }));
+          setGifs(formatted);
+        }
+      } catch (err) {
+        console.error('Failed to fetch Tenor GIFs on mobile:', err);
+      } finally {
+        if (isMounted) setGifsLoading(false);
+      }
+    };
+
+    const timer = setTimeout(fetchGifs, emojiSearchTerm.trim() ? 500 : 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [showEmojis, activeTab, emojiSearchTerm]);
+
+  const handleToggleEmojis = () => {
+    if (!showEmojis) {
+      Keyboard.dismiss();
+      setShowEmojis(true);
+    } else {
+      setShowEmojis(false);
+      setIsEmojiExpanded(false);
+    }
+  };
+
+  const handleSendSticker = (stickerUrl) => {
+    onSendMessage(stickerUrl, replyingTo?.messageId, 'STICKER', []);
+    setShowEmojis(false);
+  };
+
+  const handleSendGif = (gifUrl) => {
+    onSendMessage('', replyingTo?.messageId, 'IMAGE', [gifUrl]);
+    setShowEmojis(false);
+  };
+
+  const handleEmojiPress = (emoji) => {
+    setMessage(prev => prev + emoji);
+  };
+
+  const renderEmojiPanel = () => {
+    const panelHeight = isEmojiExpanded ? 500 : 310;
+    return (
+      <View style={[styles.emojiPanelContainer, { height: panelHeight, backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderTopColor: colors.border }]}>
+        {/* Expand Handle */}
+        <TouchableOpacity
+          style={styles.expandHandleContainer}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setIsEmojiExpanded(!isEmojiExpanded);
+          }}
+        >
+          <View style={[styles.expandHandle, { backgroundColor: isDark ? '#475569' : '#cbd5e1' }]} />
+        </TouchableOpacity>
+
+        {/* Tab Header: Emoji, Sticker, GIF */}
+        <View style={[styles.emojiTabHeader, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            style={[styles.emojiTabButton, activeTab === 'emoji' && styles.emojiTabButtonActive]}
+            onPress={() => {
+              setActiveTab('emoji');
+              setActiveCategory('smileys');
+              setEmojiSearchTerm('');
+            }}
+          >
+            <Text style={[styles.emojiTabText, activeTab === 'emoji' && { color: colors.primary }]}>Emoji</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.emojiTabButton, activeTab === 'sticker' && styles.emojiTabButtonActive]}
+            onPress={() => {
+              setActiveTab('sticker');
+              setActiveCategory('trending');
+              setEmojiSearchTerm('');
+            }}
+          >
+            <Text style={[styles.emojiTabText, activeTab === 'sticker' && { color: colors.primary }]}>Sticker</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.emojiTabButton, activeTab === 'gif' && styles.emojiTabButtonActive]}
+            onPress={() => {
+              setActiveTab('gif');
+              setEmojiSearchTerm('');
+            }}
+          >
+            <Text style={[styles.emojiTabText, activeTab === 'gif' && { color: colors.primary }]}>GIF</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Bar */}
+        <View style={[styles.emojiSearchContainer, { backgroundColor: colors.input }]}>
+          <MaterialIcons name="search" size={20} color={colors.textSubtle} />
+          <TextInput
+            style={[styles.emojiSearchInput, { color: colors.foreground }]}
+            placeholder={
+              activeTab === 'emoji'
+                ? "Tìm kiếm emoji..."
+                : activeTab === 'sticker'
+                  ? "Tìm kiếm sticker..."
+                  : "Tìm kiếm GIF từ Tenor..."
+            }
+            placeholderTextColor={colors.textSubtle}
+            value={emojiSearchTerm}
+            onChangeText={setEmojiSearchTerm}
+          />
+          {emojiSearchTerm !== '' && (
+            <TouchableOpacity onPress={() => setEmojiSearchTerm('')}>
+              <MaterialIcons name="cancel" size={20} color={colors.textSubtle} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Panel Content Scroll Area */}
+        <View style={styles.emojiPanelContent}>
+          {activeTab === 'emoji' && (
+            <ScrollView contentContainerStyle={styles.emojiGrid}>
+              {((emojiCategories.find(c => c.id === activeCategory) || emojiCategories[0]).emojis)
+                .filter(e => emojiSearchTerm === '' || e.includes(emojiSearchTerm))
+                .map((emoji, i) => (
+                  <TouchableOpacity
+                    key={`${emoji}-${i}`}
+                    onPress={() => handleEmojiPress(emoji)}
+                    style={styles.emojiCell}
+                  >
+                    <Text style={styles.emojiText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+          )}
+
+          {activeTab === 'sticker' && (
+            stickersLoading && stickers.length === 0 ? (
+              <View style={styles.panelLoadingContainer}>
+                <ActivityIndicator color={colors.primary} size="large" />
+              </View>
+            ) : stickers.length === 0 ? (
+              <View style={styles.panelLoadingContainer}>
+                <Text style={{ color: colors.textSubtle, fontSize: 13 }}>
+                  {stickersLoading ? 'Đang tìm kiếm...' : 'Không tìm thấy sticker nào'}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={styles.stickerGrid}>
+                {stickers.map((sticker) => (
+                  <TouchableOpacity
+                    key={sticker.id}
+                    onPress={() => handleSendSticker(sticker.url)}
+                    style={styles.stickerCell}
+                  >
+                    <Image source={{ uri: sticker.previewUrl }} style={styles.stickerImage} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )
+          )}
+
+          {activeTab === 'gif' && (
+            gifsLoading && gifs.length === 0 ? (
+              <View style={styles.panelLoadingContainer}>
+                <ActivityIndicator color={colors.primary} size="large" />
+              </View>
+            ) : gifs.length === 0 ? (
+              <View style={styles.panelLoadingContainer}>
+                <Text style={{ color: colors.textSubtle, fontSize: 13 }}>
+                  {gifsLoading ? 'Đang tìm kiếm...' : 'Không tìm thấy GIF nào'}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={styles.gifGrid}>
+                {gifs.map((gif) => (
+                  <TouchableOpacity
+                    key={gif.id}
+                    onPress={() => handleSendGif(gif.url)}
+                    style={styles.gifCell}
+                  >
+                    <Image source={{ uri: gif.previewUrl }} style={styles.gifImage} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )
+          )}
+        </View>
+
+        {/* Category Sub-Bar */}
+        {(activeTab === 'emoji' || activeTab === 'sticker') && (
+          <View style={[styles.categorySubBar, { borderTopColor: colors.border, backgroundColor: colors.input }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categorySubBarScroll}>
+              {activeTab === 'emoji' && emojiCategories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[styles.categorySubButton, activeCategory === category.id && styles.categorySubButtonActive]}
+                  onPress={() => setActiveCategory(category.id)}
+                >
+                  <Text style={styles.categorySubLabel}>{category.label}</Text>
+                </TouchableOpacity>
+              ))}
+              {activeTab === 'sticker' && stickerSets.map((set) => (
+                <TouchableOpacity
+                  key={set.id}
+                  style={[styles.categorySubButton, activeCategory === set.id && styles.categorySubButtonActive]}
+                  onPress={() => setActiveCategory(set.id)}
+                >
+                  <Text style={styles.categorySubLabel}>{set.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+    );
+  };
   const isPickingRef = useRef(false);
 
   const BASE_URL = CONFIG.API_URL.split('/api')[0];
@@ -508,6 +820,9 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
     isPickingRef.current = true;
     console.log('[File] Starting pickDocument process (Directly launching picker)');
     try {
+      // Wait for modal to close fully
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // DocumentPicker không cần quyền Storage trên iOS/Android hiện đại để mở trình chọn hệ thống
       console.log('[File] Launching document picker...');
       const result = await DocumentPicker.getDocumentAsync({
@@ -771,52 +1086,70 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                 </View>
               )}
 
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                backgroundColor: colors.input,
+                borderRadius: 20,
+                paddingRight: 4
+              }}>
+                <TextInput
+                  style={[styles.input, { backgroundColor: 'transparent', color: colors.foreground, flex: 1 }]}
+                  placeholder="Type a message..."
+                  placeholderTextColor={colors.textSubtle}
+                  onChangeText={handleChange}
+                  onSelectionChange={(event) => setCursorPosition(event.nativeEvent.selection.start)}
+                  onFocus={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setIsExpanded(true);
+                    setShowEmojis(false);
+                  }}
+                  editable={!isLoading && !isUploading}
+                  multiline
+                  maxHeight={100}
+                >
+                  {(() => {
+                    if (!message) return null;
 
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.input, color: colors.foreground }]}
-                placeholder="Type a message..."
-                placeholderTextColor={colors.textSubtle}
-                onChangeText={handleChange}
-                onSelectionChange={(event) => setCursorPosition(event.nativeEvent.selection.start)}
-                onFocus={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setIsExpanded(true);
-                }}
-                editable={!isLoading && !isUploading}
-                multiline
-                maxHeight={100}
-              >
-                {(() => {
-                  if (!message) return null;
+                    // Chỉ highlight nếu là GROUP chat
+                    if (conversationType !== 'GROUP') return <Text>{message}</Text>;
 
-                  // Chỉ highlight nếu là GROUP chat
-                  if (conversationType !== 'GROUP') return <Text>{message}</Text>;
+                    // Tạo danh sách tên để regex
 
-                  // Tạo danh sách tên để regex
+                    const memberNames = members
+                      .map(m => (m.fullName || m.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                      .filter(Boolean);
 
-                  const memberNames = members
-                    .map(m => (m.fullName || m.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-                    .filter(Boolean);
+                    if (memberNames.length === 0 && !message.includes('@All')) return <Text>{message}</Text>;
 
-                  if (memberNames.length === 0 && !message.includes('@All')) return <Text>{message}</Text>;
+                    const allNames = [...memberNames, 'All'].join('|');
+                    const regex = new RegExp(`(@(?:${allNames}))`, 'g');
+                    const parts = message.split(regex);
 
-                  const allNames = [...memberNames, 'All'].join('|');
-                  const regex = new RegExp(`(@(?:${allNames}))`, 'g');
-                  const parts = message.split(regex);
+                    return parts.map((part, i) => {
+                      if (part.startsWith('@')) {
+                        return (
+                          <Text key={i} style={{ color: colors.primary, fontWeight: 'bold' }}>
+                            {part}
+                          </Text>
+                        );
+                      }
+                      return <Text key={i}>{part}</Text>;
+                    });
+                  })()}
+                </TextInput>
 
-                  return parts.map((part, i) => {
-                    if (part.startsWith('@')) {
-                      return (
-                        <Text key={i} style={{ color: colors.primary, fontWeight: 'bold' }}>
-                          {part}
-                        </Text>
-                      );
-                    }
-                    return <Text key={i}>{part}</Text>;
-                  });
-                })()}
-              </TextInput>
-
+                <TouchableOpacity
+                  style={{ padding: 8, justifyContent: 'center', alignItems: 'center' }}
+                  onPress={handleToggleEmojis}
+                >
+                  <MaterialIcons
+                    name={showEmojis ? "keyboard" : "sentiment-satisfied-alt"}
+                    size={24}
+                    color={showEmojis ? colors.primary : colors.textSubtle}
+                  />
+                </TouchableOpacity>
+              </View>
 
             </View>
 
@@ -869,7 +1202,52 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
           onClose={permissionModal.onCancel || (() => setPermissionModal(prev => ({ ...prev, visible: false })))}
           onConfirm={permissionModal.onConfirm}
         />
+
+        <Modal
+          visible={showAttachMenu}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowAttachMenu(false)}
+        >
+          <TouchableOpacity
+            style={styles.menuOverlay}
+            activeOpacity={1}
+            onPress={() => setShowAttachMenu(false)}
+          >
+            <View style={[styles.menuContainer, { backgroundColor: isDark ? colors.surface200 : '#fff' }]}>
+              <Text style={[styles.menuTitle, { color: colors.foreground }]}>Gửi phương tiện</Text>
+              <View style={styles.menuOptions}>
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => {
+                    setShowAttachMenu(false);
+                    setTimeout(pickMedia, 100);
+                  }}
+                >
+                  <View style={[styles.menuIconBg, { backgroundColor: isDark ? colors.surface300 : '#e0e7ff' }]}>
+                    <MaterialIcons name="image" size={28} color="#4f46e5" />
+                  </View>
+                  <Text style={[styles.menuOptionText, { color: colors.foreground }]}>Hình ảnh</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => {
+                    setShowAttachMenu(false);
+                    setTimeout(pickDocument, 100);
+                  }}
+                >
+                  <View style={[styles.menuIconBg, { backgroundColor: isDark ? colors.surface300 : '#fef3c7' }]}>
+                    <MaterialIcons name="description" size={28} color="#d97706" />
+                  </View>
+                  <Text style={[styles.menuOptionText, { color: colors.foreground }]}>Tài liệu</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
+      {showEmojis && renderEmojiPanel()}
     </View>
   );
 });
@@ -999,14 +1377,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuOverlay: {
-    position: 'absolute',
-    bottom: 60,
-    left: 0,
-    right: 0,
-    height: 1000, // Cover the screen
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
-    zIndex: 1000,
   },
   menuContainer: {
     backgroundColor: '#fff',
@@ -1112,6 +1485,143 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
+  },
+  emojiPanelContainer: {
+    borderTopWidth: 1,
+  },
+  expandHandleContainer: {
+    height: 18,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expandHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  emojiTabHeader: {
+    flexDirection: 'row',
+    height: 48,
+    borderBottomWidth: 1,
+  },
+  emojiTabButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  emojiTabButtonActive: {
+    borderBottomColor: '#6366f1',
+  },
+  emojiTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  emojiSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 38,
+    borderRadius: 19,
+    marginHorizontal: 12,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  emojiSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 0,
+  },
+  emojiPanelContent: {
+    flex: 1,
+    paddingTop: 8,
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 8,
+    paddingBottom: 16,
+  },
+  emojiCell: {
+    width: SCREEN_WIDTH / 8 - 2,
+    height: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emojiText: {
+    fontSize: 24,
+  },
+  stickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    columnGap: 10,
+    rowGap: 10,
+    paddingBottom: 16,
+  },
+  stickerCell: {
+    width: (SCREEN_WIDTH - 24 - 30) / 4,
+    height: (SCREEN_WIDTH - 24 - 30) / 4,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stickerImage: {
+    width: '90%',
+    height: '90%',
+    resizeMode: 'contain',
+  },
+  gifGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    columnGap: 10,
+    rowGap: 10,
+    paddingBottom: 16,
+  },
+  gifCell: {
+    width: (SCREEN_WIDTH - 24 - 10) / 2,
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  gifImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  panelLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categorySubBar: {
+    height: 44,
+    borderTopWidth: 1,
+    justifyContent: 'center',
+  },
+  categorySubBarScroll: {
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 8,
+  },
+  categorySubButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  categorySubButtonActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  categorySubLabel: {
+    fontSize: 16,
   },
 });
 

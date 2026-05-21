@@ -114,10 +114,19 @@ export const useWebSocket = () => {
         const conv = conversations.find(c => c.conversationId === message.conversationId);
 
         let displayMessage = message.content || "Đã gửi một tệp đính kèm";
+        const url = (message.content || '').toLowerCase();
+        const firstMediaUrl = (message.mediaUrls && message.mediaUrls[0] || '').toLowerCase();
+        const isStickerUrl = url.includes('searchfilter=sticker') || url.includes('dicebear.com') || firstMediaUrl.includes('searchfilter=sticker') || firstMediaUrl.includes('dicebear.com');
+        const isGifUrl = url.includes('.gif') || url.includes('tenor.com') || firstMediaUrl.includes('.gif') || firstMediaUrl.includes('tenor.com');
+
         if (message.type === 'CALL_LOG') {
           displayMessage = getPreviewText(displayMessage);
         } else if (message.type === 'VOICE' || isVoiceMessage(message)) {
           displayMessage = "Tin nhắn thoại";
+        } else if (message.type === 'STICKER' || isStickerUrl) {
+          displayMessage = "[Sticker]";
+        } else if (isGifUrl) {
+          displayMessage = "[GIF]";
         } else if (message.type === 'IMAGE') {
           displayMessage = "[Hình ảnh]";
         } else if (message.type === 'VIDEO') {

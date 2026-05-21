@@ -31,11 +31,18 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
     // Handle URLs
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
       if (isAudioUrl(raw)) return '[Tin nhắn thoại]';
+      const lowerRaw = raw.toLowerCase();
+      if (lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com')) {
+        return '[Nhãn dán]';
+      }
+      if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
+        return '[GIF]';
+      }
       return '[Đính kèm]';
     }
 
     // Handle explicit tags
-    const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại'];
+    const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại', 'nhãn dán', 'gif', 'hình ảnh'];
     if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
       return raw;
     }

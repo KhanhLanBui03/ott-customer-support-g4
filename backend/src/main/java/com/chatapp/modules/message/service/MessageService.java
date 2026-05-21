@@ -155,14 +155,27 @@ public class MessageService {
                     } catch (Exception e) {
                         lastMessageText = "[Cuộc gọi]";
                     }
+                } else if ("STICKER".equals(savedMessage.getType())) {
+                    lastMessageText = "[Nhãn dán]";
                 } else if (lastMessageText == null || lastMessageText.isBlank()) {
-                    lastMessageText = switch (savedMessage.getType()) {
-                        case "IMAGE" -> "[Hình ảnh]";
-                        case "VIDEO" -> "[Video]";
-                        case "FILE" -> "[Tệp tin]";
-                        case "STICKER" -> "[Nhãn dán]";
-                        default -> "[Đính kèm]";
-                    };
+                    // Check if this IMAGE message is actually a GIF by inspecting mediaUrls
+                    if ("IMAGE".equals(savedMessage.getType()) && savedMessage.getMediaUrls() != null) {
+                        boolean isGif = savedMessage.getMediaUrls().stream()
+                                .anyMatch(url -> url != null && (url.toLowerCase().contains("tenor.com") || url.toLowerCase().endsWith(".gif") || url.toLowerCase().contains(".gif?")));
+                        if (isGif) {
+                            lastMessageText = "[GIF]";
+                        } else {
+                            lastMessageText = "[Hình ảnh]";
+                        }
+                    } else {
+                        lastMessageText = switch (savedMessage.getType()) {
+                            case "IMAGE" -> "[Hình ảnh]";
+                            case "VIDEO" -> "[Video]";
+                            case "FILE" -> "[Tệp tin]";
+                            case "STICKER" -> "[Nhãn dán]";
+                            default -> "[Đính kèm]";
+                        };
+                    }
                 }
 
                 conversationService.updateLastMessage(
