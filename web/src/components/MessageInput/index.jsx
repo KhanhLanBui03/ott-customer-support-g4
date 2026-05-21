@@ -171,21 +171,98 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const [searchTerm, setSearchTerm] = useState('');
 
   const stickerSets = [
-    { id: 'bunny', label: '🐰', stickers: ['https://api.dicebear.com/7.x/bottts/svg?seed=1', 'https://api.dicebear.com/7.x/bottts/svg?seed=2', 'https://api.dicebear.com/7.x/bottts/svg?seed=3', 'https://api.dicebear.com/7.x/bottts/svg?seed=4', 'https://api.dicebear.com/7.x/bottts/svg?seed=5', 'https://api.dicebear.com/7.x/bottts/svg?seed=6', 'https://api.dicebear.com/7.x/bottts/svg?seed=7', 'https://api.dicebear.com/7.x/bottts/svg?seed=8'] },
-    { id: 'cat', label: '🐱', stickers: ['https://api.dicebear.com/7.x/avataaars/svg?seed=Felix', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Buddy', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Luna', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Milo', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Leo', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Cooper'] },
-    { id: 'robot', label: '🤖', stickers: ['https://api.dicebear.com/7.x/bottts/svg?seed=R2', 'https://api.dicebear.com/7.x/bottts/svg?seed=C3', 'https://api.dicebear.com/7.x/bottts/svg?seed=BB8', 'https://api.dicebear.com/7.x/bottts/svg?seed=WallE'] }
+    { id: 'trending', label: '🔥' },
+    { id: 'cute', label: '🐱' },
+    { id: 'funny', label: '🤣' },
+    { id: 'love', label: '❤️' },
+    { id: 'cry', label: '😢' },
+    { id: 'angry', label: '😡' },
+    { id: 'pepe', label: '🐸' }
   ];
 
-  const sampleGifs = [
-    { id: 1, url: 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKMGpx9YJb3r9p6/giphy.gif', title: 'Hello' },
-    { id: 2, url: 'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l41lTfuxNf64YQ13O/giphy.gif', title: 'Wow' },
-    { id: 3, url: 'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJqZ3RqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqZ3JqJmZpbnM9MSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKVUn7iM8FMEU24/giphy.gif', title: 'Happy' }
-  ];
+  const [gifs, setGifs] = useState([]);
+  const [gifsLoading, setGifsLoading] = useState(false);
+  const [stickers, setStickers] = useState([]);
+  const [stickersLoading, setStickersLoading] = useState(false);
+
+  // Fetch Stickers from Tenor API
+  React.useEffect(() => {
+    if (activeTab !== 'sticker') return;
+    
+    let isMounted = true;
+    const fetchStickers = async () => {
+      setStickersLoading(true);
+      try {
+        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&searchfilter=sticker';
+        const query = searchTerm.trim() || activeCategory;
+        if (query && query !== 'trending') {
+          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=LIVDSRZULELA&limit=20&searchfilter=sticker`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        if (isMounted && data.results) {
+          const formatted = data.results.map(item => ({
+            id: item.id,
+            url: item.media[0]?.gif?.url || item.url,
+            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
+            title: item.title || item.content_description || 'Sticker'
+          }));
+          setStickers(formatted);
+        }
+      } catch (err) {
+        console.error('Failed to fetch Tenor stickers on web:', err);
+      } finally {
+        if (isMounted) setStickersLoading(false);
+      }
+    };
+
+    const timer = setTimeout(fetchStickers, searchTerm.trim() ? 500 : 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [activeTab, searchTerm, activeCategory]);
+
+  React.useEffect(() => {
+    if (activeTab !== 'gif') return;
+    
+    let isMounted = true;
+    const fetchGifs = async () => {
+      setGifsLoading(true);
+      try {
+        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20';
+        if (searchTerm.trim()) {
+          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm.trim())}&key=LIVDSRZULELA&limit=20`;
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        if (isMounted && data.results) {
+          const formatted = data.results.map(item => ({
+            id: item.id,
+            url: item.media[0]?.gif?.url || item.url,
+            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
+            title: item.title || item.content_description || 'GIF'
+          }));
+          setGifs(formatted);
+        }
+      } catch (err) {
+        console.error('Failed to fetch Tenor GIFs:', err);
+      } finally {
+        if (isMounted) setGifsLoading(false);
+      }
+    };
+
+    const timer = setTimeout(fetchGifs, searchTerm.trim() ? 500 : 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [activeTab, searchTerm]);
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     if (tabId === 'emoji') setActiveCategory('smileys');
-    else if (tabId === 'sticker') setActiveCategory('bunny');
+    else if (tabId === 'sticker') setActiveCategory('trending');
   };
 
   const handleEmojiClick = (e, emoji) => {
@@ -786,30 +863,68 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
             )}
 
             {activeTab === 'sticker' && (
-              <div className="p-4 grid grid-cols-3 gap-3">
-                {(stickerSets.find(s => s.id === activeCategory) || stickerSets[0]).stickers
-                  .filter(s => searchTerm === '' || s.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((url, i) => (
-                    <button key={i} type="button" onClick={() => handleSend(null, url, 'STICKER')} className="group relative h-24 w-24 bg-white/5 rounded-2xl overflow-hidden hover:bg-indigo-500/10 transition-all hover:scale-110 active:scale-95 flex items-center justify-center p-2">
-                      <img src={url} alt="sticker" className="h-full w-full object-contain" />
-                    </button>
-                  ))}
+              <div className="p-4 relative">
+                {stickersLoading && stickers.length === 0 ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                  </div>
+                ) : stickers.length === 0 ? (
+                  <div className="flex items-center justify-center py-12 text-slate-400 text-xs font-bold">
+                    {stickersLoading ? 'Đang tìm kiếm...' : 'Không tìm thấy sticker nào'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    {stickers.map((sticker) => (
+                      <button 
+                        key={sticker.id} 
+                        type="button" 
+                        onClick={() => {
+                          handleSend(null, sticker.url, 'STICKER');
+                          setShowEmojis(false);
+                        }} 
+                        className="group relative h-24 w-24 bg-white/5 rounded-2xl overflow-hidden hover:bg-indigo-500/10 transition-all hover:scale-110 active:scale-95 flex items-center justify-center p-2"
+                      >
+                        <img src={sticker.previewUrl} alt={sticker.title} className="h-full w-full object-contain" loading="lazy" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {activeTab === 'gif' && (
-              <div className="p-4 grid grid-cols-2 gap-2">
-                {sampleGifs.filter(g => searchTerm === '' || g.title.toLowerCase().includes(searchTerm.toLowerCase())).map(gif => (
-                  <button key={gif.id} type="button" onClick={() => handleSend(null, gif.url, 'IMAGE')} className="group relative h-32 rounded-2xl overflow-hidden border border-white/5 hover:border-indigo-500/30 transition-all">
-                    <img src={gif.url} alt="gif" className="h-full w-full object-cover" />
-                  </button>
-                ))}
+              <div className="p-4 relative">
+                {gifsLoading && gifs.length === 0 ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                  </div>
+                ) : gifs.length === 0 ? (
+                  <div className="flex items-center justify-center py-12 text-slate-400 text-xs font-bold">
+                    {gifsLoading ? 'Đang tìm kiếm...' : 'Không tìm thấy GIF nào'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {gifs.map(gif => (
+                      <button 
+                        key={gif.id} 
+                        type="button" 
+                        onClick={() => {
+                          handleSend(null, gif.url, 'IMAGE');
+                          setShowEmojis(false);
+                        }} 
+                        className="group relative h-32 rounded-2xl overflow-hidden border border-white/5 hover:border-indigo-500/30 transition-all hover:scale-[1.02] active:scale-95"
+                      >
+                        <img src={gif.previewUrl} alt={gif.title} className="h-full w-full object-cover" loading="lazy" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           <div className="p-2 bg-white/10 dark:bg-black/30 border-t border-white/5 flex items-center justify-center space-x-1">
-            {(activeTab === 'emoji' ? emojiCategories : stickerSets).map(cat => (
+            {(activeTab === 'emoji' || activeTab === 'sticker') && (activeTab === 'emoji' ? emojiCategories : stickerSets).map(cat => (
               <button key={cat.id} type="button" onClick={() => setActiveCategory(cat.id)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${activeCategory === cat.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}>
                 <span className="text-lg">{cat.label}</span>
               </button>

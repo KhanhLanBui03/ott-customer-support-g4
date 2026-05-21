@@ -32,24 +32,21 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
 
     // Handle URLs
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      if (isAudioUrl(raw)) return t('sidebar.voice_message');
-      return t('sidebar.attachment');
+      if (isAudioUrl(raw)) return '[Tin nhắn thoại]';
+      const lowerRaw = raw.toLowerCase();
+      if (lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com')) {
+        return '[Nhãn dán]';
+      }
+      if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
+        return '[GIF]';
+      }
+      return '[Đính kèm]';
     }
 
     // Handle explicit tags
-    const tagsMap = {
-      'attachment': 'sidebar.attachment',
-      'đính kèm': 'sidebar.attachment',
-      'file': 'sidebar.attachment',
-      'tin nhắn thoại': 'sidebar.voice_message',
-      'cuộc gọi video': 'sidebar.video_call',
-      'cuộc gọi thoại': 'sidebar.voice_call'
-    };
-
-    for (const [tag, translationKey] of Object.entries(tagsMap)) {
-      if (raw.toLowerCase() === `[${tag}]`) {
-        return t(translationKey);
-      }
+    const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại', 'nhãn dán', 'gif', 'hình ảnh'];
+    if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
+      return raw;
     }
 
     return raw;

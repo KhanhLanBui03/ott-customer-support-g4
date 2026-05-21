@@ -10,6 +10,7 @@ import MessageModal from '../../../src/components/MessageModal';
 import { fetchMessages, fetchConversationDetail, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi, chatApi } from '../../../src/api/chatApi';
+import { friendApi } from '../../../src/api/friendApi';
 import CreateVoteModal from '../../../src/components/CreateVoteModal';
 import { formatLastSeen } from '../../../src/utils/dateUtils';
 import ForwardModal from '../../../src/components/ForwardModal';
@@ -33,6 +34,7 @@ const ChatDetailScreen = () => {
   const [createVoteModalVisible, setCreateVoteModalVisible] = useState(false);
   const [forwardModalVisible, setForwardModalVisible] = useState(false);
   const [showAllPins, setShowAllPins] = useState(false);
+  const [localFriendship, setLocalFriendship] = useState(null);
 
   // KÍCH HOẠT WEBSOCKET TRỰC TIẾP TẠI ĐÂY
   const { sendMessageRealtime, sendReadReceipt, sendTypingStart, sendTypingStop } = useWebSocket();
@@ -423,7 +425,13 @@ const ChatDetailScreen = () => {
     });
   }, [conversation, currentUser, paramType]);
 
-  const friendshipStatus = otherMember?.friendshipStatus || 'NONE';
+  const friendshipStatus = useMemo(() => {
+    return localFriendship?.status || otherMember?.friendshipStatus || 'NONE';
+  }, [localFriendship, otherMember]);
+
+  const isRequester = useMemo(() => {
+    return localFriendship?.isRequester !== undefined ? localFriendship.isRequester : otherMember?.isRequester;
+  }, [localFriendship, otherMember]);
 
   const otherAvatar = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.avatarUrl || conversation.avatar;
@@ -445,6 +453,72 @@ const ChatDetailScreen = () => {
       })
       .map(member => String(member.userId || member.id || ''));
   }, [conversation, currentUser]);
+
+  const showStrangerBar = useMemo(() => {
+    if (!conversation || conversation.type !== 'SINGLE') return false;
+    if (conversation.isAI || displayName?.toLowerCase()?.includes('assistant') || displayName?.toLowerCase()?.includes('copilot')) return false;
+    // Only show the bar if we have CONFIRMED the friendship status from the backend
+    // otherMember must exist and have a friendshipStatus field set by the server
+    if (!otherMember) return false;
+    // If friendshipStatus is undefined/null, it means we haven't loaded the detail yet - don't show
+    const serverStatus = otherMember?.friendshipStatus;
+    if (!serverStatus) return false;
+    // Use localFriendship override if available (after user action), otherwise use server data
+    const effectiveStatus = localFriendship?.status || serverStatus;
+    return effectiveStatus !== 'ACCEPTED' && effectiveStatus !== 'BLOCKED' && effectiveStatus !== 'SELF';
+  }, [conversation, otherMember, localFriendship, displayName]);
+
+  const handleSendFriendRequest = async () => {
+    const targetUserId = otherMember?.userId || otherMember?.id;
+    if (!targetUserId) return;
+    try {
+      await friendApi.sendFriendRequest(targetUserId);
+      setLocalFriendship({ status: 'PENDING', isRequester: true });
+      dispatch(fetchConversations());
+    } catch (err) {
+      console.error("Failed to send friend request:", err);
+      Alert.alert("Lỗi", "Không thể gửi lời mời kết bạn. Vui lòng thử lại.");
+    }
+  };
+
+  const handleCancelFriendRequest = async () => {
+    const targetUserId = otherMember?.userId || otherMember?.id;
+    if (!targetUserId) return;
+    try {
+      await friendApi.cancelRequest(targetUserId);
+      setLocalFriendship({ status: 'NONE', isRequester: null });
+      dispatch(fetchConversations());
+    } catch (err) {
+      console.error("Failed to cancel friend request:", err);
+      Alert.alert("Lỗi", "Không thể hủy lời mời kết bạn. Vui lòng thử lại.");
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    const targetUserId = otherMember?.userId || otherMember?.id;
+    if (!targetUserId) return;
+    try {
+      await friendApi.acceptFriendRequest(targetUserId);
+      setLocalFriendship({ status: 'ACCEPTED', isRequester: null });
+      dispatch(fetchConversations());
+    } catch (err) {
+      console.error("Failed to accept friend request:", err);
+      Alert.alert("Lỗi", "Không thể đồng ý kết bạn. Vui lòng thử lại.");
+    }
+  };
+
+  const handleRejectFriendRequest = async () => {
+    const targetUserId = otherMember?.userId || otherMember?.id;
+    if (!targetUserId) return;
+    try {
+      await friendApi.rejectFriendRequest(targetUserId);
+      setLocalFriendship({ status: 'NONE', isRequester: null });
+      dispatch(fetchConversations());
+    } catch (err) {
+      console.error("Failed to reject friend request:", err);
+      Alert.alert("Lỗi", "Không thể từ chối kết bạn. Vui lòng thử lại.");
+    }
+  };
 
   const headerAvatarUrl = otherAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=128&bold=true`;
 
@@ -568,7 +642,7 @@ const ChatDetailScreen = () => {
             <View style={styles.headerInfo}>
               <View style={styles.nameRow}>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
-                {conversation?.type === 'SINGLE' && (
+                {conversation?.type === 'SINGLE' && otherMember?.friendshipStatus && (
                   <View style={[
                     styles.miniTag,
                     friendshipStatus === 'ACCEPTED' ? styles.friendMiniTag : [styles.strangerMiniTag, isDark && { backgroundColor: colors.surface200, borderColor: colors.border }]
@@ -735,6 +809,55 @@ const ChatDetailScreen = () => {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+        )}
+        {showStrangerBar && (
+          <View style={[styles.strangerContainer, { backgroundColor: isDark ? colors.surface200 : '#f8fafc', borderBottomColor: colors.border }]}>
+            <View style={styles.strangerLeft}>
+              <Feather name="user-plus" size={18} color={isDark ? colors.textMuted : '#64748b'} />
+              <Text style={[styles.strangerText, { color: isDark ? colors.foreground : '#334155' }]}>
+                {(() => {
+                  const status = localFriendship?.status || otherMember?.friendshipStatus || 'NONE';
+                  const req = localFriendship?.isRequester !== undefined ? localFriendship.isRequester : otherMember?.isRequester;
+                  if (status === 'PENDING') {
+                    return req ? 'Đã gửi lời mời kết bạn' : 'Người này đã gửi lời mời kết bạn';
+                  }
+                  return 'Gửi yêu cầu kết bạn tới người này';
+                })()}
+              </Text>
+            </View>
+
+            <View style={styles.strangerActions}>
+              {(() => {
+                const status = localFriendship?.status || otherMember?.friendshipStatus || 'NONE';
+                const req = localFriendship?.isRequester !== undefined ? localFriendship.isRequester : otherMember?.isRequester;
+                if (status === 'PENDING') {
+                  if (req) {
+                    return (
+                      <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={handleCancelFriendRequest}>
+                        <Text style={styles.actionButtonText}>Hủy yêu cầu</Text>
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    return (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity style={[styles.actionButton, styles.acceptButton]} onPress={handleAcceptFriendRequest}>
+                          <Text style={styles.actionButtonText}>Đồng ý</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionButton, styles.rejectButton, { backgroundColor: isDark ? colors.surface300 : '#e2e8f0' }]} onPress={handleRejectFriendRequest}>
+                          <Text style={[styles.actionButtonText, { color: isDark ? colors.foreground : '#475569' }]}>Từ chối</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+                }
+                return (
+                  <TouchableOpacity style={[styles.actionButton, styles.sendButton]} onPress={handleSendFriendRequest}>
+                    <Text style={styles.actionButtonText}>Gửi kết bạn</Text>
+                  </TouchableOpacity>
+                );
+              })()}
+            </View>
           </View>
         )}
         <View style={[styles.chatArea, { backgroundColor: colors.background }]}>
@@ -1101,7 +1224,56 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textTransform: 'uppercase',
   },
-
+  strangerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  strangerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  strangerText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  strangerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  sendButton: {
+    backgroundColor: '#0068ff',
+  },
+  cancelButton: {
+    backgroundColor: '#ef4444',
+  },
+  acceptButton: {
+    backgroundColor: '#10b981',
+  },
+  rejectButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default ChatDetailScreen;

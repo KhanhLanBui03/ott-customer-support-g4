@@ -325,10 +325,19 @@ const chatSlice = createSlice({
           const isOpenConversation = state.currentConversationId === realId;
 
           let preview = message.content;
+          const url = (message.content || '').toLowerCase();
+          const firstMediaUrl = (message.mediaUrls && message.mediaUrls[0] || '').toLowerCase();
+          const isStickerUrl = url.includes('searchfilter=sticker') || url.includes('dicebear.com') || firstMediaUrl.includes('searchfilter=sticker') || firstMediaUrl.includes('dicebear.com');
+          const isGifUrl = url.includes('.gif') || url.includes('tenor.com') || firstMediaUrl.includes('.gif') || firstMediaUrl.includes('tenor.com');
+
           if (message.isRecalled) {
             preview = "[Tin nhắn đã bị thu hồi]";
           } else if (isVoiceMessage(message)) {
             preview = "Tin nhắn thoại";
+          } else if (message.type === 'STICKER' || isStickerUrl) {
+            preview = "[Sticker]";
+          } else if (isGifUrl) {
+            preview = "[GIF]";
           } else if (message.type === 'IMAGE') {
             preview = "[Hình ảnh]";
           } else if (message.type === 'VIDEO') {
@@ -488,6 +497,13 @@ const chatSlice = createSlice({
           let lastMessage = conv.lastMessage;
           if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
             lastMessage = "Tin nhắn thoại";
+          } else if (lastMessage && (lastMessage.startsWith('http://') || lastMessage.startsWith('https://'))) {
+            const lowerLast = lastMessage.toLowerCase();
+            if (lowerLast.includes('searchfilter=sticker') || lowerLast.includes('dicebear.com')) {
+              lastMessage = "[Sticker]";
+            } else if (lowerLast.includes('.gif') || lowerLast.includes('tenor.com')) {
+              lastMessage = "[GIF]";
+            }
           }
 
           return {
