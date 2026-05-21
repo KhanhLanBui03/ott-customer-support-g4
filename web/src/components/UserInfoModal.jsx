@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, MessageSquare, Phone, UserPlus, Check, UserMinus, ShieldAlert } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { friendApi } from '../api/friendApi';
 import { userApi } from '../api/userApi';
 import { useChat } from '../hooks/useChat';
@@ -8,6 +9,7 @@ import { useTheme } from '../hooks/useTheme';
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const { create, selectConversation, activeConversationId } = useChat();
   const [loading, setLoading] = useState(false);
@@ -153,7 +155,7 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
             "text-sm font-medium mt-1",
             isDark ? "text-white/40" : "text-slate-500"
           )}>
-            {profile?.phoneNumber || "Chưa cập nhật số điện thoại"}
+            {profile?.phoneNumber || t('user_info.no_phone')}
           </p>
 
           {/* Action Buttons */}
@@ -166,13 +168,13 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
                     className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
                   >
                     <MessageSquare size={18} />
-                    <span>Nhắn tin</span>
+                    <span>{t('user_info.message')}</span>
                   </button>
                   <button
                     onClick={() => handleCallClick('audio')}
                     disabled={loading}
                     className="p-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-                    title="Gọi điện"
+                    title={t('user_info.call')}
                   >
                     <Phone size={18} />
                   </button>
@@ -180,7 +182,7 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
               ) : status === 'PENDING' ? (
                 <div className="w-full py-3.5 bg-indigo-500/10 text-indigo-500 rounded-2xl font-bold flex items-center justify-center gap-2 border border-indigo-500/20">
                   <Check size={18} />
-                  <span>Đã gửi lời mời</span>
+                  <span>{t('user_info.request_sent')}</span>
                 </div>
               ) : (
                 <>
@@ -192,14 +194,14 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
                     )}
                   >
                     <UserPlus size={18} />
-                    <span>Kết bạn</span>
+                    <span>{t('user_info.add_friend')}</span>
                   </button>
                   <button
                     onClick={handleStartChat}
                     className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
                   >
                     <MessageSquare size={18} />
-                    <span>Nhắn tin</span>
+                    <span>{t('user_info.message')}</span>
                   </button>
                 </>
               )}

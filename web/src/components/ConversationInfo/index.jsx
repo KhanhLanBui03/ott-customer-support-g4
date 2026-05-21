@@ -6,6 +6,7 @@ import {
   Edit3, Check, MessageSquareLock
 } from 'lucide-react';
 import { useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { useChat } from '../../hooks/useChat';
 import { useAuth } from '../../hooks/useAuth';
 import { friendApi } from '../../api/friendApi';
@@ -17,6 +18,7 @@ import AIAssistantPanel from '../AIAssistantPanel';
 
 const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox, allChatImages }) => {
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const { messages, fetchConversations, inviteMember, removeMember, fetchFriends, friends: allFriends, selectConversation } = useChat();
   const fileInputRef = React.useRef(null);
   const avatarInputRef = React.useRef(null);
@@ -103,13 +105,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
       
       const inGroupIds = conversation.members?.map(m => m.userId) || [];
       if (inGroupIds.includes(found.userId)) {
-        setGlobalError('Người này đã có trong nhóm');
+        setGlobalError(t('info.already_in_group'));
         return;
       }
 
       setSearchResults([found]);
     } catch (err) {
-      setGlobalError('Không tìm thấy người dùng với số điện thoại này');
+      setGlobalError(t('info.not_found_user'));
     } finally {
       setGlobalLoading(false);
     }
@@ -118,7 +120,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   const handleInvite = async (friendId) => {
     try {
       await inviteMember(conversationId, friendId);
-      alert('Đã gửi lời mời tham gia nhóm!');
+      alert(t('info.invite_sent'));
       setIsInviting(false);
     } catch (err) {
       console.error(err);
@@ -149,14 +151,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
 
   const handleRemoveMember = async (memberUserId) => {
     if (!isAdmin) return;
-    if (window.confirm('Loại bỏ thành viên này khỏi nhóm?')) {
+    if (window.confirm(t('info.remove_member_confirm'))) {
       await removeMember(conversationId, memberUserId);
       setMemberMenuId(null);
     }
   };
 
   const handleLeaveGroup = async () => {
-     if (window.confirm('Rời khỏi nhóm chat này?')) {
+     if (window.confirm(t('info.leave_group_confirm'))) {
         try {
            await chatApi.leaveConversation(conversationId);
            selectConversation(null); // Clear active chat immediately
@@ -169,7 +171,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   };
 
   const handleDisbandGroup = async () => {
-    if (window.confirm('GIẢI TÁN NHÓM? Tất cả tin nhắn và thành viên sẽ bị xóa vĩnh viễn.')) {
+    if (window.confirm(t('info.disband_group_confirm'))) {
       try {
         await chatApi.disbandGroup(conversationId);
         selectConversation(null); // Clear active chat immediately
@@ -192,7 +194,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
       setIsEditingName(false);
     } catch (err) {
       console.error('Rename failed:', err);
-      alert('Không thể đổi tên nhóm. Vui lòng thử lại.');
+      alert(t('info.rename_error'));
     }
   };
   
@@ -203,7 +205,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
       fetchConversations();
     } catch (err) {
       console.error('Toggle restriction failed:', err);
-      alert('Không thể cập nhật quyền chat. Vui lòng thử lại.');
+      alert(t('info.restriction_error'));
     }
   };
 
@@ -238,7 +240,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert('Ảnh quá lớn. Vui lòng chọn ảnh dưới 2MB.');
+      alert(t('info.file_too_large'));
       return;
     }
 
@@ -255,7 +257,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
       dispatch(updateConversationWallpaper({ conversationId, wallpaperUrl }));
     } catch (err) {
       console.error('Update wallpaper failed:', err);
-      alert('Không thể cập nhật ảnh nền. Vui lòng thử lại.');
+      alert(t('info.wallpaper_error'));
     } finally {
       setIsWallpaperLoading(false);
       e.target.value = '';
@@ -266,7 +268,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert('Ảnh quá lớn. Vui lòng chọn ảnh dưới 2MB.');
+      alert(t('info.file_too_large'));
       return;
     }
 
@@ -283,7 +285,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
       fetchConversations();
     } catch (err) {
       console.error('Update avatar failed:', err);
-      alert('Không thể cập nhật ảnh đại diện. Vui lòng thử lại.');
+      alert(t('info.rename_error'));
     } finally {
       setGlobalLoading(false);
       e.target.value = '';
@@ -297,7 +299,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
       dispatch(updateConversationWallpaper({ conversationId, wallpaperUrl: null }));
     } catch (err) {
       console.error('Clear wallpaper failed:', err);
-      alert('Không thể xóa ảnh nền. Vui lòng thử lại.');
+      alert(t('info.wallpaper_error'));
     } finally {
       setIsWallpaperLoading(false);
     }
@@ -310,9 +312,9 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   };
 
   const getRoleLabel = (role) => {
-    if (role === 'OWNER') return 'Trưởng nhóm';
-    if (role === 'ADMIN') return 'Phó nhóm';
-    return 'Thành viên';
+    if (role === 'OWNER') return t('info.role_owner');
+    if (role === 'ADMIN') return t('info.role_admin');
+    return t('info.role_member');
   };
 
   const getRoleColor = (role) => {
@@ -324,7 +326,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   return (
     <div className="w-full lg:w-[360px] h-full bg-sidebar border-l border-border flex flex-col overflow-hidden animate-slide-left shadow-2xl z-40 transition-colors">
       <div className="h-[72px] px-6 border-b border-border flex items-center justify-between flex-shrink-0 glass-premium z-10">
-        <h3 className="text-[17px] font-black text-foreground tracking-tight">Thông tin hội thoại</h3>
+        <h3 className="text-[17px] font-black text-foreground tracking-tight">{t('info.title')}</h3>
         <button onClick={onClose} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-all active:scale-90">
           <X size={20} />
         </button>
@@ -343,7 +345,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                   <button 
                     onClick={() => avatarInputRef.current?.click()}
                     className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity cursor-pointer overflow-hidden"
-                    title="Đổi ảnh đại diện nhóm"
+                    title={t('info.change_avatar')}
                   >
                     <ImageIcon size={24} />
                     <input 
@@ -381,17 +383,17 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
               <div className="flex items-center justify-center space-x-2 group/name">
                 <h4 className="text-xl font-black text-foreground tracking-tight">
                   {conversation.type === 'GROUP' 
-                    ? (conversation.name || 'Nhóm chat')
+                    ? (conversation.name || t('info.group_chat'))
                     : (conversation.name || (() => {
                         const otherMember = conversation.members?.find(m => String(m.userId || m.id) !== String(user?.userId || user?.id));
-                        return otherMember?.fullName || otherMember?.name || 'Bạn bè';
+                        return otherMember?.fullName || otherMember?.name || t('info.friends');
                       })())}
                 </h4>
                 {conversation.type === 'GROUP' && isAdmin && (
                   <button 
                     onClick={() => { setEditName(conversation.name || ''); setIsEditingName(true); }}
                     className="p-1.5 opacity-0 group-hover/name:opacity-100 hover:bg-surface-200 rounded-lg text-foreground/40 hover:text-indigo-500 transition-all"
-                    title="Đổi tên nhóm"
+                    title={t('info.change_name')}
                   >
                     <Edit3 size={14} />
                   </button>
@@ -400,7 +402,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
             )}
             <div className="flex items-center justify-center space-x-2">
                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full">
-                 {conversation.type === 'GROUP' ? `${conversation.members?.length || 0} thành viên` : 'Đang hoạt động'}
+                 {conversation.type === 'GROUP' ? t('info.member_count', { count: conversation.members?.length || 0 }) : t('info.active')}
                </span>
             </div>
           </div>
@@ -422,7 +424,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                 onClick={() => toggleSection('members')}
                 className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
               >
-                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">Thành viên nhóm</span>
+                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.members')}</span>
                  {sections.members ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
               </button>
               
@@ -436,7 +438,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                          <div className="w-10 h-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
                             <UserPlus size={18} />
                           </div>
-                         <span className="text-[14px] font-black">Thêm thành viên</span>
+                         <span className="text-[14px] font-black">{t('info.add_member')}</span>
                       </button>
                     )}
 
@@ -444,13 +446,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                     {isInviting && (
                       <div className="bg-surface-100 dark:bg-surface-200 rounded-[24px] p-4 space-y-3 border border-border animate-msg">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-black uppercase tracking-widest text-foreground/60">Mời bạn bè</span>
+                          <span className="text-[11px] font-black uppercase tracking-widest text-foreground/60">{t('info.invite_friends')}</span>
                           <button onClick={() => setIsInviting(false)} className="p-1 hover:bg-surface-200 rounded-lg"><X size={16} className="text-foreground/40" /></button>
                         </div>
                         <div className="flex space-x-2">
                           <input 
                             type="text" 
-                            placeholder="Tìm theo SĐT..." 
+                            placeholder={t('info.search_phone_placeholder')}
                             value={inviteSearch} 
                             onChange={(e) => setInviteSearch(e.target.value)}
                             className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-foreground placeholder:text-foreground/30"
@@ -468,7 +470,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                               </div>
                               <span className="text-sm font-bold text-foreground">{f.fullName}</span>
                             </div>
-                            <button onClick={() => handleInvite(f.userId)} className="px-3 py-1.5 bg-indigo-500 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-colors">Mời</button>
+                            <button onClick={() => handleInvite(f.userId)} className="px-3 py-1.5 bg-indigo-500 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-colors">{t('info.invite')}</button>
                           </div>
                         ))}
                       </div>
@@ -488,7 +490,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                               <div className="min-w-0">
                                  <p className="text-[15px] font-black text-foreground truncate leading-tight">
                                    {m.fullName}
-                                   {m.userId === (user?.userId || user?.id) && <span className="text-xs font-bold text-foreground/40 ml-1">(Bạn)</span>}
+                                   {m.userId === (user?.userId || user?.id) && <span className="text-xs font-bold text-foreground/40 ml-1">{t('info.you')}</span>}
                                  </p>
                                  <div className="flex items-center space-x-2 mt-0.5">
                                     <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${getRoleColor(m.role)}`}>
@@ -512,16 +514,16 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                                  <div className="absolute right-0 top-full mt-1 w-48 bg-sidebar border border-border shadow-2xl rounded-2xl p-1.5 z-[100] animate-msg">
                                    {isOwner && m.role !== 'ADMIN' && (
                                      <button onClick={() => handlePromote(m.userId)} className="w-full flex items-center space-x-3 px-4 py-2.5 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-xl transition-all">
-                                       <ShieldCheck size={16} className="text-emerald-500" /> <span>Bổ nhiệm phó nhóm</span>
+                                       <ShieldCheck size={16} className="text-emerald-500" /> <span>{t('info.promote_admin')}</span>
                                      </button>
                                    )}
                                    {isOwner && m.role === 'ADMIN' && (
                                      <button onClick={() => handleDemote(m.userId)} className="w-full flex items-center space-x-3 px-4 py-2.5 text-[13px] font-bold text-foreground hover:bg-surface-100 rounded-xl transition-all">
-                                       <Shield size={16} className="text-slate-400" /> <span>Gỡ phó nhóm</span>
+                                       <Shield size={16} className="text-slate-400" /> <span>{t('info.demote_admin')}</span>
                                      </button>
                                    )}
                                    <button onClick={() => handleRemoveMember(m.userId)} className="w-full flex items-center space-x-3 px-4 py-2.5 text-[13px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all">
-                                     <Trash2 size={16} /> <span>Xóa khỏi nhóm</span>
+                                     <Trash2 size={16} /> <span>{t('info.remove_from_group')}</span>
                                    </button>
                                  </div>
                                )}
@@ -541,7 +543,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                 onClick={() => toggleSection('media')}
                 className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
               >
-                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">Ảnh/Video đã chia sẻ</span>
+                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.shared_media')}</span>
                  {sections.media ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
               </button>
               {sections.media && (
@@ -567,7 +569,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                    ) : (
                      <div className="text-center py-12 opacity-30">
                         <ImageIcon size={32} className="mx-auto mb-3" />
-                        <p className="text-xs font-bold italic tracking-tight">Chưa có ảnh/video nào</p>
+                        <p className="text-xs font-bold italic tracking-tight">{t('info.no_media')}</p>
                      </div>
                    )}
                    {mediaItems.length > 12 && (
@@ -575,7 +577,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                        onClick={() => openLightbox(mediaItems, 0)}
                        className="w-full mt-4 py-3 bg-surface-100 hover:bg-indigo-500 hover:text-white text-foreground/70 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-sm active:scale-95"
                      >
-                       Xem tất cả ảnh & video ({mediaItems.length})
+                       {t('info.view_all_media', { count: mediaItems.length })}
                      </button>
                    )}
                 </div>
@@ -587,7 +589,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                 onClick={() => toggleSection('files')}
                 className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
               >
-                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">File đã chia sẻ</span>
+                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.shared_files')}</span>
                  {sections.files ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
               </button>
               {sections.files && (
@@ -597,14 +599,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         <div key={idx} onClick={() => window.open(file.url, '_blank')} className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02] cursor-pointer active:scale-[0.98]">
                            {getFileIcon(file.url)}
                            <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{file.name || 'Tệp đính kèm'}</p>
+                              <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{file.name || t('chat.attachment')}</p>
                            </div>
                         </div>
                       ))
                    ) : (
                      <div className="text-center py-12 opacity-30">
                         <FileText size={32} className="mx-auto mb-3" />
-                        <p className="text-xs font-bold italic tracking-tight">Chưa có file nào</p>
+                        <p className="text-xs font-bold italic tracking-tight">{t('info.no_files')}</p>
                      </div>
                    )}
                 </div>
@@ -619,7 +621,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
               >
                  <div className="flex items-center space-x-3">
                    <Palette size={16} className="text-indigo-500" />
-                   <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">Tùy chỉnh giao diện</span>
+                   <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.customization')}</span>
                  </div>
                  {sections.customization ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
               </button>
@@ -637,8 +639,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                          <ImageIcon size={20} />
                       </div>
                       <div className="text-left flex-1">
-                         <p className="text-[14px] font-black">{isWallpaperLoading ? 'Đang cập nhật...' : 'Thay đổi ảnh nền'}</p>
-                         <p className="text-[10px] font-bold opacity-60">Tùy chỉnh hình nền cho cuộc trò chuyện</p>
+                         <p className="text-[14px] font-black">{isWallpaperLoading ? t('info.updating') : t('info.change_wallpaper')}</p>
+                         <p className="text-[10px] font-bold opacity-60">{t('info.change_wallpaper_desc')}</p>
                       </div>
                    </button>
 
@@ -651,8 +653,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                          <TrashIcon size={18} />
                       </div>
                       <div className="text-left">
-                         <p className="text-[14px] font-black">Xóa ảnh nền</p>
-                         <p className="text-[10px] font-bold opacity-60">Quay về giao diện mặc định</p>
+                         <p className="text-[14px] font-black">{t('info.clear_wallpaper')}</p>
+                         <p className="text-[10px] font-bold opacity-60">{t('info.clear_wallpaper_desc')}</p>
                       </div>
                    </button>
                 </div>
@@ -669,7 +671,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                 onClick={() => toggleSection('security')}
                 className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
               >
-                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">Quyền riêng tư</span>
+                 <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.privacy')}</span>
                  {sections.security ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
               </button>
               {sections.security && (
@@ -682,7 +684,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         <div className="w-11 h-11 rounded-2xl bg-orange-100/50 dark:bg-orange-500/5 flex items-center justify-center group-hover:scale-110 transition-transform">
                            <LogOut size={22} />
                         </div>
-                        <span className="text-[15px] font-black tracking-tight text-foreground">Rời nhóm</span>
+                        <span className="text-[15px] font-black tracking-tight text-foreground">{t('info.leave_group')}</span>
                      </button>
                    )}
                    {conversation.type === 'GROUP' && (
@@ -702,9 +704,9 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         }`}>
                            <AlertTriangle size={22} />
                         </div>
-                        <div className="flex flex-col items-start">
-                          <span className="text-[15px] font-black tracking-tight text-inherit">Giải tán nhóm</span>
-                          {!isOwner && <span className="text-[10px] font-bold opacity-70 mt-0.5">Chỉ trưởng nhóm mới có quyền</span>}
+                        <div className="flex flex-col items-start text-left">
+                          <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.disband_group')}</span>
+                          {!isOwner && <span className="text-[10px] font-bold opacity-70 mt-0.5">{t('info.only_owner_permit')}</span>}
                         </div>
                      </button>
                    )}
@@ -727,11 +729,11 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         </div>
                         <div className="flex flex-col items-start text-left">
                           <div className="flex items-center space-x-2">
-                            <span className="text-[15px] font-black tracking-tight text-inherit">Chỉ Admin mới có thể chat</span>
+                            <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.chat_restriction')}</span>
                             {conversation.onlyAdminsCanChat && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />}
                           </div>
                           <span className="text-[10px] font-bold opacity-70 mt-0.5">
-                            {conversation.onlyAdminsCanChat ? 'Đã bật' : 'Đang tắt'} • {isAdmin ? 'Quản trị viên có thể thay đổi' : 'Chỉ quản trị viên mới có quyền'}
+                            {conversation.onlyAdminsCanChat ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
                           </span>
                         </div>
                         <div className="flex-1" />
@@ -747,7 +749,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                       <div className="w-11 h-11 rounded-2xl bg-red-100/50 dark:bg-red-500/5 flex items-center justify-center group-hover:scale-110 transition-transform">
                           <Trash2 size={22} />
                       </div>
-                      <span className="text-[15px] font-black tracking-tight text-foreground">Xóa lịch sử trò chuyện</span>
+                      <span className="text-[15px] font-black tracking-tight text-foreground">{t('info.clear_history')}</span>
                     </button>
 
                     {conversation.type === 'SINGLE' && !conversation.isAI && (() => {
@@ -776,13 +778,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                                 await friendApi.unblockUser(otherMemberId);
                                 await fetchFriends();
                                 await fetchConversations();
-                                alert(`Đã bỏ chặn ${otherMember.fullName || 'người này'}.`);
+                                alert(t('info.unblocked_success', { name: otherMember.fullName || t('call.unknown_user') }));
                               } catch (err) {
                                 console.error("Unblock failed:", err);
-                                alert("Không thể bỏ chặn người dùng này. Vui lòng thử lại.");
+                                alert(t('info.unblock_failed'));
                               }
                             } else {
-                              if (window.confirm(`Bạn có chắc chắn muốn chặn ${otherMember.fullName || 'người này'}?`)) {
+                              if (window.confirm(t('info.block_user_confirm', { name: otherMember.fullName || t('call.unknown_user') }))) {
                                 try {
                                   await friendApi.blockUser(otherMemberId);
                                   await fetchFriends();
@@ -790,7 +792,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                                   onClose();
                                 } catch (err) {
                                   console.error("Block failed:", err);
-                                  alert("Không thể chặn người dùng này. Vui lòng thử lại.");
+                                  alert(t('info.block_failed'));
                                 }
                               }
                             }
@@ -807,7 +809,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                               {isBlocked ? <ShieldCheck size={22} /> : <Shield size={22} />}
                           </div>
                           <span className="text-[15px] font-black tracking-tight text-foreground">
-                            {iBlockedThem ? 'Bỏ chặn người này' : 'Chặn người này'}
+                            {iBlockedThem ? t('info.unblock_user') : t('info.block_user')}
                           </span>
                         </button>
                       );

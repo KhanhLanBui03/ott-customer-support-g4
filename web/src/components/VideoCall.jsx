@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Phone, Volume2 } from 'lucide-react';
 import { useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 
 /**
  * VideoCall — Giao diện video call premium (FaceTime / WhatsApp style)
@@ -115,28 +116,31 @@ const CountdownCircle = ({ duration, max = 30, size = 144, className = "-top-2 -
 };
 
 // ─── Unlock Audio Overlay ────────────────────────────────────────────────
-const AudioUnlockOverlay = ({ onUnlock }) => (
-    <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white/10 p-8 rounded-3xl border border-white/20 items-center flex flex-col">
-            <div className="w-20 h-20 bg-indigo-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
-                <Mic className="text-white w-10 h-10" />
+const AudioUnlockOverlay = ({ onUnlock }) => {
+    const { t } = useTranslation();
+    return (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white/10 p-8 rounded-3xl border border-white/20 items-center flex flex-col">
+                <div className="w-20 h-20 bg-indigo-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
+                    <Mic className="text-white w-10 h-10" />
+                </div>
+                <h3 className="text-white text-xl font-bold mb-2">{t('call.audio_ready')}</h3>
+                <p className="text-white/60 mb-6 text-center max-w-[200px]">{t('call.audio_unlock_hint')}</p>
+                <button 
+                    onClick={onUnlock}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold transition-all transform active:scale-95"
+                >
+                    {t('call.turn_on_audio')}
+                </button>
             </div>
-            <h3 className="text-white text-xl font-bold mb-2">Âm thanh đã sẵn sàng</h3>
-            <p className="text-white/60 mb-6 text-center max-w-[200px]">Nhấn vào nút bên dưới để bắt đầu nghe</p>
-            <button 
-                onClick={onUnlock}
-                className="bg-indigo-500 hover:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold transition-all transform active:scale-95"
-            >
-                Bật âm thanh
-            </button>
         </div>
-    </div>
-);
+    );
+};
 
 
 // ─── Remote Video Player Component ───────────────────────────────────────
 const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false, status, activeConversation, remoteName, remoteAvatar, isSpeaking, isGroup }) => {
-
+    const { t } = useTranslation();
     const ref = useRef(null);
     
     // Đảm bảo video luôn được phát lại khi component mount hoặc track/trạng thái thay đổi
@@ -175,7 +179,7 @@ const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false, status, ac
     const fallbackName = (!isActuallyGroup || status === 'incoming' || status === 'outgoing') ? remoteName : null;
     
     // Ưu tiên: Thành viên trong list > Tên từ signal (remoteName) > Tên mặc định
-    const displayName = member?.fullName || member?.name || fallbackName || stream.name || 'Thành viên';
+    const displayName = member?.fullName || member?.name || fallbackName || stream.name || t('chat.member');
     const avatarUrl = member?.avatar || member?.avatarUrl || (!isActuallyGroup ? remoteAvatar : null) || stream.avatar;
     const initial = (displayName || 'T')[0]?.toUpperCase();
 
@@ -216,7 +220,7 @@ const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false, status, ac
                         </h2>
                         <div className="mt-3 px-4 py-1.5 bg-indigo-500/10 rounded-full border border-indigo-500/20 backdrop-blur-md">
                             <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em]">
-                                {isAudioCall ? 'Đang gọi thoại...' : 'Đã tắt Camera'}
+                                {isAudioCall ? t('call.voice_calling') : t('call.camera_off')}
                             </p>
                         </div>
                     </div>
@@ -236,6 +240,7 @@ const RemoteVideoPlayer = ({ stream, isAudioCall, fullscreen = false, status, ac
 
 // ─── Local Video Player Component ────────────────────────────────────────
 const LocalVideoPlayer = ({ videoTrack, audioTrack, camOn, micOn, user, isMeSpeaking }) => {
+    const { t } = useTranslation();
     const ref = useRef(null);
     useEffect(() => {
         if (!videoTrack || !ref.current || !camOn) return;
@@ -269,7 +274,7 @@ const LocalVideoPlayer = ({ videoTrack, audioTrack, camOn, micOn, user, isMeSpea
 
             <div className="absolute bottom-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur-xl rounded-xl flex items-center gap-2 border border-white/10 z-20">
                 <div className={`w-2 h-2 rounded-full ${micOn ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-white text-xs font-bold">Bạn</span>
+                <span className="text-white text-xs font-bold">{t('call.you')}</span>
             </div>
         </div>
     );
@@ -302,6 +307,7 @@ const VideoCall = ({
     onClose
 }) => {
     const { user } = useSelector(state => state.auth);
+    const { t } = useTranslation();
     const localRef  = useRef(null);
     const remoteRef = useRef(null);
 
@@ -382,16 +388,16 @@ const VideoCall = ({
                     <div className="flex flex-col items-center space-y-8">
                         <Avatar size="w-32 h-32" ring={true} url={displayAvatar} nameInitial={initial} />
                         <div className="text-center">
-                            <h2 className="text-3xl font-bold text-white mb-2">{displayName || 'Người dùng'}</h2>
+                            <h2 className="text-3xl font-bold text-white mb-2">{displayName || t('call.unknown_user')}</h2>
                             <div className="px-6 py-2 bg-white/10 rounded-full border border-white/20">
-                                <p className="text-white font-medium">{endCallReason || 'Cuộc gọi đã kết thúc'}</p>
+                                <p className="text-white font-medium">{endCallReason || t('call.ended')}</p>
                             </div>
                         </div>
                         <button 
                             onClick={onClose}
                             className="mt-8 px-12 py-4 bg-white text-slate-900 font-bold rounded-2xl hover:bg-indigo-50 transition-all shadow-xl active:scale-95"
                         >
-                            Trở lại trò chuyện
+                            {t('call.back_to_chat')}
                         </button>
                     </div>
                 </div>
@@ -405,15 +411,15 @@ const VideoCall = ({
                     {/* Top: Thông tin caller */}
                     <div className="flex flex-col items-center space-y-6 mt-8">
                         <p className="text-white/60 text-sm font-semibold uppercase tracking-widest animate-pulse">
-                            {callType === 'audio' ? 'Cuộc gọi thoại đến...' : 'Cuộc gọi video đến...'}
+                            {callType === 'audio' ? t('call.incoming_voice') : t('call.incoming_video')}
                         </p>
                         <div className="relative">
                             <Avatar size="w-32 h-32" pulse url={displayAvatar} nameInitial={initial} />
                             <CountdownCircle duration={ringDuration} size={144} />
                         </div>
                         <div className="text-center">
-                            <h2 className="text-3xl font-bold text-white tracking-tight">{displayName || 'Người dùng'}</h2>
-                            <p className="text-white/50 text-sm mt-1">Đang gọi cho bạn</p>
+                            <h2 className="text-3xl font-bold text-white tracking-tight">{displayName || t('call.unknown_user')}</h2>
+                            <p className="text-white/50 text-sm mt-1">{t('call.is_calling_you')}</p>
                         </div>
                     </div>
 
@@ -431,11 +437,11 @@ const VideoCall = ({
                                 onClick={onHangup}
                                 className="w-18 h-18 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-400 hover:shadow-[0_0_20px_rgba(239,68,68,0.4)] active:scale-75 transition-all duration-200 shadow-2xl shadow-red-500/50 transform"
                                 style={{ width: 72, height: 72 }}
-                                title="Từ chối"
+                                title={t('call.decline')}
                             >
                                 <PhoneOff size={28} className="text-white" />
                             </button>
-                            <span className="text-white/60 text-xs font-medium">Từ chối</span>
+                            <span className="text-white/60 text-xs font-medium">{t('call.decline')}</span>
                         </div>
 
                         <div className="flex flex-col items-center gap-3">
@@ -443,11 +449,11 @@ const VideoCall = ({
                                 onClick={onAccept}
                                 className="w-18 h-18 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-400 hover:shadow-[0_0_20px_rgba(34,197,94,0.4)] active:scale-75 transition-all duration-200 shadow-2xl shadow-green-500/50 transform animate-bounce"
                                 style={{ width: 72, height: 72, animationDuration: '3s' }}
-                                title="Chấp nhận"
+                                title={t('call.accept')}
                             >
                                 <Phone size={28} className="text-white" />
                             </button>
-                            <span className="text-white/60 text-xs font-medium">Chấp nhận</span>
+                            <span className="text-white/60 text-xs font-medium">{t('call.accept')}</span>
                         </div>
                     </div>
 
@@ -462,15 +468,15 @@ const VideoCall = ({
                     {/* Top: Thông tin callee */}
                     <div className="flex flex-col items-center space-y-6 mt-8">
                         <p className="text-white/60 text-sm font-semibold uppercase tracking-widest">
-                            Đang gọi...
+                            {t('call.calling')}
                         </p>
                         <div className="relative">
                             <Avatar size="w-32 h-32" pulse url={displayAvatar} nameInitial={initial} />
                             <CountdownCircle duration={ringDuration} size={144} />
                         </div>
                         <div className="text-center">
-                            <h2 className="text-3xl font-bold text-white tracking-tight">{displayName || 'Người dùng'}</h2>
-                            <p className="text-white/50 text-sm mt-1 animate-pulse">Đang chờ phản hồi...</p>
+                            <h2 className="text-3xl font-bold text-white tracking-tight">{displayName || t('call.unknown_user')}</h2>
+                            <p className="text-white/50 text-sm mt-1 animate-pulse">{t('call.waiting_response')}</p>
                         </div>
                     </div>
 
@@ -586,7 +592,7 @@ const VideoCall = ({
                                         </div>
                                         <h2 className="text-2xl font-black text-white tracking-tight">{displayName}</h2>
                                         <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] mt-3 animate-pulse">
-                                            Đang chờ mọi người tham gia...
+                                            {t('call.waiting_others')}
                                         </p>
                                     </div>
                                 </div>
@@ -613,7 +619,7 @@ const VideoCall = ({
                                 <div className={`absolute top-24 right-6 w-40 h-52 rounded-[2rem] overflow-hidden border-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-black z-20 animate-scale-in transition-all duration-300 hover:scale-105 ${isMeSpeaking ? 'border-green-500 ring-4 ring-green-500/50' : 'border-white/20 hover:border-white/40'}`}>
                                     <div ref={localRef} className="w-full h-full" />
                                     <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/40 backdrop-blur-md rounded-md border border-white/10">
-                                        <span className="text-[10px] font-bold text-white/90">Bạn</span>
+                                        <span className="text-[10px] font-bold text-white/90">{t('call.you')}</span>
                                     </div>
                                 </div>
                             )}
@@ -648,7 +654,7 @@ const VideoCall = ({
                     {cameraError && (
                         <div className="relative z-10 mx-5 mt-2 p-3 bg-red-500/20 border border-red-500/50 rounded-xl backdrop-blur-md">
                             <p className="text-red-200 text-xs text-center font-medium">
-                                Không thể mở Camera (có thể đang dùng bởi app khác). Cuộc gọi tiếp tục bằng âm thanh.
+                                {t('call.camera_error')}
                             </p>
                         </div>
                     )}
@@ -661,13 +667,13 @@ const VideoCall = ({
                                 <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-4 animate-pulse">
                                     <Volume2 size={32} className="text-indigo-400" />
                                 </div>
-                                <h3 className="text-white font-bold text-lg mb-2">Âm thanh bị chặn</h3>
-                                <p className="text-white/60 text-sm mb-6">Trình duyệt đã chặn tự động phát âm thanh. Vui lòng nhấn nút bên dưới để nghe.</p>
+                                <h3 className="text-white font-bold text-lg mb-2">{t('call.audio_blocked')}</h3>
+                                <p className="text-white/60 text-sm mb-6">{t('call.audio_blocked_hint')}</p>
                                 <button 
                                     onClick={onResumeAudio}
                                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-xl shadow-indigo-600/30 active:scale-95"
                                 >
-                                    Bật âm thanh
+                                    {t('call.turn_on_audio')}
                                 </button>
                             </div>
                         </div>
@@ -682,7 +688,7 @@ const VideoCall = ({
                             <button
                                 onClick={toggleMic}
                                 className={`w-14 h-14 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 ${micOn ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-400'}`}
-                                title={micOn ? 'Tắt mic' : 'Bật mic'}
+                                title={micOn ? t('call.turn_off_mic') : t('call.turn_on_mic')}
                             >
                                 {micOn ? <Mic size={22} className="text-white" /> : <MicOff size={22} className="text-white" />}
                             </button>
@@ -691,7 +697,7 @@ const VideoCall = ({
                             <button
                                 onClick={toggleCam}
                                 className={`w-14 h-14 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 ${camOn ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-400'}`}
-                                title={camOn ? 'Tắt camera' : 'Bật camera'}
+                                title={camOn ? t('call.turn_off_camera') : t('call.turn_on_camera')}
                             >
                                 {camOn ? <Video size={22} className="text-white" /> : <VideoOff size={22} className="text-white" />}
                             </button>
@@ -700,7 +706,7 @@ const VideoCall = ({
                             <button
                                 onClick={onHangup}
                                 className="w-16 h-16 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-400 hover:shadow-[0_0_20px_rgba(239,68,68,0.4)] active:scale-90 transition-all duration-200 shadow-2xl shadow-red-500/50"
-                                title="Kết thúc"
+                                title={t('call.end')}
                             >
                                 <PhoneOff size={26} className="text-white" />
                             </button>

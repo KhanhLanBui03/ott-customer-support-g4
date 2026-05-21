@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Camera, X, Save, ShieldCheck, Mail, Phone, Hash, AlertCircle } from 'lucide-react';
 import { useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
 import { updateUser } from '../store/authSlice';
 import { userApi } from '../api/userApi';
@@ -11,6 +12,7 @@ import { useTheme } from '../hooks/useTheme';
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
+  const { t } = useTranslation();
   const { user, fetchProfileData } = useAuth();
   const { isDark } = useTheme();
   const dispatch = useDispatch();
@@ -45,10 +47,10 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
       const response = await chatApi.uploadMedia(file, 'avatars');
       const data = response.data || response;
       setAvatarUrl(data.url);
-      setSuccess('Tải ảnh lên thành công');
+      setSuccess(t('profile.avatar_success'));
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError('Tải ảnh đại diện thất bại');
+      setError(t('profile.avatar_failed'));
       setTimeout(() => setError(''), 4000);
     } finally {
       setUploading(false);
@@ -76,7 +78,7 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
       };
       dispatch(updateUser(updatedUser));
       if(fetchProfileData) await fetchProfileData();
-      setSuccess('Cập nhật thành công');
+      setSuccess(t('profile.update_success'));
       setTimeout(() => setSuccess(''), 3000);
       if (!isPanel) {
         setTimeout(() => {
@@ -84,7 +86,7 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
         }, 3000);
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Cập nhật hồ sơ thất bại');
+      setError(err?.response?.data?.message || t('profile.update_failed'));
       setTimeout(() => setError(''), 4000);
     } finally {
       setLoading(false);
@@ -114,21 +116,21 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
             </label>
           </div>
           <div className="text-center">
-            <h3 className={`font-serif italic font-bold text-lg ${isDark ? 'text-white' : 'text-cursor-dark'}`}>{user?.fullName || "Người dùng"}</h3>
-            <p className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/30' : 'text-cursor-dark/30'}`}>{user?.phoneNumber || "Chưa có số điện thoại"}</p>
+            <h3 className={`font-serif italic font-bold text-lg ${isDark ? 'text-white' : 'text-cursor-dark'}`}>{user?.fullName || t('profile.user_fallback')}</h3>
+            <p className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/30' : 'text-cursor-dark/30'}`}>{user?.phoneNumber || t('profile.no_phone')}</p>
           </div>
-          {uploading && <p className="text-[10px] text-cursor-accent font-mono font-black animate-pulse tracking-widest uppercase">Đang tải ảnh lên...</p>}
+          {uploading && <p className="text-[10px] text-cursor-accent font-mono font-black animate-pulse tracking-widest uppercase">{t('profile.uploading_avatar')}</p>}
         </div>
 
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Họ</label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>{t('profile.last_name')}</label>
               <input
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                placeholder="Nhập họ..."
+                placeholder={t('profile.last_name_placeholder')}
                 className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
                     ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
@@ -137,12 +139,12 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
               />
             </div>
             <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Tên</label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>{t('profile.first_name')}</label>
               <input
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Nhập tên..."
+                placeholder={t('profile.first_name_placeholder')}
                 className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
                     ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
@@ -153,22 +155,22 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
           </div>
 
           <div className="space-y-2">
-            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Mail size={12} /><span>Email</span></label>
+            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Mail size={12} /><span>{t('profile.email')}</span></label>
             <input
               type="text"
-              value={user?.email || 'Chưa cập nhật email'}
+              value={user?.email || t('profile.no_email')}
               disabled
               className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono font-bold cursor-not-allowed transition-all ${isDark ? 'text-white/80' : 'text-cursor-dark/80'}`}
             />
           </div>
 
           <div className="space-y-2">
-            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Tiểu sử</label>
+            <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>{t('profile.bio')}</label>
             <textarea
               rows={3}
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Giới thiệu về bản thân..."
+              placeholder={t('profile.bio_placeholder')}
               className={`w-full px-5 py-4 border rounded-2xl text-sm font-serif italic font-semibold transition-all resize-none focus:outline-none ${
                 isDark 
                   ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
@@ -179,16 +181,16 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
 
           <div className="grid grid-cols-2 gap-4">
              <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Phone size={12} /><span>Số điện thoại</span></label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Phone size={12} /><span>{t('profile.phone')}</span></label>
               <input
                 type="text"
-                value={user?.phoneNumber || 'Chưa cập nhật'}
+                value={user?.phoneNumber || t('profile.not_updated')}
                 disabled
                 className={`w-full px-5 py-3 bg-surface-300/50 border border-cursor-dark/5 rounded-2xl text-sm font-mono font-bold cursor-not-allowed transition-all ${isDark ? 'text-white/80' : 'text-cursor-dark/80'}`}
               />
             </div>
              <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Hash size={12} /><span>ID Người dùng</span></label>
+              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}><Hash size={12} /><span>{t('profile.user_id')}</span></label>
               <input
                 type="text"
                 value={user?.userId || user?.id || ''}
@@ -207,7 +209,7 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
           }`}
         >
           <Save size={18} />
-          <span>{loading ? 'Đang cập nhật...' : 'Lưu thay đổi'}</span>
+          <span>{loading ? t('profile.updating') : t('profile.save_btn')}</span>
         </button>
       </form>
     </div>
@@ -219,7 +221,7 @@ const ProfileModal = ({ isOpen, onClose, isPanel = false }) => {
     <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl animate-fade-in ${isDark ? 'bg-slate-950/40' : 'bg-slate-200/40'}`}>
       <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden border ${isDark ? 'bg-surface-200 border-white/5' : 'bg-white border-slate-100'}`}>
         <div className={`h-20 flex items-center justify-between px-10 border-b sticky top-0 backdrop-blur-md ${isDark ? 'bg-surface-100/50 border-white/5' : 'bg-white/50 border-slate-50'}`}>
-          <h2 className={`font-black uppercase tracking-[0.2em] text-[12px] ${isDark ? 'text-white' : 'text-slate-800'}`}>Hồ sơ của bạn</h2>
+          <h2 className={`font-black uppercase tracking-[0.2em] text-[12px] ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('profile.title')}</h2>
           <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'}`}>
             <X size={24} />
           </button>

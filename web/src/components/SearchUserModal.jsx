@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, X, UserPlus, Check, MessageSquare, User, Zap } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { userApi } from '../api/userApi';
 import { friendApi } from '../api/friendApi';
 import { notificationApi } from '../api/notificationApi';
@@ -10,6 +11,7 @@ import { useTheme } from '../hooks/useTheme';
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
+  const { t } = useTranslation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [foundUser, setFoundUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
       const userData = response.data || response;
       setFoundUser(userData);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Không tìm thấy người dùng này');
+      setError(err.response?.data?.message || err.message || t('search.not_found'));
     } finally {
       setLoading(false);
     }
@@ -60,9 +62,22 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
     setLoading(true);
     try {
       await friendApi.sendRequest(foundUser.userId);
+      const myId = user?.userId || user?.id;
+      if (myId && foundUser?.userId) {
+        try {
+          await notificationApi.createNotification({
+            senderId: myId,
+            receiverId: foundUser.userId,
+            type: 'FRIEND_REQUEST',
+            message: t('search.friend_request_notification', { name: user?.fullName || user?.phoneNumber || 'Ai đó' })
+          });
+        } catch (e) {
+          console.warn('Failed to create FRIEND_REQUEST notification', e);
+        }
+      }
       setFoundUser(prev => ({ ...prev, friendshipStatus: 'PENDING', isRequester: true }));
     } catch (err) {
-      setError('Gửi lời mời kết bạn thất bại');
+      setError(t('search.add_friend_failed'));
     } finally {
       setLoading(false);
     }
@@ -75,7 +90,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
       await friendApi.cancelRequest(foundUser.userId);
       setFoundUser(prev => ({ ...prev, friendshipStatus: 'NONE', isRequester: null }));
     } catch (err) {
-      setError('Hủy lời mời kết bạn thất bại');
+      setError(t('search.cancel_request_failed'));
     } finally {
       setLoading(false);
     }
@@ -91,10 +106,10 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
         if (convId) selectConversation(convId);
         onClose();
       } else {
-        setError(result.error?.message || 'Không thể tạo cuộc trò chuyện');
+        setError(result.error?.message || t('search.chat_failed'));
       }
     } catch (err) {
-      setError('Không thể tạo cuộc trò chuyện');
+      setError(t('search.chat_failed'));
     } finally {
       setLoading(false);
     }
@@ -118,7 +133,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
     <div className={`flex flex-col space-y-6 p-8 ${isDark ? 'bg-surface-200' : 'bg-surface-100'}`}>
       <div className="space-y-6">
         <p className={`text-[11px] font-mono font-black uppercase tracking-[0.1em] px-1 italic ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`}>
-          Vui lòng nhập số điện thoại hợp lệ để tìm kiếm bạn bè và bắt đầu trò chuyện.
+          {t('search.hint')}
         </p>
         
         <form onSubmit={handleSearch} className="flex space-x-3">
@@ -126,7 +141,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
             <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isDark ? 'text-white/40' : 'text-cursor-dark/40'}`} size={18} />
             <input
               type="text"
-              placeholder="Nhập số điện thoại..."
+              placeholder={t('search.placeholder')}
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               disabled={loading}
@@ -145,7 +160,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
               isDark ? 'bg-indigo-600 text-white' : 'bg-cursor-dark text-cursor-cream'
             }`}
           >
-            {loading ? '...' : 'TÌM KIẾM'}
+            {loading ? '...' : t('search.btn')}
           </button>
         </form>
 
@@ -187,13 +202,13 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
                   }`}
                 >
                   <MessageSquare size={16} />
-                  <span>Nhắn tin</span>
+                  <span>{t('search.message')}</span>
                 </button>
 
                 {friendshipStatus === 'ACCEPTED' ? (
                   <div className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 cursor-default shadow-sm">
                     <Check size={16} />
-                    <span>Bạn bè</span>
+                    <span>{t('search.is_friend')}</span>
                   </div>
                 ) : friendshipStatus === 'PENDING' ? (
                   friendshipIsRequester ? (
@@ -203,12 +218,12 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
                       className="w-full py-4 bg-red-50 border border-red-100 text-red-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 shadow-sm hover:bg-red-100 transition-all disabled:opacity-50"
                     >
                       <X size={16} />
-                      <span>Hủy yêu cầu</span>
+                      <span>{t('search.cancel_request')}</span>
                     </button>
                   ) : (
                     <div className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[11px] flex items-center justify-center space-x-3 shadow-sm">
                       <Check size={16} />
-                      <span>Đã nhận lời mời</span>
+                      <span>{t('search.request_received')}</span>
                     </div>
                   )
                 ) : (
@@ -219,7 +234,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
                     }`}
                   >
                     <UserPlus size={16} />
-                    <span>Kết bạn</span>
+                    <span>{t('search.add_friend')}</span>
                   </button>
                 )}
               </div>
@@ -236,7 +251,7 @@ const SearchUserModal = ({ isOpen, onClose, isPanel = false }) => {
     <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl animate-fade-in ${isDark ? 'bg-slate-950/40' : 'bg-slate-200/40'}`}>
       <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden border ${isDark ? 'bg-surface-200 border-white/5' : 'bg-white border-slate-100'}`}>
         <div className={`h-20 flex items-center justify-between px-10 border-b backdrop-blur-md ${isDark ? 'bg-surface-100/30 border-white/5' : 'bg-surface-100/30 border-slate-100'}`}>
-          <h2 className={`font-serif italic font-black uppercase tracking-[0.1em] text-[13px] ${isDark ? 'text-white' : 'text-cursor-dark'}`}>Tìm kiếm bạn bè</h2>
+          <h2 className={`font-serif italic font-black uppercase tracking-[0.1em] text-[13px] ${isDark ? 'text-white' : 'text-cursor-dark'}`}>{t('search.title')}</h2>
           <button onClick={handleClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-black/5 text-cursor-dark/40'}`}>
             <X size={24} />
           </button>

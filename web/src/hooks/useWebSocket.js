@@ -288,6 +288,9 @@ export const useWebSocket = () => {
     }, [connect]);
 
     const sendMessage = useCallback(async (conversationId, content, type = 'TEXT', mediaUrls = [], replyToMessageId = null, forwardedFrom = null) => {
+        // Use preferred language from local storage or config
+        const userLanguage = localStorage.getItem('preferredLanguage') || 'eng_Latn';
+        
         const payload = {
             conversationId,
             content: content ?? '',
@@ -295,7 +298,8 @@ export const useWebSocket = () => {
             mediaUrls,
             replyToMessageId,
             isEncrypted: false,
-            forwardedFrom
+            forwardedFrom,
+            language: userLanguage
         };
 
         try {

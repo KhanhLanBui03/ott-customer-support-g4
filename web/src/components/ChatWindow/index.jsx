@@ -13,9 +13,12 @@ import { notificationApi } from '../../api/notificationApi';
 import GroupAvatar from '../GroupAvatar';
 import { useTheme } from '../../hooks/useTheme';
 
+import { useTranslation } from 'react-i18next';
+
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onToggleInfo, isInfoOpen, onBack, onRefreshMessages, openLightbox, allChatImages }) => {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const conversationId = conversation?.conversationId;
   const { user } = useSelector(state => state.auth);
@@ -51,12 +54,12 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
   }, [isTagMenuOpen, showStrangerMenu]);
 
   const TAGS = [
-    { key: 'customer', label: 'Khách hàng', color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500/20', bgColor: 'bg-red-500/5' },
-    { key: 'family', label: 'Gia đình', color: 'bg-emerald-500', textColor: 'text-emerald-500', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5' },
-    { key: 'work', label: 'Công việc', color: 'bg-orange-500', textColor: 'text-orange-500', borderColor: 'border-orange-500/20', bgColor: 'bg-orange-500/5' },
-    { key: 'friends', label: 'Bạn bè', color: 'bg-purple-500', textColor: 'text-purple-500', borderColor: 'border-purple-500/20', bgColor: 'bg-purple-500/5' },
-    { key: 'later', label: 'Trả lời sau', color: 'bg-yellow-500', textColor: 'text-amber-500', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5' },
-    { key: 'colleague', label: 'Đồng nghiệp', color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500/20', bgColor: 'bg-blue-500/5' }
+    { key: 'customer', label: t('sidebar.tags.customer'), color: 'bg-red-500', textColor: 'text-red-500', borderColor: 'border-red-500/20', bgColor: 'bg-red-500/5' },
+    { key: 'family', label: t('sidebar.tags.family'), color: 'bg-emerald-500', textColor: 'text-emerald-500', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5' },
+    { key: 'work', label: t('sidebar.tags.work'), color: 'bg-orange-500', textColor: 'text-orange-500', borderColor: 'border-orange-500/20', bgColor: 'bg-orange-500/5' },
+    { key: 'friends', label: t('sidebar.tags.friends'), color: 'bg-purple-500', textColor: 'text-purple-500', borderColor: 'border-purple-500/20', bgColor: 'bg-purple-500/5' },
+    { key: 'later', label: t('sidebar.tags.later'), color: 'bg-yellow-500', textColor: 'text-amber-500', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5' },
+    { key: 'colleague', label: t('sidebar.tags.colleague'), color: 'bg-blue-500', textColor: 'text-blue-500', borderColor: 'border-blue-500/20', bgColor: 'bg-blue-500/5' }
   ];
 
   const currentConv = conversation || conversations.find(c => c.conversationId === conversationId);
@@ -160,14 +163,14 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
   }, [fetchFriends]);
 
   const formatLastSeen = (status, lastSeenAt) => {
-    if (status === 'ONLINE') return 'Online';
-    if (!lastSeenAt) return 'Offline';
+    if (status === 'ONLINE') return t('chat.online');
+    if (!lastSeenAt) return t('chat.offline');
     const now = Date.now();
     const diff = Math.floor((now - lastSeenAt) / 1000); // seconds
-    if (diff < 60) return 'Vừa mới truy cập';
-    if (diff < 3600) return `Hoạt động ${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `Hoạt động ${Math.floor(diff / 3600)} giờ trước`;
-    return `Hoạt động ${Math.floor(diff / 86400)} ngày trước`;
+    if (diff < 60) return t('chat.just_now');
+    if (diff < 3600) return t('chat.minutes_ago', { count: Math.floor(diff / 60) });
+    if (diff < 86400) return t('chat.hours_ago', { count: Math.floor(diff / 3600) });
+    return t('chat.days_ago', { count: Math.floor(diff / 86400) });
   };
 
 
@@ -229,7 +232,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
       // Logic handle after create (socket will notify new message)
     } catch (err) {
       console.error("Failed to create vote:", err);
-      alert("Không thể tạo cuộc bình chọn. Vui lòng thử lại.");
+      alert(t('chat.create_vote_error'));
     }
   };
 
@@ -273,7 +276,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
             </span>
           </div>
           <p className="mt-8 text-2xl font-bold text-white/90 animate-pulse">
-            {pendingCallType === 'audio' ? 'Chuẩn bị gọi thoại nhóm...' : 'Chuẩn bị gọi video nhóm...'}
+            {pendingCallType === 'audio' ? t('chat.countdown_voice') : t('chat.countdown_video')}
           </p>
           <button
             onClick={() => {
@@ -282,7 +285,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
             }}
             className="mt-8 px-8 py-3 rounded-full bg-white/10 hover:bg-red-500/80 text-white font-medium transition-all hover:scale-105 active:scale-95"
           >
-            Hủy
+            {t('chat.cancel')}
           </button>
         </div>
       )}
@@ -320,8 +323,8 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
             `}>
               <span className="truncate">
                 {currentConv?.type === 'SINGLE' 
-                  ? (currentMember?.fullName || currentMember?.name || currentConv?.name || 'Người dùng')
-                  : (currentConv?.name || 'Nhóm chat')}
+                  ? (currentMember?.fullName || currentMember?.name || currentConv?.name || t('sidebar.user_fallback'))
+                  : (currentConv?.name || t('sidebar.group_fallback'))}
               </span>
               {currentConv?.isAI ? (
                 <SparklesIcon size={onBack ? 14 : 16} className="text-indigo-500 animate-pulse" />
@@ -333,11 +336,11 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
               {currentConv?.type === 'GROUP' ? (
                 <span className="text-[11px] font-medium text-slate-400 flex items-center">
                   <Users size={12} className="mr-1" />
-                  {currentConv.members?.length || 0} thành viên
+                  {t('chat.member_count', { count: currentConv.members?.length || 0 })}
                 </span>
               ) : (
                 <span className={`text-[11px] font-medium ${currentMember?.status === 'ONLINE' ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                  {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : 'Vừa mới truy cập'}
+                  {currentMember ? formatLastSeen(currentMember.status, currentMember.lastSeenAt) : t('chat.just_now')}
                 </span>
               )}
               <div className="w-px h-3 bg-border mx-1" />
@@ -363,7 +366,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                     style={{ clipPath: 'polygon(0% 0%, 75% 0%, 100% 50%, 75% 100%, 0% 100%)' }}
                   />
                   <span className={`text-[9px] font-semibold uppercase tracking-wider ${currentConv?.tag ? TAGS.find(t => t.key === currentConv.tag)?.textColor : 'text-slate-400'}`}>
-                    {currentConv?.tag ? TAGS.find(t => t.key === currentConv.tag)?.label : 'Phân loại'}
+                    {currentConv?.tag ? TAGS.find(t => t.key === currentConv.tag)?.label : t('chat.classify')}
                   </span>
                 </button>
 
@@ -373,7 +376,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                     className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-border dark:border-white/10 shadow-2xl rounded-2xl py-2 z-[100001] animate-in fade-in slide-in-from-top-4 duration-300"
                   >
                     <div className="px-5 py-3 mb-1 border-b border-border/40 dark:border-white/10 bg-surface-100 dark:bg-white/5 rounded-t-2xl">
-                      <p className="text-[11px] font-bold uppercase text-foreground/40 dark:text-white/50 tracking-widest text-center">Phân loại hội thoại</p>
+                      <p className="text-[11px] font-bold uppercase text-foreground/40 dark:text-white/50 tracking-widest text-center">{t('chat.classify_title')}</p>
                     </div>
                     {TAGS.map(tag => (
                       <button
@@ -455,10 +458,10 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
             </div>
             <div>
               <p className={cn("text-[14px] font-bold", isDark ? "text-white" : "text-slate-900")}>
-                Cuộc gọi nhóm đang diễn ra
+                {t('chat.ongoing_group_call')}
               </p>
               <p className={cn("text-[11px] font-medium", isDark ? "text-indigo-300" : "text-slate-600")}>
-                Nhấn để tham gia cùng mọi người
+                {t('chat.join_call_hint')}
               </p>
             </div>
           </div>
@@ -472,7 +475,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                 : "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-md shadow-indigo-600/10"
             )}
           >
-            Tham gia ngay
+            {t('chat.join_now')}
           </button>
         </div>
       )}
@@ -504,14 +507,14 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                   <MessageCircle size={18} />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className={`text-[10px] font-bold uppercase leading-none mb-0.5 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tin nhắn</span>
+                  <span className={`text-[10px] font-bold uppercase leading-none mb-0.5 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>{t('chat.message')}</span>
                   <p className={`text-[13px] font-medium truncate leading-tight ${isDark ? 'text-white/90' : 'text-slate-900'}`}>
                     {(() => {
                       const lastPin = currentConv.pinnedMessages[currentConv.pinnedMessages.length - 1];
-                      const sender = lastPin.senderName || "Thành viên";
+                      const sender = lastPin.senderName || t('chat.member');
                       return (
                         <>
-                          <span className="font-bold">{sender}:</span> {lastPin.content || "[Tệp đính kèm]"}
+                          <span className="font-bold">{sender}:</span> {lastPin.content || t('chat.attachment_pin')}
                         </>
                       );
                     })()}
@@ -522,7 +525,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
               <div className="flex items-center space-x-2 ml-4">
                 {currentConv.pinnedMessages.length > 1 && (
                   <div className={`flex items-center space-x-1 px-2 py-1 rounded-md border transition-colors ${isDark ? 'bg-white/10 border-white/10 hover:bg-white/20' : 'bg-slate-200/50 border-slate-300/30 hover:bg-slate-200'}`}>
-                    <span className={`text-[11px] font-bold ${isDark ? 'text-white/80' : 'text-slate-600'}`}>+{currentConv.pinnedMessages.length - 1} ghim</span>
+                    <span className={`text-[11px] font-bold ${isDark ? 'text-white/80' : 'text-slate-600'}`}>+{currentConv.pinnedMessages.length - 1} {t('chat.ghim')}</span>
                     <ChevronDown size={12} className={isDark ? 'text-white/40' : 'text-slate-400'} />
                   </div>
                 )}
@@ -540,7 +543,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
               {/* Header */}
               <div className={`flex items-center justify-between px-4 sm:px-6 py-2 border-b shrink-0 ${isDark ? 'border-white/5 bg-white/5' : 'border-[#d7e9fb] bg-[#e1efff]'}`}>
                 <span className={`text-[11px] font-bold uppercase tracking-wide ${isDark ? 'text-white/40' : 'text-slate-600'}`}>
-                  Danh sách ghim ({currentConv.pinnedMessages.length})
+                  {t('chat.pinned_list', { count: currentConv.pinnedMessages.length })}
                 </span>
                 <button 
                   onClick={(e) => {
@@ -549,7 +552,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                   }}
                   className={`flex items-center space-x-1 text-[11px] font-bold transition-colors uppercase ${isDark ? 'text-white/40 hover:text-white' : 'text-[#0068ff] hover:text-blue-700'}`}
                 >
-                  <span>Thu gọn</span>
+                  <span>{t('chat.collapse')}</span>
                   <ChevronUp size={14} />
                 </button>
               </div>
@@ -567,9 +570,9 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                         <MessageCircle size={18} />
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className={`text-[10px] font-bold uppercase leading-none mb-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Tin nhắn</span>
+                        <span className={`text-[10px] font-bold uppercase leading-none mb-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{t('chat.message')}</span>
                         <p className={`text-[13px] font-medium truncate leading-tight ${isDark ? 'text-white/90' : 'text-slate-800'}`}>
-                          <span className="font-bold">{pin.senderName}:</span> {pin.content || "[Tệp đính kèm]"}
+                          <span className="font-bold">{pin.senderName}:</span> {pin.content || t('chat.attachment_pin')}
                         </p>
                       </div>
                     </div>
@@ -581,7 +584,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                           fetchConversations();
                         }}
                         className={`p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:text-red-500 ${isDark ? 'text-white/20' : 'text-slate-300'}`}
-                        title="Gỡ ghim"
+                        title={t('chat.unpin')}
                       >
                         <X size={16} />
                       </button>
@@ -596,7 +599,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
               {/* Footer */}
               <div className={`flex justify-center p-2 border-t shrink-0 ${isDark ? 'border-white/5 bg-white/5' : 'border-[#d7e9fb] bg-[#e1efff]'}`}>
                 <button className={`text-[11px] font-bold transition-all flex items-center space-x-1 uppercase ${isDark ? 'text-white/40 hover:text-white' : 'text-[#0068ff] hover:text-blue-700'}`}>
-                  <span>Xem tất cả ở bảng tin nhóm</span>
+                  <span>{t('chat.view_all_pins')}</span>
                   <ChevronRight size={14} />
                 </button>
               </div>
@@ -612,8 +615,8 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
             <UserPlus size={18} className="flex-shrink-0" />
             <span className="text-[13px] font-medium">
               {friendStatus === 'PENDING'
-                ? (isRequester ? 'Đã gửi lời mời kết bạn' : 'Người này đã gửi lời mời kết bạn')
-                : 'Gửi yêu cầu kết bạn tới người này'}
+                ? (isRequester ? t('chat.friend_request_sent') : t('chat.friend_request_received'))
+                : t('chat.send_friend_request_prompt')}
             </span>
           </div>
           <div className="flex items-center space-x-2">
@@ -635,7 +638,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                   }}
                   className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[12px] font-bold rounded-lg transition-all shadow-sm"
                 >
-                  Hủy yêu cầu
+                  {t('chat.cancel_request')}
                 </button>
               ) : null
             ) : (
@@ -644,6 +647,19 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                   try {
                     const targetUserId = currentMember.userId || currentMember.id;
                     await friendApi.sendRequest(targetUserId);
+                    const myId = user?.userId || user?.id;
+                    if (myId && targetUserId) {
+                      try {
+                        await notificationApi.createNotification({
+                          senderId: myId,
+                          receiverId: targetUserId,
+                          type: 'FRIEND_REQUEST',
+                          message: `${user?.fullName || user?.phoneNumber || t('chat.someone')} ${t('chat.friend_request_notif')}`
+                        });
+                      } catch (e) {
+                        console.warn('Failed to create FRIEND_REQUEST notification', e);
+                      }
+                    }
                     dispatch(updateFriendStatus({
                       userId: targetUserId,
                       status: 'PENDING',
@@ -656,7 +672,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                 }}
                 className="px-4 py-1.5 bg-[#0068ff] hover:bg-blue-700 text-white text-[12px] font-bold rounded-lg transition-all shadow-sm"
               >
-                Gửi kết bạn
+                {t('chat.add_friend_btn')}
               </button>
             )}
             <div className="relative" ref={strangerMenuRef}>
@@ -687,18 +703,18 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                     className="w-full flex items-center px-4 py-2 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors text-left group"
                   >
                     <Ban size={16} className="text-red-500 mr-3" />
-                    <span className="text-[13px] font-bold text-red-500">Chặn người này</span>
+                    <span className="text-[13px] font-bold text-red-500">{t('chat.block_user')}</span>
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      alert("Tính năng báo xấu đang được phát triển!");
+                      alert(t('chat.report_not_implemented'));
                       setShowStrangerMenu(false);
                     }}
                     className={`w-full flex items-center px-4 py-2 hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors text-left group ${isDark ? 'text-white' : 'text-slate-700'}`}
                   >
                     <AlertCircle size={16} className="text-slate-400 mr-3" />
-                    <span className="text-[13px] font-bold">Báo xấu</span>
+                    <span className="text-[13px] font-bold">{t('chat.report')}</span>
                   </button>
                 </div>
               )}

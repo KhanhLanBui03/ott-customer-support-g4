@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Lock, Save, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { authApi } from '../api/authApi';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 
 const ChangePasswordModal = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   const { logout } = useAuth();
   const { isDark } = useTheme();
   const [currentPassword, setCurrentPassword] = useState('');
@@ -31,15 +33,15 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!currentPassword) {
-      setErrorMsg('Vui lòng nhập mật khẩu cũ');
+      setErrorMsg(t('password.error_old_required'));
       return;
     }
     if (!isNewPasswordValid) {
-      setErrorMsg('Mật khẩu mới chưa đạt yêu cầu');
+      setErrorMsg(t('password.error_new_invalid'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setErrorMsg('Mật khẩu xác nhận không khớp');
+      setErrorMsg(t('password.error_mismatch'));
       return;
     }
 
@@ -47,7 +49,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
     setErrorMsg('');
     try {
       await authApi.changePassword({ currentPassword, newPassword });
-      setSuccessMsg('Đổi mật khẩu thành công');
+      setSuccessMsg(t('password.success'));
       setWrongCount(0);
       
       setTimeout(() => {
@@ -59,13 +61,13 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
         const newCount = wrongCount + 1;
         setWrongCount(newCount);
         if (newCount >= 5) {
-          alert('Bạn đã nhập sai quá 5 lần. Tự động đăng xuất.');
+          alert(t('password.error_too_many_attempts'));
           logout();
         } else {
-          setErrorMsg(`Bạn đã nhập sai mật khẩu cũ. Số lần nhập sai: ${newCount}/5`);
+          setErrorMsg(t('password.error_wrong_old', { count: newCount }));
         }
       } else {
-        setErrorMsg('Đổi mật khẩu thất bại. Vui lòng thử lại sau.');
+        setErrorMsg(t('password.error_failed'));
       }
     } finally {
       setLoading(false);
@@ -85,7 +87,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
     <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl animate-fade-in ${isDark ? 'bg-slate-950/40' : 'bg-slate-200/40'}`}>
       <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden border ${isDark ? 'bg-surface-200 border-white/5' : 'bg-white border-slate-100'}`}>
         <div className={`h-20 flex items-center justify-between px-10 border-b sticky top-0 backdrop-blur-md ${isDark ? 'bg-surface-100/50 border-white/5' : 'bg-white/50 border-slate-50'}`}>
-          <h2 className={`font-black uppercase tracking-[0.2em] text-[12px] ${isDark ? 'text-white' : 'text-slate-800'}`}>Đổi mật khẩu</h2>
+          <h2 className={`font-black uppercase tracking-[0.2em] text-[12px] ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('password.title')}</h2>
           <button onClick={handleClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'}`}>
             <X size={24} />
           </button>
@@ -96,7 +98,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
             
             <div className="space-y-2 relative">
               <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
-                <Lock size={12} /><span>Mật khẩu cũ</span>
+                <Lock size={12} /><span>{t('password.old_password')}</span>
               </label>
               <div className="relative">
                 <input
@@ -104,11 +106,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                   value={currentPassword}
                   onChange={(e) => {
                     setCurrentPassword(e.target.value);
-                    if(errorMsg.includes('mật khẩu cũ')) setErrorMsg('');
+                    if(errorMsg.includes(t('password.old_password').toLowerCase())) setErrorMsg('');
                   }}
-                  placeholder="Nhập mật khẩu cũ..."
+                  placeholder={t('password.old_password_placeholder')}
                   className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
-                    errorMsg.includes('mật khẩu cũ') 
+                    errorMsg.includes(t('password.old_password').toLowerCase()) 
                       ? 'border-red-500/50 focus:border-red-500' 
                       : (isDark ? 'border-white/10 focus:border-indigo-500' : 'border-slate-200 focus:border-slate-400')
                   } ${isDark ? 'bg-surface-100 text-white placeholder:text-white/30' : 'bg-slate-50 text-slate-900 placeholder:text-slate-400'}`}
@@ -119,20 +121,20 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                   </div>
                 )}
               </div>
-              {errorMsg && errorMsg.includes('mật khẩu cũ') && (
+              {errorMsg && errorMsg.includes(t('password.old_password').toLowerCase()) && (
                 <p className="text-[11px] text-red-500 font-mono font-bold px-1 mt-1">{errorMsg}</p>
               )}
             </div>
 
             <div className="space-y-2">
               <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
-                <Lock size={12} /><span>Mật khẩu mới</span>
+                <Lock size={12} /><span>{t('password.new_password')}</span>
               </label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Nhập mật khẩu mới..."
+                placeholder={t('password.new_password_placeholder')}
                 className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
                     ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
@@ -142,39 +144,39 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
               
               {/* Password Requirements */}
               <div className={`mt-3 p-4 rounded-2xl border space-y-2 ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/50 border-cursor-dark/5'}`}>
-                <div className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>Yêu cầu bảo mật:</div>
+                <div className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>{t('password.requirements_title')}</div>
                 <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.length ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.length ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
-                  <span>Ít nhất 8 ký tự</span>
+                  <span>{t('password.req_length')}</span>
                 </div>
                 <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.lower ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.lower ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
-                  <span>Chứa chữ cái in thường</span>
+                  <span>{t('password.req_lower')}</span>
                 </div>
                 <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.upper ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.upper ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
-                  <span>Chứa chữ cái in hoa</span>
+                  <span>{t('password.req_upper')}</span>
                 </div>
                 <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.number ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.number ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
-                  <span>Chứa số</span>
+                  <span>{t('password.req_number')}</span>
                 </div>
                 <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.special ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
                   {reqs.special ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
-                  <span>Chứa ký tự đặc biệt (@$!%*?&)</span>
+                  <span>{t('password.req_special')}</span>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
               <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
-                <Lock size={12} /><span>Xác nhận mật khẩu</span>
+                <Lock size={12} /><span>{t('password.confirm_password')}</span>
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Nhập lại mật khẩu mới..."
+                placeholder={t('password.confirm_password_placeholder')}
                 className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
                   isDark 
                     ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
@@ -182,11 +184,11 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                 }`}
               />
                {confirmPassword && newPassword !== confirmPassword && (
-                <p className="text-[11px] text-red-500 font-mono font-bold px-1 mt-1">Mật khẩu xác nhận không khớp</p>
+                <p className="text-[11px] text-red-500 font-mono font-bold px-1 mt-1">{t('password.error_mismatch')}</p>
               )}
             </div>
 
-            {errorMsg && !errorMsg.includes('mật khẩu cũ') && (
+            {errorMsg && !errorMsg.toLowerCase().includes(t('password.old_password').toLowerCase()) && (
               <p className="text-[11px] text-red-500 font-mono font-bold text-center px-1">{errorMsg}</p>
             )}
 
@@ -198,7 +200,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
               }`}
             >
               <Save size={18} />
-              <span>{loading ? 'Đang xử lý...' : 'Xác nhận thay đổi'}</span>
+              <span>{loading ? t('password.btn_processing') : t('password.btn_confirm')}</span>
             </button>
           </form>
         </div>
@@ -220,14 +222,14 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
               <ShieldCheck size={32} className="text-cursor-success" />
             </div>
             <div>
-              <h3 className="font-serif italic font-bold text-xl text-cursor-dark mb-2">Bảo mật</h3>
-              <p className="text-sm font-mono text-cursor-dark/60">Vui lòng đăng nhập lại bằng mật khẩu mới để tiếp tục.</p>
+              <h3 className="font-serif italic font-bold text-xl text-cursor-dark mb-2">{t('password.logout_confirm_title')}</h3>
+              <p className="text-sm font-mono text-cursor-dark/60">{t('password.logout_confirm_desc')}</p>
             </div>
             <button
               onClick={() => logout()}
               className="w-full py-4 bg-cursor-dark text-white rounded-2xl font-mono font-black uppercase tracking-[0.2em] text-[12px] hover:scale-105 active:scale-95 transition-all shadow-xl"
             >
-              Đăng nhập lại
+              {t('password.btn_relogin')}
             </button>
           </div>
         </div>

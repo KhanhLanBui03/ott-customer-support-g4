@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon, Mic, Square, Video } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
@@ -12,6 +13,7 @@ import { useTheme } from '../../hooks/useTheme';
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteModal, onScrollToMessage }) => {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const [text, setText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -75,7 +77,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       senderId: currentUserId,
       receiverId,
       type: 'MESSAGE',
-      message: `${user?.fullName || user?.phoneNumber || 'Ai đó'} đã gửi cho bạn một tin nhắn từ người lạ.`
+      message: t('chat.stranger_notif', { name: user?.fullName || user?.phoneNumber || 'Ai đó' })
     };
   };
 
@@ -118,11 +120,11 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     const hasAllMention = parts.some(part => {
       const p = part.toLowerCase();
       return (p.startsWith('all') && (p.length === 3 || SEPARATORS.includes(p[3]))) ||
-             (p.startsWith('báo cho cả nhóm') && (p.length === 15 || SEPARATORS.includes(p[15])));
+             (p.startsWith(t('chat.all_group').toLowerCase()) && (p.length === t('chat.all_group').length || SEPARATORS.includes(p[t('chat.all_group').length])));
     });
 
     if (currentConv.type === 'GROUP' && !hasAllMention) {
-      options.push({ id: 'All', name: 'Báo cho cả nhóm', type: 'ALL', icon: <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white"><ShieldAlert size={14} /></div> });
+      options.push({ id: 'All', name: t('chat.all_group'), type: 'ALL', icon: <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white"><ShieldAlert size={14} /></div> });
     }
     
     const members = (currentConv.members || [])
@@ -152,7 +154,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     
     options.push(...members);
     return options;
-  }, [currentConv, user, text]);
+  }, [currentConv, user, text, t]);
 
   const emojiCategories = [
     { id: 'smileys', label: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'] },
@@ -511,7 +513,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     let filesToProcess = files;
 
     if (currentCount + files.length > maxFiles) {
-      alert(`Bạn chỉ có thể gửi tối đa ${maxFiles} tập tin một lần.`);
+      alert(t('chat.file_limit_alert', { count: maxFiles }));
       filesToProcess = files.slice(0, maxFiles - currentCount);
     }
 
@@ -599,7 +601,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           <div className="flex items-center justify-center space-x-3 p-4 bg-red-50/50 dark:bg-red-500/5 rounded-[32px] border border-red-500/10 animate-pulse">
             <ShieldAlert className="text-red-500" size={20} />
             <span className="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
-              Bạn không thể gửi tin nhắn cho người này
+              {t('chat.cannot_send_message')}
             </span>
           </div>
         );
@@ -617,7 +619,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           <div className="flex items-center justify-center space-x-3 p-4 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-[32px] border border-indigo-500/10">
             <ShieldAlert className="text-indigo-500" size={20} />
             <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
-              Chỉ Quản trị viên mới có quyền gửi tin nhắn
+              {t('chat.only_admin_can_send')}
             </span>
           </div>
         );
@@ -626,13 +628,13 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
 
     // 3. Normal input area
     const currentName = currentConv.type === 'GROUP' 
-      ? `Nhóm ${currentConv.name || 'Hội nhóm'}` 
+      ? `${t('chat.group')} ${currentConv.name || t('chat.default_group_name')}` 
       : (() => {
           const otherMember = currentConv.members?.find(m => String(m.userId || m.id) !== String(user?.userId || user?.id));
-          return otherMember?.fullName || otherMember?.name || 'Bạn bè';
+          return otherMember?.fullName || otherMember?.name || t('chat.friend');
         })();
 
-    const dynamicPlaceholder = `Nhập @, tin nhắn tới ${currentName}`;
+    const dynamicPlaceholder = t('chat.input_placeholder', { name: currentName });
 
     const filteredMentions = mentionOptions.filter(m => 
       m.name.toLowerCase().includes(mentionFilter) || 
@@ -645,7 +647,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
         {showMentions && filteredMentions.length > 0 && (
           <div className="absolute bottom-full mb-2 left-0 w-64 bg-surface-100 rounded-2xl shadow-2xl border border-border overflow-hidden z-[100] animate-in slide-in-from-bottom-2 duration-200">
             <div className="p-2 bg-surface-200 border-b border-border flex items-center justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Nhắc tên thành viên</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">{t('chat.mention_members')}</span>
             </div>
             <div className="max-h-64 overflow-y-auto no-scrollbar py-1">
               {filteredMentions.map((mention, idx) => (
@@ -714,7 +716,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
             ref={textInputRef}
             className="w-full bg-transparent border-none outline-none text-foreground text-sm sm:text-[16px] placeholder:text-foreground/30 px-2 font-bold tracking-tight resize-none py-2 max-h-32 no-scrollbar overflow-y-auto relative z-10 caret-indigo-500"
             style={{ lineHeight: '1.5' }}
-            placeholder={isUploading ? "Đang đồng bộ tập tin..." : dynamicPlaceholder}
+            placeholder={isUploading ? t('chat.uploading') : dynamicPlaceholder}
             value={text}
             spellCheck={false}
             autoComplete="off"
@@ -758,7 +760,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
             onClick={handleVoiceToggle}
             disabled={isUploading || isVoiceUploading}
             className={`w-10 h-10 flex items-center justify-center transition-all rounded-full active:scale-90 focus:outline-none ${isRecording ? 'text-white bg-rose-500 shadow-lg shadow-rose-500/30' : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10'} ${(isUploading || isVoiceUploading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={isRecording ? `Dừng ghi âm ${durationFormatted}` : 'Ghi âm'}
+            title={isRecording ? t('chat.stop_recording_count', { duration: durationFormatted }) : t('chat.record')}
           >
             {isVoiceUploading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -782,7 +784,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                 onClick={handleVoiceCancel}
                 className="ml-1 rounded-full bg-rose-500/15 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-500/25 transition-colors"
               >
-                Hủy
+                {t('common.cancel')}
               </button>
             </div>
           )}
@@ -845,7 +847,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           <div className="px-4 py-3 bg-white/5">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder={`Search ${activeTab}...`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-black/10 dark:bg-white/5 border-none rounded-xl py-2 pl-9 pr-4 text-xs text-foreground placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500/20" />
+              <input type="text" placeholder={t('chat.search_placeholder', { type: activeTab })} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-black/10 dark:bg-white/5 border-none rounded-xl py-2 pl-9 pr-4 text-xs text-foreground placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500/20" />
             </div>
           </div>
 
@@ -964,10 +966,10 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
 
             <div className="min-w-0">
               <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.1em] mb-0.5">
-                Đang trả lời {(() => {
+                {t('chat.replying_to')} {(() => {
                   const repliedId = String(replyingTo.senderId || '');
                   const myId = String(user?.userId || user?.id || '');
-                  if (repliedId === myId) return 'Bạn';
+                  if (repliedId === myId) return t('common.you');
 
                   const currentConv = conversations.find(c => c.conversationId === conversationId);
                   const freshMember = currentConv?.members?.find(m => String(m.userId || m.id) === repliedId);
@@ -982,11 +984,11 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                     (content && (content.includes('chat-media/') || content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) ||
                     (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
 
-                  if (isVoice) return 'Tin nhắn thoại';
+                  if (isVoice) return t('chat.voice_message_preview');
                   if (content && replyingTo.type !== 'STICKER' && !content.startsWith('http')) return content;
-                  if (replyingTo.type === 'IMAGE') return 'Hình ảnh';
-                  if (replyingTo.type === 'VIDEO') return 'Video';
-                  if (replyingTo.type === 'STICKER') return 'Nhãn dán';
+                  if (replyingTo.type === 'IMAGE') return t('chat.image_preview');
+                  if (replyingTo.type === 'VIDEO') return t('chat.video_preview');
+                  if (replyingTo.type === 'STICKER') return t('chat.sticker_preview');
                   if (replyingTo.type === 'FILE') {
                     if (replyingTo.mediaUrls && replyingTo.mediaUrls.length > 0) {
                       try {
@@ -995,12 +997,12 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                         let name = decoded.split('/').pop().split('?')[0];
                         name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
                         name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
-                        return name || 'Tệp đính kèm';
+                        return name || t('chat.attachment_fallback');
                       } catch (e) {
-                        return 'Tệp đính kèm';
+                        return t('chat.attachment_fallback');
                       }
                     }
-                    return 'Tệp đính kèm';
+                    return t('chat.attachment_fallback');
                   }
                   return '[Attachment]';
                 })()}

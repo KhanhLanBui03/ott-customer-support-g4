@@ -74,6 +74,9 @@ public class User {
     @DynamoDBAttribute(attributeName = "deviceIds")
     private List<String> deviceIds; // Active device list
 
+    @DynamoDBAttribute(attributeName = "preferredLanguage")
+    private String preferredLanguage; // "vie_Latn", "eng_Latn", null = tắt dịch
+
     @DynamoDBIgnore
     private Integer loginFailCount; // This will be in Redis
 

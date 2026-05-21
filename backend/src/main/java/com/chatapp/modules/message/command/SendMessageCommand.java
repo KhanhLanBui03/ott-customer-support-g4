@@ -25,6 +25,7 @@ public class SendMessageCommand {
     private String replyToMessageId;
     private com.chatapp.modules.message.domain.Message.ForwardInfo forwardedFrom;
     private Boolean isEncrypted;
+    private String language;
 
     public void validate() {
         if (conversationId == null || conversationId.isBlank()) {

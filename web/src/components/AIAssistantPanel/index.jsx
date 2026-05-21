@@ -4,11 +4,13 @@ import {
   Send, Loader2, Languages, Calendar, CheckCircle2,
   ChevronRight, BrainCircuit, FileText
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { chatApi } from '../../api/chatApi';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const AIAssistantPanel = ({ conversationId }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [type, setType] = useState(null); // 'summary', 'stats', 'ask', 'tasks'
@@ -31,7 +33,7 @@ const AIAssistantPanel = ({ conversationId }) => {
       switch (actionType) {
         case 'summary':
           if (isCustomRange && (!customStart || !customEnd)) {
-            setResult("Vui lòng chọn đầy đủ thời gian bắt đầu và kết thúc!");
+            setResult(t('ai.error_select_range'));
             setLoading(false);
             return;
           }
@@ -59,7 +61,7 @@ const AIAssistantPanel = ({ conversationId }) => {
     } catch (err) {
       console.error("AI Error:", err);
       const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message;
-      setResult(`Rất tiếc, trợ lý AI đang gặp sự cố: ${errorMsg}`);
+      setResult(t('ai.error_general', { message: errorMsg }));
     } finally {
       setLoading(false);
     }
@@ -80,20 +82,20 @@ const AIAssistantPanel = ({ conversationId }) => {
             <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
               <BrainCircuit size={18} />
             </div>
-            <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">Trợ lý AI</span>
+            <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('ai.title')}</span>
           </div>
           <button 
             onClick={() => setIsCustomRange(!isCustomRange)}
             className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
           >
-            {isCustomRange ? "Dùng chọn nhanh" : "Tùy chỉnh thời gian"}
+            {isCustomRange ? t('ai.use_quick_range') : t('ai.use_custom_range')}
           </button>
         </div>
 
         {isCustomRange ? (
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-[9px] font-bold text-foreground/40 uppercase ml-1">Từ lúc</label>
+              <label className="text-[9px] font-bold text-foreground/40 uppercase ml-1">{t('ai.from_time')}</label>
               <input 
                 type="datetime-local" 
                 value={customStart}
@@ -102,7 +104,7 @@ const AIAssistantPanel = ({ conversationId }) => {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] font-bold text-foreground/40 uppercase ml-1">Đến lúc</label>
+              <label className="text-[9px] font-bold text-foreground/40 uppercase ml-1">{t('ai.to_time')}</label>
               <input 
                 type="datetime-local" 
                 value={customEnd}
@@ -117,11 +119,11 @@ const AIAssistantPanel = ({ conversationId }) => {
             onChange={(e) => setTimeRange(Number(e.target.value))}
             className="w-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 dark:text-indigo-400 text-[11px] font-bold rounded-lg px-3 py-2 outline-none cursor-pointer focus:border-indigo-500/50 transition-colors"
           >
-            <option value={0} className="bg-background">Chưa đọc</option>
-            <option value={1} className="bg-background">1 giờ qua</option>
-            <option value={4} className="bg-background">4 giờ qua</option>
-            <option value={12} className="bg-background">12 giờ qua</option>
-            <option value={24} className="bg-background">24 giờ qua</option>
+            <option value={0} className="bg-background">{t('ai.range_unread')}</option>
+            <option value={1} className="bg-background">{t('ai.range_1h')}</option>
+            <option value={4} className="bg-background">{t('ai.range_4h')}</option>
+            <option value={12} className="bg-background">{t('ai.range_12h')}</option>
+            <option value={24} className="bg-background">{t('ai.range_24h')}</option>
           </select>
         )}
       </div>
@@ -134,7 +136,7 @@ const AIAssistantPanel = ({ conversationId }) => {
           <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl mb-2 group-hover:scale-110 transition-transform">
             <MessageSquare size={18} />
           </div>
-          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">Tóm tắt</span>
+          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">{t('ai.summary')}</span>
         </button>
 
         <button 
@@ -144,7 +146,7 @@ const AIAssistantPanel = ({ conversationId }) => {
           <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl mb-2 group-hover:scale-110 transition-transform">
             <BarChart3 size={18} />
           </div>
-          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">Thống kê</span>
+          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">{t('ai.stats')}</span>
         </button>
 
         <button 
@@ -154,7 +156,7 @@ const AIAssistantPanel = ({ conversationId }) => {
           <div className="p-2 bg-orange-500/20 text-orange-400 rounded-xl mb-2 group-hover:scale-110 transition-transform">
             <Calendar size={18} />
           </div>
-          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">Lịch hẹn</span>
+          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">{t('ai.tasks')}</span>
         </button>
         <button 
           onClick={() => handleAction('announcement')}
@@ -163,7 +165,7 @@ const AIAssistantPanel = ({ conversationId }) => {
           <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl mb-2 group-hover:scale-110 transition-transform">
             <FileText size={18} />
           </div>
-          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">Biên bản</span>
+          <span className="text-[11px] font-black text-foreground/60 uppercase tracking-tighter">{t('ai.announcement')}</span>
         </button>
 
       </div>
@@ -173,7 +175,7 @@ const AIAssistantPanel = ({ conversationId }) => {
         <form onSubmit={handleAsk} className="relative group">
           <input 
             type="text" 
-            placeholder="Hỏi AI về cuộc trò chuyện..." 
+            placeholder={t('ai.ask_placeholder')} 
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             className="w-full bg-white/5 border border-white/5 rounded-2xl py-3 pl-4 pr-12 text-sm text-foreground focus:outline-none focus:border-indigo-500/50 transition-all placeholder:text-foreground/20"
@@ -230,12 +232,12 @@ const AIAssistantPanel = ({ conversationId }) => {
               {loading ? (
                 <>
                   <Loader2 size={12} className="animate-spin mr-2" />
-                  AI Đang xử lý...
+                  {t('ai.processing')}
                 </>
               ) : (
                 <>
                   <CheckCircle2 size={12} className="mr-2" />
-                  Kết quả từ AI
+                  {t('ai.result_title')}
                 </>
               )}
             </h4>
@@ -251,7 +253,7 @@ const AIAssistantPanel = ({ conversationId }) => {
                 onClick={() => setResult(null)}
                 className="mt-6 flex items-center space-x-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:text-indigo-300 transition-colors"
               >
-                <span>Đóng kết quả</span>
+                <span>{t('ai.close_result')}</span>
                 <ChevronRight size={12} />
               </button>
             )}

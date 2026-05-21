@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
 import { Zap, Shield, Mail, Lock, ArrowRight, QrCode, KeyRound } from 'lucide-react';
 import { getAuthPersist, getRememberedEmail, setRememberedEmail } from '../../utils/storage';
@@ -7,6 +8,7 @@ import AccountRestoreModal from '../../components/AccountRestore/AccountRestoreM
 import QrLogin from './QrLogin';
 
 const Login = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(getAuthPersist());
@@ -38,7 +40,7 @@ const Login = () => {
       navigate('/');
     } catch (err) {
       const errorData = err?.response?.data?.error;
-      const message = err?.response?.data?.message || 'Signal mismatch. Access denied.';
+      const message = err?.response?.data?.message || t('auth.errors.access_denied');
 
       // Handle locked account
       if (errorData?.code === 'ACCOUNT_LOCKED') {
@@ -98,8 +100,8 @@ const Login = () => {
                   <input
                     type="email"
                     required
-                    className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Email..."
+                    className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
+                    placeholder={t('auth.email_placeholder')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
@@ -112,8 +114,8 @@ const Login = () => {
                   <input
                     type="password"
                     required
-                    className="w-full pl-16 pr-6 py-4 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
-                    placeholder="Mật khẩu..."
+                    className="w-full pl-16 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white text-sm focus:outline-none focus:border-cursor-accent focus:bg-white/8 transition-all placeholder:text-white/10 font-medium"
+                    placeholder={t('auth.password_placeholder')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -128,25 +130,25 @@ const Login = () => {
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="h-4 w-4 rounded border-white/30 bg-transparent"
                   />
-                  Remember Me
+                  {t('auth.remember_me')}
                 </label>
                 <Link to="/forgot-password" size={18} className="text-[10px] font-mono font-black uppercase tracking-widest text-white/20 hover:text-white transition-colors">
-                  Quên mật khẩu
+                  {t('auth.forgot_password')}
                 </Link>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-4 bg-cursor-accent text-cursor-dark rounded-full font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
+                className="w-full py-5 bg-cursor-accent text-cursor-dark rounded-4xl font-black tracking-tight text-lg shadow-2xl shadow-cursor-accent/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-3"
               >
-                <span>Đăng nhập</span>
+                <span>{t('auth.login_button')}</span>
                 <ArrowRight size={20} />
               </button>
             </form>
 
             <div className="relative flex items-center py-2">
               <div className="flex-grow border-t border-white/10"></div>
-              <span className="flex-shrink-0 mx-4 text-white/20 text-xs font-bold uppercase">Hoặc</span>
+              <span className="flex-shrink-0 mx-4 text-white/20 text-xs font-bold uppercase">{t('common.or')}</span>
               <div className="flex-grow border-t border-white/10"></div>
             </div>
 
@@ -155,13 +157,13 @@ const Login = () => {
               className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-full font-bold text-sm hover:bg-white/10 transition-all flex items-center justify-center space-x-3 group"
             >
               <QrCode size={20} className="text-white/50 group-hover:text-cursor-accent transition-colors" />
-              <span>Đăng nhập bằng mã QR</span>
+              <span>{t('auth.login_qr')}</span>
             </button>
 
             <p className="text-center pt-2 text-[11px] font-mono font-black text-white/20 uppercase tracking-[0.2em]">
-              Chưa có tài khoản?{' '}
+              {t('auth.no_account')}{' '}
               <Link to="/register" className="text-cursor-accent hover:underline">
-                Đăng kí tài khoản
+                {t('auth.register_link')}
               </Link>
             </p>
           </>

@@ -3,20 +3,26 @@ import { Search, X, Send, Users, User, Clock } from 'lucide-react';
 import { useChat } from '../../hooks/useChat';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
+  const { t } = useTranslation();
   const { conversations } = useChat();
   const { sendMessage } = useWebSocket();
   const { user } = useSelector(state => state.auth);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('Gần đây'); // Gần đây, Nhóm trò chuyện, Bạn bè
+  const [activeTab, setActiveTab] = useState(t('forward.tabs.recent')); // Gần đây, Nhóm trò chuyện, Bạn bè
   const [selectedConvs, setSelectedConvs] = useState([]);
   const [extraMessage, setExtraMessage] = useState('');
   const [sending, setSending] = useState(false);
 
-
+  const TABS = [
+    { key: t('forward.tabs.recent'), label: t('forward.tabs.recent') },
+    { key: t('forward.tabs.groups'), label: t('forward.tabs.groups') },
+    { key: t('forward.tabs.friends'), label: t('forward.tabs.friends') }
+  ];
 
   const filteredConversations = useMemo(() => {
     let list = Object.values(conversations);
@@ -24,9 +30,9 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
     // Sort by last message date (recent first)
     list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-    if (activeTab === 'Nhóm trò chuyện') {
+    if (activeTab === t('forward.tabs.groups')) {
       list = list.filter(c => c.type === 'GROUP');
-    } else if (activeTab === 'Bạn bè') {
+    } else if (activeTab === t('forward.tabs.friends')) {
       list = list.filter(c => c.type === 'SINGLE');
     }
 
@@ -87,7 +93,7 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
   const getConvName = (conv) => {
     if (conv.type === 'GROUP') return conv.name;
     const otherMember = conv.members?.find(m => (m.userId || m.id) !== user?.id);
-    return otherMember?.fullName || conv.name || 'Người dùng Z';
+    return otherMember?.fullName || conv.name || t('forward.user_fallback');
   };
 
   if (!isOpen || !messageToForward) return null;
@@ -98,7 +104,7 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
         
         {/* Header */}
         <div className="p-6 flex items-center justify-between border-b border-border">
-           <h3 className="text-lg font-black text-foreground uppercase tracking-tight">Chia sẻ</h3>
+           <h3 className="text-lg font-black text-foreground uppercase tracking-tight">{t('forward.title')}</h3>
            <button onClick={onClose} className="p-2 hover:bg-surface-200 rounded-xl transition-all">
               <X size={20} />
            </button>
@@ -112,7 +118,7 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
               <input 
                 type="text" 
-                placeholder="Tìm kiếm..."
+                placeholder={t('forward.search_placeholder')}
                 className="w-full pl-12 pr-4 py-3 bg-background border border-border rounded-2xl text-sm focus:outline-none focus:border-indigo-500 transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -121,16 +127,16 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
 
            {/* Tabs */}
            <div className="flex space-x-2 border-b border-border pb-1">
-              {['Gần đây', 'Nhóm trò chuyện', 'Bạn bè'].map(tab => (
+              {TABS.map(tab => (
                 <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
                   className={cn(
                     "px-4 py-2 text-[13px] font-bold transition-all border-b-2",
-                    activeTab === tab ? "border-indigo-500 text-indigo-500" : "border-transparent text-foreground/40 hover:text-foreground/60"
+                    activeTab === tab.key ? "border-indigo-500 text-indigo-500" : "border-transparent text-foreground/40 hover:text-foreground/60"
                   )}
                 >
-                  {tab}
+                  {tab.label}
                 </button>
               ))}
            </div>
@@ -161,7 +167,7 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
 
            {/* Preview Box */}
            <div className="bg-surface-200 rounded-2xl p-4 space-y-2">
-              <p className="text-[10px] font-black text-foreground/40 uppercase tracking-widest">Chia sẻ tin nhắn</p>
+              <p className="text-[10px] font-black text-foreground/40 uppercase tracking-widest">{t('forward.forward_message')}</p>
               <div className="p-3 bg-background/50 rounded-xl border border-border">
                  <p className="text-[13px] text-foreground/80 truncate italic">
                     {messageToForward.content || '[Attachment]'}
@@ -171,7 +177,7 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
 
            {/* Input for extra message */}
            <textarea 
-             placeholder="Nhập tin nhắn..."
+             placeholder={t('forward.message_placeholder')}
              className="w-full p-4 bg-background border border-border rounded-2xl text-[13px] focus:outline-none focus:border-indigo-500 transition-all resize-none"
              rows={2}
              value={extraMessage}
@@ -185,14 +191,14 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
              onClick={onClose}
              className="px-6 py-3 text-[13px] font-bold text-foreground/60 hover:bg-surface-200 rounded-2xl transition-all"
            >
-             Hủy
+             {t('forward.cancel')}
            </button>
            <button 
              onClick={handleForward}
              disabled={selectedConvs.length === 0 || sending}
              className="px-8 py-3 bg-indigo-500 text-white rounded-2xl font-black text-[13px] uppercase tracking-wider hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center space-x-2"
            >
-             {sending ? <span>...</span> : <><Send size={16} /> <span>Chia sẻ</span></>}
+             {sending ? <span>...</span> : <><Send size={16} /> <span>{t('forward.send')}</span></>}
            </button>
         </div>
       </div>

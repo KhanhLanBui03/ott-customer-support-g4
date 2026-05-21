@@ -3,6 +3,7 @@ package com.chatapp.modules.auth.repository;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
+import com.amazonaws.services.dynamodbv2.datamodeling.KeyPair;
 import com.chatapp.modules.auth.domain.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -96,5 +97,28 @@ public class UserRepository {
 
     public List<User> findAll() {
         return dynamoDBMapper.scan(User.class, new DynamoDBScanExpression());
+    }
+
+    public List<User> findAllByIds(List<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<KeyPair> keys = userIds.stream()
+                .map(id -> new KeyPair().withHashKey(id).withRangeKey("profile"))
+                .collect(java.util.stream.Collectors.toList());
+
+        Map<Class<?>, List<KeyPair>> itemsToGet = Map.of(User.class, keys);
+
+        Map<String, List<Object>> result = dynamoDBMapper.batchLoad(itemsToGet);
+        List<Object> userObjects = result.get("chat_users");
+
+        if (userObjects == null || userObjects.isEmpty()) {
+            return List.of();
+        }
+
+        return userObjects.stream()
+                .map(obj -> (User) obj)
+                .collect(java.util.stream.Collectors.toList());
     }
 }
