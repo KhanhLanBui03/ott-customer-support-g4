@@ -415,274 +415,290 @@ const ChatBubble = ({
         <View style={[styles.bubbleContainer, isOwn ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
           <Animated.View style={[
             styles.bubble,
-            isOwn ? [styles.ownBubble, { backgroundColor: colors.primary }] : [styles.otherBubble, { backgroundColor: colors.surface200 }],
+            message.type === 'STICKER'
+              ? { backgroundColor: 'transparent', paddingVertical: 0, paddingHorizontal: 0 }
+              : (isOwn ? [styles.ownBubble, { backgroundColor: colors.primary }] : [styles.otherBubble, { backgroundColor: colors.surface200 }]),
             isVoice && { paddingVertical: 6, paddingHorizontal: 10 },
             { borderColor: highlightBorder, borderWidth: 2 }
           ]}>
 
-            {message.forwardedFrom && (
-              <View style={[styles.forwardedIndicator, isOwn ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
-                <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : '#6366f1'} />
-                <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: '#6366f1' }]}>Chuyển tiếp</Text>
-              </View>
-            )}
-            {message.replyTo && (() => {
-              const r = message.replyTo;
-              let mediaUrls = r.mediaUrls || r.media_urls || [];
-              let type = r.type || '';
-              let content = r.content || r.text || '';
-              if (mediaUrls.length === 0 || !type) {
-                const originalMsg = allMessages?.find(m => m.messageId === r.messageId);
-                if (originalMsg) {
-                  if (mediaUrls.length === 0) mediaUrls = originalMsg.mediaUrls || originalMsg.media_urls || [];
-                  if (!type) type = originalMsg.type || '';
-                  if (!content) content = originalMsg.content || '';
-                }
-              }
-              const senderId = r.senderId || r.sender_id || '';
-              if (!type && mediaUrls.length > 0) {
-                const firstUrl = mediaUrls[0].toLowerCase();
-                if (firstUrl.match(/\.(mp4|webm|ogg|mov)/i)) type = 'VIDEO';
-                else if (firstUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i)) type = 'IMAGE';
-                else type = 'FILE';
-              }
-              const isVoiceReply = type === 'VOICE' || (content && (content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) || (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
-              const isImageReply = type === 'IMAGE' || (type !== 'VIDEO' && type !== 'FILE' && type !== 'VOICE' && mediaUrls.length > 0 && !isVoiceReply);
-              const isVideoReply = type === 'VIDEO';
-              const isFileReply = type === 'FILE';
-              const getFileConfig = (u) => {
-                const ext = String(u).split('.').pop().split('?')[0].toLowerCase();
-                if (ext === 'pdf') return { color: '#ef4444', icon: 'file-pdf-box' };
-                if (['doc', 'docx'].includes(ext)) return { color: '#3b82f6', icon: 'file-word-box' };
-                if (['xls', 'xlsx'].includes(ext)) return { color: '#10b981', icon: 'file-excel-box' };
-                if (['zip', 'rar', '7z'].includes(ext)) return { color: '#f59e0b', icon: 'zip-box' };
-                return { color: '#6366f1', icon: 'file-document-outline' };
-              };
-              const thumbUrl = (isImageReply || isVideoReply) && mediaUrls[0] ? (mediaUrls[0].startsWith('http') ? mediaUrls[0] : `${BASE_URL}${mediaUrls[0].startsWith('/') ? '' : '/'}${mediaUrls[0]}`) : null;
-              let typeLabel = '[Tin nhắn]';
-              if (isVoiceReply) typeLabel = 'Tin nhắn thoại';
-              else if (isImageReply) typeLabel = '[Hình ảnh]';
-              else if (isVideoReply) typeLabel = '[Video]';
-              else if (isFileReply) {
-                const fileName = mediaUrls[0]?.split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '');
-                typeLabel = fileName ? decodeURIComponent(fileName) : '[Tệp tin]';
-              }
-              const displayReplyText = isVoiceReply ? 'Tin nhắn thoại' : (content.trim() || typeLabel);
-              return (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => onPressMessage?.(r.messageId)}
-                  style={[
-                    styles.replyBubble,
-                    isOwn
-                      ? { backgroundColor: 'rgba(255, 255, 255, 0.12)', borderLeftColor: '#fff' }
-                      : { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', borderLeftColor: colors.primary }
-                  ]}
-                >
-                  <View style={[styles.replyLine, { backgroundColor: isOwn ? '#fff' : colors.primary }]} />
+            {message.type === 'STICKER' ? (
+              (() => {
+                const stickerUrl = message.content || (message.mediaUrls && message.mediaUrls[0]) || '';
+                return (
+                  <View style={styles.stickerBubbleContainer}>
+                    <Image source={{ uri: getFullUrl(stickerUrl) }} style={styles.bubbleStickerImage} />
+                    <Text style={[styles.timeInside, { color: colors.textSubtle, marginTop: 4 }]}>{formatTime(message.createdAt || Date.now())}</Text>
+                  </View>
+                );
+              })()
+            ) : (
+              <>
+                {message.forwardedFrom && (
+                  <View style={[styles.forwardedIndicator, isOwn ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
+                    <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : '#6366f1'} />
+                    <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: '#6366f1' }]}>Chuyển tiếp</Text>
+                  </View>
+                )}
+                {message.replyTo && (() => {
+                  const r = message.replyTo;
+                  let mediaUrls = r.mediaUrls || r.media_urls || [];
+                  let type = r.type || '';
+                  let content = r.content || r.text || '';
+                  if (mediaUrls.length === 0 || !type) {
+                    const originalMsg = allMessages?.find(m => m.messageId === r.messageId);
+                    if (originalMsg) {
+                      if (mediaUrls.length === 0) mediaUrls = originalMsg.mediaUrls || originalMsg.media_urls || [];
+                      if (!type) type = originalMsg.type || '';
+                      if (!content) content = originalMsg.content || '';
+                    }
+                  }
+                  const senderId = r.senderId || r.sender_id || '';
+                  if (!type && mediaUrls.length > 0) {
+                    const firstUrl = mediaUrls[0].toLowerCase();
+                    if (firstUrl.match(/\.(mp4|webm|ogg|mov)/i)) type = 'VIDEO';
+                    else if (firstUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i)) type = 'IMAGE';
+                    else type = 'FILE';
+                  }
+                  const isVoiceReply = type === 'VOICE' || (content && (content.includes('voice-messages/') || content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) || (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
+                  const isImageReply = type === 'IMAGE' || (type !== 'VIDEO' && type !== 'FILE' && type !== 'VOICE' && mediaUrls.length > 0 && !isVoiceReply);
+                  const isVideoReply = type === 'VIDEO';
+                  const isFileReply = type === 'FILE';
+                  const getFileConfig = (u) => {
+                    const ext = String(u).split('.').pop().split('?')[0].toLowerCase();
+                    if (ext === 'pdf') return { color: '#ef4444', icon: 'file-pdf-box' };
+                    if (['doc', 'docx'].includes(ext)) return { color: '#3b82f6', icon: 'file-word-box' };
+                    if (['xls', 'xlsx'].includes(ext)) return { color: '#10b981', icon: 'file-excel-box' };
+                    if (['zip', 'rar', '7z'].includes(ext)) return { color: '#f59e0b', icon: 'zip-box' };
+                    return { color: '#6366f1', icon: 'file-document-outline' };
+                  };
+                  const thumbUrl = (isImageReply || isVideoReply) && mediaUrls[0] ? (mediaUrls[0].startsWith('http') ? mediaUrls[0] : `${BASE_URL}${mediaUrls[0].startsWith('/') ? '' : '/'}${mediaUrls[0]}`) : null;
+                  let typeLabel = '[Tin nhắn]';
+                  if (isVoiceReply) typeLabel = 'Tin nhắn thoại';
+                  else if (isImageReply) typeLabel = '[Hình ảnh]';
+                  else if (isVideoReply) typeLabel = '[Video]';
+                  else if (isFileReply) {
+                    const fileName = mediaUrls[0]?.split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '');
+                    typeLabel = fileName ? decodeURIComponent(fileName) : '[Tệp tin]';
+                  }
+                  const displayReplyText = isVoiceReply ? 'Tin nhắn thoại' : (content.trim() || typeLabel);
+                  return (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => onPressMessage?.(r.messageId)}
+                      style={[
+                        styles.replyBubble,
+                        isOwn
+                          ? { backgroundColor: 'rgba(255, 255, 255, 0.12)', borderLeftColor: '#fff' }
+                          : { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)', borderLeftColor: colors.primary }
+                      ]}
+                    >
+                      <View style={[styles.replyLine, { backgroundColor: isOwn ? '#fff' : colors.primary }]} />
 
 
-                  {isFileReply && mediaUrls[0] ? (
-                    <View style={[styles.replyThumbnail, { backgroundColor: getFileConfig(mediaUrls[0]).color, alignItems: 'center', justifyContent: 'center' }]}><MaterialCommunityIcons name={getFileConfig(mediaUrls[0]).icon} size={18} color="#fff" /></View>
-                  ) : thumbUrl ? (
-                    <Image source={{ uri: thumbUrl }} style={styles.replyThumbnail} resizeMode="cover" />
-                  ) : isVoiceReply ? (
-                    <View style={[styles.replyThumbnail, { backgroundColor: 'rgba(102, 126, 234, 0.1)', alignItems: 'center', justifyContent: 'center' }]}><MaterialIcons name="mic" size={16} color="#667eea" /></View>
-                  ) : null}
-                  <View style={styles.replyContent}>
-                    <Text style={[styles.replySender, { color: isOwn ? '#fff' : colors.primary }]} numberOfLines={1}>
-                      {(() => {
-                        const currentMeId = String(user?.userId || user?.id || '');
-                        if (String(senderId) === currentMeId) return 'Bạn';
-                        let name = r.senderName || r.sender_name;
-                        for (const conv of conversations) {
-                          const found = (conv.members || []).find(m => String(m.userId || m.id || '') === String(senderId));
-                          if (found) { name = found.fullName || found.name; break; }
-                        }
-                        return name || 'Người dùng';
-                      })()}
-                    </Text>
-                    <Text style={[styles.replyText, { color: isOwn ? 'rgba(255, 255, 255, 0.8)' : (isDark ? '#cbd5e1' : '#64748b') }]} numberOfLines={1}>{displayReplyText}</Text>
+                      {isFileReply && mediaUrls[0] ? (
+                        <View style={[styles.replyThumbnail, { backgroundColor: getFileConfig(mediaUrls[0]).color, alignItems: 'center', justifyContent: 'center' }]}><MaterialCommunityIcons name={getFileConfig(mediaUrls[0]).icon} size={18} color="#fff" /></View>
+                      ) : thumbUrl ? (
+                        <Image source={{ uri: thumbUrl }} style={styles.replyThumbnail} resizeMode="cover" />
+                      ) : isVoiceReply ? (
+                        <View style={[styles.replyThumbnail, { backgroundColor: 'rgba(102, 126, 234, 0.1)', alignItems: 'center', justifyContent: 'center' }]}><MaterialIcons name="mic" size={16} color="#667eea" /></View>
+                      ) : null}
+                      <View style={styles.replyContent}>
+                        <Text style={[styles.replySender, { color: isOwn ? '#fff' : colors.primary }]} numberOfLines={1}>
+                          {(() => {
+                            const currentMeId = String(user?.userId || user?.id || '');
+                            if (String(senderId) === currentMeId) return 'Bạn';
+                            let name = r.senderName || r.sender_name;
+                            for (const conv of conversations) {
+                              const found = (conv.members || []).find(m => String(m.userId || m.id || '') === String(senderId));
+                              if (found) { name = found.fullName || found.name; break; }
+                            }
+                            return name || 'Người dùng';
+                          })()}
+                        </Text>
+                        <Text style={[styles.replyText, { color: isOwn ? 'rgba(255, 255, 255, 0.8)' : (isDark ? '#cbd5e1' : '#64748b') }]} numberOfLines={1}>{displayReplyText}</Text>
+
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })()}
+
+                {!message.isRecalled && (() => {
+                  const mediaUrls = message.mediaUrls || message.media_urls || [];
+                  if (mediaUrls.length === 0 || message.type === 'VOICE') return null;
+                  if (message.type === 'FILE') {
+                    const url = mediaUrls[0];
+                    if (!url) return null;
+                    const fileName = url.split('/').pop();
+                    const ext = fileName.split('.').pop().toUpperCase();
+                    const getFileColor = (u) => {
+                      const e = u.split('.').pop().toLowerCase();
+                      if (e === 'pdf') return '#ef4444';
+                      if (['doc', 'docx'].includes(e)) return '#3b82f6';
+                      if (['xls', 'xlsx'].includes(e)) return '#10b981';
+                      if (['zip', 'rar', '7z'].includes(e)) return '#f59e0b';
+                      return '#6366f1';
+                    };
+                    return (
+                      <TouchableOpacity style={[styles.fileBubble, isOwn ? styles.ownFileBubble : [styles.otherFileBubble, { backgroundColor: colors.surface200, borderColor: colors.border }]]} onPress={async () => {
+                        const fullUrl = getFullUrl(url);
+                        const cleanName = decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''));
+                        setSelectedFile({ url: fullUrl, name: cleanName });
+                        setFileViewerVisible(true);
+                      }}>
+                        <View style={[styles.fileIconBig, { backgroundColor: getFileColor(url) }]}><Text style={styles.fileIconText}>{ext}</Text></View>
+                        <View style={styles.fileInfo}>
+                          <Text style={[styles.fileName, { color: colors.foreground }]} numberOfLines={1}>{decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''))}</Text>
+                          <View style={styles.fileStatusRow}>
+                            <Text style={[styles.fileSize, { color: colors.textMuted }]}>{ext} • 22 KB</Text>
+                            {fileExists && <View style={styles.downloadedBadge}><MaterialIcons name="check-circle" size={12} color="#10b981" /><Text style={styles.downloadedText}>Đã có trên máy</Text></View>}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+
+                    );
+                  }
+                  const total = mediaUrls.length;
+                  const renderGridItem = (url, index, gridStyle) => {
+                    const fullUrl = getFullUrl(url);
+                    const isLastItem = index === 3 && total > 4;
+                    return (
+                      <TouchableOpacity key={index} activeOpacity={0.9} style={[styles.gridImageContainer, gridStyle]} onPress={() => { setSelectedMediaIndex(index); setMediaViewerVisible(true); }}>
+                        {message.type === 'VIDEO' ? <VideoThumbnail videoUrl={fullUrl} style={styles.gridImage} /> : <Image source={{ uri: fullUrl }} style={styles.gridImage} resizeMode="cover" />}
+                        {isLastItem && <View style={styles.moreImagesOverlay}><Text style={styles.moreImagesText}>+{total - 4}</Text></View>}
+                      </TouchableOpacity>
+                    );
+                  };
+                  let gridContent = null;
+                  if (total === 1) gridContent = renderGridItem(mediaUrls[0], 0, styles.singleImage);
+                  else if (total === 2) gridContent = (<View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.halfImage)}{renderGridItem(mediaUrls[1], 1, styles.halfImage)}</View>);
+                  else if (total === 3) gridContent = (<View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.twoThirdImage)}<View style={styles.column}>{renderGridItem(mediaUrls[1], 1, styles.oneThirdImage)}{renderGridItem(mediaUrls[2], 2, styles.oneThirdImage)}</View></View>);
+                  else gridContent = (<View style={styles.grid2x2}><View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.quarterImage)}{renderGridItem(mediaUrls[1], 1, styles.quarterImage)}</View><View style={styles.row}>{renderGridItem(mediaUrls[2], 2, styles.quarterImage)}{renderGridItem(mediaUrls[3], 3, styles.quarterImage)}</View></View>);
+                  return <View style={styles.mediaGridContainer}>{gridContent}</View>;
+                })()}
+
+                {message.isRecalled ? (
+                  <View style={styles.recalledContent}>
+                    <MaterialIcons name="history" size={16} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.textSubtle} style={{ marginRight: 4 }} />
+                    <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : [styles.otherRecalledText, { color: colors.textSubtle }]]}>Tin nhắn đã bị thu hồi</Text>
 
                   </View>
-                </TouchableOpacity>
-              );
-            })()}
+                ) : (
+                  (() => {
+                    if (isVoice) {
+                      const voiceUrl = firstMedia || message.content;
+                      const fullVoiceUrl = getFullUrl(voiceUrl);
+                      if (!fullVoiceUrl) return null;
+                      return <VoicePlayer url={fullVoiceUrl} isOwn={isOwn} />;
+                    }
+                    if (message.type === 'CALL_LOG') {
+                      try {
+                        const callData = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
+                        const cType = callData.callType || 'audio';
+                        const status = callData.status;
+                        const duration = callData.duration || 0;
 
-            {!message.isRecalled && (() => {
-              const mediaUrls = message.mediaUrls || message.media_urls || [];
-              if (mediaUrls.length === 0 || message.type === 'VOICE') return null;
-              if (message.type === 'FILE') {
-                const url = mediaUrls[0];
-                if (!url) return null;
-                const fileName = url.split('/').pop();
-                const ext = fileName.split('.').pop().toUpperCase();
-                const getFileColor = (u) => {
-                  const e = u.split('.').pop().toLowerCase();
-                  if (e === 'pdf') return '#ef4444';
-                  if (['doc', 'docx'].includes(e)) return '#3b82f6';
-                  if (['xls', 'xlsx'].includes(e)) return '#10b981';
-                  if (['zip', 'rar', '7z'].includes(e)) return '#f59e0b';
-                  return '#6366f1';
-                };
-                return (
-                  <TouchableOpacity style={[styles.fileBubble, isOwn ? styles.ownFileBubble : [styles.otherFileBubble, { backgroundColor: colors.surface200, borderColor: colors.border }]]} onPress={async () => {
-                    const fullUrl = getFullUrl(url);
-                    const cleanName = decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''));
-                    setSelectedFile({ url: fullUrl, name: cleanName });
-                    setFileViewerVisible(true);
-                  }}>
-                    <View style={[styles.fileIconBig, { backgroundColor: getFileColor(url) }]}><Text style={styles.fileIconText}>{ext}</Text></View>
-                    <View style={styles.fileInfo}>
-                      <Text style={[styles.fileName, { color: colors.foreground }]} numberOfLines={1}>{decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''))}</Text>
-                      <View style={styles.fileStatusRow}>
-                        <Text style={[styles.fileSize, { color: colors.textMuted }]}>{ext} • 22 KB</Text>
-                        {fileExists && <View style={styles.downloadedBadge}><MaterialIcons name="check-circle" size={12} color="#10b981" /><Text style={styles.downloadedText}>Đã có trên máy</Text></View>}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                        let title = '';
+                        let subtitle = '';
+                        let iconName = 'phone';
+                        let iconColor = isOwn ? '#fff' : '#6366f1';
+                        let isOngoing = status === 'ONGOING';
 
-                );
-              }
-              const total = mediaUrls.length;
-              const renderGridItem = (url, index, gridStyle) => {
-                const fullUrl = getFullUrl(url);
-                const isLastItem = index === 3 && total > 4;
-                return (
-                  <TouchableOpacity key={index} activeOpacity={0.9} style={[styles.gridImageContainer, gridStyle]} onPress={() => { setSelectedMediaIndex(index); setMediaViewerVisible(true); }}>
-                    {message.type === 'VIDEO' ? <VideoThumbnail videoUrl={fullUrl} style={styles.gridImage} /> : <Image source={{ uri: fullUrl }} style={styles.gridImage} resizeMode="cover" />}
-                    {isLastItem && <View style={styles.moreImagesOverlay}><Text style={styles.moreImagesText}>+{total - 4}</Text></View>}
-                  </TouchableOpacity>
-                );
-              };
-              let gridContent = null;
-              if (total === 1) gridContent = renderGridItem(mediaUrls[0], 0, styles.singleImage);
-              else if (total === 2) gridContent = (<View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.halfImage)}{renderGridItem(mediaUrls[1], 1, styles.halfImage)}</View>);
-              else if (total === 3) gridContent = (<View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.twoThirdImage)}<View style={styles.column}>{renderGridItem(mediaUrls[1], 1, styles.oneThirdImage)}{renderGridItem(mediaUrls[2], 2, styles.oneThirdImage)}</View></View>);
-              else gridContent = (<View style={styles.grid2x2}><View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.quarterImage)}{renderGridItem(mediaUrls[1], 1, styles.quarterImage)}</View><View style={styles.row}>{renderGridItem(mediaUrls[2], 2, styles.quarterImage)}{renderGridItem(mediaUrls[3], 3, styles.quarterImage)}</View></View>);
-              return <View style={styles.mediaGridContainer}>{gridContent}</View>;
-            })()}
+                        if (isOngoing) {
+                          title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
+                          iconName = cType === 'video' ? 'video' : 'phone-in-talk';
+                          subtitle = 'Nhấn để tham gia';
+                          iconColor = isOwn ? '#fff' : '#6366f1';
+                        } else if (isOwn) {
+                          title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
+                          iconName = 'phone-outgoing';
+                          if (status === 'SUCCESS') {
+                            const mins = Math.floor(duration / 60);
+                            const secs = duration % 60;
+                            subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                            iconColor = isOwn ? '#fff' : '#10b981';
+                          } else {
+                            subtitle = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
+                            iconColor = isOwn ? 'rgba(255,255,255,0.8)' : '#ef4444';
+                          }
+                        } else {
+                          if (status === 'SUCCESS') {
+                            title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
+                            iconName = 'phone-incoming';
+                            const mins = Math.floor(duration / 60);
+                            const secs = duration % 60;
+                            subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                            iconColor = '#10b981';
+                          } else {
+                            title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+                            iconName = 'phone-missed';
+                            subtitle = status === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
+                            iconColor = '#ef4444';
+                          }
+                        }
 
-            {message.isRecalled ? (
-              <View style={styles.recalledContent}>
-                <MaterialIcons name="history" size={16} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.textSubtle} style={{ marginRight: 4 }} />
-                <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : [styles.otherRecalledText, { color: colors.textSubtle }]]}>Tin nhắn đã bị thu hồi</Text>
+                        const isMissedIncoming = !isOwn && !isOngoing && status !== 'SUCCESS';
 
-              </View>
-            ) : (
-              (() => {
-                if (isVoice) {
-                  const voiceUrl = firstMedia || message.content;
-                  const fullVoiceUrl = getFullUrl(voiceUrl);
-                  if (!fullVoiceUrl) return null;
-                  return <VoicePlayer url={fullVoiceUrl} isOwn={isOwn} />;
-                }
-                if (message.type === 'CALL_LOG') {
-                  try {
-                    const callData = typeof message.content === 'string' ? JSON.parse(message.content) : (message.content || {});
-                    const cType = callData.callType || 'audio';
-                    const status = callData.status;
-                    const duration = callData.duration || 0;
+                        return (
+                          <View style={styles.callLogContainer}>
+                            <View style={styles.callLogHeader}>
+                              <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
+                                <MaterialCommunityIcons
+                                  name={iconName}
+                                  size={22}
+                                  color={isOngoing && !isOwn ? '#6366f1' : iconColor}
+                                />
+                              </View>
+                                <View style={styles.callLogTextGroup}>
+                                  <Text style={[
+                                    styles.callLogTitle,
+                                    isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }],
+                                    isMissedIncoming && styles.missedCallTitle
+                                  ]} numberOfLines={1}>
+                                    {title}
+                                  </Text>
+                                  <Text style={[
+                                    styles.callLogStatus,
+                                    isOwn ? styles.ownText : [styles.otherText, { color: colors.textMuted }]
+                                  ]}>
+                                    {subtitle} • {formatTime(message.createdAt)}
+                                  </Text>
+                                </View>
+                              </View>
 
-                    let title = '';
-                    let subtitle = '';
-                    let iconName = 'phone';
-                    let iconColor = isOwn ? '#fff' : '#6366f1';
-                    let isOngoing = status === 'ONGOING';
+                              <View style={[styles.callLogDivider, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : colors.border }]} />
+                              <TouchableOpacity
+                                style={styles.callBackBtn}
+                                onPress={() => onPressMessage?.({ 
+                                  ...message, 
+                                  action: 'CALL_BACK', 
+                                  callType: callData.callType || 'video', 
+                                  startTime: callData.startTime,
+                                  isOngoing: callData.status === 'ONGOING'
+                                })}
+                              >
+                                <Text style={[styles.callBackText, { color: isOwn ? '#fff' : colors.primary }]}>
+                                  {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}
+                                </Text>
 
-                    if (isOngoing) {
-                      title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
-                      iconName = cType === 'video' ? 'video' : 'phone-in-talk';
-                      subtitle = 'Nhấn để tham gia';
-                      iconColor = isOwn ? '#fff' : '#6366f1';
-                    } else if (isOwn) {
-                      title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
-                      iconName = 'phone-outgoing';
-                      if (status === 'SUCCESS') {
-                        const mins = Math.floor(duration / 60);
-                        const secs = duration % 60;
-                        subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                        iconColor = isOwn ? '#fff' : '#10b981';
-                      } else {
-                        subtitle = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
-                        iconColor = isOwn ? 'rgba(255,255,255,0.8)' : '#ef4444';
-                      }
-                    } else {
-                      if (status === 'SUCCESS') {
-                        title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
-                        iconName = 'phone-incoming';
-                        const mins = Math.floor(duration / 60);
-                        const secs = duration % 60;
-                        subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                        iconColor = '#10b981';
-                      } else {
-                        title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
-                        iconName = 'phone-missed';
-                        subtitle = status === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
-                        iconColor = '#ef4444';
-                      }
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        } catch (e) { return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{message.content}</Text>; }
                     }
 
-                    const isMissedIncoming = !isOwn && !isOngoing && status !== 'SUCCESS';
-
-                    return (
-                      <View style={styles.callLogContainer}>
-                        <View style={styles.callLogHeader}>
-                          <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
-                            <MaterialCommunityIcons
-                              name={iconName}
-                              size={22}
-                              color={isOngoing && !isOwn ? '#6366f1' : iconColor}
-                            />
-                          </View>
-                            <View style={styles.callLogTextGroup}>
-                              <Text style={[
-                                styles.callLogTitle,
-                                isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }],
-                                isMissedIncoming && styles.missedCallTitle
-                              ]} numberOfLines={1}>
-                                {title}
-                              </Text>
-                              <Text style={[
-                                styles.callLogStatus,
-                                isOwn ? styles.ownText : [styles.otherText, { color: colors.textMuted }]
-                              ]}>
-                                {subtitle} • {formatTime(message.createdAt)}
-                              </Text>
-                            </View>
-                          </View>
-  
-                          <View style={[styles.callLogDivider, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : colors.border }]} />
-                          <TouchableOpacity
-                            style={styles.callBackBtn}
-                            onPress={() => onPressMessage?.({ 
-                              ...message, 
-                              action: 'CALL_BACK', 
-                              callType: callData.callType || 'video', 
-                              startTime: callData.startTime,
-                              isOngoing: callData.status === 'ONGOING'
-                            })}
-                          >
-                            <Text style={[styles.callBackText, { color: isOwn ? '#fff' : colors.primary }]}>
-                              {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}
-                            </Text>
-  
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    } catch (e) { return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{message.content}</Text>; }
-                }
 
 
+                    if (message.type === 'VOTE') {
+                      return renderVoteContent();
+                    }
+                    return message.content ? renderTextWithMentions(message.content) : null;
+                  })())}
 
-                if (message.type === 'VOTE') {
-                  return renderVoteContent();
-                }
-                return message.content ? renderTextWithMentions(message.content) : null;
-              })())}
 
-
-            <Text style={[styles.timeInside, isOwn ? styles.ownTime : [styles.otherTime, { color: colors.textSubtle }]]}>{formatTime(message.createdAt || Date.now())}</Text>
+                <Text style={[styles.timeInside, isOwn ? styles.ownTime : [styles.otherTime, { color: colors.textSubtle }]]}>{formatTime(message.createdAt || Date.now())}</Text>
+              </>
+            )}
 
           </Animated.View>
           {renderReactions()}
@@ -886,6 +902,8 @@ const styles = StyleSheet.create({
   ongoingIconWrapper: { backgroundColor: 'rgba(255,255,255,0.25)', width: 44, height: 44, borderRadius: 22 },
   ongoingJoinBtn: { backgroundColor: '#fff', paddingVertical: 12, borderRadius: 14, alignItems: 'center', marginTop: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   ongoingJoinBtnText: { color: '#6366f1', fontWeight: '900', fontSize: 15, letterSpacing: 0.5 },
+  stickerBubbleContainer: { alignItems: 'center', justifyContent: 'center', padding: 4 },
+  bubbleStickerImage: { width: 140, height: 140, resizeMode: 'contain' },
 });
 
 

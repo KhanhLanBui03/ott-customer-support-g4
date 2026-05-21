@@ -27,14 +27,25 @@ export const getPreviewText = (lastMessage) => {
     }
   }
 
+  const type = lastMessage?.type || '';
+
   // Handle URLs
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
     if (isVoiceMessage(raw)) return 'Tin nhắn thoại';
+    const lowerRaw = raw.toLowerCase();
+    if (type === 'STICKER' || lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com')) {
+      return '[Sticker]';
+    }
+    if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
+      return '[GIF]';
+    }
     return '[Đính kèm]';
   }
 
+  if (type === 'STICKER') return '[Sticker]';
+
   // Handle explicit tags
-  const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại'];
+  const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại', 'sticker', 'gif', 'hình ảnh'];
   if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
     return raw;
   }

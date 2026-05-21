@@ -173,17 +173,30 @@ public class ConversationService {
                     } else {
                         lastMessageText = "[Cuộc gọi]";
                     }
+                } else if ("STICKER".equals(last.getType())) {
+                    lastMessageText = "[Nhãn dán]";
                 } else if (lastMessageText == null || lastMessageText.isBlank()) {
-                    lastMessageText = switch (last.getType() != null ? last.getType() : "TEXT") {
-                        case "IMAGE" -> "[Hình ảnh]";
-                        case "VIDEO" -> "[Video]";
-                        case "FILE" -> "[Tệp tin]";
-                        case "VOICE" -> "[Tin nhắn thoại]";
-                        case "LOCATION" -> "[Vị trí]";
-                        case "CONTACT" -> "[Danh thiếp]";
-                        case "POLL" -> "[Bình chọn]";
-                        default -> "";
-                    };
+                    if ("IMAGE".equals(last.getType() != null ? last.getType() : "TEXT") && last.getMediaUrls() != null) {
+                        boolean isGif = last.getMediaUrls().stream()
+                                .anyMatch(url -> url != null && (url.toLowerCase().contains("tenor.com") || url.toLowerCase().endsWith(".gif") || url.toLowerCase().contains(".gif?")));
+                        if (isGif) {
+                            lastMessageText = "[GIF]";
+                        } else {
+                            lastMessageText = "[Hình ảnh]";
+                        }
+                    } else {
+                        lastMessageText = switch (last.getType() != null ? last.getType() : "TEXT") {
+                            case "IMAGE" -> "[Hình ảnh]";
+                            case "VIDEO" -> "[Video]";
+                            case "FILE" -> "[Tệp tin]";
+                            case "VOICE" -> "[Tin nhắn thoại]";
+                            case "STICKER" -> "[Nhãn dán]";
+                            case "LOCATION" -> "[Vị trí]";
+                            case "CONTACT" -> "[Danh thiếp]";
+                            case "POLL" -> "[Bình chọn]";
+                            default -> "";
+                        };
+                    }
                 }
                 
                 uc.setLastMessage(lastMessageText);
@@ -436,13 +449,19 @@ public class ConversationService {
                     
                     // Fast-track friendship status for list view: only check for SINGLE chats to optimize performance
                     String fStatus = "NONE";
+                    Boolean isRequester = null;
                     if (mId.equals(userId)) {
                         fStatus = "SELF";
                     } else if ("SINGLE".equals(finalType)) {
                         Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
                         Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
-                        if (f1.isPresent()) fStatus = f1.get().getStatus();
-                        else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                        if (f1.isPresent()) {
+                            fStatus = f1.get().getStatus();
+                            isRequester = true;
+                        } else if (f2.isPresent()) {
+                            fStatus = f2.get().getStatus();
+                            isRequester = false;
+                        }
                     }
 
                     members.add(ConversationResponse.MemberInfo.builder()
@@ -455,6 +474,7 @@ public class ConversationService {
                             .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                             .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
                             .friendshipStatus(fStatus)
+                            .isRequester(isRequester)
                             .build());
                 });
             }
@@ -499,11 +519,17 @@ public class ConversationService {
                 
                 // Restore friendship status check for detail view to ensure UI displays correctly
                 String fStatus = "NONE";
+                Boolean isRequester = null;
                 if (!mId.equals(userId)) {
                     Optional<com.chatapp.modules.contact.domain.Friendship> f1 = friendshipRepository.find(userId, mId);
                     Optional<com.chatapp.modules.contact.domain.Friendship> f2 = friendshipRepository.find(mId, userId);
-                    if (f1.isPresent()) fStatus = f1.get().getStatus();
-                    else if (f2.isPresent()) fStatus = f2.get().getStatus();
+                    if (f1.isPresent()) {
+                        fStatus = f1.get().getStatus();
+                        isRequester = true;
+                    } else if (f2.isPresent()) {
+                        fStatus = f2.get().getStatus();
+                        isRequester = false;
+                    }
                 } else {
                     fStatus = "SELF";
                 }
@@ -518,6 +544,7 @@ public class ConversationService {
                         .role(memberUc != null ? memberUc.getRole() : "MEMBER")
                         .joinedAt(memberUc != null ? memberUc.getJoinedAt() : null)
                         .friendshipStatus(fStatus)
+                        .isRequester(isRequester)
                         .build());
             });
         }

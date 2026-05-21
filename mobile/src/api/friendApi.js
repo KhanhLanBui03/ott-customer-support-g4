@@ -9,6 +9,11 @@ export const friendApi = {
     return axiosClient.post('/friends/request', { friendId });
   },
 
+  // Cancel friend request
+  cancelRequest: (friendId) => {
+    return axiosClient.delete(`/friends/cancel/${encodeURIComponent(friendId)}`);
+  },
+
   // Accept friend request
   acceptFriendRequest: (requesterId) => {
     return axiosClient.post(`/friends/accept/${requesterId}`);

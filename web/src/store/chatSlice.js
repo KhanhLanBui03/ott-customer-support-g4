@@ -165,6 +165,18 @@ const getMessagePreviewText = (message) => {
   if (message.isRecalled) return '[Tin nhắn đã bị thu hồi]';
 
   const firstMediaUrl = Array.isArray(message.mediaUrls) && message.mediaUrls.length > 0 ? message.mediaUrls[0] : '';
+  const contentLower = (message.content || '').toLowerCase();
+  const mediaLower = firstMediaUrl.toLowerCase();
+  const isGifUrl = contentLower.includes('.gif') || contentLower.includes('tenor.com') || mediaLower.includes('.gif') || mediaLower.includes('tenor.com');
+
+  if (message.type === 'STICKER') {
+    return '[Nhãn dán]';
+  }
+
+  if (isGifUrl) {
+    return '[GIF]';
+  }
+
   if (message.type === 'VOICE' || isAudioUrl(firstMediaUrl) || isAudioUrl(message.content)) {
     return 'Tin nhắn thoại';
   }
@@ -577,6 +589,13 @@ const chatSlice = createSlice({
             let lastMessage = current.lastMessage;
             if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
               lastMessage = "Tin nhắn thoại";
+            } else if (lastMessage && (lastMessage.startsWith('http://') || lastMessage.startsWith('https://'))) {
+              const lowerLast = lastMessage.toLowerCase();
+              if (lowerLast.includes('searchfilter=sticker') || lowerLast.includes('dicebear.com')) {
+                lastMessage = "[Nhãn dán]";
+              } else if (lowerLast.includes('.gif') || lowerLast.includes('tenor.com')) {
+                lastMessage = "[GIF]";
+              }
             }
 
             // Check if last message contains a mention to me
