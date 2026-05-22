@@ -1416,6 +1416,24 @@ public class ConversationService {
         }
         response.put("friendsInGroup", friendsInGroup);
         
+        List<java.util.Map<String, Object>> representatives = new ArrayList<>();
+        if (conv.getMemberIds() != null && !conv.getMemberIds().isEmpty()) {
+            List<UserConversation> ucs = userConversationRepository.findAllByIds(conv.getMemberIds(), conversationId);
+            for (UserConversation uc : ucs) {
+                if ("OWNER".equals(uc.getRole()) || "ADMIN".equals(uc.getRole())) {
+                    userRepository.findById(uc.getUserId()).ifPresent(u -> {
+                        java.util.Map<String, Object> repMap = new java.util.HashMap<>();
+                        repMap.put("userId", u.getUserId());
+                        repMap.put("fullName", u.getFullName());
+                        repMap.put("avatarUrl", u.getAvatarUrl());
+                        repMap.put("role", uc.getRole());
+                        representatives.add(repMap);
+                    });
+                }
+            }
+        }
+        response.put("representatives", representatives);
+        
         // Also add pending request status for this user if exists
         Optional<GroupJoinRequest> existingRequest = groupJoinRequestRepository.findPendingByUserIdAndConversationId(userId, conversationId);
         response.put("pendingRequest", existingRequest.isPresent());

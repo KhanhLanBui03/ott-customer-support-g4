@@ -79,7 +79,7 @@ export default function GroupPreviewScreen() {
       if (response.data.success) {
         const { status, message } = response.data.data;
         if (status === 'JOINED') {
-          Alert.alert('Thành công', 'Đã tham gia nhóm thành công!', [
+          Alert.alert('Thành công', `Bạn đã vào nhóm ${groupInfo?.name || ''}`, [
             {
               text: 'Vào trò chuyện',
               onPress: () => {
@@ -148,7 +148,14 @@ export default function GroupPreviewScreen() {
     );
   }
 
-  const { name, avatar, totalMembers, memberApprovalRequired, mutualFriends, alreadyMember } = groupInfo;
+  const name = groupInfo.name;
+  const avatar = groupInfo.avatarUrl || groupInfo.avatar;
+  const totalMembers = groupInfo.memberCount !== undefined ? groupInfo.memberCount : (groupInfo.totalMembers || 0);
+  const memberApprovalRequired = groupInfo.memberApprovalRequired;
+  const mutualFriends = groupInfo.friendsInGroup || groupInfo.mutualFriends || [];
+  const alreadyMember = groupInfo.alreadyMember;
+  const representatives = groupInfo.representatives || [];
+  const pendingRequest = groupInfo.pendingRequest || false;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
@@ -185,7 +192,7 @@ export default function GroupPreviewScreen() {
             </Text>
           </View>
 
-          {memberApprovalRequired && !alreadyMember && (
+          {memberApprovalRequired && !alreadyMember && !pendingRequest && (
             <View style={[styles.approvalWarning, { backgroundColor: isDark ? '#2b1b17' : '#fff7e6', borderColor: isDark ? '#5c3e1d' : '#ffe7ba' }]}>
               <Ionicons name="lock-closed" size={16} color="#d46b08" style={{ marginRight: 6 }} />
               <Text style={styles.approvalWarningText}>
@@ -195,7 +202,7 @@ export default function GroupPreviewScreen() {
           )}
         </View>
 
-        {/* Mutual Friends Section */}
+        {/* Mutual Friends or Owner/Admins Section */}
         {mutualFriends && mutualFriends.length > 0 ? (
           <View style={[styles.section, { backgroundColor: isDark ? '#1e293b' : '#ffffff' }]}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
@@ -204,8 +211,8 @@ export default function GroupPreviewScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendsListHorizontal}>
               {mutualFriends.map((friend) => (
                 <View key={friend.userId || friend.id} style={styles.friendCard}>
-                  {friend.avatar ? (
-                    <Image source={getAvatarSource(friend.avatar, friend.fullName)} style={styles.friendAvatar} />
+                  {friend.avatarUrl || friend.avatar ? (
+                    <Image source={getAvatarSource(friend.avatarUrl || friend.avatar, friend.fullName)} style={styles.friendAvatar} />
                   ) : (
                     <View style={[styles.friendAvatarPlaceholder, { backgroundColor: '#818cf8' }]}>
                       <Text style={styles.friendInitial}>
@@ -221,11 +228,37 @@ export default function GroupPreviewScreen() {
             </ScrollView>
           </View>
         ) : (
-          <View style={[styles.section, styles.emptyFriendsSection, { backgroundColor: isDark ? '#1e293b' : '#ffffff' }]}>
-            <MaterialCommunityIcons name="account-multiple-outline" size={32} color={colors.textSubtle} style={{ marginBottom: 8 }} />
-            <Text style={[styles.emptyFriendsText, { color: colors.textMuted }]}>
-              Chưa có bạn bè nào của bạn tham gia nhóm này
+          <View style={[styles.section, { backgroundColor: isDark ? '#1e293b' : '#ffffff' }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              Ban quản trị nhóm
             </Text>
+            {representatives && representatives.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendsListHorizontal}>
+                {representatives.map((rep) => (
+                  <View key={rep.userId} style={styles.friendCard}>
+                    {rep.avatarUrl ? (
+                      <Image source={getAvatarSource(rep.avatarUrl, rep.fullName)} style={styles.friendAvatar} />
+                    ) : (
+                      <View style={[styles.friendAvatarPlaceholder, { backgroundColor: '#6366f1' }]}>
+                        <Text style={styles.friendInitial}>
+                          {rep.fullName ? rep.fullName.charAt(0).toUpperCase() : 'U'}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={[styles.friendName, { color: colors.foreground }]} numberOfLines={1}>
+                      {rep.fullName}
+                    </Text>
+                    <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2, fontWeight: '700' }}>
+                      {rep.role === 'OWNER' ? 'Trưởng nhóm' : 'Phó nhóm'}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: 10 }}>
+                {totalMembers} thành viên
+              </Text>
+            )}
           </View>
         )}
       </ScrollView>
@@ -240,6 +273,14 @@ export default function GroupPreviewScreen() {
             <Ionicons name="chatbubble-ellipses" size={20} color="#fff" style={{ marginRight: 8 }} />
             <Text style={styles.buttonText}>Vào trò chuyện</Text>
           </TouchableOpacity>
+        ) : pendingRequest ? (
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: '#64748b' }]}
+            disabled={true}
+          >
+            <Ionicons name="time-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.buttonText}>Yêu cầu đang chờ duyệt</Text>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: '#10b981' }]}
@@ -252,7 +293,7 @@ export default function GroupPreviewScreen() {
               <>
                 <Ionicons name="enter-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
                 <Text style={styles.buttonText}>
-                  {memberApprovalRequired ? 'Gửi yêu cầu tham gia' : 'Tham gia nhóm'}
+                  {memberApprovalRequired ? 'Yêu cầu vào nhóm' : 'Tham gia'}
                 </Text>
               </>
             )}
