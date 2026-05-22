@@ -212,6 +212,11 @@ export const conversationApi = {
     return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`);
   },
   
+  // Toggle member approval requirement (Admin/Owner only)
+  toggleMemberApproval: (conversationId) => {
+    return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-approval`);
+  },
+  
   // Pinning endpoints
   pinMessage: (conversationId, messageId) => {
     return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`);

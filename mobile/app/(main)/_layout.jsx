@@ -104,6 +104,7 @@ export default function MainLayout() {
       <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
         <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
         <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="group-preview" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       </Tabs>
 
       <VideoCall

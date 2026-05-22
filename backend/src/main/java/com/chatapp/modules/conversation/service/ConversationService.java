@@ -9,6 +9,8 @@ import com.chatapp.modules.conversation.domain.UserConversation;
 import com.chatapp.modules.conversation.dto.ConversationResponse;
 import com.chatapp.modules.conversation.dto.CreateConversationRequest;
 import com.chatapp.modules.conversation.dto.GroupInvitationResponse;
+import com.chatapp.modules.conversation.domain.GroupJoinRequest;
+import com.chatapp.modules.conversation.dto.GroupJoinRequestResponse;
 import com.chatapp.modules.conversation.repository.ConversationRepository;
 import com.chatapp.modules.conversation.repository.UserConversationRepository;
 import com.chatapp.modules.message.domain.Message;
@@ -35,6 +37,7 @@ public class ConversationService {
     private final com.chatapp.modules.contact.repository.FriendshipRepository friendshipRepository;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     private final com.chatapp.modules.conversation.repository.GroupInvitationRepository groupInvitationRepository;
+    private final com.chatapp.modules.conversation.repository.GroupJoinRequestRepository groupJoinRequestRepository;
 
     /**
      * Update denormalized last message fields across all user conversations
@@ -497,6 +500,7 @@ public class ConversationService {
                     .isPinned(finalUc.getIsPinned() != null && finalUc.getIsPinned())
                     .tag(finalUc.getTag())
                     .onlyAdminsCanChat(fullConv != null && Boolean.TRUE.equals(fullConv.getOnlyAdminsCanChat()))
+                    .memberApprovalRequired(fullConv != null && Boolean.TRUE.equals(fullConv.getMemberApprovalRequired()))
                     .build();
         }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
     }
@@ -564,6 +568,7 @@ public class ConversationService {
                 .tag(userConv.getTag())
                 .hasUnreadMention(Boolean.TRUE.equals(userConv.getUnreadMention()))
                 .onlyAdminsCanChat(conv.getOnlyAdminsCanChat() != null && Boolean.TRUE.equals(conv.getOnlyAdminsCanChat()))
+                .memberApprovalRequired(conv.getMemberApprovalRequired() != null && Boolean.TRUE.equals(conv.getMemberApprovalRequired()))
                 .build();
     }
 
@@ -1307,6 +1312,288 @@ public class ConversationService {
         } catch (Exception e) {
             log.error("Error in toggleChatRestriction: ", e);
             throw new ValidationException("DEBUG ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+        }
+    }
+
+    public void toggleMemberApproval(String userId, String conversationId) {
+        try {
+            Conversation conv = conversationRepository.findById(conversationId)
+                    .orElseThrow(() -> new NotFoundException("Conversation not found"));
+
+            UserConversation userUc = userConversationRepository.findById(userId, conversationId)
+                    .orElseThrow(() -> new ValidationException("Not a member of this conversation"));
+
+            if (!"OWNER".equals(userUc.getRole()) && !"ADMIN".equals(userUc.getRole())) {
+                throw new ValidationException("Only admins or owner can change member approval settings");
+            }
+
+            boolean current = conv.getMemberApprovalRequired() != null && conv.getMemberApprovalRequired();
+            boolean newVal = !current;
+            conv.setMemberApprovalRequired(newVal);
+            conv.setUpdatedAt(System.currentTimeMillis());
+            conversationRepository.save(conv);
+
+            // Create system message safely
+            try {
+                com.chatapp.modules.auth.domain.User user = userRepository.findById(userId).orElse(null);
+                String userName = user != null ? user.getFullName() : "Quản trị viên";
+                String statusText = newVal ? "đã bật" : "đã tắt";
+                String content = userName + " " + statusText + " chế độ kiểm duyệt thành viên mới.";
+                
+                Message sysMsg = Message.create(
+                        conversationId,
+                        java.util.UUID.randomUUID().toString(),
+                        "SYSTEM",
+                        "Hệ thống",
+                        content,
+                        "SYSTEM"
+                );
+                sysMsg.setStatus("SENT");
+                
+                messageRepository.save(sysMsg);
+                updateLastMessage(conversationId, sysMsg.getContent(), sysMsg.getCreatedAt(), "SYSTEM", userId);
+                
+                // Broadcast updates
+                eventPublisher.publishEvent(MessageEvent.of("MESSAGE_NEW", conversationId, sysMsg));
+            } catch (Exception e) {
+                log.error("Failed to send system message for member approval: {}", e.getMessage());
+            }
+            
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, getConversationDetail(conversationId, userId)));
+        } catch (Exception e) {
+            log.error("Error in toggleMemberApproval: ", e);
+            throw new ValidationException("DEBUG ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+        }
+    }
+
+    public java.util.Map<String, Object> getGroupJoinInfo(String userId, String conversationId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        
+        if (!"GROUP".equals(conv.getType())) {
+            throw new ValidationException("Only group join info can be retrieved");
+        }
+        
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("conversationId", conversationId);
+        response.put("name", conv.getName());
+        response.put("avatarUrl", conv.getAvatarUrl());
+        response.put("memberCount", conv.getMemberIds() != null ? conv.getMemberIds().size() : 0);
+        response.put("memberApprovalRequired", conv.getMemberApprovalRequired() != null && Boolean.TRUE.equals(conv.getMemberApprovalRequired()));
+        
+        boolean alreadyMember = conv.getMemberIds() != null && conv.getMemberIds().contains(userId);
+        response.put("alreadyMember", alreadyMember);
+        
+        List<java.util.Map<String, Object>> friendsInGroup = new ArrayList<>();
+        if (conv.getMemberIds() != null && !conv.getMemberIds().isEmpty()) {
+            List<com.chatapp.modules.contact.domain.Friendship> initiated = friendshipRepository.findByRequesterId(userId);
+            Set<String> friendIds = new HashSet<>();
+            for (com.chatapp.modules.contact.domain.Friendship f : initiated) {
+                if ("ACCEPTED".equals(f.getStatus())) {
+                    friendIds.add(f.getAddresseeId());
+                }
+            }
+            List<com.chatapp.modules.contact.domain.Friendship> receivedKeysOnly = friendshipRepository.findByAddresseeId(userId);
+            for (com.chatapp.modules.contact.domain.Friendship keyItem : receivedKeysOnly) {
+                friendshipRepository.find(keyItem.getRequesterId(), keyItem.getAddresseeId()).ifPresent(f -> {
+                    if ("ACCEPTED".equals(f.getStatus())) {
+                        friendIds.add(f.getRequesterId());
+                    }
+                });
+            }
+            
+            for (String friendId : friendIds) {
+                if (conv.getMemberIds().contains(friendId)) {
+                    userRepository.findById(friendId).ifPresent(u -> {
+                        java.util.Map<String, Object> friendMap = new java.util.HashMap<>();
+                        friendMap.put("userId", u.getUserId());
+                        friendMap.put("fullName", u.getFullName());
+                        friendMap.put("avatarUrl", u.getAvatarUrl());
+                        friendsInGroup.add(friendMap);
+                    });
+                }
+            }
+        }
+        response.put("friendsInGroup", friendsInGroup);
+        
+        // Also add pending request status for this user if exists
+        Optional<GroupJoinRequest> existingRequest = groupJoinRequestRepository.findPendingByUserIdAndConversationId(userId, conversationId);
+        response.put("pendingRequest", existingRequest.isPresent());
+        if (existingRequest.isPresent()) {
+            response.put("requestId", existingRequest.get().getRequestId());
+        }
+        
+        return response;
+    }
+
+    public java.util.Map<String, Object> joinGroup(String userId, String conversationId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        
+        if (!"GROUP".equals(conv.getType())) {
+            throw new ValidationException("Only groups can be joined");
+        }
+        
+        if (conv.getMemberIds() != null && conv.getMemberIds().contains(userId)) {
+            throw new ValidationException("Bạn đã là thành viên của nhóm này");
+        }
+        
+        boolean approvalRequired = conv.getMemberApprovalRequired() != null && Boolean.TRUE.equals(conv.getMemberApprovalRequired());
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        
+        if (approvalRequired) {
+            Optional<GroupJoinRequest> existingRequest = groupJoinRequestRepository.findPendingByUserIdAndConversationId(userId, conversationId);
+            if (existingRequest.isPresent()) {
+                result.put("status", "PENDING_APPROVAL");
+                result.put("message", "Yêu cầu tham gia của bạn đang chờ duyệt.");
+                return result;
+            }
+            
+            GroupJoinRequest joinRequest = GroupJoinRequest.builder()
+                    .userId(userId)
+                    .conversationId(conversationId)
+                    .status("PENDING")
+                    .createdAt(System.currentTimeMillis())
+                    .build();
+            groupJoinRequestRepository.save(joinRequest);
+            
+            // Notify admins/owner via WebSocket
+            notifyAdminsOfJoinRequest(conv, joinRequest);
+            
+            result.put("status", "PENDING_APPROVAL");
+            result.put("message", "Yêu cầu tham gia đã được gửi và đang chờ duyệt.");
+        } else {
+            addMemberToGroup(conv.getCreatorId(), conversationId, userId);
+            result.put("status", "JOINED");
+            result.put("message", "Bạn đã tham gia nhóm thành công.");
+        }
+        return result;
+    }
+
+    private void notifyAdminsOfJoinRequest(Conversation conv, GroupJoinRequest req) {
+        try {
+            User requester = userRepository.findById(req.getUserId()).orElse(null);
+            String requesterName = requester != null ? requester.getFullName() : "Một người dùng";
+            
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("requestId", req.getRequestId());
+            payload.put("userId", req.getUserId());
+            payload.put("fullName", requesterName);
+            payload.put("avatarUrl", requester != null ? requester.getAvatarUrl() : null);
+            payload.put("conversationId", conv.getConversationId());
+            payload.put("groupName", conv.getName());
+            payload.put("status", req.getStatus());
+            payload.put("createdAt", req.getCreatedAt());
+            
+            MessageEvent event = MessageEvent.of("GROUP_JOIN_REQUEST", conv.getConversationId(), payload);
+            
+            // Notify all group admins/owner
+            for (String memberId : conv.getMemberIds()) {
+                userConversationRepository.findById(memberId, conv.getConversationId()).ifPresent(uc -> {
+                    if ("OWNER".equals(uc.getRole()) || "ADMIN".equals(uc.getRole())) {
+                        messagingTemplate.convertAndSendToUser(memberId, "/queue/messages", event);
+                    }
+                });
+            }
+        } catch (Exception e) {
+            log.error("Failed to notify admins of join request: {}", e.getMessage());
+        }
+    }
+
+    public List<GroupJoinRequestResponse> getPendingJoinRequests(String userId, String conversationId) {
+        Conversation conv = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        
+        UserConversation uc = userConversationRepository.findById(userId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not authorized"));
+        
+        if (!"OWNER".equals(uc.getRole()) && !"ADMIN".equals(uc.getRole())) {
+            throw new ValidationException("Only admins can view join requests");
+        }
+        
+        List<GroupJoinRequest> requests = groupJoinRequestRepository.findByConversationId(conversationId);
+        return requests.stream()
+                .filter(req -> "PENDING".equals(req.getStatus()))
+                .map(req -> {
+                    User requester = userRepository.findById(req.getUserId()).orElse(null);
+                    return GroupJoinRequestResponse.builder()
+                            .requestId(req.getRequestId())
+                            .userId(req.getUserId())
+                            .conversationId(req.getConversationId())
+                            .status(req.getStatus())
+                            .createdAt(req.getCreatedAt())
+                            .fullName(requester != null ? requester.getFullName() : "Một người dùng")
+                            .avatarUrl(requester != null ? requester.getAvatarUrl() : null)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    public void approveJoinRequest(String adminId, String requestId) {
+        GroupJoinRequest req = groupJoinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new NotFoundException("Request not found"));
+        
+        if (!"PENDING".equals(req.getStatus())) {
+            throw new ValidationException("Yêu cầu này đã được xử lý trước đó");
+        }
+        
+        Conversation conv = conversationRepository.findById(req.getConversationId())
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        
+        UserConversation adminUc = userConversationRepository.findById(adminId, req.getConversationId())
+                .orElseThrow(() -> new ValidationException("Not authorized"));
+        
+        if (!"OWNER".equals(adminUc.getRole()) && !"ADMIN".equals(adminUc.getRole())) {
+            throw new ValidationException("Only admins can approve requests");
+        }
+        
+        req.setStatus("APPROVED");
+        groupJoinRequestRepository.save(req);
+        
+        // Add to group
+        if (!conv.getMemberIds().contains(req.getUserId())) {
+            addMemberToGroup(adminId, req.getConversationId(), req.getUserId());
+        }
+        
+        // Notify user via WebSocket
+        try {
+            messagingTemplate.convertAndSendToUser(
+                    req.getUserId(),
+                    "/queue/messages",
+                    MessageEvent.of("GROUP_JOIN_APPROVED", req.getConversationId(), Map.of("conversationId", req.getConversationId()))
+            );
+        } catch (Exception e) {
+            log.error("Failed to notify user of join request approval: {}", e.getMessage());
+        }
+    }
+
+    public void rejectJoinRequest(String adminId, String requestId) {
+        GroupJoinRequest req = groupJoinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new NotFoundException("Request not found"));
+        
+        if (!"PENDING".equals(req.getStatus())) {
+            throw new ValidationException("Yêu cầu này đã được xử lý trước đó");
+        }
+        
+        UserConversation adminUc = userConversationRepository.findById(adminId, req.getConversationId())
+                .orElseThrow(() -> new ValidationException("Not authorized"));
+        
+        if (!"OWNER".equals(adminUc.getRole()) && !"ADMIN".equals(adminUc.getRole())) {
+            throw new ValidationException("Only admins can reject requests");
+        }
+        
+        req.setStatus("REJECTED");
+        groupJoinRequestRepository.save(req);
+        
+        // Notify user via WebSocket
+        try {
+            messagingTemplate.convertAndSendToUser(
+                    req.getUserId(),
+                    "/queue/messages",
+                    MessageEvent.of("GROUP_JOIN_REJECTED", req.getConversationId(), Map.of("conversationId", req.getConversationId()))
+            );
+        } catch (Exception e) {
+            log.error("Failed to notify user of join request rejection: {}", e.getMessage());
         }
     }
 }

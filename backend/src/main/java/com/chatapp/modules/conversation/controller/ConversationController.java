@@ -247,4 +247,60 @@ public class ConversationController {
         conversationService.updateConversationAvatar(userId, conversationId, avatarUrl);
         return ResponseEntity.ok(ApiResponse.success(null, "Avatar updated successfully"));
     }
+
+    @PostMapping("/{conversationId}/toggle-approval")
+    public ResponseEntity<ApiResponse<Void>> toggleApproval(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        log.info("Toggle member approval requested for conversation: {} by user: {}", conversationId, userId);
+        conversationService.toggleMemberApproval(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Member approval status toggled successfully"));
+    }
+
+    @GetMapping("/{conversationId}/join-info")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getGroupJoinInfo(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        java.util.Map<String, Object> res = conversationService.getGroupJoinInfo(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(res, "Group join info retrieved successfully"));
+    }
+
+    @PostMapping("/{conversationId}/join")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> joinGroup(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        java.util.Map<String, Object> res = conversationService.joinGroup(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(res, "Group join request processed successfully"));
+    }
+
+    @GetMapping("/{conversationId}/join-requests")
+    public ResponseEntity<ApiResponse<List<com.chatapp.modules.conversation.dto.GroupJoinRequestResponse>>> getPendingJoinRequests(
+            HttpServletRequest request,
+            @PathVariable String conversationId) {
+        String userId = getUserId(request);
+        List<com.chatapp.modules.conversation.dto.GroupJoinRequestResponse> res = 
+                conversationService.getPendingJoinRequests(userId, conversationId);
+        return ResponseEntity.ok(ApiResponse.success(res, "Pending join requests fetched successfully"));
+    }
+
+    @PostMapping("/join-requests/{requestId}/approve")
+    public ResponseEntity<ApiResponse<Void>> approveJoinRequest(
+            HttpServletRequest request,
+            @PathVariable String requestId) {
+        String userId = getUserId(request);
+        conversationService.approveJoinRequest(userId, requestId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Join request approved successfully"));
+    }
+
+    @PostMapping("/join-requests/{requestId}/reject")
+    public ResponseEntity<ApiResponse<Void>> rejectJoinRequest(
+            HttpServletRequest request,
+            @PathVariable String requestId) {
+        String userId = getUserId(request);
+        conversationService.rejectJoinRequest(userId, requestId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Join request rejected successfully"));
+    }
 }

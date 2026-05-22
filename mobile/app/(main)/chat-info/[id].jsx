@@ -11,6 +11,7 @@ import {
   Pressable,
   Switch,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -45,6 +46,8 @@ const ChatInfoScreen = () => {
   const [isWallpaperLoading, setIsWallpaperLoading] = useState(false);
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
+  const [isQRModalVisible, setIsQRModalVisible] = useState(false);
+  const [isApprovalRequiredLocal, setIsApprovalRequiredLocal] = useState(conversation?.memberApprovalRequired || false);
   const wallpaperUrl = conversation?.wallpaperUrl || null;
 
   const otherParticipant = useMemo(() => {
@@ -254,6 +257,40 @@ const ChatInfoScreen = () => {
     }
   };
 
+  // Đồng bộ local state cho memberApprovalRequired
+  React.useEffect(() => {
+    if (conversation?.memberApprovalRequired !== undefined) {
+      setIsApprovalRequiredLocal(conversation.memberApprovalRequired);
+    }
+  }, [conversation?.memberApprovalRequired]);
+
+  const handleToggleMemberApproval = async () => {
+    const originalValue = isApprovalRequiredLocal;
+    const newValue = !originalValue;
+
+    // 1. UI update
+    setIsApprovalRequiredLocal(newValue);
+
+    // 2. Redux update
+    dispatch(updateConversation({
+      conversationId: realId,
+      memberApprovalRequired: newValue
+    }));
+
+    try {
+      // 3. API Call
+      await conversationApi.toggleMemberApproval(realId);
+    } catch (err) {
+      // 4. Rollback
+      setIsApprovalRequiredLocal(originalValue);
+      dispatch(updateConversation({
+        conversationId: realId,
+        memberApprovalRequired: originalValue
+      }));
+      Alert.alert('Lỗi', 'Không thể thay đổi thiết lập duyệt thành viên. Vui lòng thử lại.');
+    }
+  };
+
   const handleMemberAction = (member) => {
     const memberId = String(member.userId || member.id);
     const isMemberAdmin = member.role === 'ADMIN';
@@ -427,6 +464,23 @@ const ChatInfoScreen = () => {
           )}
         </View>
 
+        {/* Group QR Code Section */}
+        {isGroup && (
+          <>
+            <View style={[styles.separator, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : colors.surface100 }]} />
+            <SectionHeader title="MÃ QR NHÓM" />
+            <View style={styles.section}>
+              <InfoItem
+                icon={<MaterialIcons name="qr-code" size={22} color={colors.primary} />}
+                label="Mã QR nhóm"
+                description="Tất cả thành viên đều có thể xem và quét để vào nhóm"
+                color={colors.primary}
+                onPress={() => setIsQRModalVisible(true)}
+              />
+            </View>
+          </>
+        )}
+
         {/* AI Assistant Section for Group */}
         {isGroup && (
           <>
@@ -590,6 +644,26 @@ const ChatInfoScreen = () => {
                   </View>
                 }
               />
+
+              {/* Kiểm soát thêm thành viên */}
+              <InfoItem
+                icon={<MaterialIcons name="security" size={22} color={isAdmin ? colors.foreground : colors.textSubtle} />}
+                label="Kiểm soát thêm thành viên"
+                description={isAdmin ? 'Yêu cầu duyệt thành viên mới trước khi gia nhập' : 'Chỉ quản trị viên mới có quyền'}
+                disabled={!isAdmin}
+                showArrow={false}
+                rightElement={
+                  <View style={styles.switchContainer}>
+                    <Switch
+                      value={isApprovalRequiredLocal}
+                      onValueChange={handleToggleMemberApproval}
+                      disabled={!isAdmin}
+                      trackColor={{ false: isDark ? colors.surface300 : '#cbd5e1', true: colors.primary }}
+                      thumbColor={Platform.OS === 'ios' ? '#fff' : (isApprovalRequiredLocal ? colors.primary : '#94a3b8')}
+                    />
+                  </View>
+                }
+              />
             </>
           ) : null}
         </View>
@@ -603,6 +677,50 @@ const ChatInfoScreen = () => {
         conversationId={realId}
         existingMemberIds={conversation?.members?.map(m => String(m.userId || m.id)) || []}
       />
+
+      {/* Modal hiển thị mã QR nhóm */}
+      {isGroup && (
+        <Modal
+          visible={isQRModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setIsQRModalVisible(false)}
+        >
+          <Pressable 
+            style={styles.modalOverlay} 
+            onPress={() => setIsQRModalVisible(false)}
+          >
+            <Pressable style={[styles.qrModalContent, { backgroundColor: colors.background, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={() => setIsQRModalVisible(false)}
+              >
+                <MaterialIcons name="close" size={24} color={colors.foreground} />
+              </TouchableOpacity>
+
+              <Text style={[styles.qrTitle, { color: colors.foreground }]}>Mã QR nhóm</Text>
+              <Text style={[styles.qrSubtitle, { color: colors.textMuted }]}>
+                Quét mã QR bằng camera hoặc scanner của ứng dụng để gia nhập nhóm
+              </Text>
+
+              <View style={[styles.qrCodeWrapper, { backgroundColor: '#ffffff', borderColor: colors.border }]}>
+                <Image
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=GROUP_JOIN:${realId}` }}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+              </View>
+
+              <Text style={[styles.qrGroupName, { color: colors.foreground }]} numberOfLines={2}>
+                {conversation?.name || displayName}
+              </Text>
+              <Text style={[styles.qrGroupInfo, { color: colors.primary }]}>
+                {conversation?.members?.length || 0} thành viên
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -752,6 +870,69 @@ const styles = StyleSheet.create({
   switchContainer: {
     paddingRight: 4,
     marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  qrModalContent: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
+    borderRadius: 20,
+  },
+  qrTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  qrSubtitle: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  qrCodeWrapper: {
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+  },
+  qrGroupName: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  qrGroupInfo: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

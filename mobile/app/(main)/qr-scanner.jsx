@@ -43,6 +43,15 @@ export default function QrScannerScreen() {
   const handleBarCodeScanned = async ({ type, data }) => {
     setScanned(true);
     
+    if (data && data.startsWith('GROUP_JOIN:')) {
+      const conversationId = data.replace('GROUP_JOIN:', '');
+      router.push({
+        pathname: '/(main)/group-preview',
+        params: { conversationId }
+      });
+      return;
+    }
+    
     // Check if the data is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     

@@ -39,6 +39,18 @@ export const chatApi = {
     axiosClient.put(`/conversations/${encodeURIComponent(conversationId)}/tag`, { tag }),
   toggleChatRestriction: (conversationId) =>
     axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`),
+  toggleMemberApproval: (conversationId) =>
+    axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-approval`),
+  getGroupJoinInfo: (conversationId) =>
+    axiosClient.get(`/conversations/${encodeURIComponent(conversationId)}/join-info`),
+  joinGroup: (conversationId) =>
+    axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/join`),
+  getPendingJoinRequests: (conversationId) =>
+    axiosClient.get(`/conversations/${encodeURIComponent(conversationId)}/join-requests`),
+  approveJoinRequest: (requestId) =>
+    axiosClient.post(`/conversations/join-requests/${encodeURIComponent(requestId)}/approve`),
+  rejectJoinRequest: (requestId) =>
+    axiosClient.post(`/conversations/join-requests/${encodeURIComponent(requestId)}/reject`),
 
   // sendMessage: (data) => axiosClient.post('/messages/send', data),
 
