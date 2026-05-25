@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Search, X, Send, Users, User, Clock } from 'lucide-react';
+import { Search, X, Send, Users, User, Clock, HardDrive } from 'lucide-react';
 import { useChat } from '../../hooks/useChat';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
+import axiosClient from '../../api/axiosClient';
+import { myCloudApi } from '../../api/myCloudApi';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -21,10 +23,12 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
   const TABS = [
     { key: t('forward.tabs.recent'), label: t('forward.tabs.recent') },
     { key: t('forward.tabs.groups'), label: t('forward.tabs.groups') },
-    { key: t('forward.tabs.friends'), label: t('forward.tabs.friends') }
+    { key: t('forward.tabs.friends'), label: t('forward.tabs.friends') },
+    { key: 'MY_CLOUD', label: 'My Cloud' }
   ];
 
   const filteredConversations = useMemo(() => {
+    if (activeTab === 'MY_CLOUD') return [];
     let list = Object.values(conversations);
     
     // Sort by last message date (recent first)
@@ -48,11 +52,118 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
   }, [conversations, activeTab, searchTerm]);
 
   const toggleSelect = (convId) => {
-    setSelectedConvs(prev => 
-      prev.includes(convId) 
-        ? prev.filter(id => id !== convId) 
-        : [...prev, convId]
-    );
+    if (activeTab === 'MY_CLOUD') {
+      setSelectedConvs(prev => prev.includes('MY_CLOUD') ? [] : ['MY_CLOUD']);
+    } else {
+      setSelectedConvs(prev => 
+        prev.includes(convId) 
+          ? prev.filter(id => id !== convId) 
+          : [...prev, convId]
+      );
+    }
+  };
+
+  const handleForwardToCloud = async () => {
+    try {
+      const isText = messageToForward.type === 'TEXT';
+
+      const extractObjectKey = (inputUrl) => {
+        if (!inputUrl) return '';
+        try {
+          const parsed = new URL(inputUrl);
+          const pathname = decodeURIComponent(parsed.pathname || '').replace(/^\/+/, '');
+          const segments = pathname.split('/').filter(Boolean);
+          const host = (parsed.hostname || '').toLowerCase();
+
+          // Path-style S3 URLs: https://s3...amazonaws.com/<bucket>/<key>
+          if (host === 's3.amazonaws.com' || host.startsWith('s3.')) {
+            return segments.length > 1 ? segments.slice(1).join('/') : pathname;
+          }
+
+          // Virtual-hosted style: https://<bucket>.s3...amazonaws.com/<key>
+          return segments.join('/');
+        } catch (error) {
+          return '';
+        }
+      };
+
+      const fetchMediaBlob = async (inputUrl) => {
+        const objectKey = extractObjectKey(inputUrl);
+        if (objectKey) {
+          const response = await axiosClient.get('/media/presigned-download', {
+            params: {
+              objectKey,
+              expiresInMinutes: 15
+            }
+          });
+
+          const freshUrl = response?.data?.url || response?.url;
+          if (!freshUrl) {
+            throw new Error('Unable to create fresh download URL');
+          }
+
+          const freshResponse = await fetch(freshUrl);
+          if (!freshResponse.ok) {
+            throw new Error(`Unable to fetch file from refreshed URL: ${freshResponse.status}`);
+          }
+
+          return await freshResponse.blob();
+        }
+
+        const directResponse = await fetch(inputUrl);
+        if (!directResponse.ok) {
+          throw new Error(`Unable to fetch file: ${directResponse.status}`);
+        }
+        return await directResponse.blob();
+      };
+      
+      const cleanFileName = (url) => {
+        if (!url) return `file_${Date.now()}`;
+        try {
+          const decoded = decodeURIComponent(url);
+          let name = decoded.split('/').pop().split('?')[0];
+          // remove uuid prefix (common in S3 keys)
+          name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
+          // remove another common pattern: uuid_timestamp_
+          name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
+          return name;
+        } catch (e) {
+          return `file_${Date.now()}`;
+        }
+      };
+
+      if (isText) {
+        const text = messageToForward.content || '';
+        const name = `forwarded_${Date.now()}.txt`;
+        const blob = new Blob([text], { type: 'text/plain' });
+        await myCloudApi.uploadFile(blob, name);
+      } else {
+        const mediaUrls = messageToForward.mediaUrls || messageToForward.media_urls || [];
+        if (mediaUrls.length > 0) {
+          for (const url of mediaUrls) {
+            const blob = await fetchMediaBlob(url);
+            
+            // Priority: messageToForward.fileName > messageToForward.content (if it's a name) > cleaned URL
+            let name = messageToForward.fileName;
+            if (!name && messageToForward.content && !messageToForward.content.startsWith('http')) {
+               name = messageToForward.content;
+            }
+            if (!name) {
+               name = cleanFileName(url);
+            }
+
+            await myCloudApi.uploadFile(blob, name);
+          }
+        } else if (messageToForward.content && messageToForward.content.startsWith('http')) {
+           const blob = await fetchMediaBlob(messageToForward.content);
+           let name = messageToForward.fileName || cleanFileName(messageToForward.content);
+           await myCloudApi.uploadFile(blob, name);
+        }
+      }
+    } catch (err) {
+      console.error('Forward to cloud failed:', err);
+      throw err;
+    }
   };
 
   const handleForward = async () => {
@@ -60,26 +171,39 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
     setSending(true);
 
     try {
-      const forwardData = {
-        messageId: messageToForward.messageId,
-        conversationId: messageToForward.conversationId,
-        senderName: messageToForward.senderName
-      };
+      if (selectedConvs.includes('MY_CLOUD')) {
+        await handleForwardToCloud();
+      }
 
-      for (const convId of selectedConvs) {
-        // Forward the original message
-        await sendMessage(
-          convId, 
-          messageToForward.content, 
-          messageToForward.type, 
-          messageToForward.mediaUrls || [], 
-          null, // replyTo
-          forwardData
-        );
+      const otherConvs = selectedConvs.filter(id => id !== 'MY_CLOUD');
+      if (otherConvs.length > 0) {
+        const forwardData = {
+          messageId: messageToForward.messageId,
+          conversationId: messageToForward.conversationId,
+          senderName: messageToForward.senderName,
+          fileName: messageToForward.fileName
+        };
 
-        // Send extra message if any
-        if (extraMessage.trim()) {
-          await sendMessage(convId, extraMessage.trim(), 'TEXT');
+        for (const convId of otherConvs) {
+          // Forward the original message
+          const forwardType = messageToForward.type === 'FILE' ? 'FILE' : messageToForward.type;
+          const forwardContent = messageToForward.type === 'FILE'
+            ? (messageToForward.fileName || '[Attachment]')
+            : messageToForward.content;
+
+          await sendMessage(
+            convId, 
+            forwardContent, 
+            forwardType, 
+            messageToForward.mediaUrls || [], 
+            null, // replyTo
+            forwardData
+          );
+
+          // Send extra message if any
+          if (extraMessage.trim()) {
+            await sendMessage(convId, extraMessage.trim(), 'TEXT');
+          }
         }
       }
       onClose();
@@ -143,7 +267,28 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
 
            {/* List */}
            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-              {filteredConversations.map(conv => (
+              {activeTab === 'MY_CLOUD' ? (
+                <div 
+                  onClick={() => toggleSelect('MY_CLOUD')}
+                  className="flex items-center justify-between p-4 rounded-2xl hover:bg-surface-200 cursor-pointer transition-all border border-transparent hover:border-border group"
+                >
+                  <div className="flex items-center space-x-4">
+                     <div className="w-12 h-12 bg-indigo-500/15 rounded-2xl flex items-center justify-center text-indigo-500 shadow-sm group-hover:scale-105 transition-transform">
+                        <HardDrive size={24} />
+                     </div>
+                     <div className="flex flex-col">
+                        <span className="font-bold text-[15px] text-foreground">My Cloud</span>
+                        <span className="text-[11px] text-foreground/40 font-medium">Lưu trữ cá nhân</span>
+                     </div>
+                  </div>
+                  <div className={cn(
+                    "w-6 h-6 rounded-[8px] border-2 flex items-center justify-center transition-all",
+                    selectedConvs.includes('MY_CLOUD') ? "bg-indigo-500 border-indigo-500 shadow-lg shadow-indigo-500/30" : "border-border"
+                  )}>
+                    {selectedConvs.includes('MY_CLOUD') && <X size={14} className="text-white rotate-45" />}
+                  </div>
+                </div>
+              ) : filteredConversations.map(conv => (
                 <div 
                   key={conv.conversationId}
                   onClick={() => toggleSelect(conv.conversationId)}
@@ -170,7 +315,9 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
               <p className="text-[10px] font-black text-foreground/40 uppercase tracking-widest">{t('forward.forward_message')}</p>
               <div className="p-3 bg-background/50 rounded-xl border border-border">
                  <p className="text-[13px] text-foreground/80 truncate italic">
-                    {messageToForward.content || '[Attachment]'}
+                      {messageToForward.type === 'FILE'
+                       ? (messageToForward.fileName || '[Attachment]')
+                       : (messageToForward.content || '[Attachment]')}
                  </p>
               </div>
            </div>

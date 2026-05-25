@@ -306,7 +306,14 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
       type: type,
       status: 'SENDING',
       createdAt: Date.now(),
-      replyTo: replyingTo ? { messageId: replyingTo.messageId, content: replyingTo.content, senderName: replyingTo.senderName } : null
+      replyTo: replyingTo ? {
+        messageId: replyingTo.messageId,
+        content: replyingTo.content,
+        senderName: replyingTo.senderName,
+        senderId: replyingTo.senderId,
+        type: replyingTo.type,
+        mediaUrls: replyingTo.mediaUrls || replyingTo.media_urls || []
+      } : null
     };
 
     dispatch(addOptimisticMessage({ conversationId, message: optimisticMsg }));
