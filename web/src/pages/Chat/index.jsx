@@ -18,7 +18,8 @@ import LogoutModal from '../../components/LogoutModal';
 import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
 import MediaLightbox from '../../components/MediaLightbox';
-import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal } from 'lucide-react';
+import MyCloud from '../../components/MyCloud/MyCloud';
+import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal, Cloud } from 'lucide-react';
 import { fetchNotifications, setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
 import { setActiveConversation, setConversations } from '../../store/chatSlice';
 import { useTheme } from '../../hooks/useTheme';
@@ -58,6 +59,7 @@ const Chat = () => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isLanguageSettingsOpen, setIsLanguageSettingsOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isMyCloudView, setIsMyCloudView] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -590,13 +592,16 @@ const Chat = () => {
           <nav className={`flex ${isMobile ? 'flex-row items-center flex-1 justify-around h-full' : 'flex-col space-y-6 items-center'} w-full`}>
             {/* Chat Icon */}
             <div className="relative group">
-              <button className={`
-                ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                flex items-center justify-center bg-indigo-600 text-white rounded-[22px] shadow-lg shadow-indigo-600/30 group relative transition-all active:scale-95
-              `}>
-                <MessageSquare size={isMobile ? 22 : 24} fill="currentColor" className="opacity-90" />
+              <button 
+                onClick={() => setIsMyCloudView(false)}
+                className={`
+                  ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                  flex items-center justify-center ${(!isMyCloudView && activeConversationId) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] group relative transition-all active:scale-95
+                `}
+              >
+                <MessageSquare size={isMobile ? 22 : 24} fill={(!isMyCloudView && activeConversationId) ? "currentColor" : "none"} className="opacity-90" />
               </button>
-              {!isMobile && (
+              {!isMobile && !isMyCloudView && activeConversationId && (
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full" />
               )}
             </div>
@@ -657,6 +662,28 @@ const Chat = () => {
               </button>
               {!isMobile && (
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+            </div>
+
+            {/* My Cloud Icon */}
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setIsMyCloudView(true);
+                  if (activeConversationId) {
+                    dispatch(setActiveConversation(null));
+                  }
+                }}
+                className={`
+                  ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
+                  flex items-center justify-center ${isMyCloudView ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] transition-all group active:scale-95
+                `}
+                title="Cloud của tôi"
+              >
+                <Cloud size={isMobile ? 22 : 24} fill={isMyCloudView ? "currentColor" : "none"} />
+              </button>
+              {!isMobile && (
+                <div className={`absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full transition-opacity ${isMyCloudView ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
               )}
             </div>
 
@@ -891,6 +918,7 @@ const Chat = () => {
                 onSelect={(id) => {
                   selectConversation(id);
                   setIsInfoOpen(false);
+                  setIsMyCloudView(false);
                 }}
                 onContextMenu={handleSidebarContextMenu}
                 onTogglePin={handleTogglePin}
@@ -912,34 +940,38 @@ const Chat = () => {
 
       {/* 3. Main Chat Area & Info Sidebar */}
       {
-        (!isMobile || activeConversationId) && (
+        (!isMobile || activeConversationId || isMyCloudView) && (
           <div className={`flex-1 flex min-w-0 bg-background ${isMobile ? 'z-40' : ''}`}>
-            <div className="flex-1 flex flex-col min-w-0">
-              {activeConversation ? (
-                <ChatWindow
-                  conversation={activeConversation}
-                  onStartCall={handleStartCall}
-                  isCallActive={callStatus !== 'idle'}
-                  callStatus={callStatus}
-                  onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
-                  isInfoOpen={isInfoOpen}
-                  onBack={() => selectConversation(null)}
-                  onRefreshMessages={() => fetchMessages(activeConversationId)}
-                  openLightbox={openLightbox}
-                  allChatImages={allChatImages}
-                />
-              ) : !isMobile ? (
-                <WelcomeCarousel
-                  user={user}
-                  onAction={(type) => {
-                    if (type === 'createGroup') setIsGroupModalOpen(true);
-                    if (type === 'addFriend') setIsSearchOpen(true);
-                  }}
-                />
-              ) : null}
-            </div>
+            {isMyCloudView ? (
+              <MyCloud isDark={isDark} />
+            ) : (
+              <div className="flex-1 flex flex-col min-w-0">
+                {activeConversation ? (
+                  <ChatWindow
+                    conversation={activeConversation}
+                    onStartCall={handleStartCall}
+                    isCallActive={callStatus !== 'idle'}
+                    callStatus={callStatus}
+                    onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
+                    isInfoOpen={isInfoOpen}
+                    onBack={() => selectConversation(null)}
+                    onRefreshMessages={() => fetchMessages(activeConversationId)}
+                    openLightbox={openLightbox}
+                    allChatImages={allChatImages}
+                  />
+                ) : !isMobile ? (
+                  <WelcomeCarousel
+                    user={user}
+                    onAction={(type) => {
+                      if (type === 'createGroup') setIsGroupModalOpen(true);
+                      if (type === 'addFriend') setIsSearchOpen(true);
+                    }}
+                  />
+                ) : null}
+              </div>
+            )}
 
-            {!isMobile && activeConversationId && isInfoOpen && (
+            {!isMobile && !isMyCloudView && activeConversationId && isInfoOpen && (
               <ConversationInfo
                 conversation={activeConversation}
                 onClose={() => setIsInfoOpen(false)}

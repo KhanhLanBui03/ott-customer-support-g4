@@ -86,6 +86,9 @@ public class MessageResponse {
         private String messageId;
         private String content;
         private String senderName;
+        private String senderId;
+        private String type;
+        private List<String> mediaUrls;
     }
 
     @Data

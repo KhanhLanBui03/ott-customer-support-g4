@@ -580,6 +580,36 @@
       "inviter_prefix": "Từ:",
       "user_fallback": "Người dùng",
       "someone": "Ai đó"
+    },
+    "cloud": {
+      "title": "Cloud của tôi",
+      "subtitle": "Lưu giữ khoảnh khắc & tài liệu",
+      "upload": "Tải tệp lên",
+      "search": "Tìm kiếm trong Cloud...",
+      "no_files": "Chưa có tệp nào",
+      "no_files_desc": "Bắt đầu tải lên các tài liệu, hình ảnh hoặc video để lưu trữ an toàn.",
+      "first_upload": "Nhấn để tải lên tệp đầu tiên",
+      "loading": "Đang tải tệp...",
+      "delete_confirm": "Bạn có chắc chắn muốn xóa tệp này?",
+      "upload_failed": "Tải lên thất bại",
+      "delete_failed": "Xóa thất bại",
+      "types": {
+        "all": "Tất cả",
+        "image": "Hình ảnh",
+        "video": "Video",
+        "audio": "Âm thanh",
+        "document": "Tài liệu",
+        "other": "Khác"
+      },
+      "secure_storage": "Lưu trữ bảo mật",
+      "secure_storage_desc": "Các tệp của bạn được mã hóa và bảo vệ bởi hệ thống bảo mật của chúng tôi.",
+      "load_more": "Xem thêm",
+      "loading_more": "Đang tải thêm...",
+      "info_title": "Thông tin Cloud",
+      "files": "tệp tin",
+      "refresh": "Làm mới",
+      "clear_all": "Xóa tất cả",
+      "clear_all_confirm": "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trên Cloud?"
     }
   }
 }

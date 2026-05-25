@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import chatApi from '../../api/chatApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote } from '../../store/chatSlice';
+import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimistic, updateMessage, optimisticVote, fetchConversations } from '../../store/chatSlice';
 import VoteDetailsModal from '../VoteDetailsModal';
 import { useTheme } from '../../hooks/useTheme';
 import UserInfoModal from '../UserInfoModal';
@@ -771,11 +771,23 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
       } else if (action === 'PIN') {
         dispatch(pinMessageOptimistic({ conversationId, messageId }));
         setActiveMenu(null);
-        await chatApi.pinMessage(conversationId, messageId);
+        try {
+          await chatApi.pinMessage(conversationId, messageId);
+          dispatch(fetchConversations());
+        } catch (err) {
+          dispatch(unpinMessageOptimistic({ conversationId, messageId }));
+          throw err;
+        }
       } else if (action === 'UNPIN') {
         dispatch(unpinMessageOptimistic({ conversationId, messageId }));
         setActiveMenu(null);
-        await chatApi.unpinMessage(conversationId, messageId);
+        try {
+          await chatApi.unpinMessage(conversationId, messageId);
+          dispatch(fetchConversations());
+        } catch (err) {
+          dispatch(pinMessageOptimistic({ conversationId, messageId }));
+          throw err;
+        }
       } else if (action === 'REACTION') {
         const { id, emoji } = messageId;
         const currentUserId = user?.userId || user?.id;
@@ -1148,6 +1160,14 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               (mediaUrls.length > 0 && String(mediaUrls[0]).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
 
                                             if (isVoice) return t('chat.voice_message');
+                                            
+                                            if (originalMsg?.type === 'FILE' || r.type === 'FILE') {
+                                              const fileName = originalMsg?.forwardedFrom?.fileName || 
+                                                             (content && !content.startsWith('http') ? content : null) ||
+                                                             getFileName(mediaUrls[0] || content);
+                                              return `[${t('chat.file')}] ${fileName}`;
+                                            }
+
                                             if (content && content !== '[Attachment]' && !content.startsWith('http')) return content;
 
                                             if (originalMsg) {
@@ -1157,6 +1177,10 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               if (originalMsg.type === 'FILE' && originalMsg.mediaUrls?.length > 0) {
                                                 try {
                                                   const url = originalMsg.mediaUrls[0];
+                                                  const forwardedName = originalMsg?.forwardedFrom?.fileName;
+                                                  if (forwardedName) {
+                                                    return `[${t('chat.file')}] ${forwardedName}`;
+                                                  }
                                                   const decoded = decodeURIComponent(url);
                                                   let name = decoded.split('/').pop().split('?')[0];
                                                   name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
@@ -1448,6 +1472,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                   <div className={cn("absolute top-0 flex items-center space-x-1 opacity-0 group-hover/bubble-main:opacity-100 transition-all z-10", isMe ? "-left-28" : "-right-28")}>
                                     <button onClick={() => onReply(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all" title={t('chat.reply')}><Reply size={18} /></button>
                                     <button onClick={() => onForward(msg)} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-blue-500 transition-all" title={t('chat.forward')}><Forward size={18} className="text-blue-500" /></button>
+                                    <button
+                                      onClick={() => handleAction(isPinned ? 'UNPIN' : 'PIN', msg.messageId)}
+                                      className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-indigo-500 transition-all"
+                                      title={isPinned ? t('chat.unpin_message') : t('chat.pin_message')}
+                                    >
+                                      <Pin size={18} className={isPinned ? 'text-indigo-500' : ''} fill={isPinned ? 'currentColor' : 'none'} />
+                                    </button>
                                     <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === msg.messageId ? null : msg.messageId); }} className="p-1 px-1.5 hover:bg-surface-200 rounded-full text-foreground/40 hover:text-foreground transition-all" title={t('chat.more')}><MoreHorizontal size={18} /></button>
                                   </div>
 
@@ -1553,17 +1584,24 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                     );
                                                   }
                                                   return (
-                                                    <div key={idx} className="flex flex-col max-w-full p-2">
+                                                      <div key={idx} className="flex flex-col max-w-full p-2">
                                                       <FilePreview url={fullUrl} />
                                                       <div className="relative group/file">
                                                         <div
-                                                          onClick={() => setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: getFileName(url), sender: msg.senderName, time: formatMessageTime(msg.createdAt) })}
+                                                          onClick={() => {
+                                                            const fileName = (msg.type === 'FILE' && msg.content && !msg.content.startsWith('http')) 
+                                                              ? msg.content 
+                                                              : (msg.forwardedFrom?.fileName || getFileName(url));
+                                                            setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: fileName, sender: msg.senderName, time: formatMessageTime(msg.createdAt) });
+                                                          }}
                                                           className={`flex items-start space-x-4 p-4 pr-16 rounded-2xl border transition-all min-w-[260px] max-w-full cursor-pointer ${isMe ? 'bg-white/10 border-white/20 hover:bg-white/15' : 'bg-surface-100 dark:bg-surface-200 border-border hover:bg-surface-200'}`}
                                                         >
                                                           {getFileIcon(url)}
                                                           <div className="flex-1 min-w-0 pt-0.5">
                                                             <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
-                                                              {getFileName(url)}
+                                                              {(msg.type === 'FILE' && msg.content && !msg.content.startsWith('http')) 
+                                                                ? msg.content 
+                                                                : (msg.forwardedFrom?.fileName || getFileName(url))}
                                                             </p>
                                                           </div>
                                                         </div>
@@ -1641,7 +1679,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                               })()}
                                             </div>
                                           )}
-                                          {msg.content && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{renderContentWithMentions(msg.content, isMe)}</p>}
+                                          {msg.content && msg.type === 'TEXT' && <p className="text-[14px] px-4 pt-3 pb-1 whitespace-pre-wrap break-words font-semibold leading-relaxed tracking-tight text-inherit/90">{renderContentWithMentions(msg.content, isMe)}</p>}
 
                                           {/* Manual Translate Button */}
                                           {msg.type === 'TEXT' && 
