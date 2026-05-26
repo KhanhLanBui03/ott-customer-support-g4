@@ -620,7 +620,16 @@ const ChatDetailScreen = () => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(main)');
+              }
+            }}
+            style={styles.backButton}
+          >
             <Ionicons name="chevron-back" size={28} color={colors.primary} />
           </TouchableOpacity>
 

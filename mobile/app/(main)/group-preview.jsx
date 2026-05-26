@@ -87,7 +87,7 @@ export default function GroupPreviewScreen() {
               },
             },
           ]);
-        } else if (status === 'PENDING') {
+        } else if (status === 'PENDING' || status === 'PENDING_APPROVAL') {
           Alert.alert(
             'Yêu cầu đã gửi',
             'Yêu cầu tham gia nhóm đã được gửi thành công. Vui lòng chờ quản trị viên duyệt.',
@@ -95,8 +95,12 @@ export default function GroupPreviewScreen() {
               {
                 text: 'OK',
                 onPress: () => {
+                if (router.canGoBack()) {
                   router.back();
-                },
+                } else {
+                  router.replace('/(main)');
+                }
+              },
               },
             ]
           );
@@ -140,7 +144,13 @@ export default function GroupPreviewScreen() {
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={fetchGroupInfo}>
             <Text style={styles.retryText}>Thử lại</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backLink} onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(main)');
+            }
+          }}>
             <Text style={[styles.backLinkText, { color: colors.primary }]}>Quay lại</Text>
           </TouchableOpacity>
         </View>
@@ -161,7 +171,16 @@ export default function GroupPreviewScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: isDark ? '#1e293b' : '#e2e8f0' }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(main)');
+            }
+          }}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông tin nhóm</Text>

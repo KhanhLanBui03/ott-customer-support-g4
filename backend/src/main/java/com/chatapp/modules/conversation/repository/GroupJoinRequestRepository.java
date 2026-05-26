@@ -39,7 +39,13 @@ public class GroupJoinRequestRepository {
                     .withIndexName("conversation-index")
                     .withConsistentRead(false);
 
-            return dynamoDBMapper.query(GroupJoinRequest.class, queryExpression);
+            List<GroupJoinRequest> gsiResults = dynamoDBMapper.query(GroupJoinRequest.class, queryExpression);
+            
+            // GSI may only project key attributes. Reload full items from main table.
+            return gsiResults.stream()
+                    .map(r -> dynamoDBMapper.load(GroupJoinRequest.class, r.getRequestId()))
+                    .filter(r -> r != null)
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("Failed to query group join requests by conversationId GSI: {}", e.getMessage());
             

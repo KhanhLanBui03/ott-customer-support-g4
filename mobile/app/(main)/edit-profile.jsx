@@ -127,7 +127,12 @@ const EditProfileScreen = () => {
       await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
 
       Alert.alert('Thành công', 'Thông tin hồ sơ đã được cập nhật!', [
-        { text: 'OK', onPress: () => router.push('/profile') }
+        {
+          text: 'OK',
+          onPress: () => {
+            router.navigate('/(main)/profile');
+          }
+        }
       ]);
     } catch (error) {
       // Bỏ qua log error nếu là 401 vì đã được xử lý toàn cục ở axiosClient
@@ -145,7 +150,12 @@ const EditProfileScreen = () => {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>HỒ SƠ CỦA BẠN</Text>
-          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.closeButton}>
+          <TouchableOpacity
+            onPress={() => {
+              router.navigate('/(main)/profile');
+            }}
+            style={styles.closeButton}
+          >
             <Ionicons name="close" size={26} color={colors.textMuted} />
           </TouchableOpacity>
         </View>

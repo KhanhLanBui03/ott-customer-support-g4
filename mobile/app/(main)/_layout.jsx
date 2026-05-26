@@ -33,7 +33,7 @@ export default function MainLayout() {
         } else if (['FRIEND_DELETE', 'FRIEND_BLOCK', 'FRIEND_UNBLOCK', 'FRIEND_REQUEST_REJECTED', 'FRIEND_REQUEST_CANCELLED'].includes(eventType)) {
           dispatch(fetchConversations());
           DeviceEventEmitter.emit('friendship_changed');
-        } else if (eventType === 'NOTIFICATION' || eventType === 'FRIEND_REQUEST' || eventType === 'FRIEND_ACCEPT' || eventType === 'GROUP_INVITE') {
+        } else if (eventType === 'NOTIFICATION' || eventType === 'FRIEND_REQUEST' || eventType === 'FRIEND_ACCEPT' || eventType === 'GROUP_INVITE' || eventType === 'NEW_JOIN_REQUEST') {
           let finalPayload = payload;
           if (eventType === 'FRIEND_REQUEST') {
             finalPayload = { id: `fr_${Date.now()}`, title: 'Lời mời kết bạn', message: payload.fullName || 'Ai đó', subMessage: 'muốn kết bạn với bạn', type: 'FRIEND_REQUEST', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
@@ -46,6 +46,21 @@ export default function MainLayout() {
             DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'GROUP_INVITE') {
             finalPayload = { id: `gi_${Date.now()}`, title: 'Lời mời vào nhóm', message: payload.groupName || 'Nhóm mới', subMessage: `được mời bởi ${payload.inviterName || 'ai đó'}`, type: 'GROUP_INVITE', invitationId: payload.invitationId, conversationId: payload.conversationId, senderId: payload.inviterId, avatarUrl: payload.groupAvatar, fullName: payload.groupName, createdAt: new Date().toISOString(), isRead: false };
+            dispatch(setInAppNotification(finalPayload));
+          } else if (eventType === 'NEW_JOIN_REQUEST') {
+            finalPayload = {
+              id: `jr_${Date.now()}`,
+              title: 'Yêu cầu vào nhóm',
+              message: payload.groupName || 'Nhóm của bạn',
+              subMessage: `${payload.requesterName || 'Một người dùng'} muốn gia nhập`,
+              type: 'JOIN_REQUEST',
+              conversationId: conversationId,
+              senderId: payload.requesterId,
+              avatarUrl: payload.requesterAvatar,
+              fullName: payload.requesterName,
+              createdAt: new Date().toISOString(),
+              isRead: false
+            };
             dispatch(setInAppNotification(finalPayload));
           }
           dispatch(addNotification(finalPayload));

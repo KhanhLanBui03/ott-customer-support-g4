@@ -227,6 +227,17 @@ export const conversationApi = {
   togglePinConversation: (conversationId) => {
     return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-pin`);
   },
+  
+  // Group Join Requests
+  getPendingJoinRequests: (conversationId) => {
+    return axiosClient.get(`/conversations/${encodeURIComponent(conversationId)}/join-requests`);
+  },
+  approveJoinRequest: (requestId) => {
+    return axiosClient.post(`/conversations/join-requests/${encodeURIComponent(requestId)}/approve`);
+  },
+  rejectJoinRequest: (requestId) => {
+    return axiosClient.post(`/conversations/join-requests/${encodeURIComponent(requestId)}/reject`);
+  },
 };
 
 export const mediaApi = {

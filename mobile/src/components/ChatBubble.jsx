@@ -70,7 +70,7 @@ const ChatBubble = ({
 
   const highlightBorder = highlightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', '#FFD700'],
+    outputRange: ['transparent', colors.primary],
   });
 
   const currentUserIdStr = String(user?.userId || user?.id || '');
@@ -258,11 +258,11 @@ const ChatBubble = ({
     if (hasReadByOther) return null;
     const statusText = !isOnline ? 'Đã gửi' : 'Đã nhận';
     const iconName = !isOnline ? 'check' : 'check-circle';
-    const iconColor = !isOnline ? '#6b7280' : '#4338ca';
+    const iconColor = !isOnline ? colors.textMuted : colors.primary;
     return (
       <View style={styles.deliveryStatus}>
         <MaterialIcons name={iconName} size={12} color={iconColor} />
-        <Text style={[styles.deliveryStatusText, !isOnline ? styles.deliveryStatusSent : styles.deliveryStatusOnline]}>{statusText}</Text>
+        <Text style={[styles.deliveryStatusText, { color: iconColor }]}>{statusText}</Text>
       </View>
     );
   };
@@ -436,8 +436,8 @@ const ChatBubble = ({
               <>
                 {message.forwardedFrom && (
                   <View style={[styles.forwardedIndicator, isOwn ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
-                    <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : '#6366f1'} />
-                    <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: '#6366f1' }]}>Chuyển tiếp</Text>
+                    <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.primary} />
+                    <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.primary }]}>Chuyển tiếp</Text>
                   </View>
                 )}
                 {message.replyTo && (() => {
@@ -601,14 +601,14 @@ const ChatBubble = ({
                         let title = '';
                         let subtitle = '';
                         let iconName = 'phone';
-                        let iconColor = isOwn ? '#fff' : '#6366f1';
+                        let iconColor = isOwn ? '#fff' : colors.primary;
                         let isOngoing = status === 'ONGOING';
 
                         if (isOngoing) {
                           title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
                           iconName = cType === 'video' ? 'video' : 'phone-in-talk';
                           subtitle = 'Nhấn để tham gia';
-                          iconColor = isOwn ? '#fff' : '#6366f1';
+                          iconColor = isOwn ? '#fff' : colors.primary;
                         } else if (isOwn) {
                           title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
                           iconName = 'phone-outgoing';
@@ -619,7 +619,7 @@ const ChatBubble = ({
                             iconColor = isOwn ? '#fff' : '#10b981';
                           } else {
                             subtitle = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
-                            iconColor = isOwn ? 'rgba(255,255,255,0.8)' : '#ef4444';
+                            iconColor = isOwn ? 'rgba(255,255,255,0.8)' : colors.error;
                           }
                         } else {
                           if (status === 'SUCCESS') {
@@ -633,7 +633,7 @@ const ChatBubble = ({
                             title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
                             iconName = 'phone-missed';
                             subtitle = status === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
-                            iconColor = '#ef4444';
+                            iconColor = colors.error;
                           }
                         }
 
@@ -642,11 +642,11 @@ const ChatBubble = ({
                         return (
                           <View style={styles.callLogContainer}>
                             <View style={styles.callLogHeader}>
-                              <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
+                              <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : `${colors.primary}1A` }]}>
                                 <MaterialCommunityIcons
                                   name={iconName}
                                   size={22}
-                                  color={isOngoing && !isOwn ? '#6366f1' : iconColor}
+                                  color={isOngoing && !isOwn ? colors.primary : iconColor}
                                 />
                               </View>
                                 <View style={styles.callLogTextGroup}>

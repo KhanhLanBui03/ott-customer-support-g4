@@ -38,6 +38,7 @@ public class ConversationService {
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     private final com.chatapp.modules.conversation.repository.GroupInvitationRepository groupInvitationRepository;
     private final com.chatapp.modules.conversation.repository.GroupJoinRequestRepository groupJoinRequestRepository;
+    private final com.chatapp.modules.notification.service.NotificationService notificationService;
 
     /**
      * Update denormalized last message fields across all user conversations
@@ -1530,7 +1531,8 @@ public class ConversationService {
         }
         
         List<GroupJoinRequest> requests = groupJoinRequestRepository.findByConversationId(conversationId);
-        return requests.stream()
+        
+        List<GroupJoinRequestResponse> result = requests.stream()
                 .filter(req -> "PENDING".equals(req.getStatus()))
                 .map(req -> {
                     User requester = userRepository.findById(req.getUserId()).orElse(null);
@@ -1545,6 +1547,7 @@ public class ConversationService {
                             .build();
                 })
                 .collect(Collectors.toList());
+        return result;
     }
 
     public void approveJoinRequest(String adminId, String requestId) {
@@ -1593,6 +1596,9 @@ public class ConversationService {
             throw new ValidationException("Yêu cầu này đã được xử lý trước đó");
         }
         
+        Conversation conv = conversationRepository.findById(req.getConversationId())
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        
         UserConversation adminUc = userConversationRepository.findById(adminId, req.getConversationId())
                 .orElseThrow(() -> new ValidationException("Not authorized"));
         
@@ -1603,8 +1609,22 @@ public class ConversationService {
         req.setStatus("REJECTED");
         groupJoinRequestRepository.save(req);
         
-        // Notify user via WebSocket
+        // Notify user via WebSocket and DB Notification
         try {
+            com.chatapp.modules.notification.dto.NotificationRequest notifReq = com.chatapp.modules.notification.dto.NotificationRequest.builder()
+                .senderId(adminId)
+                .receiverId(req.getUserId())
+                .type("OTHER")
+                .message("Bạn đã bị từ chối vô nhóm " + conv.getName())
+                .build();
+            com.chatapp.modules.notification.dto.NotificationResponse notifResponse = notificationService.createNotification(notifReq);
+            
+            // Broadcast WS notification event
+            com.chatapp.modules.message.event.MessageEvent event = 
+                com.chatapp.modules.message.event.MessageEvent.of("NOTIFICATION", "SYSTEM", notifResponse);
+            messagingTemplate.convertAndSendToUser(req.getUserId(), "/queue/messages", event);
+            
+            // Also keep the simple group join rejected WS event for immediate UI response if needed
             messagingTemplate.convertAndSendToUser(
                     req.getUserId(),
                     "/queue/messages",

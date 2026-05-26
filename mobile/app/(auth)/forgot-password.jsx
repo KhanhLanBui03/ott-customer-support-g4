@@ -201,6 +201,14 @@ const ForgotPasswordScreen = () => {
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/login');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -208,7 +216,7 @@ const ForgotPasswordScreen = () => {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="#1a1a1a" />
           </TouchableOpacity>
 

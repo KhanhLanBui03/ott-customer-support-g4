@@ -13,7 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { friendApi } from '../../api/friendApi';
 import { chatApi } from '../../api/chatApi';
 import { userApi } from '../../api/userApi';
-import { updateConversationWallpaper } from '../../store/chatSlice';
+import { updateConversationWallpaper, updateConversation } from '../../store/chatSlice';
 import GroupAvatar from '../GroupAvatar';
 import AIAssistantPanel from '../AIAssistantPanel';
 
@@ -26,10 +26,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   const { user } = useAuth();
 
   const conversationId = conversation?.conversationId;
-  const currentMember = useMemo(() => 
-    conversation.members?.find(m => m.userId === (user?.userId || user?.id)),
-    [conversation.members, user?.userId, user?.id]
-  );
+  const currentMember = useMemo(() => {
+    const myId = String(user?.userId || user?.id || '').toLowerCase();
+    return conversation.members?.find(m => {
+      const memberId = String(m.userId || m.id || '').toLowerCase();
+      return memberId && memberId === myId;
+    });
+  }, [conversation.members, user?.userId, user?.id]);
   const isOwner = currentMember?.role === 'OWNER';
   const isOnlyMember = conversation.type === 'GROUP' && conversation.members?.length === 1;
   const isAdmin = currentMember?.role === 'ADMIN' || isOwner || isOnlyMember;
@@ -43,7 +46,18 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
     customization: true,
     security: true
   });
-  
+
+  const [isRestrictedLocal, setIsRestrictedLocal] = useState(conversation?.onlyAdminsCanChat || false);
+  const [isApprovalRequiredLocal, setIsApprovalRequiredLocal] = useState(conversation?.memberApprovalRequired || false);
+
+  React.useEffect(() => {
+    setIsRestrictedLocal(conversation?.onlyAdminsCanChat || false);
+  }, [conversation?.onlyAdminsCanChat]);
+
+  React.useEffect(() => {
+    setIsApprovalRequiredLocal(conversation?.memberApprovalRequired || false);
+  }, [conversation?.memberApprovalRequired]);
+
   const [isInviting, setIsInviting] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [inviteSearch, setInviteSearch] = useState('');
@@ -65,7 +79,9 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
     if (conversation.type === 'GROUP' && isAdmin) {
       try {
         const res = await chatApi.getPendingJoinRequests(conversationId);
-        if (res?.data) {
+        if (res?.success) {
+          setJoinRequests(res.data || []);
+        } else if (res?.data) {
           setJoinRequests(res.data);
         } else if (Array.isArray(res)) {
           setJoinRequests(res);
@@ -78,15 +94,47 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
 
   React.useEffect(() => {
     fetchJoinRequests();
-  }, [fetchJoinRequests]);
+
+    const handleJoinRequestSocket = (event) => {
+      const { conversationId: eventConvId, eventType } = event.detail;
+      if (String(eventConvId) === String(conversationId)) {
+        console.log(`[ConversationInfo] Updating join requests due to ${eventType}`);
+        fetchJoinRequests();
+      }
+    };
+
+    window.addEventListener('join-request-update', handleJoinRequestSocket);
+    return () => {
+      window.removeEventListener('join-request-update', handleJoinRequestSocket);
+    };
+  }, [fetchJoinRequests, conversationId]);
 
   const handleToggleMemberApproval = async () => {
     if (!isAdmin) return;
+    const originalValue = isApprovalRequiredLocal;
+    const newValue = !originalValue;
+
+    // Optimistic Update
+    setIsApprovalRequiredLocal(newValue);
+    dispatch(updateConversation({
+      conversationId,
+      memberApprovalRequired: newValue
+    }));
+
     try {
       await chatApi.toggleMemberApproval(conversationId);
-      fetchConversations();
+      // No need to fetchConversations here as Redux is already updated
+      // but we can still call it to be safe or if there are other side effects
+      // fetchConversations();
     } catch (err) {
       console.error('Toggle member approval failed:', err);
+      // Rollback
+      setIsApprovalRequiredLocal(originalValue);
+      dispatch(updateConversation({
+        conversationId,
+        memberApprovalRequired: originalValue
+      }));
+      alert(t('info.restriction_error'));
     }
   };
 
@@ -253,11 +301,26 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   
   const handleToggleChatRestriction = async () => {
     if (!isAdmin) return;
+    const originalValue = isRestrictedLocal;
+    const newValue = !originalValue;
+
+    // Optimistic Update
+    setIsRestrictedLocal(newValue);
+    dispatch(updateConversation({
+      conversationId,
+      onlyAdminsCanChat: newValue
+    }));
+
     try {
       await chatApi.toggleChatRestriction(conversationId);
-      fetchConversations();
     } catch (err) {
       console.error('Toggle restriction failed:', err);
+      // Rollback
+      setIsRestrictedLocal(originalValue);
+      dispatch(updateConversation({
+        conversationId,
+        onlyAdminsCanChat: originalValue
+      }));
       alert(t('info.restriction_error'));
     }
   };
@@ -509,14 +572,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                             <div key={req.requestId} className="flex items-center justify-between bg-white dark:bg-slate-800 p-3 rounded-2xl border border-border">
                               <div className="flex items-center space-x-3">
                                 <div className="w-9 h-9 rounded-xl bg-surface-200 overflow-hidden">
-                                  {req.userAvatar ? (
-                                    <img src={req.userAvatar} className="w-full h-full object-cover" />
+                                  {req.avatarUrl ? (
+                                    <img src={req.avatarUrl} className="w-full h-full object-cover" />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-foreground/40">{req.userFullName?.charAt(0)}</div>
+                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-foreground/40">{req.fullName?.charAt(0)}</div>
                                   )}
                                 </div>
                                 <div className="text-left">
-                                  <p className="text-sm font-bold text-foreground leading-tight">{req.userFullName}</p>
+                                  <p className="text-sm font-bold text-foreground leading-tight">{req.fullName}</p>
                                   <p className="text-[10px] text-foreground/50 mt-0.5">Muốn tham gia nhóm</p>
                                 </div>
                               </div>
@@ -836,18 +899,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         }`}>
                            <MessageSquareLock size={22} />
                         </div>
-                        <div className="flex flex-col items-start text-left">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.chat_restriction')}</span>
-                            {conversation.onlyAdminsCanChat && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />}
-                          </div>
+                        <div className="flex flex-col items-start text-left flex-1">
+                          <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.chat_restriction')}</span>
                           <span className="text-[10px] font-bold opacity-70 mt-0.5">
-                            {conversation.onlyAdminsCanChat ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
+                            {isRestrictedLocal ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
                           </span>
                         </div>
-                        <div className="flex-1" />
-                        <div className={`w-10 h-5 rounded-full relative transition-colors ${conversation.onlyAdminsCanChat ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
-                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${conversation.onlyAdminsCanChat ? 'left-6' : 'left-1'}`} />
+                        <div className={`w-11 h-6 rounded-full relative transition-all duration-300 ${isRestrictedLocal ? 'bg-indigo-600 shadow-inner' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                           <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ${isRestrictedLocal ? 'translate-x-5' : 'translate-x-0'}`} />
                         </div>
                      </button>
                    )}
@@ -868,18 +927,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                          }`}>
                             <ShieldCheck size={22} />
                          </div>
-                         <div className="flex flex-col items-start text-left">
-                           <div className="flex items-center space-x-2">
-                             <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.member_approval')}</span>
-                             {conversation.memberApprovalRequired && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />}
-                           </div>
+                         <div className="flex flex-col items-start text-left flex-1">
+                           <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.member_approval')}</span>
                            <span className="text-[10px] font-bold opacity-70 mt-0.5">
-                             {conversation.memberApprovalRequired ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
+                             {isApprovalRequiredLocal ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
                            </span>
                          </div>
-                         <div className="flex-1" />
-                         <div className={`w-10 h-5 rounded-full relative transition-colors ${conversation.memberApprovalRequired ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
-                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${conversation.memberApprovalRequired ? 'left-6' : 'left-1'}`} />
+                         <div className={`w-11 h-6 rounded-full relative transition-all duration-300 ${isApprovalRequiredLocal ? 'bg-indigo-600 shadow-inner' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ${isApprovalRequiredLocal ? 'translate-x-5' : 'translate-x-0'}`} />
                          </div>
                       </button>
                     )}

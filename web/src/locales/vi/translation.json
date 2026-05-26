@@ -18,7 +18,8 @@
       "success": "Thành công",
       "you": "Bạn",
       "today": "Hôm nay",
-      "yesterday": "Hôm qua"
+      "yesterday": "Hôm qua",
+      "or": "Hoặc"
     },
     "sidebar": {
       "no_conversations": "Chưa có hội thoại",
@@ -213,9 +214,10 @@
       "register_title": "Đăng kí",
       "email_placeholder": "Email...",
       "password_placeholder": "Mật khẩu...",
-      "remember_me": "Remember Me",
+      "remember_me": "Ghi nhớ đăng nhập",
       "forgot_password": "Quên mật khẩu",
       "login_button": "Đăng nhập",
+      "login_qr": "Đăng nhập bằng mã QR",
       "no_account": "Chưa có tài khoản?",
       "register_link": "Đăng kí tài khoản",
       "register_init": "KHỞI TẠO ĐĂNG KÝ TÀI KHOẢN",

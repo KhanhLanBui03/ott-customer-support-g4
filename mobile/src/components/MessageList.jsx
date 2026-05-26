@@ -363,7 +363,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#667eea',
   },
   typingContainer: {
     paddingLeft: 48,
@@ -374,7 +373,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#f3f4f6',
     borderRadius: 20,
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
@@ -394,12 +392,10 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#9ca3af',
   },
   typingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6b7280',
   },
   dateSeparatorContainer: {
     alignItems: 'center',
@@ -429,7 +425,6 @@ const styles = StyleSheet.create({
   },
   loadingMoreText: {
     fontSize: 12,
-    color: '#9ca3af',
     fontWeight: '500',
   },
 });

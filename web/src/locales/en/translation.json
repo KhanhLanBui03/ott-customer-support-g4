@@ -18,7 +18,8 @@
       "success": "Success",
       "you": "You",
       "today": "Today",
-      "yesterday": "Yesterday"
+      "yesterday": "Yesterday",
+      "or": "Or"
     },
     "sidebar": {
       "no_conversations": "No conversations",
@@ -210,6 +211,7 @@
       "remember_me": "Remember Me",
       "forgot_password": "Forgot Password",
       "login_button": "Login",
+      "login_qr": "Login with QR Code",
       "no_account": "Don't have an account?",
       "register_link": "Register an account",
       "register_init": "INITIALIZE ACCOUNT REGISTRATION",

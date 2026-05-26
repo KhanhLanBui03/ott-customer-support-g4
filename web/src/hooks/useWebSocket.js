@@ -204,6 +204,15 @@ export const useWebSocket = () => {
                 dispatch(fetchConversations());
             } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN' || event.eventType === 'MEMBER_UPDATE' || event.eventType === 'CONVERSATION_DELETE') {
                 dispatch(fetchConversations());
+            } else if (event.eventType === 'JOIN_REQUEST' || event.eventType === 'NEW_JOIN_REQUEST' || event.eventType === 'JOIN_REQUEST_PROCESSED') {
+                console.log(`[STOMP] Join request event: ${event.eventType} for ${event.conversationId}`);
+                // Phát event cho component ConversationInfo nhận
+                window.dispatchEvent(new CustomEvent('join-request-update', {
+                    detail: {
+                        conversationId: event.conversationId,
+                        eventType: event.eventType
+                    }
+                }));
             } else if (event.eventType === 'USER_UPDATE') {
                 dispatch(updateMemberInfo(event.payload));
             }
