@@ -576,6 +576,35 @@
       "inviter_prefix": "From:",
       "user_fallback": "User",
       "someone": "Someone"
+    },
+    "cloud": {
+      "title": "My Cloud",
+      "subtitle": "Keep your documents & memories",
+      "upload": "Upload File",
+      "search": "Search Cloud...",
+      "no_files": "No files found",
+      "no_files_desc": "Start uploading documents, photos or videos to keep them safe.",
+      "first_upload": "Click to upload first file",
+      "loading": "Loading files...",
+      "delete_confirm": "Are you sure you want to delete this file?",
+      "upload_failed": "Upload failed",
+      "delete_failed": "Delete failed",
+      "types": {
+        "image": "Images",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Documents",
+        "other": "Others"
+      },
+      "secure_storage": "Secure Storage",
+      "secure_storage_desc": "Your files are encrypted and protected by our security system.",
+      "load_more": "Load more",
+      "loading_more": "Loading more...",
+      "info_title": "Cloud Info",
+      "files": "files",
+      "refresh": "Refresh",
+      "clear_all": "Clear all",
+      "clear_all_confirm": "Are you sure you want to clear all data in Cloud?"
     }
   }
 }

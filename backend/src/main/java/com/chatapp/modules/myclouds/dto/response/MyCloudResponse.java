@@ -12,8 +12,16 @@ public class MyCloudResponse {
     String id;
     private String fileName;
     private String fileUrl;     // presigned URL (hết hạn sau 1 giờ)
-    private String fileType;    // image | video | audio | document | other
+    private String typeFile;    // image | video | audio | document | other
     private String mimeType;
     private Long   fileSize;    // bytes
     private String uploadedAt;  // ISO-8601
+    private String messageText;
+    private boolean deleted;
+    private String replyToMessageId; // Expose reply fields
+    private String replyToContent;    // Expose reply fields
+    private String replyToTypeFile;   // Expose reply fields
+    private String replyToFileName;    // Expose reply fields
+    private String replyToFileUrl;     // Expose reply fields
+    private String replyToSenderName;  // Expose reply fields
 }
