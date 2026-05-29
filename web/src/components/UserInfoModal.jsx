@@ -11,7 +11,7 @@ const cn = (...classes) => classes.filter(Boolean).join(" ");
 const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
-  const { create, selectConversation, activeConversationId } = useChat();
+  const { conversations, create, selectConversation, activeConversationId } = useChat();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(userInfo?.friendshipStatus || 'NONE');
   const [profile, setProfile] = useState(userInfo);
@@ -39,9 +39,23 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
   if (!isOpen || !userInfo) return null;
 
   const handleStartChat = async () => {
+    const targetUserId = userInfo.userId || userInfo.id;
+
+    // Check if conversation already exists locally to make the switch instant
+    const existingConv = conversations?.find(conv => 
+      conv.type === 'SINGLE' && 
+      conv.members?.some(m => String(m.userId || m.id) === String(targetUserId))
+    );
+
+    if (existingConv) {
+      selectConversation(existingConv.conversationId);
+      onClose();
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await create('SINGLE', [userInfo.userId || userInfo.id]);
+      const result = await create('SINGLE', [targetUserId]);
       if (result.payload) {
         const convId = result.payload.conversationId || result.payload?.data?.conversationId;
         if (convId) selectConversation(convId);
@@ -55,17 +69,46 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
   };
 
   const handleCallClick = async (type = 'audio') => {
+    const targetUserId = userInfo.userId || userInfo.id;
+    const name = profile?.fullName || profile?.name || userInfo.fullName || userInfo.name;
+    const avatar = profile?.avatarUrl || profile?.avatar || userInfo.avatarUrl || userInfo.avatar || null;
+
+    // Check if conversation already exists locally to make call trigger instant
+    const existingConv = conversations?.find(conv => 
+      conv.type === 'SINGLE' && 
+      conv.members?.some(m => String(m.userId || m.id) === String(targetUserId))
+    );
+
+    if (existingConv) {
+      const convId = existingConv.conversationId;
+      // If already in this conversation, just start call
+      if (convId === activeConversationId) {
+        if (onStartCall) onStartCall(type, { targetName: name, targetAvatar: avatar });
+      } else {
+        // Switch conversation and then start call via event
+        selectConversation(convId);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('START_CALL_AGAIN', { 
+            detail: { 
+              type, 
+              isSingle: true,
+              targetName: name,
+              targetAvatar: avatar
+            } 
+          }));
+        }, 100);
+      }
+      onClose();
+      return;
+    }
+
     setLoading(true);
     try {
-      const targetUserId = userInfo.userId || userInfo.id;
       const result = await create('SINGLE', [targetUserId]);
       if (result.payload) {
         const convId = result.payload.conversationId || result.payload?.data?.conversationId;
         
         if (convId) {
-          const name = profile?.fullName || profile?.name || userInfo.fullName || userInfo.name;
-          const avatar = profile?.avatarUrl || profile?.avatar || userInfo.avatarUrl || userInfo.avatar || null;
-
           // If already in this conversation, just start call
           if (convId === activeConversationId) {
             if (onStartCall) onStartCall(type, { targetName: name, targetAvatar: avatar });
@@ -81,7 +124,7 @@ const UserInfoModal = ({ isOpen, onClose, userInfo, onStartCall }) => {
                   targetAvatar: avatar
                 } 
               }));
-            }, 500);
+            }, 300);
           }
         }
         onClose();
