@@ -1175,10 +1175,9 @@ const Chat = () => {
 
       {isReportModalOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 backdrop-blur-md bg-black/40 animate-fade-in" onClick={() => setIsReportModalOpen(false)}>
-          <div 
-            className={`w-full max-w-md rounded-[32px] shadow-2xl border transition-all duration-300 scale-in-center p-6 ${
-              isDark ? "bg-[#1a1e26] border-white/5 text-white" : "bg-white border-slate-100 text-slate-800"
-            }`}
+          <div
+            className={`w-full max-w-md rounded-[32px] shadow-2xl border transition-all duration-300 scale-in-center p-6 ${isDark ? "bg-[#1a1e26] border-white/5 text-white" : "bg-white border-slate-100 text-slate-800"
+              }`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/5 mb-4">
@@ -1186,7 +1185,7 @@ const Chat = () => {
                 <AlertTriangle className="text-rose-500 animate-pulse" size={22} />
                 <h3 className="text-lg font-black tracking-tight">Báo cáo hội thoại</h3>
               </div>
-              <button 
+              <button
                 onClick={() => setIsReportModalOpen(false)}
                 className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors text-slate-400"
               >
@@ -1207,18 +1206,17 @@ const Chat = () => {
                   { key: 'inappropriate', label: 'Nội dung phản cảm / Độc hại' },
                   { key: 'other', label: 'Lý do khác' }
                 ].map(item => (
-                  <label 
-                    key={item.key} 
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all active:scale-[0.99] ${
-                      reportReason === item.key 
+                  <label
+                    key={item.key}
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all active:scale-[0.99] ${reportReason === item.key
                         ? (isDark ? 'border-rose-500/50 bg-rose-500/10' : 'border-rose-500 bg-rose-50')
                         : (isDark ? 'border-white/5 bg-white/5 hover:bg-white/10' : 'border-slate-200 bg-white hover:bg-slate-50')
-                    }`}
+                      }`}
                   >
                     <span className="text-[14px] font-bold">{item.label}</span>
-                    <input 
-                      type="radio" 
-                      name="reportReason" 
+                    <input
+                      type="radio"
+                      name="reportReason"
                       value={item.key}
                       checked={reportReason === item.key}
                       onChange={() => setReportReason(item.key)}
@@ -1230,27 +1228,25 @@ const Chat = () => {
 
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">Chi tiết lý do báo cáo (Không bắt buộc)</label>
-                <textarea 
+                <textarea
                   value={reportNotes}
                   onChange={(e) => setReportNotes(e.target.value)}
                   placeholder="Nhập thêm chi tiết phản ánh của bạn..."
-                  className={`w-full p-4 rounded-2xl text-sm border focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all min-h-[80px] max-h-[140px] resize-y placeholder:text-foreground/20 font-medium ${
-                    isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'
-                  }`}
+                  className={`w-full p-4 rounded-2xl text-sm border focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all min-h-[80px] max-h-[140px] resize-y placeholder:text-foreground/20 font-medium ${isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'
+                    }`}
                 />
               </div>
             </div>
 
             <div className="mt-6 flex space-x-3">
-              <button 
+              <button
                 onClick={() => setIsReportModalOpen(false)}
-                className={`flex-1 py-3.5 rounded-2xl font-bold transition-all active:scale-95 text-[14px] border ${
-                  isDark ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
-                }`}
+                className={`flex-1 py-3.5 rounded-2xl font-bold transition-all active:scale-95 text-[14px] border ${isDark ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
+                  }`}
               >
                 Hủy bỏ
               </button>
-              <button 
+              <button
                 onClick={() => {
                   const reportPayload = {
                     reportId: 'REP#' + Math.random().toString(36).substr(2, 9).toUpperCase(),
@@ -1338,14 +1334,12 @@ const Chat = () => {
 
       {toast && (
         <div className="fixed top-6 right-6 z-[10000] animate-in fade-in slide-in-from-top-6 duration-300">
-          <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl backdrop-blur-xl border shadow-2xl transition-all ${
-            isDark 
-              ? 'bg-slate-900/90 border-white/10 text-white shadow-black/40' 
+          <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl backdrop-blur-xl border shadow-2xl transition-all ${isDark
+              ? 'bg-slate-900/90 border-white/10 text-white shadow-black/40'
               : 'bg-white/95 border-slate-200 text-slate-800 shadow-indigo-100'
-          }`}>
-            <div className={`w-3 h-3 rounded-full ${
-              toast.type === 'error' ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
-            }`} />
+            }`}>
+            <div className={`w-3 h-3 rounded-full ${toast.type === 'error' ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+              }`} />
             <p className="text-[14px] font-bold tracking-tight">{toast.message}</p>
           </div>
         </div>
