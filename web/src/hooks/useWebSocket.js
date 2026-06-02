@@ -204,7 +204,7 @@ export const useWebSocket = () => {
                 dispatch(fetchConversations());
             } else if (event.eventType === 'MESSAGE_PIN' || event.eventType === 'MESSAGE_UNPIN' || event.eventType === 'MEMBER_UPDATE' || event.eventType === 'CONVERSATION_DELETE') {
                 dispatch(fetchConversations());
-            } else if (event.eventType === 'JOIN_REQUEST' || event.eventType === 'NEW_JOIN_REQUEST' || event.eventType === 'JOIN_REQUEST_PROCESSED') {
+            } else if (event.eventType === 'JOIN_REQUEST' || event.eventType === 'NEW_JOIN_REQUEST' || event.eventType === 'JOIN_REQUEST_PROCESSED' || event.eventType === 'GROUP_JOIN_REQUEST' || event.eventType === 'GROUP_JOIN_REQUEST_PROCESSED') {
                 console.log(`[STOMP] Join request event: ${event.eventType} for ${event.conversationId}`);
                 // Phát event cho component ConversationInfo nhận
                 window.dispatchEvent(new CustomEvent('join-request-update', {
@@ -215,6 +215,11 @@ export const useWebSocket = () => {
                 }));
             } else if (event.eventType === 'USER_UPDATE') {
                 dispatch(updateMemberInfo(event.payload));
+            } else if (event.eventType === 'MY_CLOUD_UPDATE') {
+                console.log('[STOMP] My Cloud update received:', event.payload);
+                window.dispatchEvent(new CustomEvent('my-cloud-update', {
+                    detail: event.payload
+                }));
             }
         } catch (err) {
             console.error('[STOMP] Error in message handler:', err);

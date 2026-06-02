@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { View, Text, Platform, Animated, Dimensions, TouchableOpacity, DeviceEventEmitter } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import VideoCall from '../../src/components/VideoCall';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TAB_BAR_WIDTH = SCREEN_WIDTH - 32;
-const TAB_WIDTH = TAB_BAR_WIDTH / 4;
+const TAB_WIDTH = TAB_BAR_WIDTH / 5;
 
 export default function MainLayout() {
   const { accessToken, user } = useSelector((state) => state.auth);
@@ -109,6 +109,7 @@ export default function MainLayout() {
       >
       <Tabs.Screen name="index" options={{ title: 'Tin nhắn', icon: 'chatbubble' }} />
       <Tabs.Screen name="contacts" options={{ title: 'Danh bạ', icon: 'people' }} />
+      <Tabs.Screen name="shop-expert-ai" options={{ title: 'ShopExpert AI', icon: 'sparkles' }} />
       <Tabs.Screen name="notifications" options={{ title: 'Thông báo', icon: 'notifications' }} />
       <Tabs.Screen name="profile" options={{ title: 'Cá nhân', icon: 'person' }} />
 
@@ -117,9 +118,12 @@ export default function MainLayout() {
       <Tabs.Screen name="chat/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="chat-info/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-        <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-        <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="shared-links/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="group-preview" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="my-cloud" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="settings" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       </Tabs>
 
       <VideoCall
@@ -155,14 +159,16 @@ const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
   }
 
   const translateX = useRef(new Animated.Value(0)).current;
+  const user = useSelector((state) => state.auth.user);
 
   // Danh sách các Tab được phép hiển thị (Whitelist)
-  const allowedTabs = ['index', 'contacts', 'notifications', 'profile'];
+  const allowedTabs = ['index', 'contacts', 'shop-expert-ai', 'notifications', 'profile'];
 
   // Ánh xạ các màn hình phụ về Tab chính để giữ trạng thái Active
   const routeMap = {
     'edit-profile': 'profile',
     'change-password': 'profile',
+    'settings': 'profile',
     // Thêm các ánh xạ khác nếu cần
   };
 
@@ -217,6 +223,21 @@ const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
           const isFocused = activeIndex === index;
 
           const onPress = () => {
+            if (route.name === 'shop-expert-ai') {
+              const currentUserId = user?.userId || user?.id;
+              if (currentUserId) {
+                const participants = [String(currentUserId), 'shop-expert-ai-bot'].sort();
+                const aiConvId = `SINGLE#${participants[0]}#${participants[1]}`;
+                router.push({
+                  pathname: `/chat/${encodeURIComponent(aiConvId)}`,
+                  params: {
+                    name: 'ShopExpert AI',
+                    type: 'SINGLE'
+                  }
+                });
+              }
+              return;
+            }
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);

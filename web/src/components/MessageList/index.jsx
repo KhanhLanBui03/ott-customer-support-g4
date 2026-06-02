@@ -310,6 +310,34 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     }
   };
 
+  const renderTextWithLinks = (text, isMe) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
+    const subParts = text.split(urlRegex);
+    return subParts.map((subPart, j) => {
+      if (subPart.match(urlRegex)) {
+        return (
+          <a
+            key={`link-${j}`}
+            href={subPart}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "underline font-bold transition-opacity hover:opacity-85",
+              isMe
+                ? "text-white hover:text-white/80"
+                : "text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-500"
+            )}
+          >
+            {subPart}
+          </a>
+        );
+      }
+      return subPart;
+    });
+  };
+
   const renderContentWithMentions = (content, isMe) => {
     if (!content) return null;
     // Regex to find @mentions (handles spaces using \u200B marker)
@@ -334,7 +362,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           </span>
         );
       }
-      return part;
+      return renderTextWithLinks(part, isMe);
     });
   };
 
@@ -1089,8 +1117,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         {!isMe && msg.type !== 'VOTE' && (
                           <div className="w-9 h-9 flex-shrink-0 mb-1">
                             {(isLastInGroup || msg.type === 'CALL_LOG') ? (
-                              <div className="w-full h-full rounded-[14px] bg-surface-200 overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform animate-in zoom-in duration-300">
-                                {(msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
+                              <div className={cn(
+                                "w-full h-full rounded-[14px] overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform animate-in zoom-in duration-300 flex items-center justify-center",
+                                msg.senderId === 'shop-expert-ai-bot' ? "bg-indigo-600" : "bg-surface-200"
+                              )}>
+                                {msg.senderId === 'shop-expert-ai-bot' ? (
+                                  <SparklesIcon className="text-white" size={16} />
+                                ) : (msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
                                   <img src={msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl} className="w-full h-full object-cover" alt="" />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-foreground/40 font-black italic uppercase text-sm">{msg.senderName?.charAt(0) || '?'}</div>

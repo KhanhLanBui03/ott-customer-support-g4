@@ -310,7 +310,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
               conversation={currentConv} 
               size={onBack ? 'h-10 w-10' : 'h-14 w-14'} 
             />
-            {currentMember?.status === 'ONLINE' && (
+            {(currentMember?.status === 'ONLINE' || currentConv?.isAI || conversationId?.includes('shop-expert-ai-bot')) && (
               <div className={`absolute -bottom-0.5 -right-0.5 ${onBack ? 'w-3.5 h-3.5' : 'w-4.5 h-4.5'} rounded-full bg-background flex items-center justify-center`}>
                 <div className="w-full h-full rounded-full bg-emerald-500 status-glow shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
               </div>
@@ -326,7 +326,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                   ? (currentMember?.fullName || currentMember?.name || currentConv?.name || t('sidebar.user_fallback'))
                   : (currentConv?.name || t('sidebar.group_fallback'))}
               </span>
-              {currentConv?.isAI ? (
+              {(currentConv?.isAI || conversationId?.includes('shop-expert-ai-bot')) ? (
                 <SparklesIcon size={onBack ? 14 : 16} className="text-indigo-500 animate-pulse" />
               ) : (
                 <ShieldCheck size={onBack ? 14 : 16} className="text-cursor-accent flex-shrink-0" />

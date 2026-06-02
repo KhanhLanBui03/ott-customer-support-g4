@@ -79,6 +79,10 @@ const ChatInfoScreen = () => {
     return getRealId(chatState, conversationId, currentUser?.userId || currentUser?.id);
   }, [chatState, conversationId, currentUser]);
 
+  const isAI = useMemo(() => {
+    return realId?.includes('shop-expert-ai-bot') || conversationId?.includes('shop-expert-ai-bot');
+  }, [realId, conversationId]);
+
   const conversation = (chatState.conversations || []).find(c => c.conversationId === realId);
   const [isWallpaperLoading, setIsWallpaperLoading] = useState(false);
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
@@ -99,7 +103,7 @@ const ChatInfoScreen = () => {
   const isGroup = conversation?.type === 'GROUP' || paramType === 'GROUP';
   const displayName = isGroup ? (conversation?.name || paramName || 'Nhóm chat') : (otherParticipant?.fullName || otherParticipant?.name || paramName || 'Thông tin hội thoại');
   const avatarUrl = isGroup ? (conversation?.avatarUrl || paramAvatar) : (otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic || paramAvatar);
-  const isOnline = !isGroup && (otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true);
+  const isOnline = !isGroup && (isAI || otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true);
 
   const finalAvatarUrl = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=256&bold=true`;
 
@@ -449,9 +453,9 @@ const ChatInfoScreen = () => {
         if (data.conversationId === realId) {
           console.log('[Socket] Join Request Event:', data.eventType);
 
-          if (data.eventType === 'JOIN_REQUEST' || data.eventType === 'NEW_JOIN_REQUEST') {
+          if (data.eventType === 'JOIN_REQUEST' || data.eventType === 'NEW_JOIN_REQUEST' || data.eventType === 'GROUP_JOIN_REQUEST') {
             fetchJoinRequests(); // Tải lại danh sách khi có yêu cầu mới
-          } else if (data.eventType === 'JOIN_REQUEST_PROCESSED') {
+          } else if (data.eventType === 'JOIN_REQUEST_PROCESSED' || data.eventType === 'GROUP_JOIN_REQUEST_PROCESSED') {
             // Khi một admin khác đã duyệt/từ chối, xóa khỏi danh sách local hoặc fetch lại
             fetchJoinRequests();
           }
@@ -523,7 +527,13 @@ const ChatInfoScreen = () => {
             onPress={handleAvatarChange}
             disabled={!isGroup || !isAdmin || isAvatarLoading}
           >
-            <Image source={{ uri: finalAvatarUrl }} style={[styles.avatar, { borderColor: colors.border }, isAvatarLoading && { opacity: 0.5 }]} />
+            {isAI ? (
+              <View style={[styles.avatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderColor: colors.border }]}>
+                <Ionicons name="sparkles" size={54} color="#6366f1" />
+              </View>
+            ) : (
+              <Image source={{ uri: finalAvatarUrl }} style={[styles.avatar, { borderColor: colors.border }, isAvatarLoading && { opacity: 0.5 }]} />
+            )}
             {isOnline && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
 
             {isGroup && isAdmin && (
@@ -616,7 +626,7 @@ const ChatInfoScreen = () => {
           <>
             <SectionHeader title="THÀNH VIÊN NHÓM" colors={colors} />
             <View style={styles.section}>
-              {isAdmin && (
+              {(isAdmin || !isApprovalRequiredLocal) && (
                 <InfoItem
                   icon={<MaterialIcons name="person-add" size={22} color="#667eea" />}
                   label="Thêm thành viên"
@@ -675,6 +685,13 @@ const ChatInfoScreen = () => {
             icon={<MaterialIcons name="insert-drive-file" size={22} color={colors.textMuted} />}
             label="FILE ĐÃ CHIA SẺ"
             onPress={() => router.push(`/shared-files/${encodeURIComponent(realId || conversationId)}`)}
+            colors={colors}
+            isDark={isDark}
+          />
+          <InfoItem
+            icon={<MaterialIcons name="link" size={22} color={colors.textMuted} />}
+            label="LINK ĐÃ CHIA SẺ"
+            onPress={() => router.push(`/shared-links/${encodeURIComponent(realId || conversationId)}`)}
             colors={colors}
             isDark={isDark}
           />

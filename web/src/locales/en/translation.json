@@ -344,6 +344,8 @@
       "view_all_media": "View all media ({{count}})",
       "shared_files": "Shared Files",
       "no_files": "No files shared yet",
+      "shared_links": "Shared Links",
+      "no_links": "No links shared yet",
       "customization": "Customization",
       "change_wallpaper": "Change wallpaper",
       "change_wallpaper_desc": "Customize chat background",

@@ -837,13 +837,35 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         const uploadedUrls = [];
         let failCount = 0;
 
+        const getMimeType = (fileName) => {
+          if (!fileName) return 'application/octet-stream';
+          const lower = fileName.toLowerCase();
+          if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+          if (lower.endsWith('.png')) return 'image/png';
+          if (lower.endsWith('.gif')) return 'image/gif';
+          if (lower.endsWith('.webp')) return 'image/webp';
+          if (lower.endsWith('.heic')) return 'image/heic';
+          if (lower.endsWith('.mp4')) return 'video/mp4';
+          if (lower.endsWith('.mov') || lower.endsWith('.qt')) return 'video/quicktime';
+          if (lower.endsWith('.mkv')) return 'video/x-matroska';
+          if (lower.endsWith('.mp3')) return 'audio/mpeg';
+          if (lower.endsWith('.wav')) return 'audio/wav';
+          if (lower.endsWith('.m4a')) return 'audio/m4a';
+          if (lower.endsWith('.aac')) return 'audio/aac';
+          if (lower.endsWith('.pdf')) return 'application/pdf';
+          if (lower.endsWith('.txt')) return 'text/plain';
+          if (lower.endsWith('.doc') || lower.endsWith('.docx')) return 'application/msword';
+          if (lower.endsWith('.xls') || lower.endsWith('.xlsx')) return 'application/vnd.ms-excel';
+          return 'application/octet-stream';
+        };
+
         for (let i = 0; i < result.assets.length; i++) {
           const asset = result.assets[i];
           setUploadProgress(`${i + 1}/${result.assets.length}`);
 
           const file = {
             uri: asset.uri,
-            type: asset.mimeType || 'application/octet-stream',
+            type: asset.mimeType && asset.mimeType !== 'application/octet-stream' ? asset.mimeType : getMimeType(asset.name),
             name: asset.name,
           };
 

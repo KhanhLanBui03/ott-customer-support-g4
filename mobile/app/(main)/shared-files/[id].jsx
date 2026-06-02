@@ -126,7 +126,7 @@ const SharedFilesScreen = () => {
         <FlatList
           data={sharedFiles}
           renderItem={renderFileItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => item?.id ? `${item.id}_${index}` : `file_${index}`}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />

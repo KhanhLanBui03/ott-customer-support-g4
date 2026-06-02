@@ -11,9 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { MaterialIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { sendMessage } from '../store/chatSlice';
+import * as FileSystem from 'expo-file-system/legacy';
+import myCloudApi from '../api/myCloudApi';
+import axiosClient from '../api/axiosClient';
+
 
 const ForwardModal = ({ visible, onClose, messageToForward }) => {
   const dispatch = useDispatch();
@@ -27,6 +31,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
   const [sending, setSending] = useState(false);
 
   const filteredConversations = useMemo(() => {
+    if (activeTab === 'My Cloud') return [];
     let list = [...conversations];
     
     // Sort by last message date (recent first) - assuming conversations are already sorted in store
@@ -51,11 +56,143 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
   }, [conversations, activeTab, searchTerm]);
 
   const toggleSelect = (convId) => {
-    setSelectedConvs(prev => 
-      prev.includes(convId) 
-        ? prev.filter(id => id !== convId) 
-        : [...prev, convId]
-    );
+    if (activeTab === 'My Cloud') {
+      setSelectedConvs(prev => prev.includes('MY_CLOUD') ? [] : ['MY_CLOUD']);
+    } else {
+      setSelectedConvs(prev => 
+        prev.includes(convId) 
+          ? prev.filter(id => id !== convId) 
+          : [...prev, convId]
+      );
+    }
+  };
+
+
+  const handleForwardToCloud = async () => {
+    try {
+      const isText = messageToForward.type === 'TEXT';
+
+      const getMimeType = (fileName) => {
+        if (!fileName) return 'application/octet-stream';
+        const lower = fileName.toLowerCase();
+        if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+        if (lower.endsWith('.png')) return 'image/png';
+        if (lower.endsWith('.gif')) return 'image/gif';
+        if (lower.endsWith('.webp')) return 'image/webp';
+        if (lower.endsWith('.heic')) return 'image/heic';
+        if (lower.endsWith('.mp4')) return 'video/mp4';
+        if (lower.endsWith('.mov') || lower.endsWith('.qt')) return 'video/quicktime';
+        if (lower.endsWith('.mkv')) return 'video/x-matroska';
+        if (lower.endsWith('.mp3')) return 'audio/mpeg';
+        if (lower.endsWith('.wav')) return 'audio/wav';
+        if (lower.endsWith('.m4a')) return 'audio/m4a';
+        if (lower.endsWith('.aac')) return 'audio/aac';
+        if (lower.endsWith('.pdf')) return 'application/pdf';
+        if (lower.endsWith('.txt')) return 'text/plain';
+        if (lower.endsWith('.doc') || lower.endsWith('.docx')) return 'application/msword';
+        return 'application/octet-stream';
+      };
+
+      const extractObjectKey = (inputUrl) => {
+        if (!inputUrl) return '';
+        try {
+          const parsed = new URL(inputUrl);
+          const pathname = decodeURIComponent(parsed.pathname || '').replace(/^\/+/, '');
+          const segments = pathname.split('/').filter(Boolean);
+          const host = (parsed.hostname || '').toLowerCase();
+          if (host === 's3.amazonaws.com' || host.startsWith('s3.')) {
+            return segments.length > 1 ? segments.slice(1).join('/') : pathname;
+          }
+          return segments.join('/');
+        } catch (error) {
+          return '';
+        }
+      };
+
+      const getFreshUrl = async (inputUrl) => {
+        const objectKey = extractObjectKey(inputUrl);
+        if (objectKey) {
+          try {
+            const response = await axiosClient.get('/media/presigned-download', {
+              params: { objectKey, expiresInMinutes: 15 }
+            });
+            return response?.data?.url || response?.url || inputUrl;
+          } catch (e) {
+            console.log('Presigned download error, using direct URL', e);
+          }
+        }
+        return inputUrl;
+      };
+
+      const cleanFileName = (url) => {
+        if (!url) return `file_${Date.now()}`;
+        try {
+          const decoded = decodeURIComponent(url);
+          let name = decoded.split('/').pop().split('?')[0];
+          name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
+          name = name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i, '');
+          return name;
+        } catch (e) {
+          return `file_${Date.now()}`;
+        }
+      };
+
+      if (isText) {
+        const text = messageToForward.content || '';
+        const fileName = `forwarded_${Date.now()}.txt`;
+        const tempUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(tempUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+
+        const formData = new FormData();
+        formData.append('file', {
+          uri: Platform.OS === 'ios' ? tempUri.replace('file://', '') : tempUri,
+          name: fileName,
+          type: 'text/plain',
+        });
+        await myCloudApi.uploadFile(formData);
+      } else {
+        const mediaUrls = messageToForward.mediaUrls || messageToForward.media_urls || [];
+        if (mediaUrls.length > 0) {
+          for (const url of mediaUrls) {
+            const freshUrl = await getFreshUrl(url);
+            let name = messageToForward.fileName;
+            if (!name && messageToForward.content && !messageToForward.content.startsWith('http')) {
+               name = messageToForward.content;
+            }
+            if (!name) {
+               name = cleanFileName(url);
+            }
+            
+            const tempUri = `${FileSystem.cacheDirectory}${name}`;
+            const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
+            
+            const formData = new FormData();
+            formData.append('file', {
+              uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
+              name: name,
+              type: getMimeType(name)
+            });
+            await myCloudApi.uploadFile(formData);
+          }
+        } else if (messageToForward.content && messageToForward.content.startsWith('http')) {
+           const freshUrl = await getFreshUrl(messageToForward.content);
+           let name = messageToForward.fileName || cleanFileName(messageToForward.content);
+           const tempUri = `${FileSystem.cacheDirectory}${name}`;
+           const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
+
+           const formData = new FormData();
+           formData.append('file', {
+             uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
+             name: name,
+             type: getMimeType(name)
+           });
+           await myCloudApi.uploadFile(formData);
+        }
+      }
+    } catch (err) {
+      console.error('Forward to cloud failed:', err);
+      throw err;
+    }
   };
 
   const handleForward = async () => {
@@ -63,29 +200,36 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
     setSending(true);
 
     try {
-      const forwardedFrom = {
-        messageId: messageToForward.messageId,
-        conversationId: messageToForward.conversationId,
-        senderName: messageToForward.senderName || 'Người dùng'
-      };
+      if (selectedConvs.includes('MY_CLOUD')) {
+        await handleForwardToCloud();
+      }
 
-      for (const convId of selectedConvs) {
-        // Forward the original message
-        await dispatch(sendMessage({
-          conversationId: convId, 
-          content: messageToForward.content || '', 
-          type: messageToForward.type || 'TEXT', 
-          mediaUrls: messageToForward.mediaUrls || messageToForward.media_urls || [], 
-          forwardedFrom
-        }));
+      const otherConvs = selectedConvs.filter(id => id !== 'MY_CLOUD');
+      if (otherConvs.length > 0) {
+        const forwardedFrom = {
+          messageId: messageToForward.messageId || messageToForward.id,
+          conversationId: messageToForward.conversationId,
+          senderName: messageToForward.senderName || 'Người dùng'
+        };
 
-        // Send extra message if any
-        if (extraMessage.trim()) {
+        for (const convId of otherConvs) {
+          // Forward the original message
           await dispatch(sendMessage({
             conversationId: convId, 
-            content: extraMessage.trim(), 
-            type: 'TEXT'
+            content: messageToForward.content || '', 
+            type: messageToForward.type || 'TEXT', 
+            mediaUrls: messageToForward.mediaUrls || messageToForward.media_urls || [], 
+            forwardedFrom
           }));
+
+          // Send extra message if any
+          if (extraMessage.trim()) {
+            await dispatch(sendMessage({
+              conversationId: convId, 
+              content: extraMessage.trim(), 
+              type: 'TEXT'
+            }));
+          }
         }
       }
       onClose();
@@ -123,6 +267,28 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
           )}
         </View>
         <Text style={styles.convName} numberOfLines={1}>{getConvName(item)}</Text>
+        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          {isSelected && <MaterialIcons name="check" size={16} color="#fff" />}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderMyCloudItem = () => {
+    const isSelected = selectedConvs.includes('MY_CLOUD');
+    return (
+      <TouchableOpacity 
+        style={[styles.convItem, isSelected && styles.convItemSelected]} 
+        onPress={() => toggleSelect('MY_CLOUD')}
+        activeOpacity={0.7}
+      >
+        <View style={styles.convAvatar}>
+          <MaterialCommunityIcons name="cloud-outline" size={24} color="#6366f1" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.convName} numberOfLines={1}>My Cloud</Text>
+          <Text style={{ fontSize: 12, color: '#9ca3af' }}>Lưu trữ cá nhân</Text>
+        </View>
         <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
           {isSelected && <MaterialIcons name="check" size={16} color="#fff" />}
         </View>
@@ -168,7 +334,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
 
             {/* Tabs */}
             <View style={styles.tabs}>
-              {['Gần đây', 'Nhóm', 'Bạn bè'].map(tab => (
+              {['Gần đây', 'Nhóm', 'Bạn bè', 'My Cloud'].map(tab => (
                 <TouchableOpacity 
                   key={tab} 
                   style={[styles.tab, activeTab === tab && styles.tabActive]}
@@ -181,16 +347,19 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
 
             {/* Conversation List */}
             <FlatList
-              data={filteredConversations}
-              renderItem={renderConvItem}
+              data={activeTab === 'My Cloud' ? [{ conversationId: 'MY_CLOUD', isMyCloud: true }] : filteredConversations}
+              renderItem={activeTab === 'My Cloud' ? renderMyCloudItem : renderConvItem}
               keyExtractor={item => item.conversationId}
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Không tìm thấy cuộc trò chuyện nào</Text>
-                </View>
+                activeTab === 'My Cloud' ? null : (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>Không tìm thấy cuộc trò chuyện nào</Text>
+                  </View>
+                )
               }
             />
+
 
             {/* Preview & Extra Message */}
             <View style={styles.footer}>

@@ -106,7 +106,7 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
           } else if (event.eventType === 'WALLPAPER_UPDATED') {
             const wallpaperPayload = { conversationId: event.conversationId, wallpaperUrl: event.payload?.wallpaperUrl ?? null };
             wallpaperUpdateHandlers.forEach(handler => handler(wallpaperPayload));
-          } else if (event.eventType === 'JOIN_REQUEST' || event.eventType === 'JOIN_REQUEST_PROCESSED' || event.eventType === 'NEW_JOIN_REQUEST') {
+          } else if (event.eventType === 'JOIN_REQUEST' || event.eventType === 'JOIN_REQUEST_PROCESSED' || event.eventType === 'NEW_JOIN_REQUEST' || event.eventType === 'GROUP_JOIN_REQUEST' || event.eventType === 'GROUP_JOIN_REQUEST_PROCESSED') {
             joinRequestHandlers.forEach(handler => handler({
               conversationId: event.conversationId,
               payload: event.payload,
@@ -184,6 +184,8 @@ export const onWallpaperUpdated = (handler) => wallpaperUpdateHandlers.add(handl
 export const offWallpaperUpdated = (handler) => wallpaperUpdateHandlers.delete(handler);
 export const onUserUpdate = (handler) => userUpdateHandlers.add(handler);
 export const offUserUpdate = (handler) => userUpdateHandlers.delete(handler);
+export const onGlobalEvent = (handler) => globalHandlers.add(handler);
+export const offGlobalEvent = (handler) => globalHandlers.delete(handler);
 export const onStatusUpdate = onUserStatusChange;
 export const offStatusUpdate = offUserStatusChange;
 
@@ -257,6 +259,7 @@ export default {
   onReaction, offReaction, onMessageUpdate, offMessageUpdate, onMessageRead, offMessageRead,
   onWallpaperUpdated, offWallpaperUpdated, onUserUpdate, offUserUpdate, onStatusUpdate, offStatusUpdate,
   onJoinRequest, offJoinRequest,
+  onGlobalEvent, offGlobalEvent,
   sendMessageViaSocket, emitSendMessage, emitCallSignal,
   emitTypingStart, emitTypingStop, emitReadReceipt, emitRecallMessage,
 };

@@ -285,16 +285,31 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     // Important: if handleSend is called as onSubmit, customType will be the Event object.
     const isExplicitType = typeof customType === 'string' && ['IMAGE', 'STICKER', 'VIDEO', 'FILE', 'VOICE'].includes(customType);
 
-    if (isExplicitType) {
-      type = customType;
-      if (customContent && !finalAttachments.includes(customContent)) {
-        finalAttachments = [customContent];
+    // ★ BULLETPROOF URL GUARD: if text content is a URL and no explicit type was set,
+    // force TEXT mode and discard ALL attachments unconditionally.
+    // This prevents virtual browser-generated files from being sent alongside URLs.
+    const isUrlMessage = !isExplicitType && finalContent && /^https?:\/\//i.test(finalContent.trim());
+    if (isUrlMessage) {
+      console.warn('[handleSend] URL content detected, forcing TEXT mode. Discarding', finalAttachments.length, 'attachment(s)');
+      finalAttachments = [];
+      type = 'TEXT';
+      // Clear stale state immediately
+      setAttachments([]);
+      setLocalAttachments([]);
+    }
+
+    if (!isUrlMessage) {
+      if (isExplicitType) {
+        type = customType;
+        if (customContent && !finalAttachments.includes(customContent)) {
+          finalAttachments = [customContent];
+        }
+      } else if (finalAttachments.length > 0) {
+        const firstUrl = String(finalAttachments[0]).toLowerCase();
+        if (firstUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)/i)) type = 'IMAGE';
+        else if (firstUrl.match(/\.(mp4|webm|ogg)/i)) type = 'VIDEO';
+        else type = 'FILE';
       }
-    } else if (attachments.length > 0) {
-      const firstUrl = String(attachments[0]).toLowerCase();
-      if (firstUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)/i)) type = 'IMAGE';
-      else if (firstUrl.match(/\.(mp4|webm|ogg)/i)) type = 'VIDEO';
-      else type = 'FILE';
     }
 
     const messageContent = (type === 'IMAGE' && customContent !== null) ? '' : finalContent;
@@ -302,7 +317,8 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     const optimisticMsg = {
       content: messageContent,
       senderId: user?.userId || user?.id,
-      mediaUrls: localAttachments.length > 0 ? localAttachments.map(a => a.blobUrl) : finalAttachments,
+      // ★ For URL messages, always use empty array — ignore stale localAttachments state
+      mediaUrls: isUrlMessage ? [] : (localAttachments.length > 0 ? localAttachments.map(a => a.blobUrl) : finalAttachments),
       type: type,
       status: 'SENDING',
       createdAt: Date.now(),
@@ -553,14 +569,52 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   };
 
   const handlePaste = (e) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
 
+    const pastedText = (clipboardData.getData('text/plain') || '').trim();
+    const pastedUri = (clipboardData.getData('text/uri-list') || '').trim();
+
+    console.warn("[handlePaste-v2] fired:", { pastedText, pastedUri, types: Array.from(clipboardData.types || []) });
+
+    // EARLY EXIT: If the pasted content is a URL, skip ALL file processing.
+    // Browsers (Chrome/Edge) generate virtual shortcut files (e.g. "github.com")
+    // when copying URLs from the address bar. We must not upload those.
+    const urlPattern = /^https?:\/\//i;
+    if (urlPattern.test(pastedText) || urlPattern.test(pastedUri)) {
+      console.warn("[handlePaste-v2] URL detected in clipboard text, skipping all file processing.");
+      // Also clear any leftover attachments from previous pastes (HMR state preservation fix)
+      if (localAttachments.length > 0 || attachments.length > 0) {
+        console.warn("[handlePaste-v2] Clearing stale attachments:", attachments.length, "server,", localAttachments.length, "local");
+        setAttachments([]);
+        setLocalAttachments([]);
+      }
+      return;
+    }
+
+    const items = clipboardData.items;
     const files = [];
     for (let i = 0; i < items.length; i++) {
       if (items[i].kind === 'file') {
         const file = items[i].getAsFile();
-        if (file) files.push(file);
+        if (!file) continue;
+
+        const cleanName = (file.name || '').trim();
+        const ext = cleanName.split('.').pop().toLowerCase();
+
+        // Additional safety: skip files whose name looks like a domain/URL
+        const webTlds = ['com','net','org','vn','edu','gov','io','co','us','uk','info','biz','xyz','me','html','htm','dev','local','app','tech'];
+        const looksLikeUrl = webTlds.includes(ext) ||
+                             ['url','lnk','website','webloc'].includes(ext) ||
+                             urlPattern.test(cleanName) ||
+                             /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,10}(\/.*)?$/.test(cleanName);
+
+        if (looksLikeUrl && !file.type.startsWith('image/')) {
+          console.warn("[handlePaste-v2] Skipping URL-like file:", cleanName);
+          continue;
+        }
+
+        files.push(file);
       }
     }
 

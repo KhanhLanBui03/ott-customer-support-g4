@@ -1,12 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { X, Download, Trash2, HardDrive, FileText } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { 
+  X, Download, Trash2, HardDrive, FileText, ChevronDown, ChevronRight, 
+  Image as ImageIcon, Video, Link as LinkIcon, PlayCircle 
+} from 'lucide-react';
 import { myCloudApi } from '../../api/myCloudApi';
 import { useTranslation } from 'react-i18next';
 
-const CloudInfo = ({ onClose, isDark }) => {
+const CloudInfo = ({ onClose, isDark, onPreviewFile }) => {
   const { t } = useTranslation();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sections, setSections] = useState({
+    media: false,
+    files: false,
+    links: false
+  });
 
   const fetchFiles = async () => {
     setLoading(true);
@@ -25,7 +33,15 @@ const CloudInfo = ({ onClose, isDark }) => {
     fetchFiles();
   }, []);
 
-  const handleDelete = async (id) => {
+  const toggleSection = (section) => {
+    setSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  const handleDelete = async (id, e) => {
+    if (e) e.stopPropagation();
     if (!window.confirm(t('cloud.delete_confirm'))) return;
     try {
       await myCloudApi.deleteFile(id);
@@ -39,7 +55,6 @@ const CloudInfo = ({ onClose, isDark }) => {
   const handleClearAll = async () => {
     if (!window.confirm(t('cloud.clear_all_confirm') || 'Clear all cloud files?')) return;
     try {
-      // naive: delete one by one
       for (const f of files) {
         await myCloudApi.deleteFile(f.id);
       }
@@ -48,6 +63,95 @@ const CloudInfo = ({ onClose, isDark }) => {
       console.error('Clear all failed', err);
       alert(t('cloud.delete_failed'));
     }
+  };
+
+  const mediaItems = useMemo(() => {
+    return files
+      .filter(f => f.typeFile === 'image' || f.typeFile === 'video')
+      .map(f => ({
+        ...f,
+        url: f.fileUrl,
+        type: f.typeFile === 'image' ? 'IMAGE' : 'VIDEO',
+        name: f.fileName
+      }));
+  }, [files]);
+
+  const fileItems = useMemo(() => {
+    return files
+      .filter(f => {
+        const isMsg = Boolean(f.messageText) && String(f.fileName || '').startsWith('message_');
+        return !isMsg && f.typeFile !== 'image' && f.typeFile !== 'video' && f.typeFile !== 'audio';
+      })
+      .map(f => {
+        const decoded = decodeURIComponent(f.fileUrl || '');
+        const cleanUrl = decoded.split('?')[0];
+        let name = f.fileName || cleanUrl.split('/').pop() || 'File';
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i;
+        name = name.replace(uuidPattern, '');
+        const longPrefixPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[0-9]+_/i;
+        name = name.replace(longPrefixPattern, '');
+        return {
+          ...f,
+          url: f.fileUrl,
+          name: name
+        };
+      });
+  }, [files]);
+
+  const linkItems = useMemo(() => {
+    const items = [];
+    files.forEach(f => {
+      const isMsg = Boolean(f.messageText) && String(f.fileName || '').startsWith('message_');
+      if (isMsg) {
+        let text = f.messageText;
+        if (text.startsWith('{"text":')) {
+          try {
+             const parsed = JSON.parse(text);
+             text = parsed.text || '';
+          } catch (e) {}
+        }
+        if (text) {
+          const urls = text.match(/https?:\/\/[^\s]+/gi);
+          if (urls) {
+            urls.forEach(url => {
+              const lowerUrl = url.toLowerCase();
+              if (
+                lowerUrl.includes('/chat-media/') ||
+                lowerUrl.includes('/uploads/') ||
+                lowerUrl.includes('/voice-messages/') ||
+                lowerUrl.includes('/chat-wallpaper/') ||
+                lowerUrl.includes('/avatars/') ||
+                lowerUrl.includes('amazonaws.com') ||
+                lowerUrl.includes('s3.') ||
+                lowerUrl.includes('dicebear.com')
+              ) {
+                return;
+              }
+              items.push({ id: f.id, url, text, uploadedAt: f.uploadedAt });
+            });
+          }
+        }
+      }
+    });
+    return items;
+  }, [files]);
+
+  const getFileIconComponent = (url) => {
+    const ext = url.split('.').pop().split('?')[0].toLowerCase();
+    const colorClass =
+      ext === 'pdf' ? 'bg-red-500' :
+      ['doc', 'docx'].includes(ext) ? 'bg-blue-500' :
+      ['xls', 'xlsx'].includes(ext) ? 'bg-emerald-500' :
+      ['zip', 'rar', '7z'].includes(ext) ? 'bg-amber-500' :
+      'bg-indigo-500';
+
+    return (
+      <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center text-white relative overflow-hidden flex-shrink-0 shadow-sm ${colorClass}`}>
+        <FileText size={16} className="mb-[-2px] opacity-40" />
+        <span className="text-[8px] font-black uppercase tracking-tighter leading-none">{ext}</span>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+      </div>
+    );
   };
 
   return (
@@ -73,34 +177,123 @@ const CloudInfo = ({ onClose, isDark }) => {
           </div>
         </div>
 
-        <div className="px-6 space-y-6">
-          <div className="bg-surface-200/50 rounded-3xl p-4 border border-border/50">
-             <div className="text-[11px] font-black uppercase tracking-widest text-foreground/40 mb-4 px-2">Recent Files</div>
-             {loading ? (
-                <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
-             ) : (
-                <div className="space-y-2">
-                   {files.length === 0 ? (
-                      <div className="py-4 text-center text-xs text-foreground/30 font-bold uppercase tracking-widest">No files</div>
-                   ) : files.slice(0, 10).map(f => (
-                      <div key={f.id} className="group flex items-center justify-between p-3 hover:bg-white/5 rounded-2xl transition-colors">
-                         <div className="flex items-center space-x-3 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0"><FileText size={18} /></div>
-                            <div className="min-w-0">
-                               <div className="text-sm font-bold truncate text-foreground/80">{f.fileName}</div>
-                               <div className="text-[10px] text-foreground/40 font-bold">{new Date(f.uploadedAt).toLocaleDateString()}</div>
+        {loading ? (
+          <div className="py-8 flex justify-center"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : (
+          <div className="px-4 space-y-3">
+            {/* Ảnh/Video đã chia sẻ */}
+            <div className="py-2 border-b border-border/40">
+              <button 
+                onClick={() => toggleSection('media')}
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
+              >
+                <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.shared_media')}</span>
+                {sections.media ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
+              </button>
+              {sections.media && (
+                <div className="mt-4 px-2">
+                  {mediaItems.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {mediaItems.slice(0, 12).map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="aspect-square rounded-xl overflow-hidden cursor-pointer relative group border border-border bg-surface-100"
+                          onClick={() => onPreviewFile ? onPreviewFile(item) : window.open(item.url, '_blank')}
+                        >
+                          {item.type === 'IMAGE' ? (
+                            <img src={item.url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-black/40">
+                              <PlayCircle size={32} className="text-white drop-shadow-lg" />
                             </div>
-                         </div>
-                         <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <a href={f.fileUrl} target="_blank" rel="noreferrer" className="p-2 hover:text-indigo-500"><Download size={16} /></a>
-                            <button onClick={() => handleDelete(f.id)} className="p-2 hover:text-red-500"><Trash2 size={16} /></button>
-                         </div>
-                      </div>
-                   ))}
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 opacity-30">
+                      <ImageIcon size={32} className="mx-auto mb-3" />
+                      <p className="text-xs font-bold italic tracking-tight">{t('info.no_media')}</p>
+                    </div>
+                  )}
                 </div>
-             )}
+              )}
+            </div>
+
+            {/* File đã chia sẻ */}
+            <div className="py-2 border-b border-border/40">
+              <button 
+                onClick={() => toggleSection('files')}
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
+              >
+                <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.shared_files')}</span>
+                {sections.files ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
+              </button>
+              {sections.files && (
+                <div className="mt-3 space-y-2 px-2">
+                  {fileItems.length > 0 ? (
+                    fileItems.slice(0, 5).map((file, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => onPreviewFile ? onPreviewFile(file) : window.open(file.url, '_blank')} 
+                        className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
+                      >
+                        {getFileIconComponent(file.url)}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{file.name || t('chat.attachment')}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 opacity-30">
+                      <FileText size={32} className="mx-auto mb-3" />
+                      <p className="text-xs font-bold italic tracking-tight">{t('info.no_files')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Link đã chia sẻ */}
+            <div className="py-2 border-b border-border/40">
+              <button 
+                onClick={() => toggleSection('links')}
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
+              >
+                <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.shared_links')}</span>
+                {sections.links ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
+              </button>
+              {sections.links && (
+                <div className="mt-3 space-y-2 px-2">
+                  {linkItems.length > 0 ? (
+                    linkItems.slice(0, 5).map((item, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => window.open(item.url, '_blank')} 
+                        className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02] cursor-pointer active:scale-[0.98]"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0">
+                          <LinkIcon size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{item.url}</p>
+                          {item.text !== item.url && (
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-1">{item.text}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 opacity-30">
+                      <LinkIcon size={32} className="mx-auto mb-3" />
+                      <p className="text-xs font-bold italic tracking-tight">{t('info.no_links')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="p-6 border-t border-border">

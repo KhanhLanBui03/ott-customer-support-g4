@@ -7,8 +7,12 @@ const GroupAvatar = ({ conversation, size = "h-12 w-12", isLarge = false, isActi
   
   if (!conversation) return null;
 
-  const { type, avatarUrl, avatar, name, members = [], isAI } = conversation;
+  const { type, avatarUrl, avatar, name, members = [] } = conversation;
   let displayAvatar = avatarUrl || avatar;
+
+  const isAI = conversation.isAI || 
+               conversation.conversationId?.includes('shop-expert-ai-bot') || 
+               members.some(m => String(m.userId || m.id).includes('shop-expert-ai-bot'));
 
   // Fallback to the other member's avatar for SINGLE conversations
   if (type === 'SINGLE' && members.length > 0) {

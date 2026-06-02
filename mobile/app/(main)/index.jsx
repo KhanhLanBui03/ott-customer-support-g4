@@ -11,6 +11,7 @@ import CreateGroupModal from '../../src/components/CreateGroupModal';
 import { TAGS, getTagByKey } from '../../src/constants/tags';
 import { conversationApi } from '../../src/api/chatApi';
 import { useTheme } from '../../src/context/ThemeContext';
+import { getPreviewText } from '../../src/utils/messageUtils';
 
 
 const HomeScreen = () => {
@@ -211,7 +212,7 @@ const HomeScreen = () => {
     const unreadCount = item.unreadCount || 0;
     const unreadText = unreadCount > 9 ? '9+' : String(unreadCount);
     const isOwnLastMessage = String(item.lastMessageSenderId || item.lastSenderId || '') === currentUserId;
-    const lastMessagePreview = item.lastMessage || 'Chưa có tin nhắn';
+    const lastMessagePreview = getPreviewText(item.lastMessage);
     
     // Kiểm tra mention
     const myName = currentUser?.fullName || currentUser?.name || '';
@@ -241,6 +242,7 @@ const HomeScreen = () => {
     
     // Lấy thông tin tag
     const tagInfo = item.tag ? getTagByKey(item.tag) : null;
+    const isAIConv = item.conversationId?.includes('shop-expert-ai-bot') || displayName?.toLowerCase()?.includes('shopexpert');
 
     return (
       <Swipeable
@@ -274,8 +276,14 @@ const HomeScreen = () => {
           activeOpacity={0.7}
         >
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            {isOnline && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
+            {isAIConv ? (
+              <View style={[styles.avatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
+                <Ionicons name="sparkles" size={20} color="#6366f1" />
+              </View>
+            ) : (
+              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            )}
+            {(isOnline || isAIConv) && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
             {item.isPinned && (
               <View style={styles.pinBadge}>
                 <MaterialCommunityIcons name="pin" size={10} color="#fff" style={styles.pinIconTiny} />

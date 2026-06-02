@@ -116,6 +116,7 @@ const ContactsScreen = () => {
               await friendApi.unfriend(friend.userId || friend.id);
               setFriends(prev => prev.filter(f => (f.userId || f.id) !== (friend.userId || friend.id)));
               Alert.alert('Thành công', 'Đã hủy kết bạn.');
+              DeviceEventEmitter.emit('friendship_changed');
             } catch (err) {
               Alert.alert('Lỗi', 'Không thể thực hiện yêu cầu lúc này.');
             }

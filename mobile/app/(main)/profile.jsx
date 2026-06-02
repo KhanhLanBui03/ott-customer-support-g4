@@ -151,6 +151,34 @@ const ProfileScreen = () => {
         </View>
 
 
+        {/* Personal Storage */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Lưu trữ cá nhân</Text>
+          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/my-cloud')}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="cloud-done-outline" size={20} color={colors.primary} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Cloud của tôi</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Settings */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Cài đặt</Text>
+          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/settings')}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="settings-outline" size={20} color={colors.primary} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Cài đặt chung</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Settings & Support */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Bảo mật & Hỗ trợ</Text>

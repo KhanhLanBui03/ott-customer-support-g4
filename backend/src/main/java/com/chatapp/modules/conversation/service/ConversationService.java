@@ -652,6 +652,16 @@ public class ConversationService {
             throw new ValidationException("User is already a member of this group");
         }
 
+        UserConversation inviterUc = userConversationRepository.findById(inviterId, conversationId)
+                .orElseThrow(() -> new ValidationException("Not a member of this group"));
+
+        boolean isApprovalRequired = conv.getMemberApprovalRequired() != null && conv.getMemberApprovalRequired();
+        if (isApprovalRequired) {
+            if (!"OWNER".equals(inviterUc.getRole()) && !"ADMIN".equals(inviterUc.getRole())) {
+                throw new ValidationException("Chỉ trưởng hoặc phó nhóm mới có quyền mời thành viên khi chế độ kiểm duyệt được bật.");
+            }
+        }
+
         com.chatapp.modules.conversation.domain.GroupInvitation invitation = 
             com.chatapp.modules.conversation.domain.GroupInvitation.builder()
                 .inviterId(inviterId)
@@ -1519,6 +1529,29 @@ public class ConversationService {
         }
     }
 
+    private void notifyAdminsOfJoinRequestProcessed(Conversation conv, GroupJoinRequest req) {
+        try {
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("requestId", req.getRequestId());
+            payload.put("userId", req.getUserId());
+            payload.put("conversationId", conv.getConversationId());
+            payload.put("status", req.getStatus());
+            
+            MessageEvent event = MessageEvent.of("GROUP_JOIN_REQUEST_PROCESSED", conv.getConversationId(), payload);
+            
+            // Notify all group admins/owner
+            for (String memberId : conv.getMemberIds()) {
+                userConversationRepository.findById(memberId, conv.getConversationId()).ifPresent(uc -> {
+                    if ("OWNER".equals(uc.getRole()) || "ADMIN".equals(uc.getRole())) {
+                        messagingTemplate.convertAndSendToUser(memberId, "/queue/messages", event);
+                    }
+                });
+            }
+        } catch (Exception e) {
+            log.error("Failed to notify admins of join request process: {}", e.getMessage());
+        }
+    }
+
     public List<GroupJoinRequestResponse> getPendingJoinRequests(String userId, String conversationId) {
         Conversation conv = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
@@ -1576,6 +1609,9 @@ public class ConversationService {
             addMemberToGroup(adminId, req.getConversationId(), req.getUserId());
         }
         
+        // Notify admins of processing
+        notifyAdminsOfJoinRequestProcessed(conv, req);
+        
         // Notify user via WebSocket
         try {
             messagingTemplate.convertAndSendToUser(
@@ -1608,6 +1644,9 @@ public class ConversationService {
         
         req.setStatus("REJECTED");
         groupJoinRequestRepository.save(req);
+        
+        // Notify admins of processing
+        notifyAdminsOfJoinRequestProcessed(conv, req);
         
         // Notify user via WebSocket and DB Notification
         try {

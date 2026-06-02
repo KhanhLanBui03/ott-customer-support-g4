@@ -40,7 +40,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
       if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
         return '[GIF]';
       }
-      return '[Đính kèm]';
+      return `🔗 ${raw}`;
     }
 
     // Handle explicit tags

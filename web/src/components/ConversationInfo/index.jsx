@@ -352,6 +352,36 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
     return items.reverse();
   }, [currentMessages]);
 
+  const linkItems = useMemo(() => {
+    const items = [];
+    currentMessages.forEach(msg => {
+      if (msg.type !== 'TEXT') return;
+      const text = msg.content || msg.messageText || '';
+      if (text) {
+        const urls = text.match(/https?:\/\/[^\s]+/gi);
+        if (urls) {
+          urls.forEach(url => {
+            const lowerUrl = url.toLowerCase();
+            if (
+              lowerUrl.includes('/chat-media/') ||
+              lowerUrl.includes('/uploads/') ||
+              lowerUrl.includes('/voice-messages/') ||
+              lowerUrl.includes('/chat-wallpaper/') ||
+              lowerUrl.includes('/avatars/') ||
+              lowerUrl.includes('amazonaws.com') ||
+              lowerUrl.includes('s3.') ||
+              lowerUrl.includes('dicebear.com')
+            ) {
+              return;
+            }
+            items.push({ url, text, createdAt: msg.createdAt });
+          });
+        }
+      }
+    });
+    return items.reverse();
+  }, [currentMessages]);
+
   const handleWallpaperChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -602,7 +632,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         </div>
                       </div>
                     )}
-                    {isAdmin && (
+                    {(isAdmin || !isApprovalRequiredLocal) && (
                       <button 
                         onClick={handleFetchFriends}
                         className="w-full flex items-center space-x-4 p-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-[24px] hover:scale-[1.02] active:scale-[0.98] transition-all group"
@@ -784,6 +814,40 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                 </div>
               )}
            </div>
+
+            <div className="py-2">
+               <button 
+                 onClick={() => toggleSection('links')}
+                 className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
+               >
+                  <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.shared_links')}</span>
+                  {sections.links ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
+               </button>
+               {sections.links && (
+                 <div className="mt-3 space-y-2 px-2">
+                    {linkItems.length > 0 ? (
+                       linkItems.slice(0, 5).map((item, idx) => (
+                         <div key={idx} onClick={() => window.open(item.url, '_blank')} className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02] cursor-pointer active:scale-[0.98]">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0">
+                               <LinkIcon size={18} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                               <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{item.url}</p>
+                               {item.text !== item.url && (
+                                 <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-1">{item.text}</p>
+                               )}
+                            </div>
+                         </div>
+                       ))
+                    ) : (
+                      <div className="text-center py-12 opacity-30">
+                         <LinkIcon size={32} className="mx-auto mb-3" />
+                         <p className="text-xs font-bold italic tracking-tight">{t('info.no_links')}</p>
+                      </div>
+                    )}
+                 </div>
+               )}
+            </div>
 
            {/* Tùy chỉnh giao diện */}
            <div className="py-2">

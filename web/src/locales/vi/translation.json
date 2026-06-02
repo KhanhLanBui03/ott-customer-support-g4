@@ -350,6 +350,8 @@
       "view_all_media": "Xem tất cả ảnh & video ({{count}})",
       "shared_files": "File đã chia sẻ",
       "no_files": "Chưa có file nào",
+      "shared_links": "Đường dẫn (Link) đã chia sẻ",
+      "no_links": "Chưa có đường dẫn nào",
       "customization": "Tùy chỉnh giao diện",
       "change_wallpaper": "Thay đổi ảnh nền",
       "change_wallpaper_desc": "Tùy chỉnh hình nền cho cuộc trò chuyện",

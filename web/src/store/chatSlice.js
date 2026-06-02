@@ -38,9 +38,9 @@ const initialState = {
 
 const isAudioUrl = (value) => {
   if (typeof value !== 'string') return false;
-  return /\.(mp3|m4a|webm|wav|ogg|opus|aac|amr)(\?|$)/i.test(value) || 
-         value.includes('voice-messages/') ||
-         value.includes('audio/');
+  return /\.(mp3|m4a|webm|wav|ogg|opus|aac|amr)(\?|$)/i.test(value) ||
+    value.includes('voice-messages/') ||
+    value.includes('audio/');
 };
 
 const urlRegex = /(https?:\/\/[^\s"'<>]+\.[a-z0-9]{2,}(?:\?[^\s"'<>]*)?)/gi;
@@ -68,7 +68,7 @@ const extractCandidateUrls = (source) => {
   ['fileUrl', 'mediaUrl', 'mediaUrls', 'media_urls', 'voiceUrl', 'audioUrl', 'attachmentUrl', 'url', 'src', 'payload'].forEach((key) => {
     if (source[key]) pushCandidate(source[key]);
   });
-  
+
   if (Array.isArray(source.attachments)) source.attachments.forEach(pushCandidate);
   if (Array.isArray(source.files)) source.files.forEach(pushCandidate);
 
@@ -83,7 +83,7 @@ const extractCandidateUrls = (source) => {
 const normalizeMessage = (message) => {
   if (!message) return message;
   const msg = { ...message };
-  
+
   // Combine all possible media fields
   const rawMedia = [
     ...(Array.isArray(msg.mediaUrls) ? msg.mediaUrls : []),
@@ -91,7 +91,7 @@ const normalizeMessage = (message) => {
     ...(msg.mediaUrl ? [msg.mediaUrl] : []),
     ...(msg.fileUrl ? [msg.fileUrl] : [])
   ].filter(url => typeof url === 'string' && url.trim().length > 0);
-  
+
   // 1. Initial de-duplication
   let uniqueMedia = Array.from(new Set(rawMedia));
 
@@ -113,10 +113,22 @@ const normalizeMessage = (message) => {
   }
 
   // Fallback to extraction for TEXT or missing types
-  const candidates = extractCandidateUrls(msg);
-  
+  let candidates = extractCandidateUrls(msg);
+  if (uniqueMedia.length === 0) {
+    // Only keep candidates that are actually images, videos, or audio/voice files.
+    // We do NOT want to extract generic websites (e.g. google.com, sv.iuh.edu.vn)
+    // as media attachments because they would get normalized to FILE messages.
+    candidates = candidates.filter(url => {
+      const lowerUrl = url.toLowerCase();
+      const isImage = /\.(jpeg|jpg|gif|png|webp|svg)/i.test(lowerUrl);
+      const isVideo = /\.(mp4|webm|ogg)/i.test(lowerUrl);
+      const isVoice = isAudioUrl(lowerUrl);
+      return isImage || isVideo || isVoice;
+    });
+  }
+
   let finalMedia = uniqueMedia.length > 0 ? uniqueMedia : candidates;
-  
+
   // Apply smart filtering to candidates too if needed
   if (finalMedia.length > 1) {
     finalMedia.sort((a, b) => b.length - a.length);
@@ -145,7 +157,7 @@ const normalizeMessage = (message) => {
   // Determine type based on content/urls IF type is currently TEXT or missing
   if (!msg.type || msg.type === 'TEXT') {
     const firstMediaUrl = (msg.mediaUrls && msg.mediaUrls.length > 0) ? msg.mediaUrls[0] : '';
-    
+
     if (isAudioUrl(firstMediaUrl) || isAudioUrl(msg.content)) {
       msg.type = 'VOICE';
     } else if (candidates.length > 0) {
@@ -260,11 +272,11 @@ const chatSlice = createSlice({
           // Kiểm tra xem có mention không (Không phân biệt hoa thường)
           const content = (normalizedMessage.content || '').toLowerCase();
           const myName = (action.payload.currentUserName || '').toLowerCase();
-          const hasMention = 
-            (myName && content.includes(`@${myName}`)) || 
-            content.includes('@all') || 
+          const hasMention =
+            (myName && content.includes(`@${myName}`)) ||
+            content.includes('@all') ||
             content.includes('@báo cho cả nhóm');
-            
+
           if (hasMention) {
             conv.unreadMention = true;
           }
@@ -357,7 +369,7 @@ const chatSlice = createSlice({
     },
     setTyping: (state, action) => {
       const { conversationId, userId, isTyping } = action.payload;
-      
+
       // Normalize ID (Same logic as other reducers)
       let realId = conversationId;
       if (conversationId && !conversationId.includes('#')) {
@@ -379,7 +391,7 @@ const chatSlice = createSlice({
           const conv = state.conversations.find(c => c.conversationId === realId);
           const member = conv?.members?.find(m => String(m.userId || m.id) === String(userId));
           const name = member?.fullName || member?.name || 'Ai đó';
-          
+
           state.typingUsers[realId].push({ userId, name });
         }
       } else {
@@ -531,7 +543,7 @@ const chatSlice = createSlice({
         }
       }
     },
-    
+
 
     updateConversationWallpaper: (state, action) => {
       const { conversationId, wallpaperUrl } = action.payload || {};
@@ -551,7 +563,7 @@ const chatSlice = createSlice({
         if (state.activeConversationId === conversationId && updates.unreadCount > 0) {
           updates.unreadCount = 0;
         }
-        
+
         state.conversations[index] = {
           ...state.conversations[index],
           ...updates
@@ -564,7 +576,7 @@ const chatSlice = createSlice({
     updateFriendStatus: (state, action) => {
       const friend = action.payload; // This is a FriendshipResponse
       if (!friend || !friend.userId) return;
-      
+
       if (!state.friends) state.friends = [];
       const idx = state.friends.findIndex(f => String(f.userId || f.id) === String(friend.userId));
       if (idx !== -1) {
@@ -581,7 +593,7 @@ const chatSlice = createSlice({
       })
       .addCase(fetchConversations.fulfilled, (state, action) => {
         const myName = (state.user?.fullName || state.user?.name || '').toLowerCase();
-        
+
         const uniqueConvs = (action.payload || []).reduce((acc, current) => {
           const x = acc.find(item => String(item.conversationId) === String(current.conversationId));
           if (!x) {
@@ -600,13 +612,13 @@ const chatSlice = createSlice({
 
             // Check if last message contains a mention to me
             const hasMention = lastMessage && myName && current.unreadCount > 0 && (
-              lastMessage.toLowerCase().includes(`@${myName}`) || 
+              lastMessage.toLowerCase().includes(`@${myName}`) ||
               lastMessage.toLowerCase().includes('@all') ||
               lastMessage.toLowerCase().includes('@báo cho cả nhóm')
             );
 
-            return acc.concat([{ 
-              ...current, 
+            return acc.concat([{
+              ...current,
               lastMessage,
               // Use hasUnreadMention from backend, fallback to client-side detection if needed
               unreadMention: current.hasUnreadMention ?? !!(current.unreadMention || hasMention)

@@ -8,6 +8,11 @@ const VideoThumbnail = ({ videoUrl, style }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!videoUrl) {
+      setLoading(false);
+      return;
+    }
+
     const generateThumbnail = async () => {
       try {
         const { uri } = await VideoThumbnails.getThumbnailAsync(videoUrl, {

@@ -173,7 +173,7 @@ export default function QrScannerScreen() {
 
           {/* Title */}
           <Text style={[styles.confirmTitle, { color: colors.foreground }]}>
-            Đăng nhập Chat app Web bằng mã QR trên thiết bị lạ?
+            Đăng nhập F5 Chat Web bằng mã QR trên thiết bị lạ?
           </Text>
 
           {/* Warning banner */}
