@@ -14,6 +14,7 @@ let readHandlers = new Set();
 let statusHandlers = new Set();
 let userUpdateHandlers = new Set();
 let wallpaperUpdateHandlers = new Set();
+let joinRequestHandlers = new Set(); // Thêm handler cho yêu cầu gia nhập
 let conversationUpdateHandlers = new Set();
 let globalHandlers = new Set();
 let callHandlers = new Set(); // Thêm cho Calling
@@ -30,9 +31,10 @@ export const clearAllHandlers = () => {
   statusHandlers.clear();
   userUpdateHandlers.clear();
   wallpaperUpdateHandlers.clear();
+  joinRequestHandlers.clear(); // Clear
   conversationUpdateHandlers.clear();
   globalHandlers.clear();
-  console.log('🧹 All socket handlers cleared');
+  console.log('Sweep: All socket handlers cleared');
 };
 
 export const initializeSocket = (token, userId, globalHandler = null) => {
@@ -104,6 +106,12 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
           } else if (event.eventType === 'WALLPAPER_UPDATED') {
             const wallpaperPayload = { conversationId: event.conversationId, wallpaperUrl: event.payload?.wallpaperUrl ?? null };
             wallpaperUpdateHandlers.forEach(handler => handler(wallpaperPayload));
+          } else if (event.eventType === 'JOIN_REQUEST' || event.eventType === 'JOIN_REQUEST_PROCESSED' || event.eventType === 'NEW_JOIN_REQUEST' || event.eventType === 'GROUP_JOIN_REQUEST' || event.eventType === 'GROUP_JOIN_REQUEST_PROCESSED') {
+            joinRequestHandlers.forEach(handler => handler({
+              conversationId: event.conversationId,
+              payload: event.payload,
+              eventType: event.eventType
+            }));
           } else if (event.eventType === 'CONVERSATION_UPDATE' || event.eventType === 'MEMBER_UPDATE' || event.eventType === 'CONVERSATION_RECREATED' || event.eventType === 'GROUP_INVITE') {
             conversationUpdateHandlers.forEach(handler => handler({
               conversationId: event.conversationId,
@@ -155,6 +163,8 @@ export const onUserStatusChange = (handler) => statusHandlers.add(handler);
 export const offUserStatusChange = (handler) => statusHandlers.delete(handler);
 export const onConversationUpdate = (handler) => conversationUpdateHandlers.add(handler);
 export const offConversationUpdate = (handler) => conversationUpdateHandlers.delete(handler);
+export const onJoinRequest = (handler) => joinRequestHandlers.add(handler);
+export const offJoinRequest = (handler) => joinRequestHandlers.delete(handler);
 export const onCallSignal = (handler) => callHandlers.add(handler);
 export const offCallSignal = (handler) => callHandlers.delete(handler);
 
@@ -174,6 +184,8 @@ export const onWallpaperUpdated = (handler) => wallpaperUpdateHandlers.add(handl
 export const offWallpaperUpdated = (handler) => wallpaperUpdateHandlers.delete(handler);
 export const onUserUpdate = (handler) => userUpdateHandlers.add(handler);
 export const offUserUpdate = (handler) => userUpdateHandlers.delete(handler);
+export const onGlobalEvent = (handler) => globalHandlers.add(handler);
+export const offGlobalEvent = (handler) => globalHandlers.delete(handler);
 export const onStatusUpdate = onUserStatusChange;
 export const offStatusUpdate = offUserStatusChange;
 
@@ -246,6 +258,8 @@ export default {
   onMessageEdit, offMessageEdit, onMessageDelete, offMessageDelete, onMessageRecall, offMessageRecall,
   onReaction, offReaction, onMessageUpdate, offMessageUpdate, onMessageRead, offMessageRead,
   onWallpaperUpdated, offWallpaperUpdated, onUserUpdate, offUserUpdate, onStatusUpdate, offStatusUpdate,
+  onJoinRequest, offJoinRequest,
+  onGlobalEvent, offGlobalEvent,
   sendMessageViaSocket, emitSendMessage, emitCallSignal,
   emitTypingStart, emitTypingStop, emitReadReceipt, emitRecallMessage,
 };

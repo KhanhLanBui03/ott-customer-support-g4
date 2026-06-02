@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { View, Text, Platform, Animated, Dimensions, TouchableOpacity, DeviceEventEmitter } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import VideoCall from '../../src/components/VideoCall';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TAB_BAR_WIDTH = SCREEN_WIDTH - 32;
-const TAB_WIDTH = TAB_BAR_WIDTH / 4;
+const TAB_WIDTH = TAB_BAR_WIDTH / 5;
 
 export default function MainLayout() {
   const { accessToken, user } = useSelector((state) => state.auth);
@@ -28,12 +28,12 @@ export default function MainLayout() {
         const { eventType, conversationId, payload } = event;
         if (eventType === 'MESSAGE_SEND') {
           dispatch(addMessage({ conversationId, message: payload, myId }));
-        } else if (eventType === 'CONVERSATION_UPDATE') {
+        } else if (['CONVERSATION_UPDATE', 'MEMBER_UPDATE', 'CONVERSATION_RECREATED', 'JOIN_REQUEST_PROCESSED', 'GROUP_JOIN_REQUEST_PROCESSED'].includes(eventType)) {
           dispatch(fetchConversations());
         } else if (['FRIEND_DELETE', 'FRIEND_BLOCK', 'FRIEND_UNBLOCK', 'FRIEND_REQUEST_REJECTED', 'FRIEND_REQUEST_CANCELLED'].includes(eventType)) {
           dispatch(fetchConversations());
           DeviceEventEmitter.emit('friendship_changed');
-        } else if (eventType === 'NOTIFICATION' || eventType === 'FRIEND_REQUEST' || eventType === 'FRIEND_ACCEPT' || eventType === 'GROUP_INVITE') {
+        } else if (eventType === 'NOTIFICATION' || eventType === 'FRIEND_REQUEST' || eventType === 'FRIEND_ACCEPT' || eventType === 'GROUP_INVITE' || eventType === 'NEW_JOIN_REQUEST') {
           let finalPayload = payload;
           if (eventType === 'FRIEND_REQUEST') {
             finalPayload = { id: `fr_${Date.now()}`, title: 'Lời mời kết bạn', message: payload.fullName || 'Ai đó', subMessage: 'muốn kết bạn với bạn', type: 'FRIEND_REQUEST', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
@@ -46,6 +46,22 @@ export default function MainLayout() {
             DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'GROUP_INVITE') {
             finalPayload = { id: `gi_${Date.now()}`, title: 'Lời mời vào nhóm', message: payload.groupName || 'Nhóm mới', subMessage: `được mời bởi ${payload.inviterName || 'ai đó'}`, type: 'GROUP_INVITE', invitationId: payload.invitationId, conversationId: payload.conversationId, senderId: payload.inviterId, avatarUrl: payload.groupAvatar, fullName: payload.groupName, createdAt: new Date().toISOString(), isRead: false };
+            dispatch(setInAppNotification(finalPayload));
+            dispatch(fetchConversations()); // Refresh list to show new group invitation if any
+          } else if (eventType === 'NEW_JOIN_REQUEST') {
+            finalPayload = {
+              id: `jr_${Date.now()}`,
+              title: 'Yêu cầu vào nhóm',
+              message: payload.groupName || 'Nhóm của bạn',
+              subMessage: `${payload.requesterName || 'Một người dùng'} muốn gia nhập`,
+              type: 'JOIN_REQUEST',
+              conversationId: conversationId,
+              senderId: payload.requesterId,
+              avatarUrl: payload.requesterAvatar,
+              fullName: payload.requesterName,
+              createdAt: new Date().toISOString(),
+              isRead: false
+            };
             dispatch(setInAppNotification(finalPayload));
           }
           dispatch(addNotification(finalPayload));
@@ -94,6 +110,7 @@ export default function MainLayout() {
       >
       <Tabs.Screen name="index" options={{ title: 'Tin nhắn', icon: 'chatbubble' }} />
       <Tabs.Screen name="contacts" options={{ title: 'Danh bạ', icon: 'people' }} />
+      <Tabs.Screen name="shop-expert-ai" options={{ title: 'ShopExpert AI', icon: 'sparkles' }} />
       <Tabs.Screen name="notifications" options={{ title: 'Thông báo', icon: 'notifications' }} />
       <Tabs.Screen name="profile" options={{ title: 'Cá nhân', icon: 'person' }} />
 
@@ -102,8 +119,12 @@ export default function MainLayout() {
       <Tabs.Screen name="chat/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="chat-info/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-        <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-        <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="shared-links/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="group-preview" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="my-cloud" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="settings" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       </Tabs>
 
       <VideoCall
@@ -139,14 +160,16 @@ const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
   }
 
   const translateX = useRef(new Animated.Value(0)).current;
+  const user = useSelector((state) => state.auth.user);
 
   // Danh sách các Tab được phép hiển thị (Whitelist)
-  const allowedTabs = ['index', 'contacts', 'notifications', 'profile'];
+  const allowedTabs = ['index', 'contacts', 'shop-expert-ai', 'notifications', 'profile'];
 
   // Ánh xạ các màn hình phụ về Tab chính để giữ trạng thái Active
   const routeMap = {
     'edit-profile': 'profile',
     'change-password': 'profile',
+    'settings': 'profile',
     // Thêm các ánh xạ khác nếu cần
   };
 
@@ -201,6 +224,21 @@ const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
           const isFocused = activeIndex === index;
 
           const onPress = () => {
+            if (route.name === 'shop-expert-ai') {
+              const currentUserId = user?.userId || user?.id;
+              if (currentUserId) {
+                const participants = [String(currentUserId), 'shop-expert-ai-bot'].sort();
+                const aiConvId = `SINGLE#${participants[0]}#${participants[1]}`;
+                router.push({
+                  pathname: `/chat/${encodeURIComponent(aiConvId)}`,
+                  params: {
+                    name: 'ShopExpert AI',
+                    type: 'SINGLE'
+                  }
+                });
+              }
+              return;
+            }
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);

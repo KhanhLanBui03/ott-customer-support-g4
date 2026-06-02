@@ -15,18 +15,33 @@ const { width, height } = Dimensions.get('window');
 
 const MediaViewer = ({ visible, onClose, allMedia = [], initialIndex = 0 }) => {
   const flatListRef = useRef(null);
+  const [activeIndex, setActiveIndex] = React.useState(initialIndex);
 
   useEffect(() => {
-    if (visible && flatListRef.current) {
-      // Nhảy tới đúng ảnh đã chọn khi mở modal
-      setTimeout(() => {
-        flatListRef.current.scrollToIndex({ index: initialIndex, animated: false });
-      }, 50);
+    if (visible) {
+      setActiveIndex(initialIndex);
+      if (flatListRef.current) {
+        // Nhảy tới đúng ảnh đã chọn khi mở modal
+        setTimeout(() => {
+          flatListRef.current.scrollToIndex({ index: initialIndex, animated: false });
+        }, 50);
+      }
     }
   }, [visible, initialIndex]);
 
-  const renderItem = ({ item }) => {
+  const handleScroll = (event) => {
+    const slideSize = event.nativeEvent.layoutMeasurement.width;
+    if (slideSize > 0) {
+      const index = Math.round(event.nativeEvent.contentOffset.x / slideSize);
+      if (index >= 0 && index < allMedia.length) {
+        setActiveIndex(index);
+      }
+    }
+  };
+
+  const renderItem = ({ item, index }) => {
     const isVideo = item.type === 'VIDEO';
+    const isCurrent = index === activeIndex;
     return (
       <View style={styles.slide}>
         {isVideo ? (
@@ -36,7 +51,7 @@ const MediaViewer = ({ visible, onClose, allMedia = [], initialIndex = 0 }) => {
             volume={1.0}
             isMuted={false}
             resizeMode="contain"
-            shouldPlay={visible} // Chỉ phát khi modal mở
+            shouldPlay={visible && isCurrent} // Chỉ phát khi modal mở và là slide hiện tại
             useNativeControls
             style={styles.mediaVideo}
           />
@@ -77,6 +92,7 @@ const MediaViewer = ({ visible, onClose, allMedia = [], initialIndex = 0 }) => {
             index,
           })}
           onScrollToIndexFailed={() => {}}
+          onMomentumScrollEnd={handleScroll}
         />
       </View>
     </Modal>

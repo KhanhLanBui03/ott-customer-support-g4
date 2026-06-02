@@ -217,7 +217,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
   const renderEmojiPanel = () => {
     const panelHeight = isEmojiExpanded ? 500 : 310;
     return (
-      <View style={[styles.emojiPanelContainer, { height: panelHeight, backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderTopColor: colors.border }]}>
+      <View style={[styles.emojiPanelContainer, { height: panelHeight, backgroundColor: isDark ? colors.surface200 : colors.background, borderTopColor: colors.border }]}>
         {/* Expand Handle */}
         <TouchableOpacity
           style={styles.expandHandleContainer}
@@ -226,39 +226,39 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             setIsEmojiExpanded(!isEmojiExpanded);
           }}
         >
-          <View style={[styles.expandHandle, { backgroundColor: isDark ? '#475569' : '#cbd5e1' }]} />
+          <View style={[styles.expandHandle, { backgroundColor: colors.border }]} />
         </TouchableOpacity>
 
         {/* Tab Header: Emoji, Sticker, GIF */}
         <View style={[styles.emojiTabHeader, { borderBottomColor: colors.border }]}>
           <TouchableOpacity
-            style={[styles.emojiTabButton, activeTab === 'emoji' && styles.emojiTabButtonActive]}
+            style={[styles.emojiTabButton, activeTab === 'emoji' && { borderBottomColor: colors.primary }]}
             onPress={() => {
               setActiveTab('emoji');
               setActiveCategory('smileys');
               setEmojiSearchTerm('');
             }}
           >
-            <Text style={[styles.emojiTabText, activeTab === 'emoji' && { color: colors.primary }]}>Emoji</Text>
+            <Text style={[styles.emojiTabText, { color: activeTab === 'emoji' ? colors.primary : colors.textSubtle }]}>Emoji</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.emojiTabButton, activeTab === 'sticker' && styles.emojiTabButtonActive]}
+            style={[styles.emojiTabButton, activeTab === 'sticker' && { borderBottomColor: colors.primary }]}
             onPress={() => {
               setActiveTab('sticker');
               setActiveCategory('trending');
               setEmojiSearchTerm('');
             }}
           >
-            <Text style={[styles.emojiTabText, activeTab === 'sticker' && { color: colors.primary }]}>Sticker</Text>
+            <Text style={[styles.emojiTabText, { color: activeTab === 'sticker' ? colors.primary : colors.textSubtle }]}>Sticker</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.emojiTabButton, activeTab === 'gif' && styles.emojiTabButtonActive]}
+            style={[styles.emojiTabButton, activeTab === 'gif' && { borderBottomColor: colors.primary }]}
             onPress={() => {
               setActiveTab('gif');
               setEmojiSearchTerm('');
             }}
           >
-            <Text style={[styles.emojiTabText, activeTab === 'gif' && { color: colors.primary }]}>GIF</Text>
+            <Text style={[styles.emojiTabText, { color: activeTab === 'gif' ? colors.primary : colors.textSubtle }]}>GIF</Text>
           </TouchableOpacity>
         </View>
 
@@ -363,7 +363,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
               {activeTab === 'emoji' && emojiCategories.map((category) => (
                 <TouchableOpacity
                   key={category.id}
-                  style={[styles.categorySubButton, activeCategory === category.id && styles.categorySubButtonActive]}
+                  style={[styles.categorySubButton, activeCategory === category.id && { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.1)' }]}
                   onPress={() => setActiveCategory(category.id)}
                 >
                   <Text style={styles.categorySubLabel}>{category.label}</Text>
@@ -372,7 +372,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
               {activeTab === 'sticker' && stickerSets.map((set) => (
                 <TouchableOpacity
                   key={set.id}
-                  style={[styles.categorySubButton, activeCategory === set.id && styles.categorySubButtonActive]}
+                  style={[styles.categorySubButton, activeCategory === set.id && { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.1)' }]}
                   onPress={() => setActiveCategory(set.id)}
                 >
                   <Text style={styles.categorySubLabel}>{set.label}</Text>
@@ -837,13 +837,35 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         const uploadedUrls = [];
         let failCount = 0;
 
+        const getMimeType = (fileName) => {
+          if (!fileName) return 'application/octet-stream';
+          const lower = fileName.toLowerCase();
+          if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+          if (lower.endsWith('.png')) return 'image/png';
+          if (lower.endsWith('.gif')) return 'image/gif';
+          if (lower.endsWith('.webp')) return 'image/webp';
+          if (lower.endsWith('.heic')) return 'image/heic';
+          if (lower.endsWith('.mp4')) return 'video/mp4';
+          if (lower.endsWith('.mov') || lower.endsWith('.qt')) return 'video/quicktime';
+          if (lower.endsWith('.mkv')) return 'video/x-matroska';
+          if (lower.endsWith('.mp3')) return 'audio/mpeg';
+          if (lower.endsWith('.wav')) return 'audio/wav';
+          if (lower.endsWith('.m4a')) return 'audio/m4a';
+          if (lower.endsWith('.aac')) return 'audio/aac';
+          if (lower.endsWith('.pdf')) return 'application/pdf';
+          if (lower.endsWith('.txt')) return 'text/plain';
+          if (lower.endsWith('.doc') || lower.endsWith('.docx')) return 'application/msword';
+          if (lower.endsWith('.xls') || lower.endsWith('.xlsx')) return 'application/vnd.ms-excel';
+          return 'application/octet-stream';
+        };
+
         for (let i = 0; i < result.assets.length; i++) {
           const asset = result.assets[i];
           setUploadProgress(`${i + 1}/${result.assets.length}`);
 
           const file = {
             uri: asset.uri,
-            type: asset.mimeType || 'application/octet-stream',
+            type: asset.mimeType && asset.mimeType !== 'application/octet-stream' ? asset.mimeType : getMimeType(asset.name),
             name: asset.name,
           };
 
@@ -1040,27 +1062,27 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
             <View style={{ flex: 1, position: 'relative' }}>
               {showMentions && (
-                <View style={[styles.mentionList, { backgroundColor: isDark ? '#1e293b' : '#fff', borderColor: colors.border, left: isExpanded ? -10 : -110 }]}>
+                <View style={[styles.mentionList, { backgroundColor: colors.surface100, borderColor: colors.border, left: isExpanded ? -10 : -110 }]}>
 
-                  <View style={[styles.mentionHeader, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}>
-                    <Text style={[styles.mentionHeaderText, { color: isDark ? '#94a3b8' : '#64748b' }]}>NHẮC TÊN THÀNH VIÊN</Text>
+                  <View style={[styles.mentionHeader, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.mentionHeaderText, { color: colors.textMuted }]}>NHẮC TÊN THÀNH VIÊN</Text>
                   </View>
 
                   <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="always">
                     {/* Option @All - Báo cho cả nhóm */}
                     {(mentionQuery === '' || 'tất cả'.includes(mentionQuery) || 'all'.includes(mentionQuery)) && (
                       <TouchableOpacity
-                        style={[styles.mentionItem, styles.mentionItemAll, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
+                        style={[styles.mentionItem, styles.mentionItemAll, { borderBottomColor: colors.border, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)' }]}
                         onPress={() => handleSelectMention({ fullName: 'All' })}
                       >
                         <View style={styles.mentionAvatarWrapper}>
-                          <View style={[styles.mentionAvatarAll, { backgroundColor: '#6366f1' }]}>
+                          <View style={[styles.mentionAvatarAll, { backgroundColor: colors.primary }]}>
                             <MaterialIcons name="security" size={18} color="#fff" />
                           </View>
                         </View>
                         <View style={styles.mentionTextContent}>
-                          <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>Báo cho cả nhóm</Text>
-                          <Text style={[styles.mentionSubName, { color: '#6366f1' }]}>@All</Text>
+                          <Text style={[styles.mentionName, { color: colors.foreground }]}>Báo cho cả nhóm</Text>
+                          <Text style={[styles.mentionSubName, { color: colors.primary }]}>@All</Text>
                         </View>
                       </TouchableOpacity>
                     )}
@@ -1068,7 +1090,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                     {mentionResults.map((member) => (
                       <TouchableOpacity
                         key={member.userId || member.id}
-                        style={[styles.mentionItem, { borderBottomColor: isDark ? '#334155' : '#f1f5f9' }]}
+                        style={[styles.mentionItem, { borderBottomColor: colors.border }]}
                         onPress={() => handleSelectMention(member)}
                       >
                         <View style={styles.mentionAvatarWrapper}>
@@ -1078,7 +1100,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                           />
                         </View>
                         <View style={styles.mentionTextContent}>
-                          <Text style={[styles.mentionName, { color: isDark ? '#fff' : '#1e293b' }]}>{member.fullName}</Text>
+                          <Text style={[styles.mentionName, { color: colors.foreground }]}>{member.fullName}</Text>
                         </View>
                       </TouchableOpacity>
                     ))}
@@ -1281,12 +1303,10 @@ const styles = StyleSheet.create({
   replyPreviewSender: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
     marginBottom: 2,
   },
   replyPreviewText: {
     fontSize: 13,
-    color: '#6b7280',
   },
   replyThumbnail: {
     width: 40,
@@ -1352,7 +1372,6 @@ const styles = StyleSheet.create({
   recordingTime: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1f2937',
   },
   recordingActions: {
     flexDirection: 'row',
@@ -1372,7 +1391,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#667eea',
     justifyContent: 'center',
     alignItems: 'center',
   },

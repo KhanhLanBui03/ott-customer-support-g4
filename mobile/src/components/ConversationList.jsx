@@ -12,6 +12,8 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { getPreviewText } from '../utils/messageUtils';
 
+import { useTheme } from '../context/ThemeContext';
+
 /**
  * ConversationList Component (Mobile)
  * List of conversations with search and create functionality
@@ -25,6 +27,7 @@ const ConversationList = ({
   isLoading = false,
   unreadCounts = {},
 }) => {
+  const { colors, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredConversations, setFilteredConversations] = useState(conversations);
 
@@ -49,15 +52,24 @@ const ConversationList = ({
 
     return (
       <TouchableOpacity
-        style={[styles.conversationItem, isSelected && styles.conversationItemActive]}
+        style={[
+          styles.conversationItem,
+          { borderBottomColor: colors.border },
+          isSelected && {
+            backgroundColor: isDark ? colors.surface200 : 'rgba(99, 102, 241, 0.1)',
+            borderLeftColor: colors.primary,
+            borderLeftWidth: 3,
+            paddingLeft: 13,
+          }
+        ]}
         onPress={() => onSelectConversation(item.conversationId || item.id)}
       >
         {/* Avatar */}
-        <View style={styles.avatarContainer}>
+        <View style={[styles.avatarContainer, { backgroundColor: colors.surface200 }]}>
           {item.avatar ? (
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
           ) : (
-            <View style={styles.avatarPlaceholder}>
+            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
               <Text style={styles.avatarText}>{(item.name || 'U')[0].toUpperCase()}</Text>
             </View>
           )}
@@ -66,10 +78,10 @@ const ConversationList = ({
         {/* Content */}
         <View style={styles.contentContainer}>
           <View style={styles.headerContainer}>
-            <Text style={styles.conversationName} numberOfLines={1}>
+            <Text style={[styles.conversationName, { color: colors.foreground }]} numberOfLines={1}>
               {item.name || 'Unknown'}
             </Text>
-            <Text style={styles.timeText}>
+            <Text style={[styles.timeText, { color: colors.textSubtle }]}>
               {item.lastMessageTime
                 ? new Date(item.lastMessageTime).toLocaleTimeString('en-US', {
                     hour: 'numeric',
@@ -78,14 +90,14 @@ const ConversationList = ({
                 : ''}
             </Text>
           </View>
-          <Text style={styles.previewText} numberOfLines={1}>
+          <Text style={[styles.previewText, { color: colors.textMuted }]} numberOfLines={1}>
             {getPreviewText(item.lastMessage)}
           </Text>
         </View>
 
         {/* Unread Badge */}
         {unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
+          <View style={[styles.unreadBadge, { backgroundColor: colors.error }]}>
             <Text style={styles.unreadText}>{unreadCount}</Text>
           </View>
         )}
@@ -94,22 +106,22 @@ const ConversationList = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity style={styles.createButton} onPress={onCreateConversation}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Messages</Text>
+        <TouchableOpacity style={[styles.createButton, { backgroundColor: colors.primary }]} onPress={onCreateConversation}>
           <MaterialIcons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={20} color="#999" />
+      <View style={[styles.searchContainer, { backgroundColor: colors.input }]}>
+        <MaterialIcons name="search" size={20} color={colors.textSubtle} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.foreground }]}
           placeholder="Search conversations..."
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.textSubtle}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -118,12 +130,12 @@ const ConversationList = ({
       {/* Conversation List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#667eea" />
-          <Text style={styles.loadingText}>Loading conversations...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.primary }]}>Loading conversations...</Text>
         </View>
       ) : filteredConversations.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: colors.textSubtle }]}>
             {searchQuery ? 'No conversations found' : 'No conversations yet'}
           </Text>
         </View>
@@ -142,7 +154,6 @@ const ConversationList = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
 
   header: {
@@ -152,20 +163,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
 
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
   },
 
   createButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#667eea',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -175,7 +183,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#f9fafb',
     gap: 8,
     marginHorizontal: 12,
     marginVertical: 8,
@@ -185,7 +192,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#111827',
   },
 
   loadingContainer: {
@@ -197,7 +203,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#667eea',
   },
 
   emptyContainer: {
@@ -208,7 +213,6 @@ const styles = StyleSheet.create({
 
   emptyText: {
     fontSize: 14,
-    color: '#9ca3af',
   },
 
   conversationItem: {
@@ -218,14 +222,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
   },
 
   conversationItemActive: {
-    backgroundColor: '#eff6ff',
-    borderLeftWidth: 3,
-    borderLeftColor: '#667eea',
-    paddingLeft: 13,
   },
 
   avatarContainer: {
@@ -233,7 +232,6 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: '#f3f4f6',
   },
 
   avatar: {
@@ -246,7 +244,6 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#667eea',
   },
 
   avatarText: {
@@ -270,25 +267,21 @@ const styles = StyleSheet.create({
   conversationName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
     flex: 1,
   },
 
   timeText: {
     fontSize: 12,
-    color: '#9ca3af',
   },
 
   previewText: {
     fontSize: 13,
-    color: '#6b7280',
   },
 
   unreadBadge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#ef4444',
     justifyContent: 'center',
     alignItems: 'center',
   },

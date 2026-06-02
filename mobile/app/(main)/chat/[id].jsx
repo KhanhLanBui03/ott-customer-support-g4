@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground, DeviceEventEmitter } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -51,6 +51,10 @@ const ChatDetailScreen = () => {
   const messages = chatState.messages[realId] || [];
   const conversation = conversations.find(c => c.conversationId === realId);
 
+  const isAI = useMemo(() => {
+    return realId?.includes('shop-expert-ai-bot') || conversationId?.includes('shop-expert-ai-bot');
+  }, [realId, conversationId]);
+
   const wallpaperUrl = conversation?.wallpaperUrl || null;
   const isLoading = chatState.loading;
 
@@ -78,6 +82,20 @@ const ChatDetailScreen = () => {
     dispatch(fetchConversationDetail(conversationId));
     dispatch(fetchMessages(conversationId));
   }, [conversationId, currentUser?.userId, currentUser?.id, dispatch]);
+
+  // Lắng nghe sự kiện thay đổi trạng thái bạn bè để đồng bộ UI lập tức
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('friendship_changed', () => {
+      console.log('[Chat] friendship_changed event received, resetting local friendship and re-fetching details');
+      setLocalFriendship(null);
+      if (conversationId) {
+        dispatch(fetchConversationDetail(conversationId));
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [conversationId, dispatch]);
 
   // Effect 2: Xử lý focus/blur - CORE LOGIC cho seen/delivered
   // Y như web: vào chat = set active + gửi read receipt (→ seen)
@@ -455,8 +473,9 @@ const ChatDetailScreen = () => {
   }, [conversation, currentUser]);
 
   const showStrangerBar = useMemo(() => {
+    if (isAI) return false;
     if (!conversation || conversation.type !== 'SINGLE') return false;
-    if (conversation.isAI || displayName?.toLowerCase()?.includes('assistant') || displayName?.toLowerCase()?.includes('copilot')) return false;
+    if (conversation.isAI || displayName?.toLowerCase()?.includes('assistant') || displayName?.toLowerCase()?.includes('copilot') || displayName?.toLowerCase()?.includes('shopexpert')) return false;
     // Only show the bar if we have CONFIRMED the friendship status from the backend
     // otherMember must exist and have a friendshipStatus field set by the server
     if (!otherMember) return false;
@@ -466,7 +485,7 @@ const ChatDetailScreen = () => {
     // Use localFriendship override if available (after user action), otherwise use server data
     const effectiveStatus = localFriendship?.status || serverStatus;
     return effectiveStatus !== 'ACCEPTED' && effectiveStatus !== 'BLOCKED' && effectiveStatus !== 'SELF';
-  }, [conversation, otherMember, localFriendship, displayName]);
+  }, [conversation, otherMember, localFriendship, displayName, isAI]);
 
   const handleSendFriendRequest = async () => {
     const targetUserId = otherMember?.userId || otherMember?.id;
@@ -620,7 +639,16 @@ const ChatDetailScreen = () => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(main)');
+              }
+            }}
+            style={styles.backButton}
+          >
             <Ionicons name="chevron-back" size={28} color={colors.primary} />
           </TouchableOpacity>
 
@@ -636,13 +664,19 @@ const ChatDetailScreen = () => {
             })}
           >
             <View style={styles.headerAvatarContainer}>
-              <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200 }]} />
-              {isOnline && <View style={[styles.headerOnlineBadge, { borderColor: colors.background }]} />}
+              {isAI ? (
+                <View style={[styles.headerAvatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
+                  <Ionicons name="sparkles" size={20} color="#6366f1" />
+                </View>
+              ) : (
+                <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200 }]} />
+              )}
+              {(isOnline || isAI) && <View style={[styles.headerOnlineBadge, { borderColor: colors.background }]} />}
             </View>
             <View style={styles.headerInfo}>
               <View style={styles.nameRow}>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
-                {conversation?.type === 'SINGLE' && otherMember?.friendshipStatus && (
+                {conversation?.type === 'SINGLE' && !isAI && otherMember?.friendshipStatus && (
                   <View style={[
                     styles.miniTag,
                     friendshipStatus === 'ACCEPTED' ? styles.friendMiniTag : [styles.strangerMiniTag, isDark && { backgroundColor: colors.surface200, borderColor: colors.border }]
@@ -656,25 +690,29 @@ const ChatDetailScreen = () => {
                   </View>
                 )}
               </View>
-              <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : [styles.statusOffline, { color: colors.textSubtle }]]} numberOfLines={1}>
-                {otherMember
+              <Text style={[styles.headerStatus, (isOnline || isAI) ? styles.statusOnline : [styles.statusOffline, { color: colors.textSubtle }]]} numberOfLines={1}>
+                {isAI ? 'Đang hoạt động' : (otherMember
                   ? formatLastSeen(otherMember.status || otherMember.presence, otherMember.lastSeenAt || otherMember.last_seen_at)
                   : (conversation?.type === 'GROUP'
                     ? `${conversation?.members?.length || 0} thành viên`
                     : (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')
                   )
-                }
+                )}
               </Text>
             </View>
           </TouchableOpacity>
 
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('audio')}>
-              <MaterialIcons name="call" size={24} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('video')}>
-              <MaterialIcons name="videocam" size={24} color={colors.primary} />
-            </TouchableOpacity>
+            {!isAI && (
+              <>
+                <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('audio')}>
+                  <MaterialIcons name="call" size={24} color={colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('video')}>
+                  <MaterialIcons name="videocam" size={24} color={colors.primary} />
+                </TouchableOpacity>
+              </>
+            )}
             <TouchableOpacity
               style={styles.headerActionButton}
               onPress={() => router.push({

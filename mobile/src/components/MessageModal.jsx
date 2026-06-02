@@ -87,10 +87,10 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isP
                       </View>
                       <View style={styles.fileInfo}>
                         <Text style={[styles.fileName, { color: isOwn ? '#fff' : '#1e293b' }]} numberOfLines={1}>
-                          {(message.mediaUrls?.[0] || 'file').split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '')}
+                          {message.fileName || (message.mediaUrls?.[0] || 'file').split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/, '')}
                         </Text>
                         <Text style={[styles.fileSize, { color: isOwn ? 'rgba(255,255,255,0.7)' : '#64748b' }]}>
-                          FILE • 22 KB
+                          {message.fileSize ? (message.fileSize > 1024 * 1024 ? `${(message.fileSize / (1024 * 1024)).toFixed(2)} MB` : `${(message.fileSize / 1024).toFixed(2)} KB`) : 'FILE'}
                         </Text>
                       </View>
                     </View>

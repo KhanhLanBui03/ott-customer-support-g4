@@ -492,7 +492,11 @@ const chatSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchConversations.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(fetchConversations.fulfilled, (state, action) => {
+        state.loading = false;
         const sortedConvs = (action.payload || []).map(conv => {
           let lastMessage = conv.lastMessage;
           if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
@@ -521,6 +525,9 @@ const chatSlice = createSlice({
           const dateB = new Date(b.updatedAt || 0);
           return dateB - dateA;
         });
+      })
+      .addCase(fetchConversations.rejected, (state) => {
+        state.loading = false;
       })
       .addCase(fetchConversationDetail.fulfilled, (state, action) => {
         const conv = action.payload;

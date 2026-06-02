@@ -11,6 +11,7 @@ import CreateGroupModal from '../../src/components/CreateGroupModal';
 import { TAGS, getTagByKey } from '../../src/constants/tags';
 import { conversationApi } from '../../src/api/chatApi';
 import { useTheme } from '../../src/context/ThemeContext';
+import { getPreviewText } from '../../src/utils/messageUtils';
 
 
 const HomeScreen = () => {
@@ -24,7 +25,21 @@ const HomeScreen = () => {
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
-  
+  // Chỉ hiện loading ban đầu nếu chưa có dữ liệu hội thoại
+  const [showInitialLoading, setShowInitialLoading] = useState(conversations.length === 0);
+
+  useEffect(() => {
+    // Nếu chưa có hội thoại, đợi 2s để tạo hiệu ứng mượt mà (chỉ lần đầu đăng nhập)
+    if (conversations.length === 0) {
+      const timer = setTimeout(() => {
+        setShowInitialLoading(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowInitialLoading(false);
+    }
+  }, []);
+
   // States cho phân loại
   const [filterType, setFilterType] = useState('all'); // 'all', 'unread'
   const [selectedTags, setSelectedTags] = useState([]);
@@ -211,7 +226,7 @@ const HomeScreen = () => {
     const unreadCount = item.unreadCount || 0;
     const unreadText = unreadCount > 9 ? '9+' : String(unreadCount);
     const isOwnLastMessage = String(item.lastMessageSenderId || item.lastSenderId || '') === currentUserId;
-    const lastMessagePreview = item.lastMessage || 'Chưa có tin nhắn';
+    const lastMessagePreview = getPreviewText(item.lastMessage);
     
     // Kiểm tra mention
     const myName = currentUser?.fullName || currentUser?.name || '';
@@ -241,6 +256,7 @@ const HomeScreen = () => {
     
     // Lấy thông tin tag
     const tagInfo = item.tag ? getTagByKey(item.tag) : null;
+    const isAIConv = item.conversationId?.includes('shop-expert-ai-bot') || displayName?.toLowerCase()?.includes('shopexpert');
 
     return (
       <Swipeable
@@ -274,8 +290,14 @@ const HomeScreen = () => {
           activeOpacity={0.7}
         >
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            {isOnline && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
+            {isAIConv ? (
+              <View style={[styles.avatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
+                <Ionicons name="sparkles" size={20} color="#6366f1" />
+              </View>
+            ) : (
+              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            )}
+            {(isOnline || isAIConv) && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
             {item.isPinned && (
               <View style={styles.pinBadge}>
                 <MaterialCommunityIcons name="pin" size={10} color="#fff" style={styles.pinIconTiny} />
@@ -405,9 +427,18 @@ const HomeScreen = () => {
         </View>
 
 
-        {loading && !refreshing && conversations.length === 0 ? (
+        {/*
+           Chỉ hiển thị màn hình loading trung tâm khi:
+           1. Đang tải (loading) HOẶC đang trong thời gian chờ 2s (showInitialLoading)
+           2. VÀ Quan trọng: Danh sách hội thoại hiện tại phải đang trống (conversations.length === 0)
+           3. VÀ Không phải đang thực hiện thao tác kéo để làm mới (refreshing)
+        */}
+        {((loading || showInitialLoading) && conversations.length === 0 && !refreshing) ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#667eea" />
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={[styles.loadingText, { color: colors.textMuted, marginTop: 15 }]}>
+              Đang tải dữ liệu...
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -418,7 +449,7 @@ const HomeScreen = () => {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Không tìm thấy hội thoại nào</Text>
+                <Text style={styles.emptyText}>Chưa có hội thoại nào</Text>
               </View>
             }
           />
@@ -736,6 +767,7 @@ const styles = StyleSheet.create({
 
   lastMessageUnread: { fontWeight: '700', color: '#111827' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { fontSize: 16, fontWeight: '600' },
   emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100 },
   emptyText: { color: '#9ca3af', fontSize: 16 },
 

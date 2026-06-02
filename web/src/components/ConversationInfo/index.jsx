@@ -3,8 +3,9 @@ import {
   Bell, Pin, Users, Clock, Hash, Image as ImageIcon, FileText, Link as LinkIcon, 
   Trash2, AlertTriangle, EyeOff, ChevronDown, ChevronRight, X, Download, PlayCircle,
   UserPlus, Shield, ShieldCheck, MoreVertical, LogOut, Palette, Search, Zap, Trash2 as TrashIcon,
-  Edit3, Check, MessageSquareLock
+  Edit3, Check, MessageSquareLock, QrCode
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useDispatch } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { useChat } from '../../hooks/useChat';
@@ -12,7 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { friendApi } from '../../api/friendApi';
 import { chatApi } from '../../api/chatApi';
 import { userApi } from '../../api/userApi';
-import { updateConversationWallpaper } from '../../store/chatSlice';
+import { updateConversationWallpaper, updateConversation } from '../../store/chatSlice';
 import GroupAvatar from '../GroupAvatar';
 import AIAssistantPanel from '../AIAssistantPanel';
 
@@ -23,6 +24,20 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   const fileInputRef = React.useRef(null);
   const avatarInputRef = React.useRef(null);
   const { user } = useAuth();
+
+  const conversationId = conversation?.conversationId;
+  const currentMember = useMemo(() => {
+    const myId = String(user?.userId || user?.id || '').toLowerCase();
+    return conversation.members?.find(m => {
+      const memberId = String(m.userId || m.id || '').toLowerCase();
+      return memberId && memberId === myId;
+    });
+  }, [conversation.members, user?.userId, user?.id]);
+  const isOwner = currentMember?.role === 'OWNER';
+  const isOnlyMember = conversation.type === 'GROUP' && conversation.members?.length === 1;
+  const isAdmin = currentMember?.role === 'ADMIN' || isOwner || isOnlyMember;
+  const currentMessages = useMemo(() => messages[conversationId] || [], [messages, conversationId]);
+
   const [sections, setSections] = useState({
     members: true,
     media: false,
@@ -31,7 +46,18 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
     customization: true,
     security: true
   });
-  
+
+  const [isRestrictedLocal, setIsRestrictedLocal] = useState(conversation?.onlyAdminsCanChat || false);
+  const [isApprovalRequiredLocal, setIsApprovalRequiredLocal] = useState(conversation?.memberApprovalRequired || false);
+
+  React.useEffect(() => {
+    setIsRestrictedLocal(conversation?.onlyAdminsCanChat || false);
+  }, [conversation?.onlyAdminsCanChat]);
+
+  React.useEffect(() => {
+    setIsApprovalRequiredLocal(conversation?.memberApprovalRequired || false);
+  }, [conversation?.memberApprovalRequired]);
+
   const [isInviting, setIsInviting] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [inviteSearch, setInviteSearch] = useState('');
@@ -46,17 +72,92 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
     fetchFriends();
   }, [fetchFriends]);
 
-  const conversationId = conversation?.conversationId;
-  const currentMessages = useMemo(() => messages[conversationId] || [], [messages, conversationId]);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [joinRequests, setJoinRequests] = useState([]);
 
-  const currentMember = useMemo(() => 
-    conversation.members?.find(m => m.userId === (user?.userId || user?.id)),
-    [conversation.members, user?.userId, user?.id]
-  );
+  const fetchJoinRequests = React.useCallback(async () => {
+    if (conversation.type === 'GROUP' && isAdmin) {
+      try {
+        const res = await chatApi.getPendingJoinRequests(conversationId);
+        if (res?.success) {
+          setJoinRequests(res.data || []);
+        } else if (res?.data) {
+          setJoinRequests(res.data);
+        } else if (Array.isArray(res)) {
+          setJoinRequests(res);
+        }
+      } catch (err) {
+        console.error('Fetch join requests failed:', err);
+      }
+    }
+  }, [conversation.type, conversationId, isAdmin]);
 
-  const isOwner = currentMember?.role === 'OWNER';
-  const isOnlyMember = conversation.type === 'GROUP' && conversation.members?.length === 1;
-  const isAdmin = currentMember?.role === 'ADMIN' || isOwner || isOnlyMember;
+  React.useEffect(() => {
+    fetchJoinRequests();
+
+    const handleJoinRequestSocket = (event) => {
+      const { conversationId: eventConvId, eventType } = event.detail;
+      if (String(eventConvId) === String(conversationId)) {
+        console.log(`[ConversationInfo] Updating join requests due to ${eventType}`);
+        fetchJoinRequests();
+      }
+    };
+
+    window.addEventListener('join-request-update', handleJoinRequestSocket);
+    return () => {
+      window.removeEventListener('join-request-update', handleJoinRequestSocket);
+    };
+  }, [fetchJoinRequests, conversationId]);
+
+  const handleToggleMemberApproval = async () => {
+    if (!isAdmin) return;
+    const originalValue = isApprovalRequiredLocal;
+    const newValue = !originalValue;
+
+    // Optimistic Update
+    setIsApprovalRequiredLocal(newValue);
+    dispatch(updateConversation({
+      conversationId,
+      memberApprovalRequired: newValue
+    }));
+
+    try {
+      await chatApi.toggleMemberApproval(conversationId);
+      // No need to fetchConversations here as Redux is already updated
+      // but we can still call it to be safe or if there are other side effects
+      // fetchConversations();
+    } catch (err) {
+      console.error('Toggle member approval failed:', err);
+      // Rollback
+      setIsApprovalRequiredLocal(originalValue);
+      dispatch(updateConversation({
+        conversationId,
+        memberApprovalRequired: originalValue
+      }));
+      alert(t('info.restriction_error'));
+    }
+  };
+
+  const handleApproveRequest = async (requestId) => {
+    try {
+      await chatApi.approveJoinRequest(requestId);
+      fetchJoinRequests();
+      fetchConversations();
+    } catch (err) {
+      console.error('Approve join request failed:', err);
+    }
+  };
+
+  const handleRejectRequest = async (requestId) => {
+    try {
+      await chatApi.rejectJoinRequest(requestId);
+      fetchJoinRequests();
+    } catch (err) {
+      console.error('Reject join request failed:', err);
+    }
+  };
+
+  
 
   const getFileIcon = (url) => {
     const getExt = (u) => {
@@ -200,11 +301,26 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
   
   const handleToggleChatRestriction = async () => {
     if (!isAdmin) return;
+    const originalValue = isRestrictedLocal;
+    const newValue = !originalValue;
+
+    // Optimistic Update
+    setIsRestrictedLocal(newValue);
+    dispatch(updateConversation({
+      conversationId,
+      onlyAdminsCanChat: newValue
+    }));
+
     try {
       await chatApi.toggleChatRestriction(conversationId);
-      fetchConversations();
     } catch (err) {
       console.error('Toggle restriction failed:', err);
+      // Rollback
+      setIsRestrictedLocal(originalValue);
+      dispatch(updateConversation({
+        conversationId,
+        onlyAdminsCanChat: originalValue
+      }));
       alert(t('info.restriction_error'));
     }
   };
@@ -231,6 +347,36 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
             items.push({ url, name, createdAt: msg.createdAt, metadata: msg.metadata });
           }
         });
+      }
+    });
+    return items.reverse();
+  }, [currentMessages]);
+
+  const linkItems = useMemo(() => {
+    const items = [];
+    currentMessages.forEach(msg => {
+      if (msg.type !== 'TEXT') return;
+      const text = msg.content || msg.messageText || '';
+      if (text) {
+        const urls = text.match(/https?:\/\/[^\s]+/gi);
+        if (urls) {
+          urls.forEach(url => {
+            const lowerUrl = url.toLowerCase();
+            if (
+              lowerUrl.includes('/chat-media/') ||
+              lowerUrl.includes('/uploads/') ||
+              lowerUrl.includes('/voice-messages/') ||
+              lowerUrl.includes('/chat-wallpaper/') ||
+              lowerUrl.includes('/avatars/') ||
+              lowerUrl.includes('amazonaws.com') ||
+              lowerUrl.includes('s3.') ||
+              lowerUrl.includes('dicebear.com')
+            ) {
+              return;
+            }
+            items.push({ url, text, createdAt: msg.createdAt });
+          });
+        }
       }
     });
     return items.reverse();
@@ -410,6 +556,24 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
 
         <div className="h-2 bg-slate-50 dark:bg-slate-900/50" />
 
+        {/* Mã QR Nhóm (Cho tất cả thành viên) */}
+        {conversation.type === 'GROUP' && (
+          <div className="px-4 py-3">
+             <button 
+               onClick={() => setShowQRModal(true)}
+               className="w-full flex items-center space-x-4 p-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-[24px] hover:scale-[1.02] active:scale-[0.98] transition-all group cursor-pointer"
+             >
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                   <QrCode size={20} />
+                </div>
+                <div className="text-left flex-1">
+                   <p className="text-[14px] font-black">Mã QR nhóm</p>
+                   <p className="text-[10px] font-bold opacity-60">Quét mã QR để gia nhập nhóm nhanh chóng</p>
+                </div>
+             </button>
+          </div>
+        )}
+
         {/* Trợ lý AI (Chỉ cho Nhóm) */}
         {conversation.type === 'GROUP' && (
           <AIAssistantPanel conversationId={conversationId} />
@@ -430,7 +594,45 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
               
               {sections.members && (
                  <div className="mt-4 space-y-3 px-2">
-                    {isAdmin && (
+                    {isAdmin && joinRequests && joinRequests.length > 0 && (
+                      <div className="bg-amber-500/5 border border-amber-500/20 rounded-[24px] p-4 mb-3 space-y-3">
+                        <p className="text-[12px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">Yêu cầu gia nhập ({joinRequests.length})</p>
+                        <div className="space-y-2.5">
+                          {joinRequests.map(req => (
+                            <div key={req.requestId} className="flex items-center justify-between bg-white dark:bg-slate-800 p-3 rounded-2xl border border-border">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-9 h-9 rounded-xl bg-surface-200 overflow-hidden">
+                                  {req.avatarUrl ? (
+                                    <img src={req.avatarUrl} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-foreground/40">{req.fullName?.charAt(0)}</div>
+                                  )}
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-sm font-bold text-foreground leading-tight">{req.fullName}</p>
+                                  <p className="text-[10px] text-foreground/50 mt-0.5">Muốn tham gia nhóm</p>
+                                </div>
+                              </div>
+                              <div className="flex space-x-1.5">
+                                <button 
+                                  onClick={() => handleApproveRequest(req.requestId)}
+                                  className="px-3 py-1.5 bg-indigo-500 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-colors"
+                                >
+                                  Duyệt
+                                </button>
+                                <button 
+                                  onClick={() => handleRejectRequest(req.requestId)}
+                                  className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-foreground rounded-xl text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                                >
+                                  Từ chối
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(isAdmin || !isApprovalRequiredLocal) && (
                       <button 
                         onClick={handleFetchFriends}
                         className="w-full flex items-center space-x-4 p-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-[24px] hover:scale-[1.02] active:scale-[0.98] transition-all group"
@@ -613,6 +815,40 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
               )}
            </div>
 
+            <div className="py-2">
+               <button 
+                 onClick={() => toggleSection('links')}
+                 className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-100 rounded-2xl transition-all"
+               >
+                  <span className="text-[11px] font-black text-foreground/70 uppercase tracking-widest">{t('info.shared_links')}</span>
+                  {sections.links ? <ChevronDown size={18} className="text-foreground/70" /> : <ChevronRight size={18} className="text-foreground/70" />}
+               </button>
+               {sections.links && (
+                 <div className="mt-3 space-y-2 px-2">
+                    {linkItems.length > 0 ? (
+                       linkItems.slice(0, 5).map((item, idx) => (
+                         <div key={idx} onClick={() => window.open(item.url, '_blank')} className="flex items-center space-x-4 p-4 hover:bg-white dark:hover:bg-white/5 rounded-[24px] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 transition-all group shadow-sm hover:shadow-lg hover:scale-[1.02] cursor-pointer active:scale-[0.98]">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0">
+                               <LinkIcon size={18} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                               <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 truncate leading-tight">{item.url}</p>
+                               {item.text !== item.url && (
+                                 <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-1">{item.text}</p>
+                               )}
+                            </div>
+                         </div>
+                       ))
+                    ) : (
+                      <div className="text-center py-12 opacity-30">
+                         <LinkIcon size={32} className="mx-auto mb-3" />
+                         <p className="text-xs font-bold italic tracking-tight">{t('info.no_links')}</p>
+                      </div>
+                    )}
+                 </div>
+               )}
+            </div>
+
            {/* Tùy chỉnh giao diện */}
            <div className="py-2">
               <button 
@@ -727,30 +963,46 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         }`}>
                            <MessageSquareLock size={22} />
                         </div>
-                        <div className="flex flex-col items-start text-left">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.chat_restriction')}</span>
-                            {conversation.onlyAdminsCanChat && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />}
-                          </div>
+                        <div className="flex flex-col items-start text-left flex-1">
+                          <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.chat_restriction')}</span>
                           <span className="text-[10px] font-bold opacity-70 mt-0.5">
-                            {conversation.onlyAdminsCanChat ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
+                            {isRestrictedLocal ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
                           </span>
                         </div>
-                        <div className="flex-1" />
-                        <div className={`w-10 h-5 rounded-full relative transition-colors ${conversation.onlyAdminsCanChat ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
-                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${conversation.onlyAdminsCanChat ? 'left-6' : 'left-1'}`} />
+                        <div className={`w-11 h-6 rounded-full relative transition-all duration-300 ${isRestrictedLocal ? 'bg-indigo-600 shadow-inner' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                           <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ${isRestrictedLocal ? 'translate-x-5' : 'translate-x-0'}`} />
                         </div>
                      </button>
                    )}
-                    <button 
-                      onClick={onClearHistory}
-                      className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-red-100 dark:hover:border-red-500/20"
-                    >
-                      <div className="w-11 h-11 rounded-2xl bg-red-100/50 dark:bg-red-500/5 flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <Trash2 size={22} />
-                      </div>
-                      <span className="text-[15px] font-black tracking-tight text-foreground">{t('info.clear_history')}</span>
-                    </button>
+                    {conversation.type === 'GROUP' && (
+                      <button 
+                         onClick={isAdmin ? handleToggleMemberApproval : undefined}
+                         disabled={!isAdmin}
+                         className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all border border-transparent ${
+                           isAdmin 
+                             ? 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-indigo-600 group scale-100 hover:scale-[1.02] hover:border-indigo-100 dark:hover:border-indigo-500/20 cursor-pointer' 
+                             : 'text-foreground/40 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
+                         }`}
+                      >
+                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
+                           isAdmin 
+                             ? 'bg-indigo-100/50 dark:bg-indigo-500/5 group-hover:scale-110 text-indigo-600' 
+                             : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
+                         }`}>
+                            <ShieldCheck size={22} />
+                         </div>
+                         <div className="flex flex-col items-start text-left flex-1">
+                           <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.member_approval')}</span>
+                           <span className="text-[10px] font-bold opacity-70 mt-0.5">
+                             {isApprovalRequiredLocal ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
+                           </span>
+                         </div>
+                         <div className={`w-11 h-6 rounded-full relative transition-all duration-300 ${isApprovalRequiredLocal ? 'bg-indigo-600 shadow-inner' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ${isApprovalRequiredLocal ? 'translate-x-5' : 'translate-x-0'}`} />
+                         </div>
+                      </button>
+                    )}
+                    
 
                     {conversation.type === 'SINGLE' && !conversation.isAI && (() => {
                       const otherMember = conversation.members?.find(m => {
@@ -819,6 +1071,41 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
               )}
            </div>
         </div>
+
+      {/* Group QR Code Modal */}
+      {showQRModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] animate-fade-in">
+          <div className="bg-sidebar border border-border w-[380px] rounded-[32px] p-6 shadow-2xl space-y-6 relative animate-scale-up">
+            <button 
+              onClick={() => setShowQRModal(false)}
+              className="absolute top-4 right-4 p-2 hover:bg-surface-200 rounded-full text-foreground/50 hover:text-foreground transition-all cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-foreground">Mã QR nhóm</h3>
+              <p className="text-xs text-foreground/65">Quét mã này bằng camera hoặc scanner để gia nhập nhóm</p>
+            </div>
+
+            <div className="bg-white p-6 rounded-[24px] flex items-center justify-center shadow-inner border border-slate-100 mx-auto w-fit">
+              <QRCodeSVG 
+                value={`GROUP_JOIN:${conversationId}`} 
+                size={220}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            <div className="text-center space-y-2">
+              <p className="text-sm font-bold text-foreground truncate max-w-full px-2">{conversation.name}</p>
+              <p className="text-[11px] text-indigo-500 font-bold bg-indigo-500/10 px-3 py-1 rounded-full w-fit mx-auto">
+                {conversation.members?.length || 0} thành viên
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

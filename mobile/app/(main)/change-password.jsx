@@ -103,7 +103,7 @@ const ChangePasswordScreen = () => {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>ĐỔI MẬT KHẨU</Text>
-          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.closeButton}>
+          <TouchableOpacity onPress={() => router.navigate('/(main)/profile')} style={styles.closeButton}>
             <Ionicons name="close" size={26} color={colors.textMuted} />
           </TouchableOpacity>
         </View>

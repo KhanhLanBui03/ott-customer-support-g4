@@ -43,6 +43,15 @@ export default function QrScannerScreen() {
   const handleBarCodeScanned = async ({ type, data }) => {
     setScanned(true);
     
+    if (data && data.startsWith('GROUP_JOIN:')) {
+      const conversationId = data.replace('GROUP_JOIN:', '');
+      router.push({
+        pathname: '/(main)/group-preview',
+        params: { conversationId }
+      });
+      return;
+    }
+    
     // Check if the data is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     
@@ -75,7 +84,13 @@ export default function QrScannerScreen() {
     } catch (err) {
       console.log('Error scanning QR:', err);
       Alert.alert('Lỗi', 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ', [
-        { text: 'OK', onPress: () => router.back() }
+        { text: 'OK', onPress: () => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(main)');
+          }
+        }}
       ]);
     }
   };
@@ -87,7 +102,13 @@ export default function QrScannerScreen() {
       });
       if (response.data.success) {
         Alert.alert('Thành công', 'Đã xác nhận đăng nhập thành công', [
-          { text: 'OK', onPress: () => router.back() }
+          { text: 'OK', onPress: () => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(main)');
+            }
+          }}
         ]);
       }
     } catch (err) {
@@ -109,7 +130,11 @@ export default function QrScannerScreen() {
     } catch (err) {
       console.log('Error canceling login:', err);
     }
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(main)');
+    }
   };
 
   if (hasPermission === null) {
@@ -119,7 +144,13 @@ export default function QrScannerScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: colors.foreground }}>Không có quyền truy cập camera</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.button} onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(main)');
+          }
+        }}>
           <Text style={styles.buttonText}>Quay lại</Text>
         </TouchableOpacity>
       </View>
@@ -142,7 +173,7 @@ export default function QrScannerScreen() {
 
           {/* Title */}
           <Text style={[styles.confirmTitle, { color: colors.foreground }]}>
-            Đăng nhập Chat app Web bằng mã QR trên thiết bị lạ?
+            Đăng nhập F5 Chat Web bằng mã QR trên thiết bị lạ?
           </Text>
 
           {/* Warning banner */}
@@ -204,7 +235,16 @@ export default function QrScannerScreen() {
       
       <View style={styles.overlay}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(main)');
+              }
+            }}
+            style={styles.backButton}
+          >
             <MaterialCommunityIcons name="arrow-left" size={28} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.title}>Quét mã QR</Text>

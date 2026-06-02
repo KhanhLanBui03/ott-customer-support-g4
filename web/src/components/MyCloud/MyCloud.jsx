@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Download,
   Eye,
@@ -15,6 +15,8 @@ import {
   MoreVertical,
   Forward,
   Reply,
+  Play,
+  Pause,
   X
 } from 'lucide-react';
 import { myCloudApi } from '../../api/myCloudApi';
@@ -136,6 +138,25 @@ const MyCloud = ({ isDark }) => {
   }, []);
 
   useEffect(() => {
+    const handleCloudUpdate = (e) => {
+      const { action, item, fileId } = e.detail;
+      if (action === 'UPLOAD') {
+        setFiles(prev => {
+          if (prev.some(f => f.id === item.id)) return prev;
+          const newFiles = [...prev, item];
+          return newFiles.sort((a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime());
+        });
+        scrollToBottom();
+      } else if (action === 'DELETE') {
+        setFiles(prev => prev.filter(f => f.id !== fileId));
+      }
+    };
+
+    window.addEventListener('my-cloud-update', handleCloudUpdate);
+    return () => window.removeEventListener('my-cloud-update', handleCloudUpdate);
+  }, []);
+
+  useEffect(() => {
     if (files.length > 0) {
       scrollToBottom();
     }
@@ -148,21 +169,25 @@ const MyCloud = ({ isDark }) => {
   }, []);
 
   const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const filesList = e.target.files;
+    if (!filesList || filesList.length === 0) return;
 
     setUploading(true);
     try {
       const metadata = replyingTo ? buildReplyMetadata(replyingTo) : {};
 
-      const resp = await myCloudApi.uploadFile(file, undefined, metadata);
-      const created = resp?.data || resp;
-      if (created) {
-        setFiles(prev => [...prev, created]);
-        scrollToBottom();
-      } else {
-        await fetchFiles();
+      for (let i = 0; i < filesList.length; i++) {
+        const file = filesList[i];
+        const resp = await myCloudApi.uploadFile(file, undefined, metadata);
+        const created = resp?.data || resp;
+        if (created) {
+          setFiles(prev => {
+            if (prev.some(f => f.id === created.id)) return prev;
+            return [...prev, created];
+          });
+        }
       }
+      scrollToBottom();
     } catch (err) {
       console.error('Upload failed:', err);
       alert(t('cloud.upload_failed'));
@@ -173,6 +198,7 @@ const MyCloud = ({ isDark }) => {
   };
 
   const sendTextMessageToCloud = async () => {
+    if (uploading) return;
     const text = (messageText || '').trim();
     if (!text) return;
     setUploading(true);
@@ -184,7 +210,10 @@ const MyCloud = ({ isDark }) => {
       const created = resp?.data?.data || resp?.data || resp;
       if (created) {
         const msgObj = { ...created, typeFile: created.typeFile || 'document' };
-        setFiles(prev => [...prev, msgObj]);
+        setFiles(prev => {
+          if (prev.some(f => f.id === msgObj.id)) return prev;
+          return [...prev, msgObj];
+        });
         setMessageText('');
         setReplyingTo(null);
         scrollToBottom();
@@ -199,12 +228,15 @@ const MyCloud = ({ isDark }) => {
     }
   };
 
-  const handleDelete = async (fileId) => {
+  const handleDelete = async (fileIdOrIds) => {
     if (!window.confirm(t('cloud.delete_confirm'))) return;
 
     try {
-      await myCloudApi.deleteFile(fileId);
-      setFiles(prev => prev.filter(f => f.id !== fileId));
+      const ids = Array.isArray(fileIdOrIds) ? fileIdOrIds : [fileIdOrIds];
+      for (const id of ids) {
+        await myCloudApi.deleteFile(id);
+      }
+      setFiles(prev => prev.filter(f => !ids.includes(f.id)));
     } catch (err) {
       console.error('Delete failed:', err);
       alert(t('cloud.delete_failed'));
@@ -279,17 +311,51 @@ const MyCloud = ({ isDark }) => {
     ((getDisplayMessageText(file) || file.fileName || '')).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const orderedFiles = [...filteredFiles].sort((left, right) => {
-    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
-    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
-    return leftTime - rightTime;
-  });
+  const groupedItems = useMemo(() => {
+    const ordered = [...filteredFiles].sort((left, right) => {
+      const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
+      const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
+      return leftTime - rightTime;
+    });
 
-  // Show as one-sided chat (user only -> right side)
-  const threadItems = orderedFiles.map((file) => ({
-    ...file,
-    side: 'right'
-  }));
+    const grouped = [];
+    let currentGroup = null;
+
+    ordered.forEach((item) => {
+      const isMsg = Boolean(getDisplayMessageText(item)) && String(item.fileName || '').startsWith('message_');
+      const isGroupable = !isMsg;
+      const itemTime = item.uploadedAt ? new Date(item.uploadedAt).getTime() : 0;
+
+      if (isGroupable && currentGroup) {
+        const timeDiff = Math.abs(itemTime - currentGroup.time);
+        if (timeDiff <= 5000) {
+          currentGroup.files.push(item);
+          return;
+        }
+      }
+
+      if (isGroupable) {
+        currentGroup = {
+          id: `group_${item.id}`,
+          isGroup: true,
+          type: 'file_group',
+          time: itemTime,
+          uploadedAt: item.uploadedAt,
+          side: 'right',
+          files: [item]
+        };
+        grouped.push(currentGroup);
+      } else {
+        currentGroup = null;
+        grouped.push({
+          ...item,
+          side: 'right'
+        });
+      }
+    });
+
+    return grouped;
+  }, [filteredFiles]);
 
   const formatTime = (dateValue) => {
     if (!dateValue) return '';
@@ -357,11 +423,256 @@ const MyCloud = ({ isDark }) => {
               </div>
             </div>
 
-            {threadItems.map((file) => {
+            {groupedItems.map((file) => {
               const isRight = file.side === 'right';
+
+              if (file.isGroup && file.type === 'file_group') {
+                const replyData = getReplyPreview(file.files[0]);
+                const imagesAndVideos = file.files.filter(f => {
+                  const t = getFilePreviewType(f);
+                  return t === 'image' || t === 'video';
+                });
+                const otherFiles = file.files.filter(f => {
+                  const t = getFilePreviewType(f);
+                  return t !== 'image' && t !== 'video';
+                });
+
+                const renderSingleMedia = (mediaFile) => {
+                  const isVideo = getFilePreviewType(mediaFile) === 'video';
+                  return (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); openPreview(mediaFile); }}
+                      className="max-w-[280px] rounded-2xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity border border-white/10 bg-black/10"
+                    >
+                      {isVideo ? (
+                        <div className="relative">
+                          <video src={mediaFile.fileUrl} className="w-full max-h-[220px] object-cover" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                              <Play size={20} fill="currentColor" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <img src={mediaFile.fileUrl} alt={mediaFile.fileName} className="w-full max-h-[220px] object-cover" />
+                      )}
+                    </div>
+                  );
+                };
+
+                const renderSingleDocument = (docFile) => {
+                  return (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); openPreview(docFile); }}
+                      className="flex items-center space-x-4 p-4 rounded-[22px] border transition-all min-w-[260px] max-w-full cursor-pointer bg-white/10 border-white/20 hover:bg-white/15"
+                    >
+                      {(() => {
+                        const ext = docFile.fileName?.split('.').pop().toLowerCase() || 'file';
+                        const colorClass =
+                          ext === 'pdf' ? 'bg-red-500' :
+                          ['doc', 'docx'].includes(ext) ? 'bg-blue-500' :
+                          ['xls', 'xlsx'].includes(ext) ? 'bg-emerald-500' :
+                          ['zip', 'rar', '7z'].includes(ext) ? 'bg-amber-500' :
+                          'bg-indigo-500';
+                        return (
+                          <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-white relative overflow-hidden flex-shrink-0 shadow-sm ${colorClass}`}>
+                            <FileText size={18} className="mb-[-2px] opacity-40" />
+                            <span className="text-[9px] font-black uppercase tracking-tighter leading-none">{ext}</span>
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+                          </div>
+                        );
+                      })()}
+                      <div className="flex-1 min-w-0 pt-0.5 text-left">
+                        <p className="text-[14px] font-bold truncate mb-0.5 text-white">
+                          {docFile.fileName}
+                        </p>
+                        <p className="text-[11px] font-bold text-white/50 uppercase tracking-widest">
+                          {formatSize(docFile.fileSize)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                };
+
+                return (
+                  <div key={file.id} className="group relative flex flex-col items-end space-y-1">
+                    {/* Reaction Bar Dummy */}
+                    <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-md rounded-full px-2 py-1 mb-1 mr-10 scale-90 origin-right">
+                      {['👍', '❤️', '😂', '😮', '😢', '😡'].map(e => <span key={e} className="cursor-pointer hover:scale-125 transition-transform">{e}</span>)}
+                    </div>
+
+                    <div className="flex items-end space-x-3 justify-end">
+                      {/* Quick Action Icons */}
+                      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setReplyingTo(file.files[0]); }}
+                          className="p-1.5 hover:bg-white/10 rounded-full text-white/40 hover:text-white transition-colors"
+                        >
+                          <Reply size={16} />
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuId(activeMenuId === file.id ? null : file.id);
+                          }}
+                          className={`p-1.5 hover:bg-white/10 rounded-full transition-colors ${activeMenuId === file.id ? 'text-indigo-400 bg-white/5' : 'text-white/40 hover:text-white'}`}
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                      </div>
+
+                      <div className="max-w-[75%] flex flex-col items-end">
+                        {replyData && (
+                           <div className={`mb-1 flex items-center space-x-2 px-3 py-1.5 rounded-t-xl border-l-[3px] border-indigo-500 text-[11px] ${isDark ? 'bg-white/5 text-white/40 shadow-sm' : 'bg-slate-50 text-slate-400 border-slate-200 shadow-sm'}`}>
+                              <div className="w-5 h-5 bg-indigo-500/10 rounded flex items-center justify-center shrink-0">
+                                 <Reply size={10} className="text-indigo-400" />
+                              </div>
+                              <div className="flex-1 truncate italic">
+                                 <span className="font-bold not-italic mr-1">{replyData.senderName}:</span>
+                                 {replyData.fileUrl ? (
+                                   <a
+                                     href={replyData.fileUrl}
+                                     target="_blank"
+                                     rel="noreferrer"
+                                     onClick={(e) => e.stopPropagation()}
+                                     className="underline decoration-dotted underline-offset-2 hover:text-indigo-300"
+                                   >
+                                     {replyData.content}
+                                   </a>
+                                 ) : (
+                                   replyData.content
+                                 )}
+                              </div>
+                           </div>
+                        )}
+
+                        {file.files.length === 1 && imagesAndVideos.length === 1 ? (
+                          renderSingleMedia(imagesAndVideos[0])
+                        ) : file.files.length === 1 && otherFiles.length === 1 ? (
+                          renderSingleDocument(otherFiles[0])
+                        ) : (
+                          <div className="relative shadow-lg transition-all duration-300 pointer-events-auto bg-indigo-600 text-white rounded-[22px] rounded-br-[4px] p-4 max-w-[320px] space-y-3">
+                            {/* Media Grid */}
+                            {imagesAndVideos.length > 0 && (
+                              <div className={`grid ${imagesAndVideos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-1.5 overflow-hidden rounded-xl bg-black/10 p-1`}>
+                                {imagesAndVideos.map((mediaFile) => {
+                                  const isVideo = getFilePreviewType(mediaFile) === 'video';
+                                  return (
+                                    <div
+                                      key={mediaFile.id}
+                                      onClick={(e) => { e.stopPropagation(); openPreview(mediaFile); }}
+                                      className="relative aspect-square cursor-pointer hover:opacity-90 transition-opacity bg-black/20 rounded-lg overflow-hidden group/item"
+                                    >
+                                      {isVideo ? (
+                                        <>
+                                          <video src={mediaFile.fileUrl} className="w-full h-full object-cover" />
+                                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                            <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white">
+                                              <Play size={14} fill="currentColor" />
+                                            </div>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <img src={mediaFile.fileUrl} alt={mediaFile.fileName} className="w-full h-full object-cover" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Documents list */}
+                            {otherFiles.length > 0 && (
+                              <div className="space-y-2">
+                                {otherFiles.map((docFile) => {
+                                  const ext = docFile.fileName?.split('.').pop().toLowerCase() || 'file';
+                                  const colorClass =
+                                    ext === 'pdf' ? 'bg-red-500' :
+                                    ['doc', 'docx'].includes(ext) ? 'bg-blue-500' :
+                                    ['xls', 'xlsx'].includes(ext) ? 'bg-emerald-500' :
+                                    ['zip', 'rar', '7z'].includes(ext) ? 'bg-amber-500' :
+                                    'bg-indigo-500';
+                                  return (
+                                    <div
+                                      key={docFile.id}
+                                      onClick={(e) => { e.stopPropagation(); openPreview(docFile); }}
+                                      className="flex items-center space-x-3 p-3 rounded-xl border transition-all cursor-pointer bg-white/10 border-white/20 hover:bg-white/15"
+                                    >
+                                      <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center text-white relative overflow-hidden flex-shrink-0 shadow-sm ${colorClass}`}>
+                                        <FileText size={14} className="mb-[-2px] opacity-40" />
+                                        <span className="text-[8px] font-black uppercase tracking-tighter leading-none">{ext}</span>
+                                      </div>
+                                      <div className="flex-1 min-w-0 text-left">
+                                        <p className="text-[13px] font-bold truncate text-white mb-0.5">
+                                          {docFile.fileName}
+                                        </p>
+                                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider">
+                                          {formatSize(docFile.fileSize)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Context Menu for group */}
+                        {activeMenuId === file.id && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }} />
+                            <div
+                              className={`absolute z-50 bottom-full right-0 mb-3 w-56 rounded-[28px] shadow-2xl border backdrop-blur-xl overflow-hidden animate-zoom-in ${isDark ? 'bg-[#161b2c]/95 border-white/10' : 'bg-white/95 border-slate-100'}`}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <div className="p-2 space-y-1">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setReplyingTo(file.files[0]); setActiveMenuId(null); }}
+                                  className={`w-full flex items-center space-x-3 px-4 py-3.5 text-[13px] font-bold rounded-2xl transition-all ${isDark ? 'hover:bg-white/5 text-white/90' : 'hover:bg-slate-50 text-slate-700'}`}
+                                >
+                                  <Reply size={18} className="text-indigo-400" />
+                                  <span>Trả lời</span>
+                                </button>
+                                <div className={`h-px mx-4 my-1 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const ids = file.files.map(f => f.id);
+                                    handleDelete(ids);
+                                    setActiveMenuId(null);
+                                  }}
+                                  className={`w-full flex items-center space-x-3 px-4 py-3.5 text-[13px] font-bold rounded-2xl transition-all ${isDark ? 'hover:bg-red-500/10 text-red-500' : 'hover:bg-red-50 text-red-600'}`}
+                                >
+                                  <Trash2 size={18} />
+                                  <span>Xóa nhóm file này</span>
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        <div className={`mt-1.5 flex items-center space-x-2 px-1 text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+                          <span>{formatTime(file.uploadedAt)}</span>
+                        </div>
+                      </div>
+
+                      {isRight && (
+                        <div className="flex flex-col items-center mb-6 shrink-0 group/avatar">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isDark ? 'bg-indigo-500/20 text-indigo-300 group-hover/avatar:bg-indigo-500 group-hover/avatar:text-white' : 'bg-indigo-50 text-indigo-600'} border border-indigo-500/30 overflow-hidden shadow-sm`}>
+                            <HardDrive size={16} />
+                          </div>
+                          <span className="text-[9px] font-black mt-1.5 opacity-40 uppercase tracking-tighter">Bạn</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
               const displayContent = getDisplayMessageText(file);
               const replyData = getReplyPreview(file);
-              const isMessage = Boolean(displayContent);
+              const isMessage = Boolean(displayContent) && String(file.fileName || '').startsWith('message_');
               
               return (
                 <div key={file.id} className="group relative flex flex-col items-end space-y-1">
@@ -369,7 +680,7 @@ const MyCloud = ({ isDark }) => {
                   <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-md rounded-full px-2 py-1 mb-1 mr-10 scale-90 origin-right">
                     {['👍', '❤️', '😂', '😮', '😢', '😡'].map(e => <span key={e} className="cursor-pointer hover:scale-125 transition-transform">{e}</span>)}
                   </div>
-
+ 
                   <div className={`flex items-end space-x-3 ${isRight ? 'justify-end' : 'justify-start'}`}>
                     {/* Quick Action Icons */}
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
@@ -390,7 +701,7 @@ const MyCloud = ({ isDark }) => {
                         <MoreVertical size={16} />
                       </button>
                     </div>
-
+ 
                     <div className={`max-w-[75%] flex flex-col ${isRight ? 'items-end' : 'items-start'}`}>
                       {replyData && (
                          <div className={`mb-1 flex items-center space-x-2 px-3 py-1.5 rounded-t-xl border-l-[3px] border-indigo-500 text-[11px] ${isDark ? 'bg-white/5 text-white/40 shadow-sm' : 'bg-slate-50 text-slate-400 border-slate-200 shadow-sm'}`}>
@@ -411,7 +722,7 @@ const MyCloud = ({ isDark }) => {
                                  </a>
                                ) : (
                                  replyData.content
-                               )}
+                                )}
                             </div>
                          </div>
                       )}
@@ -429,45 +740,95 @@ const MyCloud = ({ isDark }) => {
                       >
                         {isMessage ? (
                           <div className="text-[15px] font-semibold leading-relaxed whitespace-pre-wrap break-words">
-                            {displayContent}
+                            {(() => {
+                              const urlRegex = /(https?:\/\/[^\s]+)/gi;
+                              const parts = displayContent.split(urlRegex);
+                              return parts.map((part, index) => {
+                                if (part.match(urlRegex)) {
+                                  return (
+                                    <a
+                                      key={`link-${index}`}
+                                      href={part}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className={`underline font-bold transition-opacity hover:opacity-80 ${
+                                        isRight
+                                          ? 'text-white hover:text-white/80'
+                                          : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-500'
+                                      }`}
+                                    >
+                                      {part}
+                                    </a>
+                                  );
+                                }
+                                return part;
+                              });
+                            })()}
+                          </div>
+                        ) : getFilePreviewType(file) === 'image' ? (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); openPreview(file); }}
+                            className="max-w-[280px] rounded-2xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity border border-white/10 bg-black/10"
+                          >
+                            <img src={file.fileUrl} alt={file.fileName} className="w-full max-h-[220px] object-cover" />
+                          </div>
+                        ) : getFilePreviewType(file) === 'video' ? (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); openPreview(file); }}
+                            className="max-w-[280px] rounded-2xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity relative border border-white/10 bg-black/10"
+                          >
+                            <video src={file.fileUrl} className="w-full max-h-[220px] object-cover" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                                <Play size={20} fill="currentColor" />
+                              </div>
+                            </div>
                           </div>
                         ) : (
-                          <div className={`flex flex-col min-w-[260px] overflow-hidden ${isRight ? 'rounded-[22px] rounded-br-[4px]' : 'rounded-[22px] rounded-bl-[4px]'}`}>
-                             <div className={`p-4 flex items-start space-x-4 ${isDark ? 'bg-black/20' : 'bg-slate-50'}`}>
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${isRight ? 'bg-white/10' : 'bg-indigo-50'}`}>
-                                  {getFileIcon(file.typeFile)}
+                          <div
+                            onClick={(e) => { e.stopPropagation(); openPreview(file); }}
+                            className={`flex items-center space-x-4 p-4 rounded-2xl border transition-all min-w-[260px] max-w-full cursor-pointer bg-white/10 border-white/20 hover:bg-white/15`}
+                          >
+                            {(() => {
+                              const ext = file.fileName?.split('.').pop().toLowerCase() || 'file';
+                              const colorClass =
+                                ext === 'pdf' ? 'bg-red-500' :
+                                ['doc', 'docx'].includes(ext) ? 'bg-blue-500' :
+                                ['xls', 'xlsx'].includes(ext) ? 'bg-emerald-500' :
+                                ['zip', 'rar', '7z'].includes(ext) ? 'bg-amber-500' :
+                                'bg-indigo-500';
+                              return (
+                                <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-white relative overflow-hidden flex-shrink-0 shadow-sm ${colorClass}`}>
+                                  <FileText size={18} className="mb-[-2px] opacity-40" />
+                                  <span className="text-[9px] font-black uppercase tracking-tighter leading-none">{ext}</span>
+                                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="font-bold text-[14px] truncate mb-0.5">{file.fileName}</div>
-                                  <div className={`text-[11px] font-bold opacity-60 uppercase tracking-widest`}>{formatSize(file.fileSize)}</div>
-                                </div>
-                             </div>
-                             <div className="px-4 py-3 border-t border-white/5 flex items-center justify-between bg-black/5">
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Tệp đính kèm</p>
-                                <div className="flex items-center space-x-2">
-                                  {file.fileUrl && getFilePreviewType(file) !== 'file' && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); openPreview(file); }}
-                                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
-                                    >
-                                      <Eye size={12} />
-                                      <span className="text-[10px] font-black">XEM TRƯỚC</span>
-                                    </button>
-                                  )}
-                                  {file.fileUrl && (
-                                    <a 
-                                      href={file.fileUrl} 
-                                      target="_blank" 
-                                      rel="noreferrer" 
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
-                                    >
-                                      <Download size={12} />
-                                      <span className="text-[10px] font-black">TẢI VỀ</span>
-                                    </a>
-                                  )}
-                                </div>
-                             </div>
+                              );
+                            })()}
+                            <div className="flex-1 min-w-0 pt-0.5">
+                              <p className="text-[14px] font-bold truncate mb-0.5 text-white">
+                                {file.fileName}
+                              </p>
+                              <p className="text-[11px] font-bold text-white/50 uppercase tracking-widest">
+                                {formatSize(file.fileSize)}
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              {file.fileUrl && (
+                                <a
+                                  href={file.fileUrl}
+                                  download={file.fileName}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                                  title="Tải về"
+                                >
+                                  <Download size={14} />
+                                </a>
+                              )}
+                            </div>
                           </div>
                         )}
 
@@ -582,12 +943,18 @@ const MyCloud = ({ isDark }) => {
             className="hidden"
             ref={fileInputRef}
             onChange={handleUpload}
+            multiple
           />
           <input
             type="text"
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') sendTextMessageToCloud(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                sendTextMessageToCloud();
+              }
+            }}
             placeholder="Type a message to Cloud"
             className={`flex-1 min-h-[42px] bg-transparent outline-none text-sm font-medium ${isDark ? 'text-white/85 placeholder-white/40' : 'text-slate-700 placeholder-slate-400'}`}
           />
@@ -613,7 +980,7 @@ const MyCloud = ({ isDark }) => {
         </div>
       </div>
     </div>
-    {isInfoOpen && <CloudInfo onClose={() => setIsInfoOpen(false)} isDark={isDark} />}
+    {isInfoOpen && <CloudInfo onClose={() => setIsInfoOpen(false)} isDark={isDark} onPreviewFile={openPreview} />}
     <ForwardModal
       isOpen={isForwardModalOpen}
       onClose={() => {

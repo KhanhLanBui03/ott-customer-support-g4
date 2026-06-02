@@ -19,12 +19,12 @@ import * as SecureStore from 'expo-secure-store';
 
 /**
  * ForgotPasswordScreen (Mobile)
- * Implementation consistent with Web version
+ * Redesigned for F5 Chat with premium dark theme and unified UI
  */
 
 const ForgotPasswordScreen = () => {
   const router = useRouter();
-  const { forgotPassword, resetPassword, sendOtp, loading } = useAuth();
+  const { forgotPassword, resetPassword, sendOtp, loading, clearError } = useAuth();
   const COOLDOWN_MS = 2 * 60 * 1000;
 
   const [step, setStep] = useState('request'); // 'request' or 'reset'
@@ -37,17 +37,22 @@ const ForgotPasswordScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [focusedInput, setFocusedInput] = useState(''); // '' or 'email' or 'otp' or 'newPassword' or 'confirmPassword'
   
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
-  // SecureStore keys only allow alphanumeric, '.', '-', and '_'
   const sanitizedEmail = normalizedEmail.replace(/[^a-zA-Z0-9._-]/g, '_');
   const cooldownKey = normalizedEmail ? `forgot_password_cooldown_${sanitizedEmail}` : '';
   const cooldownRemainingMs = Math.max(0, cooldownUntil - now);
   const cooldownRemainingSeconds = Math.ceil(cooldownRemainingMs / 1000);
   const isCooldownActive = cooldownRemainingMs > 0;
+
+  // Clear errors on load
+  useEffect(() => {
+    clearError();
+  }, []);
 
   // Timer for cooldown
   useEffect(() => {
@@ -57,7 +62,7 @@ const ForgotPasswordScreen = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Clear local error on mount and step change
+  // Clear errors on step change
   useEffect(() => {
     setLocalError('');
     setSuccessMessage('');
@@ -131,7 +136,6 @@ const ForgotPasswordScreen = () => {
     }
 
     try {
-      // Use the dedicated forgot-password endpoint for the first request
       await forgotPassword(email.trim().toLowerCase());
       setStep('reset');
       await applyCooldown(email.trim().toLowerCase());
@@ -149,7 +153,6 @@ const ForgotPasswordScreen = () => {
     setSuccessMessage('');
 
     try {
-      // For resending, we can also use sendOtp with FORGOT_PASSWORD purpose which is often more stable
       await sendOtp(email.trim().toLowerCase(), 'FORGOT_PASSWORD');
       await applyCooldown(email.trim().toLowerCase());
       setSuccessMessage('Mã OTP đã được gửi lại thành công.');
@@ -201,15 +204,31 @@ const ForgotPasswordScreen = () => {
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/login');
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
+      {/* Decorative Glow Elements */}
+      <View style={styles.glow1} pointerEvents="none" />
+      <View style={styles.glow2} pointerEvents="none" />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#1a1a1a" />
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#ffffff" />
           </TouchableOpacity>
 
           <View style={styles.header}>
@@ -225,19 +244,31 @@ const ForgotPasswordScreen = () => {
             {/* Email Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Gmail</Text>
-              <View style={[styles.inputWrapper, step === 'reset' && styles.disabledInput]}>
-                <MaterialCommunityIcons name="email-outline" size={20} color="#666" style={styles.inputIcon} />
+              <View style={[
+                styles.inputWrapper, 
+                step === 'reset' ? styles.disabledInput : null,
+                focusedInput === 'email' ? styles.inputActiveBorder : null
+              ]}>
+                <MaterialCommunityIcons 
+                  name="email-outline" 
+                  size={20} 
+                  color={focusedInput === 'email' ? '#6366f1' : '#64748b'} 
+                  style={styles.inputIcon} 
+                />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, step === 'reset' && { color: '#475569' }]}
                   placeholder="user@gmail.com"
+                  placeholderTextColor="#475569"
                   autoCapitalize="none"
                   keyboardType="email-address"
                   editable={step === 'request' && !loading}
                   value={email}
                   onChangeText={setEmail}
+                  onFocus={() => setFocusedInput('email')}
+                  onBlur={() => setFocusedInput('')}
                 />
                 {isCheckingEmail && (
-                  <ActivityIndicator size="small" color="#007AFF" style={{ marginRight: 8 }} />
+                  <ActivityIndicator size="small" color="#6366f1" style={{ marginRight: 8 }} />
                 )}
               </View>
             </View>
@@ -247,15 +278,26 @@ const ForgotPasswordScreen = () => {
                 {/* OTP Input */}
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Mã OTP</Text>
-                  <View style={styles.inputWrapper}>
-                    <MaterialCommunityIcons name="shield-check-outline" size={20} color="#666" style={styles.inputIcon} />
+                  <View style={[
+                    styles.inputWrapper,
+                    focusedInput === 'otp' ? styles.inputActiveBorder : null
+                  ]}>
+                    <MaterialCommunityIcons 
+                      name="shield-check-outline" 
+                      size={20} 
+                      color={focusedInput === 'otp' ? '#6366f1' : '#64748b'} 
+                      style={styles.inputIcon} 
+                    />
                     <TextInput
                       style={styles.input}
                       placeholder="Nhập mã OTP"
+                      placeholderTextColor="#475569"
                       keyboardType="number-pad"
                       editable={!loading}
                       value={otpCode}
                       onChangeText={setOtpCode}
+                      onFocus={() => setFocusedInput('otp')}
+                      onBlur={() => setFocusedInput('')}
                     />
                   </View>
                 </View>
@@ -263,18 +305,29 @@ const ForgotPasswordScreen = () => {
                 {/* New Password */}
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Mật khẩu mới</Text>
-                  <View style={styles.inputWrapper}>
-                    <MaterialCommunityIcons name="lock-outline" size={20} color="#666" style={styles.inputIcon} />
+                  <View style={[
+                    styles.inputWrapper,
+                    focusedInput === 'newPassword' ? styles.inputActiveBorder : null
+                  ]}>
+                    <MaterialCommunityIcons 
+                      name="lock-outline" 
+                      size={20} 
+                      color={focusedInput === 'newPassword' ? '#6366f1' : '#64748b'} 
+                      style={styles.inputIcon} 
+                    />
                     <TextInput
                       style={styles.input}
                       placeholder="Ít nhất 8 ký tự"
+                      placeholderTextColor="#475569"
                       secureTextEntry={!showPassword}
                       editable={!loading}
                       value={newPassword}
                       onChangeText={setNewPassword}
+                      onFocus={() => setFocusedInput('newPassword')}
+                      onBlur={() => setFocusedInput('')}
                     />
-                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                      <MaterialCommunityIcons name={showPassword ? "eye-off" : "eye"} size={20} color="#666" />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
+                      <MaterialCommunityIcons name={showPassword ? "eye-off" : "eye"} size={20} color="#64748b" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -282,39 +335,62 @@ const ForgotPasswordScreen = () => {
                 {/* Confirm Password */}
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Xác nhận mật khẩu</Text>
-                  <View style={styles.inputWrapper}>
-                    <MaterialCommunityIcons name="lock-check-outline" size={20} color="#666" style={styles.inputIcon} />
+                  <View style={[
+                    styles.inputWrapper,
+                    focusedInput === 'confirmPassword' ? styles.inputActiveBorder : null
+                  ]}>
+                    <MaterialCommunityIcons 
+                      name="lock-check-outline" 
+                      size={20} 
+                      color={focusedInput === 'confirmPassword' ? '#6366f1' : '#64748b'} 
+                      style={styles.inputIcon} 
+                    />
                     <TextInput
                       style={styles.input}
                       placeholder="Nhập lại mật khẩu"
+                      placeholderTextColor="#475569"
                       secureTextEntry={!showConfirmPassword}
                       editable={!loading}
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
+                      onFocus={() => setFocusedInput('confirmPassword')}
+                      onBlur={() => setFocusedInput('')}
                     />
-                    <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                      <MaterialCommunityIcons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color="#666" />
+                    <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} activeOpacity={0.7}>
+                      <MaterialCommunityIcons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color="#64748b" />
                     </TouchableOpacity>
                   </View>
                 </View>
               </>
             )}
 
-            {localError ? <Text style={styles.errorText}>{localError}</Text> : null}
-            {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
+            {localError ? (
+              <View style={styles.errorContainer}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#ef4444" />
+                <Text style={styles.errorText}>{localError}</Text>
+              </View>
+            ) : null}
+
+            {successMessage ? (
+              <View style={styles.successContainer}>
+                <MaterialCommunityIcons name="check-circle-outline" size={18} color="#10b981" />
+                <Text style={styles.successText}>{successMessage}</Text>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.primaryButton, (loading || (step === 'request' && isCooldownActive)) && styles.disabledButton]}
               onPress={step === 'request' ? handleRequestOtp : handleResetPassword}
               disabled={loading || (step === 'request' && isCooldownActive)}
+              activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#0c0714" />
               ) : (
                 <Text style={styles.buttonText}>
                   {step === 'request' 
-                    ? (isCooldownActive ? `Thử lại sau ${formatCooldown(cooldownRemainingSeconds)}` : 'Gửi mã OTP')
-                    : 'Đặt lại mật khẩu'}
+                    ? (isCooldownActive ? `THỬ LẠI SAU ${formatCooldown(cooldownRemainingSeconds)}` : 'GỬI MÃ OTP')
+                    : 'ĐẶT LẠI MẬT KHẨU'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -324,6 +400,7 @@ const ForgotPasswordScreen = () => {
                 onPress={handleResendOtp} 
                 disabled={loading || isCooldownActive}
                 style={styles.resendButton}
+                activeOpacity={0.7}
               >
                 <Text style={[styles.resendText, (loading || isCooldownActive) && styles.disabledText]}>
                   {isCooldownActive ? `Gửi lại mã sau ${formatCooldown(cooldownRemainingSeconds)}` : 'Gửi lại mã OTP'}
@@ -338,43 +415,184 @@ const ForgotPasswordScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  scrollContent: { padding: 24, flexGrow: 1 },
-  backButton: { width: 40, height: 40, justifyContent: 'center', marginBottom: 20 },
-  header: { marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1a1a1a' },
-  subtitle: { fontSize: 16, color: '#666', marginTop: 8, lineHeight: 22 },
-  form: { gap: 16 },
-  inputGroup: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginLeft: 4 },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#0c0714',
+    position: 'relative'
+  },
+  scrollContent: { 
+    padding: 20, 
+    flexGrow: 1, 
+    justifyContent: 'center' 
+  },
+  backButton: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginBottom: 20 
+  },
+  glow1: {
+    width: 300, 
+    height: 300, 
+    borderRadius: 150, 
+    backgroundColor: '#7c3aed', 
+    opacity: 0.12,
+    position: 'absolute', 
+    top: -50, 
+    right: -50,
+  },
+  glow2: {
+    width: 300, 
+    height: 300, 
+    borderRadius: 150, 
+    backgroundColor: '#4f46e5', 
+    opacity: 0.1,
+    position: 'absolute', 
+    bottom: -50, 
+    left: -50,
+  },
+  header: { 
+    marginBottom: 24,
+    alignItems: 'center'
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: '900', 
+    color: '#ffffff',
+    letterSpacing: -0.5
+  },
+  subtitle: { 
+    fontSize: 14, 
+    color: '#94a3b8', 
+    marginTop: 8, 
+    lineHeight: 22,
+    textAlign: 'center'
+  },
+  form: { 
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderWidth: 1, 
+    borderColor: 'rgba(255, 255, 255, 0.06)', 
+    borderRadius: 32, 
+    padding: 24, 
+    paddingBottom: 28,
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 5,
+  },
+  inputGroup: { 
+    gap: 8 
+  },
+  label: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    color: '#94a3b8', 
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
+    backgroundColor: 'rgba(22, 15, 38, 0.3)',
+    borderRadius: 18,
     paddingHorizontal: 16,
     height: 56,
     borderWidth: 1,
-    borderColor: '#eee'
+    borderColor: 'rgba(255, 255, 255, 0.08)'
   },
-  disabledInput: { backgroundColor: '#f0f0f0', borderColor: '#ddd' },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontSize: 16, color: '#1a1a1a' },
+  disabledInput: { 
+    backgroundColor: 'rgba(255, 255, 255, 0.01)', 
+    borderColor: 'rgba(255, 255, 255, 0.03)' 
+  },
+  inputActiveBorder: { 
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+    backgroundColor: 'rgba(22, 15, 38, 0.5)'
+  },
+  inputIcon: { 
+    marginRight: 12 
+  },
+  input: { 
+    flex: 1, 
+    fontSize: 15, 
+    color: '#f8fafc',
+    paddingVertical: 0
+  },
   primaryButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#ffffff',
     height: 56,
-    borderRadius: 12,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8
+    marginTop: 8,
+    shadowColor: '#ffffff', 
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, 
+    shadowRadius: 8, 
+    elevation: 4,
   },
-  disabledButton: { backgroundColor: '#94c5ff' },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  errorText: { color: '#ff4d4f', fontSize: 14, textAlign: 'center', marginTop: 8 },
-  successText: { color: '#4CAF50', fontSize: 14, textAlign: 'center', marginTop: 8 },
-  resendButton: { alignItems: 'center', marginTop: 12, paddingVertical: 8 },
-  resendText: { color: '#007AFF', fontWeight: '600', fontSize: 14 },
-  disabledText: { color: '#999' },
+  disabledButton: { 
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    elevation: 0
+  },
+  buttonText: { 
+    color: '#0c0714', 
+    fontSize: 15, 
+    fontWeight: '800',
+    letterSpacing: 1
+  },
+  errorContainer: {
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    padding: 14, 
+    borderRadius: 16, 
+    borderWidth: 1, 
+    borderColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  errorText: { 
+    color: '#ef4444', 
+    fontSize: 13, 
+    fontWeight: '600',
+    flex: 1
+  },
+  successContainer: {
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    padding: 14, 
+    borderRadius: 16, 
+    borderWidth: 1, 
+    borderColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  successText: { 
+    color: '#10b981', 
+    fontSize: 13, 
+    fontWeight: '600',
+    flex: 1
+  },
+  resendButton: { 
+    alignItems: 'center', 
+    marginTop: 12, 
+    paddingVertical: 8 
+  },
+  resendText: { 
+    color: '#818cf8', 
+    fontWeight: '700', 
+    fontSize: 14 
+  },
+  disabledText: { 
+    color: '#475569' 
+  },
 });
 
 export default ForgotPasswordScreen;
