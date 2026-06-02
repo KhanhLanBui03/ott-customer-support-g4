@@ -65,7 +65,7 @@ async function calibrateServerTime() {
 
 export const useAgoraCall = (conversationId, activeConversation = null, isListener = true) => {
     const { user } = useSelector((state) => state.auth);
-    const { conversations } = useSelector((state) => state.chat);
+    const { conversations, friends } = useSelector((state) => state.chat);
     const myId = user?.userId || user?.id;
     const dispatch = useDispatch();
 
@@ -306,7 +306,8 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
 
                     const content = JSON.stringify({ callType: callType || 'audio', duration: callDuration, status: statusStr });
-                    chatApi.sendMessage({ conversationId: cid, content, type: 'CALL_LOG' });
+                    chatApi.sendMessage({ conversationId: cid, content, type: 'CALL_LOG' })
+                        .catch(err => console.error('[Agora] Failed to send final log (async):', err));
                 } catch (err) { console.error('[Agora] Log error:', err); }
             }
         }
@@ -737,16 +738,38 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
             // Gửi tín hiệu mời - CHỈ gửi nếu KHÔNG phải là tham gia vào cuộc gọi đang diễn ra
             if (!options.isJoin) {
-                emitCallSignal(conversationId, {
-                    type: 'CALL_INVITE',
-                    callType: type,
-                    isGroup: isGroupMode,
-                    senderAvatar: user?.avatar || user?.avatarUrl,
-                    conversationName: activeConversation?.name,
-                    conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
-                    conversationType: activeConversation?.type || (isGroupMode ? 'GROUP' : 'SINGLE'),
-                    inviteTime: getTrueTime()
-                }, user?.fullName || (user?.lastName && user?.firstName ? `${user.lastName} ${user.firstName}` : '') || user?.name || 'Người dùng');
+                let isBlocked = false;
+                if (!isGroupMode) {
+                    const other = activeConversationRef.current?.members?.find(m => {
+                        const mid = m.userId || m.id || m._id;
+                        return mid && String(mid).trim() !== String(myId).trim();
+                    });
+                    if (other) {
+                        const otherId = other.userId || other.id || other._id;
+                        const friendInfo = Array.isArray(friends) && friends.find(f => {
+                            const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+                            return fId !== '' && fId === String(otherId).toLowerCase();
+                        });
+                        if (friendInfo?.status === 'BLOCKED') {
+                            isBlocked = true;
+                        }
+                    }
+                }
+
+                if (!isBlocked) {
+                    emitCallSignal(conversationId, {
+                        type: 'CALL_INVITE',
+                        callType: type,
+                        isGroup: isGroupMode,
+                        senderAvatar: user?.avatar || user?.avatarUrl,
+                        conversationName: activeConversation?.name,
+                        conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
+                        conversationType: activeConversation?.type || (isGroupMode ? 'GROUP' : 'SINGLE'),
+                        inviteTime: getTrueTime()
+                    }, user?.fullName || (user?.lastName && user?.firstName ? `${user.lastName} ${user.firstName}` : '') || user?.name || 'Người dùng');
+                } else {
+                    console.log('[Agora] Signal CALL_INVITE suppressed due to block status.');
+                }
             }
 
             // Đối với cuộc gọi NHÓM, người gọi vào phòng luôn để chờ mọi người
@@ -764,7 +787,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                             status: 'ONGOING',
                             startTime: getTrueTime()
                         });
-                        chatApi.sendMessage({ conversationId, content, type: 'CALL_LOG' });
+                        await chatApi.sendMessage({ conversationId, content, type: 'CALL_LOG' });
                         ongoingLogSentRef.current = true;
                     } catch (err) {
                         console.error('[Agora] Failed to send ONGOING log:', err);

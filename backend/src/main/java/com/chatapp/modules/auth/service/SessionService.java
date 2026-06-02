@@ -36,19 +36,20 @@ public class SessionService {
     public String createSession(String userId, String deviceType) {
         String type = (deviceType != null && deviceType.toLowerCase().contains("mobile")) ? "mobile" : "web";
         
-        // Enforce single active session per deviceType
+        // Enforce single active session per deviceType (invalidate older sessions of the same type)
         Set<String> activeSessions = userToSessions.get(userId);
         if (activeSessions != null) {
+            java.util.List<String> sessionsToRemove = new java.util.ArrayList<>();
             for (String activeId : activeSessions) {
                 SessionEntry activeEntry = sessionToUser.get(activeId);
-                if (activeEntry != null && activeEntry.expiresAt > System.currentTimeMillis()) {
-                    if (activeEntry.deviceType.equalsIgnoreCase(type)) {
-                        String errorMsg = "web".equals(type) 
-                            ? "Tài khoản đang đăng nhập trên một trình duyệt Web khác!" 
-                            : "Tài khoản đang đăng nhập trên một thiết bị di động khác!";
-                        throw new com.chatapp.common.exception.ValidationException(errorMsg);
-                    }
+                if (activeEntry != null && activeEntry.deviceType.equalsIgnoreCase(type)) {
+                    sessionsToRemove.add(activeId);
                 }
+            }
+            for (String activeId : sessionsToRemove) {
+                log.info("Kicking out older {} session {} for user {}", type, activeId, userId);
+                sessionToUser.remove(activeId);
+                activeSessions.remove(activeId);
             }
         }
 

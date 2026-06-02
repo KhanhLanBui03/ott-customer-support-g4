@@ -14,23 +14,26 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { authApi } from '../../api/authApi';
 
-const AccountRestoreModal = ({ visible, email, lockedAt, onClose }) => {
-  const [step, setStep] = useState(1); // 1: Info, 2: Phone, 3: OTP, 4: New Password
+const AccountRestoreModal = ({ visible, email, lockedAt, deletionDate, onClose, onRestoreSuccess }) => {
+  const [step, setStep] = useState(1); // 1: Info, 2: OTP
   const [loading, setLoading] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [timer, setTimer] = useState(0);
   const [canResend, setCanResend] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Calculate days
+  // Calculate days & dates
   const lockedDate = new Date(lockedAt);
-  const now = new Date();
-  const diffTime = Math.abs(now - lockedDate);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const formattedDeletionDate = deletionDate 
+    ? new Date(deletionDate).toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : null;
   const formattedDate = lockedDate.toLocaleDateString('vi-VN');
 
   useEffect(() => {
@@ -45,21 +48,19 @@ const AccountRestoreModal = ({ visible, email, lockedAt, onClose }) => {
     return () => clearInterval(interval);
   }, [timer]);
 
-  const handleStartRestore = () => setStep(2);
-
-  const handleVerifyPhone = async () => {
-    setError('');
-    if (!phoneNumber.trim()) {
-      setError('Vui lòng nhập số điện thoại');
-      return;
-    }
+  const handleStartReactivationFlow = async () => {
     setLoading(true);
+    setError('');
+    setSuccess('');
     try {
-      await authApi.restoreVerifyPhone({ email, phoneNumber });
-      await handleSendOtp();
-      setStep(3);
+      await authApi.restoreSendOtp(email);
+      setTimer(120); // 2 minutes
+      setCanResend(false);
+      setSuccess('Mã OTP đã được gửi tới email của bạn.');
+      setTimeout(() => setSuccess(''), 5000);
+      setStep(2);
     } catch (err) {
-      setError(err.response?.data?.message || 'Số điện thoại không đúng');
+      setError(err.response?.data?.message || 'Không thể gửi mã OTP. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
@@ -67,64 +68,35 @@ const AccountRestoreModal = ({ visible, email, lockedAt, onClose }) => {
 
   const handleSendOtp = async () => {
     setError('');
+    setLoading(true);
     try {
       await authApi.restoreSendOtp(email);
       setTimer(120); // 2 minutes
       setCanResend(false);
-      setSuccess('Mã OTP đã được gửi tới email');
+      setSuccess('Mã OTP đã được gửi lại tới email.');
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
-      setError('Không thể gửi mã OTP');
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    setError('');
-    if (!otp.trim()) {
-      setError('Vui lòng nhập mã OTP');
-      return;
-    }
-    setLoading(true);
-    try {
-      await authApi.restoreVerifyOtp({ email, otp });
-      setStep(4);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Mã OTP không hợp lệ');
+      setError('Không thể gửi mã OTP. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResetPassword = async () => {
+  const handleVerifyOtp = async () => {
     setError('');
-    if (!newPassword.trim()) {
-      setError('Vui lòng nhập mật khẩu mới');
+    if (otp.length < 6) {
+      setError('Vui lòng nhập đủ 6 ký tự OTP');
       return;
     }
-    if (newPassword !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
-      return;
-    }
-    // Simple password check (mirroring web/backend requirements)
-    if (newPassword.length < 8) {
-      setError('Mật khẩu phải từ 8 ký tự');
-      return;
-    }
-
     setLoading(true);
     try {
-      await authApi.restoreResetPassword({
-        email,
-        otp,
-        newPassword,
-        confirmPassword
-      });
-      setSuccess('Khôi phục tài khoản thành công!');
+      await authApi.restoreVerifyOtpReactivate({ email, otp });
+      setSuccess('Kích hoạt lại tài khoản thành công!');
       setTimeout(() => {
-        onClose();
+        onRestoreSuccess?.();
       }, 2000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Lỗi đặt lại mật khẩu');
+      setError(err.response?.data?.message || 'Mã OTP không hợp lệ hoặc đã hết hạn.');
     } finally {
       setLoading(false);
     }
@@ -140,51 +112,30 @@ const AccountRestoreModal = ({ visible, email, lockedAt, onClose }) => {
             </View>
             <Text style={styles.title}>Tài khoản đang chờ xóa</Text>
             <Text style={styles.description}>
-              Tài khoản này đã yêu cầu xóa được <Text style={styles.boldRed}>{diffDays}</Text>/30 ngày, 
-              bắt đầu từ ngày <Text style={styles.bold}>{formattedDate}</Text>.
+              Tài khoản này đang trong quá trình chờ xóa. Dự kiến xóa vĩnh viễn vào ngày <Text style={styles.boldRed}>{formattedDeletionDate || '30 ngày từ lúc khóa'}</Text>.
             </Text>
-            <Text style={styles.smallInfo}>BẠN CÓ MUỐN KHÔI PHỤC LẠI KHÔNG?</Text>
+            <Text style={styles.smallInfo}>BẠN CÓ MUỐN NHẬN MÃ OTP ĐỂ XÁC NHẬN KÍCH HOẠT LẠI KHÔNG?</Text>
             
-            <TouchableOpacity style={styles.primaryButton} onPress={handleStartRestore}>
-              <Text style={styles.primaryButtonText}>XÁC NHẬN KHÔI PHỤC</Text>
-              <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+            <TouchableOpacity 
+              style={[styles.primaryButton, loading && styles.disabledButton]} 
+              onPress={handleStartReactivationFlow}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Text style={styles.primaryButtonText}>KÍCH HOẠT LẠI TÀI KHOẢN</Text>
+                  <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+                </>
+              )}
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.secondaryButton} onPress={onClose}>
-              <Text style={styles.secondaryButtonText}>HỦY BỎ</Text>
+            <TouchableOpacity style={styles.secondaryButton} onPress={onClose} disabled={loading}>
+              <Text style={styles.secondaryButtonText}>HỦY BỎ, THOÁT RA</Text>
             </TouchableOpacity>
           </View>
         );
 
       case 2:
-        return (
-          <View style={styles.stepContainer}>
-            <MaterialCommunityIcons name="cellphone-check" size={48} color="#007AFF" />
-            <Text style={styles.title}>Xác minh chính chủ</Text>
-            <Text style={styles.smallInfo}>NHẬP SỐ ĐIỆN THOẠI ĐĂNG KÝ</Text>
-            
-            <View style={styles.inputContainer}>
-              <MaterialCommunityIcons name="phone-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Số điện thoại..."
-                keyboardType="phone-pad"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-              />
-            </View>
-            
-            <TouchableOpacity 
-              style={[styles.primaryButton, loading && styles.disabledButton]} 
-              onPress={handleVerifyPhone}
-              disabled={loading}
-            >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>TIẾP TỤC</Text>}
-            </TouchableOpacity>
-          </View>
-        );
-
-      case 3:
         return (
           <View style={styles.stepContainer}>
             <MaterialCommunityIcons name="email-fast-outline" size={48} color="#007AFF" />
@@ -220,45 +171,6 @@ const AccountRestoreModal = ({ visible, email, lockedAt, onClose }) => {
           </View>
         );
 
-      case 4:
-        return (
-          <View style={styles.stepContainer}>
-            <MaterialCommunityIcons name="lock-reset" size={48} color="#007AFF" />
-            <Text style={styles.title}>Đặt mật khẩu mới</Text>
-            <Text style={styles.description}>Bước cuối cùng để khôi phục tài khoản</Text>
-            
-            <View style={styles.inputContainer}>
-              <MaterialCommunityIcons name="lock-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Mật khẩu mới..."
-                secureTextEntry
-                value={newPassword}
-                onChangeText={setNewPassword}
-              />
-            </View>
-            
-            <View style={styles.inputContainer}>
-              <MaterialCommunityIcons name="lock-check-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Xác nhận mật khẩu..."
-                secureTextEntry
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-              />
-            </View>
-            
-            <TouchableOpacity 
-              style={[styles.primaryButton, loading && styles.disabledButton]} 
-              onPress={handleResetPassword}
-              disabled={loading}
-            >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>KHÔI PHỤC HOÀN TẤT</Text>}
-            </TouchableOpacity>
-          </View>
-        );
-
       default:
         return null;
     }
@@ -279,7 +191,7 @@ const AccountRestoreModal = ({ visible, email, lockedAt, onClose }) => {
           <View style={styles.modalView}>
             {/* Progress Bar */}
             <View style={styles.progressBackground}>
-              <View style={[styles.progressBar, { width: `${(step / 4) * 100}%` }]} />
+              <View style={[styles.progressBar, { width: `${(step / 2) * 100}%` }]} />
             </View>
 
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>

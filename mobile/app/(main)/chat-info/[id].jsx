@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,18 +19,21 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTheme } from '../../../src/context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  getRealId,
   updateConversation,
   updateConversationWallpaper,
   updateMemberRoleLocal,
   removeMemberLocal,
   removeConversationLocal,
-  getRealId
+  updateMemberFriendshipStatus
 } from '../../../src/store/chatSlice';
 import { conversationApi } from '../../../src/api/chatApi';
 import { mediaApi } from '../../../src/api/mediaApi';
+import { friendApi } from '../../../src/api/friendApi';
 import * as ImagePicker from 'expo-image-picker';
 import InviteMemberModal from '../../../src/components/chat/InviteMemberModal';
 import AIAssistantPanel from '../../../src/components/chat/AIAssistantPanel';
+import ReportModal from '../../../src/components/ReportModal';
 
 // Helper Components defined outside to prevent re-mounting on every render
 const InfoItem = ({ icon, label, description, onPress, colors, isDark, color = '#fff', showArrow = true, rightElement, disabled }) => (
@@ -89,11 +92,13 @@ const ChatInfoScreen = () => {
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
   const [isQRModalVisible, setIsQRModalVisible] = useState(false);
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
 
   // Local state cho Switch để mượt mà 100%
   const [isRestrictedLocal, setIsRestrictedLocal] = useState(conversation?.onlyAdminsCanChat || false);
   const [isApprovalRequiredLocal, setIsApprovalRequiredLocal] = useState(conversation?.memberApprovalRequired || false);
 
+  const [isBlockLoading, setIsBlockLoading] = useState(false);
   const wallpaperUrl = conversation?.wallpaperUrl || null;
 
   const otherParticipant = useMemo(() => {
@@ -114,6 +119,94 @@ const ChatInfoScreen = () => {
   const isAdmin = myRole === 'ADMIN' || isOwner;
 
   const [joinRequests, setJoinRequests] = useState([]);
+
+  // Block status - derived from otherParticipant's friendshipStatus in the conversation member data
+  // This reads directly from Redux so it stays in sync with chat screen changes
+  const blockStatus = useMemo(() => {
+    if (isGroup || !otherParticipant) return { isBlocked: false, isBlockedByOther: false };
+    const status = otherParticipant?.friendshipStatus;
+    const requester = otherParticipant?.isRequester; // true = tôi block, false = họ block tôi
+    const isBlocked = status === 'BLOCKED' && requester === true;      // Tôi chủ động chặn họ
+    const isBlockedByOther = status === 'BLOCKED' && requester === false; // Họ chặn tôi
+    return { isBlocked, isBlockedByOther };
+  }, [otherParticipant, isGroup]);
+
+  const otherUserId = String(otherParticipant?.userId || otherParticipant?.id || '');
+
+  const handleBlock = useCallback(() => {
+    Alert.alert(
+      'Chặn người dùng',
+      `Bạn có chắc chắn muốn chặn ${displayName}? Người này sẽ không thể gửi tin nhắn cho bạn.`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Chặn',
+          style: 'destructive',
+          onPress: async () => {
+            if (!otherUserId) return;
+            setIsBlockLoading(true);
+            // Optimistic update: update Redux store immediately so both screens sync
+            dispatch(updateMemberFriendshipStatus({
+              userId: otherUserId,
+              friendshipStatus: 'BLOCKED',
+              isRequester: true,
+            }));
+            try {
+              await friendApi.blockUser(otherUserId);
+              Alert.alert('Đã chặn', `Bạn đã chặn ${displayName}.`);
+            } catch (err) {
+              // Rollback
+              dispatch(updateMemberFriendshipStatus({
+                userId: otherUserId,
+                friendshipStatus: 'NONE',
+                isRequester: null,
+              }));
+              Alert.alert('Lỗi', 'Không thể chặn người dùng này. Vui lòng thử lại.');
+            } finally {
+              setIsBlockLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  }, [otherUserId, displayName, dispatch]);
+
+  const handleUnblock = useCallback(() => {
+    Alert.alert(
+      'Bỏ chặn người dùng',
+      `Bỏ chặn ${displayName}? Người này có thể gửi tin nhắn cho bạn trở lại.`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Bỏ chặn',
+          onPress: async () => {
+            if (!otherUserId) return;
+            setIsBlockLoading(true);
+            // Optimistic update: update Redux store immediately so both screens sync
+            dispatch(updateMemberFriendshipStatus({
+              userId: otherUserId,
+              friendshipStatus: 'NONE',
+              isRequester: null,
+            }));
+            try {
+              await friendApi.unblockUser(otherUserId);
+              Alert.alert('Đã bỏ chặn', `Bạn đã bỏ chặn ${displayName}.`);
+            } catch (err) {
+              // Rollback
+              dispatch(updateMemberFriendshipStatus({
+                userId: otherUserId,
+                friendshipStatus: 'BLOCKED',
+                isRequester: true,
+              }));
+              Alert.alert('Lỗi', 'Không thể bỏ chặn người dùng này. Vui lòng thử lại.');
+            } finally {
+              setIsBlockLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  }, [otherUserId, displayName, dispatch]);
 
   const handleWallpaperChange = async () => {
     try {
@@ -597,13 +690,13 @@ const ChatInfoScreen = () => {
                         </View>
                       </View>
                       <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 }}
                           onPress={() => handleApproveRequest(req.requestId || req.id)}
                         >
                           <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Duyệt</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 }}
                           onPress={() => handleRejectRequest(req.requestId || req.id)}
                         >
@@ -830,7 +923,79 @@ const ChatInfoScreen = () => {
                 }
               />
             </>
-          ) : null}
+          ) : (
+            /* Hội thoại 1-1: Nút chặn / bỏ chặn */
+            <>
+              {blockStatus.isBlocked ? (
+                /* Đang chặn người này → Nút BỎ CHẶN */
+                <Pressable
+                  onPress={handleUnblock}
+                  disabled={isBlockLoading}
+                  style={({ pressed }) => [
+                    styles.blockActionCard,
+                    { backgroundColor: isDark ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.07)', borderColor: '#ef4444' },
+                    { opacity: (pressed || isBlockLoading) ? 0.6 : 1 }
+                  ]}
+                >
+                  <View style={[styles.blockActionIcon, { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
+                    {isBlockLoading
+                      ? <ActivityIndicator size="small" color="#ef4444" />
+                      : <MaterialIcons name="lock-open" size={22} color="#ef4444" />
+                    }
+                  </View>
+                  <View style={styles.blockActionContent}>
+                    <Text style={[styles.blockActionTitle, { color: '#ef4444' }]}>Bỏ chặn {displayName}</Text>
+                    <Text style={[styles.blockActionSub, { color: colors.textMuted }]}>Cho phép nhắn tin trở lại</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={22} color="#ef4444" />
+                </Pressable>
+              ) : (
+                /* Chưa chặn → Nút CHẶN */
+                <Pressable
+                  onPress={handleBlock}
+                  disabled={isBlockLoading}
+                  style={({ pressed }) => [
+                    styles.blockActionCard,
+                    { backgroundColor: isDark ? 'rgba(107,114,128,0.1)' : colors.surface100, borderColor: colors.border },
+                    { opacity: (pressed || isBlockLoading) ? 0.6 : 1 }
+                  ]}
+                >
+                  <View style={[styles.blockActionIcon, { backgroundColor: isDark ? 'rgba(107,114,128,0.2)' : 'rgba(107,114,128,0.1)' }]}>
+                    {isBlockLoading
+                      ? <ActivityIndicator size="small" color={colors.textSubtle} />
+                      : <MaterialIcons name="block" size={22} color={colors.textSubtle} />
+                    }
+                  </View>
+                  <View style={styles.blockActionContent}>
+                    <Text style={[styles.blockActionTitle, { color: colors.foreground }]}>Chặn {displayName}</Text>
+                    <Text style={[styles.blockActionSub, { color: colors.textMuted }]}>Ngừng nhận tin nhắn từ người này</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={22} color={colors.textMuted} />
+                </Pressable>
+              )}
+
+              {/* Thông báo nếu bị người kia chặn */}
+              {blockStatus.isBlockedByOther && (
+                <View style={[styles.blockedByBanner, { backgroundColor: isDark ? 'rgba(234,179,8,0.1)' : 'rgba(234,179,8,0.08)', borderColor: 'rgba(234,179,8,0.3)' }]}>
+                  <MaterialIcons name="info-outline" size={18} color="#eab308" style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 13, color: '#eab308', fontWeight: '600', flex: 1 }}>
+                    Người này đã hạn chế tin nhắn với bạn
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          <InfoItem
+            icon={<MaterialIcons name="report" size={22} color="#f43f5e" />}
+            label="Báo cáo vi phạm"
+            description="Báo cáo cuộc trò chuyện này vì hành vi vi phạm"
+            color="#f43f5e"
+            onPress={() => setIsReportModalVisible(true)}
+            showArrow={true}
+            colors={colors}
+            isDark={isDark}
+          />
         </View>
 
         <View style={{ height: 40 + insets.bottom }} />
@@ -851,13 +1016,13 @@ const ChatInfoScreen = () => {
           animationType="fade"
           onRequestClose={() => setIsQRModalVisible(false)}
         >
-          <Pressable 
-            style={styles.modalOverlay} 
+          <Pressable
+            style={styles.modalOverlay}
             onPress={() => setIsQRModalVisible(false)}
           >
             <Pressable style={[styles.qrModalContent, { backgroundColor: colors.background, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
-              <TouchableOpacity 
-                style={styles.closeButton} 
+              <TouchableOpacity
+                style={styles.closeButton}
                 onPress={() => setIsQRModalVisible(false)}
               >
                 <MaterialIcons name="close" size={24} color={colors.foreground} />
@@ -886,6 +1051,12 @@ const ChatInfoScreen = () => {
           </Pressable>
         </Modal>
       )}
+      <ReportModal
+        visible={isReportModalVisible}
+        onClose={() => setIsReportModalVisible(false)}
+        targetId={isGroup ? (realId || conversationId) : otherUserId}
+        targetType={isGroup ? 'GROUP' : 'USER'}
+      />
     </View>
   );
 };
@@ -1011,6 +1182,46 @@ const styles = StyleSheet.create({
   deleteActionContent: { flex: 1, marginLeft: 16 },
   deleteActionTitle: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
   deleteActionSub: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+
+  blockActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  blockActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  blockActionContent: { flex: 1 },
+  blockActionTitle: { fontSize: 15, fontWeight: '700' },
+  blockActionSub: { fontSize: 12, marginTop: 2 },
+
+  blockedByBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 4,
+    marginBottom: 4,
+    borderWidth: 1,
+  },
+
+  privacyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
   disabledOpacity: {
     opacity: 0.5,
   },

@@ -23,6 +23,10 @@ public class UserRepository {
         return user;
     }
 
+    public void delete(User user) {
+        dynamoDBMapper.delete(user);
+    }
+
     public Optional<User> findById(String userId) {
         User user = dynamoDBMapper.load(User.class, userId, "profile");
         return Optional.ofNullable(user);

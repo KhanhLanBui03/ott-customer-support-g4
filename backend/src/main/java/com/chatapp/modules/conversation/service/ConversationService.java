@@ -56,6 +56,13 @@ public class ConversationService {
             conversationRepository.save(conv);
 
             for (String memberId : conv.getMemberIds()) {
+                if (conversationId.startsWith("SINGLE#")) {
+                    Optional<com.chatapp.modules.contact.domain.Friendship> f = friendshipRepository.find(memberId, senderId);
+                    if (f.isPresent() && "BLOCKED".equals(f.get().getStatus())) {
+                        continue;
+                    }
+                }
+
                 userConversationRepository.findById(memberId, conversationId).ifPresentOrElse(
                     uc -> {
                         // Update existing UserConversation
@@ -140,7 +147,7 @@ public class ConversationService {
             }
             
             // Broadcast update to all members to refresh their conversation list (including unread count)
-            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, Map.of()));
+            eventPublisher.publishEvent(MessageEvent.of("CONVERSATION_UPDATE", conversationId, Map.of("senderId", senderId != null ? senderId : "")));
         });
     }
 

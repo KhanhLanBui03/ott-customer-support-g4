@@ -1,25 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Smartphone, Mail, Lock, CheckCircle, ArrowRight, RefreshCw, X, AlertCircle } from 'lucide-react';
+import { Shield, Mail, ArrowRight, RefreshCw, X, AlertCircle, CheckCircle } from 'lucide-react';
 import authApi from '../../api/authApi';
 
-const AccountRestoreModal = ({ email, lockedAt, onClose }) => {
-  const [step, setStep] = useState(1); // 1: Info, 2: Phone, 3: OTP, 4: New Password
+const AccountRestoreModal = ({ email, lockedAt, deletionDate, onClose }) => {
+  const [step, setStep] = useState(1); // 1: Info, 2: OTP
   const [loading, setLoading] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [timer, setTimer] = useState(0);
   const [canResend, setCanResend] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isOtpFocused, setIsOtpFocused] = useState(false);
 
-  // Calculate days
+  // Calculate formatted date
   const lockedDate = new Date(lockedAt);
-  const now = new Date();
-  const diffTime = Math.abs(now - lockedDate);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  const formattedDate = lockedDate.toLocaleDateString('vi-VN');
+  const formattedDeletionDate = deletionDate 
+    ? new Date(deletionDate).toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : null;
 
   useEffect(() => {
     let interval;
@@ -33,18 +36,19 @@ const AccountRestoreModal = ({ email, lockedAt, onClose }) => {
     return () => clearInterval(interval);
   }, [timer]);
 
-  const handleStartRestore = () => setStep(2);
-
-  const handleVerifyPhone = async (e) => {
-    e.preventDefault();
-    setError('');
+  const handleStartReactivationFlow = async () => {
     setLoading(true);
+    setError('');
+    setSuccess('');
     try {
-      await authApi.restoreVerifyPhone({ email, phoneNumber });
-      await handleSendOtp();
-      setStep(3);
+      await authApi.restoreSendOtp(email);
+      setTimer(120);
+      setCanResend(false);
+      setSuccess('Mã OTP đã được gửi tới email của bạn.');
+      setTimeout(() => setSuccess(''), 5000);
+      setStep(2);
     } catch (err) {
-      setError(err.response?.data?.message || 'Số điện thoại không đúng');
+      setError(err.response?.data?.message || 'Không thể gửi mã OTP. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
@@ -52,52 +56,35 @@ const AccountRestoreModal = ({ email, lockedAt, onClose }) => {
 
   const handleSendOtp = async () => {
     setError('');
-    try {
-      await authApi.restoreSendOtp(email);
-      setTimer(120); // 2 minutes
-      setCanResend(false);
-      setSuccess('Mã OTP đã được gửi tới email');
-      setTimeout(() => setSuccess(''), 5000);
-    } catch (err) {
-      setError('Không thể gửi mã OTP');
-    }
-  };
-
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setError('');
     setLoading(true);
     try {
-      await authApi.restoreVerifyOtp({ email, otp });
-      setStep(4);
+      await authApi.restoreSendOtp(email);
+      setTimer(120);
+      setCanResend(false);
+      setSuccess('Mã OTP đã được gửi lại tới email.');
+      setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Mã OTP không hợp lệ');
+      setError('Không thể gửi mã OTP. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResetPassword = async (e) => {
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    if (otp.length < 6) return;
     setError('');
-    if (newPassword !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
-      return;
-    }
     setLoading(true);
     try {
-      await authApi.restoreResetPassword({
-        email,
-        otp,
-        newPassword,
-        confirmPassword
-      });
-      setSuccess('Khôi phục tài khoản thành công!');
+      await authApi.restoreVerifyOtpReactivate({ email, otp });
+      setSuccess('Kích hoạt lại tài khoản thành công!');
       setTimeout(() => {
         onClose();
+        // Reload page to automatically log in the reactivated user
+        window.location.reload();
       }, 2000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Lỗi đặt lại mật khẩu');
+      setError(err.response?.data?.message || 'Mã OTP không hợp lệ hoặc đã hết hạn.');
     } finally {
       setLoading(false);
     }
@@ -112,28 +99,35 @@ const AccountRestoreModal = ({ email, lockedAt, onClose }) => {
               <AlertCircle size={32} className="text-red-500" />
             </div>
             <div className="space-y-3">
-              <h3 className="text-xl font-black text-white">Tài khoản đang chờ xóa</h3>
-              <p className="text-white/60 text-sm leading-relaxed">
-                Tài khoản này đã yêu cầu xóa được <span className="text-red-400 font-bold">{diffDays}</span>/30 ngày, 
-                bắt đầu từ ngày <span className="text-white font-bold">{formattedDate}</span>.
+              <h3 className="text-xl font-black text-white">Tài khoản chờ xóa</h3>
+              <p className="text-white/60 text-sm leading-relaxed px-2">
+                Tài khoản này đang trong quá trình chờ xóa. Dự kiến xóa vĩnh viễn vào ngày <span className="text-red-400 font-bold">{formattedDeletionDate || '30 ngày từ lúc khóa'}</span>.
               </p>
-              <p className="text-white/40 text-[11px] uppercase font-mono tracking-widest">
-                Bạn có muốn khôi phục lại tài khoản này không?
+              <p className="text-white/40 text-[10px] uppercase font-mono tracking-widest">
+                Bạn có muốn nhận mã OTP để xác nhận kích hoạt lại tài khoản này ngay không?
               </p>
             </div>
             <div className="flex flex-col gap-3 pt-4">
               <button
-                onClick={handleStartRestore}
-                className="w-full py-4 bg-cursor-accent text-cursor-dark rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 transition-all flex items-center justify-center gap-2"
+                onClick={handleStartReactivationFlow}
+                disabled={loading}
+                className="w-full py-4 bg-cursor-accent text-cursor-dark rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <span>Xác nhận khôi phục</span>
-                <ArrowRight size={16} />
+                {loading ? <RefreshCw className="animate-spin mx-auto" size={16} /> : (
+                  <>
+                    <span>Kích hoạt lại tài khoản</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
               </button>
+
               <button
+                type="button"
                 onClick={onClose}
-                className="w-full py-4 bg-white/5 text-white/40 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:text-white transition-all"
+                disabled={loading}
+                className="w-full py-3 text-white/40 font-black uppercase tracking-widest text-[9px] hover:text-white transition-all disabled:opacity-50"
               >
-                Hủy bỏ
+                Không, thoát ra ngoài
               </button>
             </div>
           </div>
@@ -141,104 +135,84 @@ const AccountRestoreModal = ({ email, lockedAt, onClose }) => {
 
       case 2:
         return (
-          <form onSubmit={handleVerifyPhone} className="space-y-6 animate-slide-up">
-            <div className="text-center space-y-2">
-              <Smartphone size={32} className="text-cursor-accent mx-auto" />
-              <h3 className="text-xl font-black text-white">Xác minh chính chủ</h3>
-              <p className="text-white/40 text-xs uppercase font-mono tracking-widest">Nhập số điện thoại đăng ký</p>
-            </div>
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20">
-                <Smartphone size={18} />
-              </div>
-              <input
-                type="text"
-                required
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:border-cursor-accent transition-all"
-                placeholder="Số điện thoại..."
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-              />
-            </div>
-            <button
-              disabled={loading}
-              className="w-full py-4 bg-cursor-accent text-cursor-dark rounded-2xl font-black uppercase tracking-widest text-xs disabled:opacity-50"
-            >
-              {loading ? <RefreshCw className="animate-spin mx-auto" size={16} /> : 'Tiếp tục'}
-            </button>
-          </form>
-        );
-
-      case 3:
-        return (
           <form onSubmit={handleVerifyOtp} className="space-y-6 animate-slide-up">
             <div className="text-center space-y-2">
               <Mail size={32} className="text-cursor-accent mx-auto" />
               <h3 className="text-xl font-black text-white">Nhập mã OTP</h3>
               <p className="text-white/40 text-xs">Mã đã được gửi tới email: {email}</p>
             </div>
-            <input
-              type="text"
-              required
-              maxLength={6}
-              className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-center text-2xl font-black tracking-[0.5em] focus:outline-none focus:border-cursor-accent"
-              placeholder="000000"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-            />
+
+            <div className="relative my-6 flex justify-between items-center max-w-[280px] mx-auto">
+              {/* Hidden input to capture keyboard events */}
+              <input
+                type="text"
+                pattern="\d*"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onFocus={() => setIsOtpFocused(true)}
+                onBlur={() => setIsOtpFocused(false)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                autoComplete="one-time-code"
+              />
+              
+              {/* Styled Box Grid */}
+              <div className="flex gap-2.5 w-full justify-between">
+                {Array.from({ length: 6 }).map((_, index) => {
+                  const char = otp[index] || '';
+                  const isFocused = isOtpFocused && (otp.length === index || (otp.length === 6 && index === 5));
+                  const hasValue = char !== '';
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`w-10 h-12 rounded-xl flex items-center justify-center text-lg font-black font-mono border transition-all duration-200 pointer-events-none select-none ${
+                        hasValue 
+                          ? 'bg-white/10 border-white/20 text-white scale-[1.05]' 
+                          : 'bg-white/5 border-white/5 text-white/30'
+                      } ${
+                        isFocused 
+                          ? 'border-cursor-accent ring-2 ring-cursor-accent/20 scale-[1.08] shadow-lg shadow-cursor-accent/10' 
+                          : ''
+                      }`}
+                    >
+                      {char || (isFocused ? <span className="animate-pulse text-cursor-accent font-normal">|</span> : '•')}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="text-center">
               <button
                 type="button"
-                disabled={!canResend}
+                disabled={!canResend || loading}
                 onClick={handleSendOtp}
                 className={`text-[10px] uppercase font-mono font-black tracking-widest transition-all ${
-                  canResend ? 'text-cursor-accent hover:underline' : 'text-white/20'
+                  canResend && !loading ? 'text-cursor-accent hover:underline cursor-pointer' : 'text-white/20 cursor-not-allowed'
                 }`}
               >
                 {timer > 0 ? `Gửi lại mã sau ${timer}s` : 'Gửi lại mã ngay'}
               </button>
             </div>
-            <button
-              disabled={loading}
-              className="w-full py-4 bg-cursor-accent text-cursor-dark rounded-2xl font-black uppercase tracking-widest text-xs disabled:opacity-50"
-            >
-              {loading ? <RefreshCw className="animate-spin mx-auto" size={16} /> : 'Xác thực OTP'}
-            </button>
-          </form>
-        );
-
-      case 4:
-        return (
-          <form onSubmit={handleResetPassword} className="space-y-6 animate-slide-up">
-            <div className="text-center space-y-2">
-              <Lock size={32} className="text-cursor-accent mx-auto" />
-              <h3 className="text-xl font-black text-white">Đặt mật khẩu mới</h3>
-              <p className="text-white/40 text-xs">Bước cuối cùng để khôi phục tài khoản</p>
+            
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setStep(1); setOtp(''); setError(''); }}
+                disabled={loading}
+                className="flex-1 py-4 bg-white/5 border border-white/10 rounded-2xl text-white/80 font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-all disabled:opacity-50"
+              >
+                Quay lại
+              </button>
+              <button
+                disabled={loading || otp.length < 6}
+                type="submit"
+                className="flex-1 py-4 bg-cursor-accent text-cursor-dark rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {loading ? <RefreshCw className="animate-spin mx-auto" size={16} /> : 'Xác thực'}
+              </button>
             </div>
-            <div className="space-y-4">
-              <input
-                type="password"
-                required
-                className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:border-cursor-accent"
-                placeholder="Mật khẩu mới..."
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-              <input
-                type="password"
-                required
-                className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:border-cursor-accent"
-                placeholder="Xác nhận mật khẩu mới..."
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-            <button
-              disabled={loading}
-              className="w-full py-4 bg-cursor-accent text-cursor-dark rounded-2xl font-black uppercase tracking-widest text-xs disabled:opacity-50"
-            >
-              {loading ? <RefreshCw className="animate-spin mx-auto" size={16} /> : 'Khôi phục hoàn tất'}
-            </button>
           </form>
         );
       
@@ -254,7 +228,7 @@ const AccountRestoreModal = ({ email, lockedAt, onClose }) => {
         <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
           <div 
             className="h-full bg-cursor-accent transition-all duration-500" 
-            style={{ width: `${(step / 4) * 100}%` }}
+            style={{ width: `${(step / 2) * 100}%` }}
           />
         </div>
 

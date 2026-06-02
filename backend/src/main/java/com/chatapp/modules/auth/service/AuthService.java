@@ -91,6 +91,50 @@ public class AuthService {
             throw new ValidationException("Email is not verified. Please verify OTP first.");
         }
 
+        // If account is LOCKED, stop login and notify user
+        if ("LOCKED".equals(user.getStatus())) {
+            // Check if this is an admin lock (lockCount > 0) or user-initiated deletion
+            boolean isAdminLock = user.getLockCount() != null && user.getLockCount() > 0;
+
+            if (user.getLockUntil() != null && user.getLockUntil() > 0) {
+                if (System.currentTimeMillis() > user.getLockUntil()) {
+                    // Lock has expired! Auto-unlock
+                    user.setStatus("OFFLINE");
+                    user.setLockUntil(null);
+                    userRepository.save(user);
+                    log.info("Temporary lock expired. Account auto-unlocked for user: {}", user.getUserId());
+                } else {
+                    // Still locked (temp admin lock)
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+                    String unlockTimeStr = sdf.format(new java.util.Date(user.getLockUntil()));
+                    throw new com.chatapp.common.exception.LockedAccountException(
+                        "Tài khoản của bạn đang bị khóa tạm thời đến " + unlockTimeStr + " do vi phạm chính sách.",
+                        user.getUpdatedAt(),
+                        user.getLockUntil(),
+                        "ADMIN_LOCK"
+                    );
+                }
+            } else if (isAdminLock) {
+                // Permanent admin lock
+                log.info("Access denied for permanently LOCKED user: {}", user.getUserId());
+                throw new com.chatapp.common.exception.LockedAccountException(
+                    "Tài khoản của bạn đã bị khóa vĩnh viễn do vi phạm chính sách cộng đồng nhiều lần.",
+                    user.getUpdatedAt(),
+                    user.getDeletionDate(),
+                    "ADMIN_LOCK"
+                );
+            } else {
+                // User-initiated deletion (soft delete)
+                log.info("Access denied for LOCKED user (pending deletion): {}", user.getUserId());
+                throw new com.chatapp.common.exception.LockedAccountException(
+                    "Tài khoản của bạn đang trong trạng thái chờ xóa.",
+                    user.getUpdatedAt(),
+                    user.getDeletionDate(),
+                    "DELETION"
+                );
+            }
+        }
+
         if (!hashUtil.verifyPassword(request.getPassword(), user.getPasswordHash())) {
             incrementLoginFailCount(cleanEmail);
             throw new BadCredentialsException(MessageConstants.Error.INVALID_CREDENTIALS);
@@ -117,13 +161,6 @@ public class AuthService {
         System.out.println("=================================================");
         System.out.println("USER STATUS AT LOGIN: " + user.getStatus());
         System.out.println("=================================================");
-
-        // If account is LOCKED, stop login and notify user
-        if ("LOCKED".equals(user.getStatus())) {
-            log.info("Access denied for LOCKED user: {}", user.getUserId());
-            throw new com.chatapp.common.exception.LockedAccountException(
-                "Tài khoản của bạn đang trong trạng thái chờ xóa.", user.getUpdatedAt());
-        }
 
         // Update status to ONLINE
         user.updateStatus("ONLINE");
@@ -282,6 +319,8 @@ public class AuthService {
                 .avatarUrl(user.getAvatarUrl())
                 .bio(user.getBio())
                 .email(user.getEmail())
+                .status(user.getStatus())
+                .role(user.getRole() != null ? user.getRole() : "USER")
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")

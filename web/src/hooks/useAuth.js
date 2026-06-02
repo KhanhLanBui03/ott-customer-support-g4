@@ -19,6 +19,7 @@ const mapAuthPayload = (data) => ({
     avatar: data.avatarUrl || data.avatar,
     bio: data.bio,
     email: data.email,
+    role: data.role,
   },
 });
 

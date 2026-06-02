@@ -2,8 +2,10 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, Animated, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchConversations, setCurrentUserId, updateConversation, removeConversationLocal, pinConversation, unpinConversation } from '../../src/store/chatSlice';
+import { fetchConversations, setCurrentUserId, updateConversation, removeConversationLocal, pinConversation, unpinConversation, updateMemberFriendshipStatus } from '../../src/store/chatSlice';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { friendApi } from '../../src/api/friendApi';
+import ReportModal from '../../src/components/ReportModal';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import CONFIG from '../../src/config';
 import SearchModal from '../../src/components/SearchModal';
@@ -47,6 +49,7 @@ const HomeScreen = () => {
   const [actionModalVisible, setActionModalVisible] = useState(false);
   const [actionModalType, setActionModalType] = useState('menu'); // 'menu' or 'tags'
   const [selectedConv, setSelectedConv] = useState(null);
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
 
   // Refs để quản lý các item đang mở swipe
   const swipeableRefs = useRef(new Map());
@@ -142,6 +145,74 @@ const HomeScreen = () => {
       setActionModalVisible(false);
     } catch (err) {
       console.error('Toggle pin error:', err);
+    }
+  };
+
+  const handleBlockToggleFromHome = (conv, otherUserId, isBlocked) => {
+    setActionModalVisible(false);
+    if (!otherUserId) return;
+    
+    const displayName = conv.name || 'Người dùng';
+
+    if (isBlocked) {
+      Alert.alert(
+        'Bỏ chặn người dùng',
+        `Bỏ chặn ${displayName}? Người này có thể gửi tin nhắn cho bạn trở lại.`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Bỏ chặn',
+            onPress: async () => {
+              dispatch(updateMemberFriendshipStatus({
+                userId: otherUserId,
+                friendshipStatus: 'NONE',
+                isRequester: null,
+              }));
+              try {
+                await friendApi.unblockUser(otherUserId);
+                Alert.alert('Đã bỏ chặn', `Bạn đã bỏ chặn ${displayName}.`);
+              } catch (err) {
+                dispatch(updateMemberFriendshipStatus({
+                  userId: otherUserId,
+                  friendshipStatus: 'BLOCKED',
+                  isRequester: true,
+                }));
+                Alert.alert('Lỗi', 'Không thể bỏ chặn người dùng này.');
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Chặn người dùng',
+        `Bạn có chắc chắn muốn chặn ${displayName}? Người này sẽ không thể gửi tin nhắn cho bạn.`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Chặn',
+            style: 'destructive',
+            onPress: async () => {
+              dispatch(updateMemberFriendshipStatus({
+                userId: otherUserId,
+                friendshipStatus: 'BLOCKED',
+                isRequester: true,
+              }));
+              try {
+                await friendApi.blockUser(otherUserId);
+                Alert.alert('Đã chặn', `Bạn đã chặn ${displayName}.`);
+              } catch (err) {
+                dispatch(updateMemberFriendshipStatus({
+                  userId: otherUserId,
+                  friendshipStatus: 'NONE',
+                  isRequester: null,
+                }));
+                Alert.alert('Lỗi', 'Không thể chặn người dùng này.');
+              }
+            }
+          }
+        ]
+      );
     }
   };
 
@@ -568,6 +639,46 @@ const HomeScreen = () => {
                         </View>
                         <Text style={[styles.actionListLabel, { color: colors.foreground }]}>Phân loại</Text>
                       </TouchableOpacity>
+
+                      {selectedConv?.type === 'SINGLE' && (() => {
+                        const currentUserId = String(currentUser?.userId || currentUser?.id || '');
+                        const otherMember = selectedConv.members?.find(m => {
+                          const mId = String(m.userId || m.id || '');
+                          return mId !== '' && mId !== currentUserId;
+                        });
+                        const otherUserId = otherMember?.userId || otherMember?.id || '';
+                        
+                        const status = otherMember?.friendshipStatus;
+                        const requester = otherMember?.isRequester;
+                        const isBlocked = status === 'BLOCKED' && requester === true;
+
+                        return (
+                          <TouchableOpacity 
+                            style={styles.actionListItem} 
+                            onPress={() => handleBlockToggleFromHome(selectedConv, otherUserId, isBlocked)}
+                          >
+                            <View style={[styles.actionListIcon, { backgroundColor: isDark ? colors.surface300 : '#fee2e2' }]}>
+                              <MaterialIcons name={isBlocked ? "lock-open" : "block"} size={24} color={isBlocked ? "#10b981" : "#ef4444"} />
+                            </View>
+                            <Text style={[styles.actionListLabel, { color: isBlocked ? "#10b981" : "#ef4444" }]}>
+                              {isBlocked ? `Bỏ chặn người dùng` : `Chặn người dùng`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })()}
+
+                      <TouchableOpacity 
+                        style={styles.actionListItem} 
+                        onPress={() => {
+                          setActionModalVisible(false);
+                          setIsReportModalVisible(true);
+                        }}
+                      >
+                        <View style={[styles.actionListIcon, { backgroundColor: isDark ? colors.surface300 : '#ffe4e6' }]}>
+                          <MaterialIcons name="report" size={24} color="#f43f5e" />
+                        </View>
+                        <Text style={[styles.actionListLabel, { color: '#f43f5e' }]}>Báo xấu</Text>
+                      </TouchableOpacity>
                     </View>
                   ) : (
                     <ScrollView contentContainerStyle={styles.actionGrid}>
@@ -610,6 +721,26 @@ const HomeScreen = () => {
           visible={createGroupVisible}
           onClose={() => setCreateGroupVisible(false)}
         />
+        {(() => {
+          const isGroup = selectedConv?.type === 'GROUP';
+          let targetId = selectedConv?.conversationId;
+          if (!isGroup && selectedConv) {
+            const currentUserId = String(currentUser?.userId || currentUser?.id || '');
+            const otherMember = selectedConv.members?.find(m => {
+              const mId = String(m.userId || m.id || '');
+              return mId !== '' && mId !== currentUserId;
+            });
+            targetId = otherMember?.userId || otherMember?.id || selectedConv.conversationId;
+          }
+          return (
+            <ReportModal
+              visible={isReportModalVisible}
+              onClose={() => setIsReportModalVisible(false)}
+              targetId={targetId}
+              targetType={isGroup ? 'GROUP' : 'USER'}
+            />
+          );
+        })()}
       </View>
     </GestureHandlerRootView>
   );

@@ -26,6 +26,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useDispatch, useSelector } from 'react-redux';
 import { chatApi } from '../../api/chatApi';
 import { friendApi } from '../../api/friendApi';
+import adminApi from '../../api/adminApi';
 
 const Chat = () => {
   const { user, logout } = useAuth();
@@ -37,6 +38,7 @@ const Chat = () => {
     activeConversationId,
     fetchConversations,
     fetchFriends,
+    friends,
     fetchMessages,
     selectConversation,
     loading,
@@ -198,6 +200,7 @@ const Chat = () => {
   }, [connect]);
 
   const handleStartCall = (type = 'video', options = {}) => {
+
     if (options.targetName) {
       setOutgoingTarget({
         name: options.targetName,
@@ -1060,6 +1063,12 @@ const Chat = () => {
                 onClearHistory={() => handleDeleteConversation(activeConversationId)}
                 openLightbox={openLightbox}
                 allChatImages={allChatImages}
+                onReport={() => {
+                  setReportingConvId(activeConversationId);
+                  setReportReason('spam');
+                  setReportNotes('');
+                  setIsReportModalOpen(true);
+                }}
               />
             )}
 
@@ -1072,6 +1081,12 @@ const Chat = () => {
                   onClearHistory={() => handleDeleteConversation(activeConversationId)}
                   openLightbox={openLightbox}
                   allChatImages={allChatImages}
+                  onReport={() => {
+                    setReportingConvId(activeConversationId);
+                    setReportReason('spam');
+                    setReportNotes('');
+                    setIsReportModalOpen(true);
+                  }}
                 />
               </div>
             )}
@@ -1248,28 +1263,31 @@ const Chat = () => {
               </button>
               <button
                 onClick={() => {
-                  const reportPayload = {
-                    reportId: 'REP#' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-                    reporterId: myId,
-                    reporterName: user?.fullName || user?.name || 'Người dùng',
-                    conversationId: reportingConvId,
-                    conversationName: conversations?.find(c => c.conversationId === reportingConvId)?.name || 'Hội thoại',
-                    reason: reportReason,
-                    notes: reportNotes,
-                    timestamp: new Date().toISOString()
-                  };
-
-                  try {
-                    const existing = JSON.parse(localStorage.getItem('submitted_reports')) || [];
-                    localStorage.setItem('submitted_reports', JSON.stringify([...existing, reportPayload]));
-                    console.log("[Moderation] 🛡️ Report payload successfully sent to Moderation Queue:", reportPayload);
-                  } catch (e) {
-                    console.error("Failed to save report payload to localStorage", e);
+                  const targetConversation = conversations?.find(c => c.conversationId === reportingConvId);
+                  const isGroup = targetConversation?.type === 'GROUP';
+                  const targetType = isGroup ? 'GROUP' : 'USER';
+                  
+                  let targetId = reportingConvId;
+                  if (!isGroup) {
+                    const otherMember = targetConversation?.members?.find(m => {
+                      const mid = m.userId || m.id || m._id;
+                      return mid && String(mid).trim() !== String(myId).trim();
+                    });
+                    targetId = otherMember ? (otherMember.userId || otherMember.id || otherMember._id) : reportingConvId;
                   }
 
-                  showToast("Gửi báo cáo thành công! Cảm ơn đóng góp của bạn.", "success");
-                  setIsReportModalOpen(false);
-                  setReportNotes('');
+                  adminApi.submitReport(targetId, targetType, reportReason, reportNotes)
+                    .then(() => {
+                      showToast("Gửi báo cáo thành công! Cảm ơn đóng góp của bạn.", "success");
+                    })
+                    .catch((err) => {
+                      console.error("Gửi báo cáo thất bại:", err);
+                      showToast("Gửi báo cáo thất bại. Vui lòng thử lại sau.", "error");
+                    })
+                    .finally(() => {
+                      setIsReportModalOpen(false);
+                      setReportNotes('');
+                    });
                 }}
                 className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-all active:scale-95 text-[14px] shadow-lg shadow-rose-500/20"
               >

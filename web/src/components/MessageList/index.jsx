@@ -269,6 +269,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const menuNodeRef = useRef(null);
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
+  const { friends } = useSelector(state => state.chat);
   const [activeMenu, setActiveMenu] = useState(null);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [optimisticReactions, setOptimisticReactions] = useState({}); // { messageId: [reactions] }
@@ -289,6 +290,22 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const meId = user?.userId || user?.id;
   const preferredLanguage = user?.preferredLanguage;
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
+
+  const otherMember = currentConv?.members?.find(m => {
+    const mId = String(m.userId || m.id || '').toLowerCase();
+    const myId = String(meId || '').toLowerCase();
+    return mId !== '' && mId !== myId;
+  });
+  const otherMemberId = otherMember?.userId || otherMember?.id;
+
+  const isBlockedByOther = React.useMemo(() => {
+    if (!otherMemberId || currentConv?.type !== 'SINGLE') return false;
+    const friendRecord = Array.isArray(friends) && friends.find(f => {
+      const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+      return fId !== '' && fId === String(otherMemberId).toLowerCase();
+    });
+    return friendRecord && friendRecord.status === 'BLOCKED' && !friendRecord.isRequester;
+  }, [friends, otherMemberId, currentConv]);
 
   const handleMentionClick = (mentionText) => {
     const name = mentionText.startsWith('@') ? mentionText.substring(1) : mentionText;
@@ -1883,7 +1900,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             );
                                           }
 
-                                          const isOtherOnline = currentConv?.members?.some(m =>
+                                          const isOtherOnline = !isBlockedByOther && currentConv?.members?.some(m =>
                                             String(m.userId || m.id) !== String(meId) &&
                                             (String(m.status || m.presence || '').toUpperCase() === 'ONLINE' || m.isOnline === true)
                                           );

@@ -57,4 +57,7 @@ public class Conversation {
 
     @DynamoDBAttribute(attributeName = "memberApprovalRequired")
     private Boolean memberApprovalRequired;
+
+    @DynamoDBAttribute(attributeName = "violationCount")
+    private Integer violationCount;
 }

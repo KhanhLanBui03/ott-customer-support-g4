@@ -20,7 +20,9 @@ export const authApi = {
   restoreVerifyPhone: (data) => axiosClient.post('/auth/restore/verify-phone', data),
   restoreSendOtp: (email) => axiosClient.post('/auth/restore/send-otp', { email }),
   restoreVerifyOtp: (data) => axiosClient.post('/auth/restore/verify-otp', data),
+  restoreVerifyOtpReactivate: (data) => axiosClient.post('/auth/restore/verify-otp-reactivate', data),
   restoreResetPassword: (data) => axiosClient.post('/auth/restore/reset-password', data),
+  quickCancel: (email) => axiosClient.post('/auth/restore/quick-cancel', { email }),
 };
 
 export default authApi;
