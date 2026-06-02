@@ -28,7 +28,7 @@ export default function MainLayout() {
         const { eventType, conversationId, payload } = event;
         if (eventType === 'MESSAGE_SEND') {
           dispatch(addMessage({ conversationId, message: payload, myId }));
-        } else if (eventType === 'CONVERSATION_UPDATE') {
+        } else if (['CONVERSATION_UPDATE', 'MEMBER_UPDATE', 'CONVERSATION_RECREATED', 'JOIN_REQUEST_PROCESSED', 'GROUP_JOIN_REQUEST_PROCESSED'].includes(eventType)) {
           dispatch(fetchConversations());
         } else if (['FRIEND_DELETE', 'FRIEND_BLOCK', 'FRIEND_UNBLOCK', 'FRIEND_REQUEST_REJECTED', 'FRIEND_REQUEST_CANCELLED'].includes(eventType)) {
           dispatch(fetchConversations());
@@ -47,6 +47,7 @@ export default function MainLayout() {
           } else if (eventType === 'GROUP_INVITE') {
             finalPayload = { id: `gi_${Date.now()}`, title: 'Lời mời vào nhóm', message: payload.groupName || 'Nhóm mới', subMessage: `được mời bởi ${payload.inviterName || 'ai đó'}`, type: 'GROUP_INVITE', invitationId: payload.invitationId, conversationId: payload.conversationId, senderId: payload.inviterId, avatarUrl: payload.groupAvatar, fullName: payload.groupName, createdAt: new Date().toISOString(), isRead: false };
             dispatch(setInAppNotification(finalPayload));
+            dispatch(fetchConversations()); // Refresh list to show new group invitation if any
           } else if (eventType === 'NEW_JOIN_REQUEST') {
             finalPayload = {
               id: `jr_${Date.now()}`,

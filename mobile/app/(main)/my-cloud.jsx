@@ -75,6 +75,10 @@ const MyCloudScreen = () => {
   const [messageModalVisible, setMessageModalVisible] = useState(false);
   const [selectedCloudItem, setSelectedCloudItem] = useState(null);
 
+  // Selection mode states
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+
   // Fetching My Cloud files
   const fetchFiles = async (key = null, filterType = activeTab) => {
     if (key) {
@@ -549,8 +553,25 @@ const MyCloudScreen = () => {
 
   const mapCloudItemToMessage = (item) => {
     if (!item) return null;
+
     const displayContent = getDisplayMessageText(item);
     const isMsg = Boolean(displayContent) && String(item.fileName || '').startsWith('message_');
+
+    if (item.isGroup) {
+      const firstFile = item.files[0];
+      return {
+        messageId: item.id,
+        content: isMsg ? displayContent : '',
+        type: 'FILE',
+        mediaUrls: item.files.map(f => f.fileUrl).filter(Boolean),
+        senderId: user?.userId || user?.id,
+        isGroup: true,
+        files: item.files,
+        uploadedAt: item.uploadedAt,
+        typeFile: firstFile?.typeFile
+      };
+    }
+
     let type = 'FILE';
     if (isMsg) {
       type = 'TEXT';
@@ -565,6 +586,10 @@ const MyCloudScreen = () => {
       type: type,
       mediaUrls: item.fileUrl ? [item.fileUrl] : [],
       senderId: user?.userId || user?.id,
+      uploadedAt: item.uploadedAt,
+      fileName: item.fileName,
+      fileSize: item.fileSize,
+      typeFile: item.typeFile
     };
   };
 
@@ -594,7 +619,24 @@ const MyCloudScreen = () => {
         }
         break;
       case 'delete':
-        handleDeleteFile(file.id);
+      case 'recall': // Map recall to delete for My Cloud
+        if (file.isGroup) {
+          handleDeleteFile(file.files.map(f => f.id));
+        } else {
+          handleDeleteFile(file.id);
+        }
+        break;
+      case 'select':
+        setSelectionMode(true);
+        if (file.isGroup) {
+          setSelectedIds(file.files.map(f => f.id));
+        } else {
+          setSelectedIds([file.id]);
+        }
+        break;
+      case 'pin':
+        // Pin logic - UI level highlighting if needed, or just Alert for now
+        Alert.alert('Ghim tệp', 'Tính năng ghim đang được phát triển.');
         break;
       default:
         if (file.fileUrl) {
@@ -605,8 +647,55 @@ const MyCloudScreen = () => {
   };
 
   const handleMessageLongPress = (file) => {
+    if (selectionMode) {
+      toggleSelection(file.id);
+      return;
+    }
     setSelectedCloudItem(file);
     setMessageModalVisible(true);
+  };
+
+  const toggleSelection = (id) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        const next = prev.filter((i) => i !== id);
+        if (next.length === 0) setSelectionMode(false);
+        return next;
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    Alert.alert(
+      'Xóa nhiều tệp',
+      `Bạn có chắc chắn muốn xóa ${selectedIds.length} mục đã chọn khỏi Cloud?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              for (const id of selectedIds) {
+                // If id is a group id, we need to handle it.
+                // But selectedIds will contain actual file IDs from the checkboxes.
+                await myCloudApi.deleteFile(id);
+              }
+              setFiles((prev) => prev.filter((f) => !selectedIds.includes(f.id)));
+              setSelectedIds([]);
+              setSelectionMode(false);
+            } catch (err) {
+              console.error('Failed to delete files:', err);
+              Alert.alert('Lỗi', 'Không thể xóa một số tệp.');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   // Group adjacent files (images, videos, documents, audios) within 5 seconds of upload time
@@ -757,8 +846,21 @@ const MyCloudScreen = () => {
       // If it is just a single image or video, render as single media item
       if (item.files.length === 1 && imagesAndVideos.length === 1) {
         const mediaFile = imagesAndVideos[0];
+        const isSelected = selectedIds.includes(mediaFile.id);
         return (
           <View style={styles.messageRow}>
+            {selectionMode && (
+              <TouchableOpacity
+                style={styles.selectionCircle}
+                onPress={() => toggleSelection(mediaFile.id)}
+              >
+                <Ionicons
+                  name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                  size={24}
+                  color={isSelected ? colors.primary : colors.textSubtle}
+                />
+              </TouchableOpacity>
+            )}
             <View style={styles.messageContainer}>
               {replyData && (
                 <View style={[styles.replyBubbleHeader, { backgroundColor: isDark ? colors.surface200 : '#e0e7ff', borderLeftColor: colors.primary }]}>
@@ -775,13 +877,17 @@ const MyCloudScreen = () => {
               )}
               <TouchableOpacity
                 onPress={() => {
-                  setMediaViewerList([{ url: mediaFile.fileUrl, type: mediaFile.typeFile === 'video' ? 'VIDEO' : 'IMAGE' }]);
-                  setSelectedMediaIndex(0);
-                  setMediaViewerVisible(true);
+                  if (selectionMode) {
+                    toggleSelection(mediaFile.id);
+                  } else {
+                    setMediaViewerList([{ url: mediaFile.fileUrl, type: mediaFile.typeFile === 'video' ? 'VIDEO' : 'IMAGE' }]);
+                    setSelectedMediaIndex(0);
+                    setMediaViewerVisible(true);
+                  }
                 }}
                 onLongPress={() => handleMessageLongPress(mediaFile)}
                 activeOpacity={0.9}
-                style={styles.imageMessageContainer}
+                style={[styles.imageMessageContainer, isSelected && styles.selectedOverlay]}
               >
                 {mediaFile.typeFile === 'video' ? (
                   <VideoThumbnail videoUrl={mediaFile.fileUrl} style={styles.imageMessageStyle} />
@@ -800,8 +906,21 @@ const MyCloudScreen = () => {
       // If it is just a single document/file, render as single document bubble
       if (item.files.length === 1 && otherFiles.length === 1) {
         const file = otherFiles[0];
+        const isSelected = selectedIds.includes(file.id);
         return (
           <View style={styles.messageRow}>
+            {selectionMode && (
+              <TouchableOpacity
+                style={styles.selectionCircle}
+                onPress={() => toggleSelection(file.id)}
+              >
+                <Ionicons
+                  name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                  size={24}
+                  color={isSelected ? colors.primary : colors.textSubtle}
+                />
+              </TouchableOpacity>
+            )}
             <View style={styles.messageContainer}>
               {replyData && (
                 <View style={[styles.replyBubbleHeader, { backgroundColor: isDark ? colors.surface200 : '#e0e7ff', borderLeftColor: colors.primary }]}>
@@ -817,13 +936,19 @@ const MyCloudScreen = () => {
                 </View>
               )}
               <TouchableOpacity
-                onPress={() => handleItemPress(file)}
+                onPress={() => {
+                  if (selectionMode) {
+                    toggleSelection(file.id);
+                  } else {
+                    handleItemPress(file);
+                  }
+                }}
                 onLongPress={() => handleMessageLongPress(file)}
                 activeOpacity={0.9}
                 style={[
                   styles.bubble,
                   {
-                    backgroundColor: colors.primary,
+                    backgroundColor: isSelected ? colors.primary + 'CC' : colors.primary,
                     borderTopLeftRadius: 18,
                     borderTopRightRadius: 18,
                     borderBottomLeftRadius: 18,
@@ -893,8 +1018,29 @@ const MyCloudScreen = () => {
       }
 
       // If it is a group of multiple files (mixed or multiple of same type)
+      const allGroupIds = item.files.map(f => f.id);
+      const isGroupSelected = allGroupIds.every(id => selectedIds.includes(id));
+
       return (
         <View style={styles.messageRow}>
+          {selectionMode && (
+            <TouchableOpacity
+              style={styles.selectionCircle}
+              onPress={() => {
+                if (isGroupSelected) {
+                  setSelectedIds(prev => prev.filter(id => !allGroupIds.includes(id)));
+                } else {
+                  setSelectedIds(prev => [...new Set([...prev, ...allGroupIds])]);
+                }
+              }}
+            >
+              <Ionicons
+                name={isGroupSelected ? "checkmark-circle" : "ellipse-outline"}
+                size={24}
+                color={isGroupSelected ? colors.primary : colors.textSubtle}
+              />
+            </TouchableOpacity>
+          )}
           <View style={styles.messageContainer}>
             {replyData && (
               <View style={[styles.replyBubbleHeader, { backgroundColor: isDark ? colors.surface200 : '#e0e7ff', borderLeftColor: colors.primary }]}>
@@ -911,26 +1057,21 @@ const MyCloudScreen = () => {
             )}
 
             <TouchableOpacity
-              onLongPress={() => {
-                Alert.alert(
-                  'Tùy chọn nhóm tệp tin',
-                  'Chọn hành động của bạn',
-                  [
-                    { text: 'Trả lời', onPress: () => setReplyingTo(item.files[0]) },
-                    { text: 'Xóa toàn bộ nhóm', style: 'destructive', onPress: () => {
-                      const ids = item.files.map(f => f.id);
-                      handleDeleteFile(ids);
-                    }},
-                    { text: 'Hủy', style: 'cancel' }
-                  ],
-                  { cancelable: true }
-                );
+              onPress={() => {
+                if (selectionMode) {
+                   if (isGroupSelected) {
+                    setSelectedIds(prev => prev.filter(id => !allGroupIds.includes(id)));
+                  } else {
+                    setSelectedIds(prev => [...new Set([...prev, ...allGroupIds])]);
+                  }
+                }
               }}
+              onLongPress={() => handleMessageLongPress(item)}
               activeOpacity={0.9}
               style={[
                 styles.bubble,
                 {
-                  backgroundColor: colors.primary,
+                  backgroundColor: isGroupSelected ? colors.primary + 'CC' : colors.primary,
                   borderTopLeftRadius: 18,
                   borderTopRightRadius: 18,
                   borderBottomLeftRadius: 18,
@@ -954,16 +1095,21 @@ const MyCloudScreen = () => {
                   >
                     {imagesAndVideos.map((mediaFile, index) => {
                       const isVideo = mediaFile.typeFile === 'video';
+                      const isFileSelected = selectedIds.includes(mediaFile.id);
                       return (
                         <TouchableOpacity
                           key={mediaFile.id}
                           onPress={() => {
-                            setMediaViewerList(imagesAndVideos.map(f => ({
-                              url: f.fileUrl,
-                              type: f.typeFile === 'video' ? 'VIDEO' : 'IMAGE'
-                            })));
-                            setSelectedMediaIndex(index);
-                            setMediaViewerVisible(true);
+                            if (selectionMode) {
+                              toggleSelection(mediaFile.id);
+                            } else {
+                              setMediaViewerList(imagesAndVideos.map(f => ({
+                                url: f.fileUrl,
+                                type: f.typeFile === 'video' ? 'VIDEO' : 'IMAGE'
+                              })));
+                              setSelectedMediaIndex(index);
+                              setMediaViewerVisible(true);
+                            }
                           }}
                           onLongPress={() => handleMessageLongPress(mediaFile)}
                           activeOpacity={0.8}
@@ -974,12 +1120,19 @@ const MyCloudScreen = () => {
                             overflow: 'hidden',
                             position: 'relative',
                             backgroundColor: 'rgba(0,0,0,0.1)',
+                            borderWidth: isFileSelected ? 2 : 0,
+                            borderColor: colors.primary,
                           }}
                         >
                           {isVideo ? (
                             <VideoThumbnail videoUrl={mediaFile.fileUrl} style={{ width: '100%', height: '100%' }} />
                           ) : (
                             <Image source={{ uri: mediaFile.fileUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                          )}
+                          {isFileSelected && (
+                            <View style={{ position: 'absolute', top: 4, right: 4 }}>
+                              <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                            </View>
                           )}
                         </TouchableOpacity>
                       );
@@ -990,13 +1143,18 @@ const MyCloudScreen = () => {
                   (() => {
                     const mediaFile = imagesAndVideos[0];
                     const isVideo = mediaFile.typeFile === 'video';
+                    const isFileSelected = selectedIds.includes(mediaFile.id);
                     return (
                       <TouchableOpacity
                         key={mediaFile.id}
                         onPress={() => {
-                          setMediaViewerList([{ url: mediaFile.fileUrl, type: isVideo ? 'VIDEO' : 'IMAGE' }]);
-                          setSelectedMediaIndex(0);
-                          setMediaViewerVisible(true);
+                          if (selectionMode) {
+                            toggleSelection(mediaFile.id);
+                          } else {
+                            setMediaViewerList([{ url: mediaFile.fileUrl, type: isVideo ? 'VIDEO' : 'IMAGE' }]);
+                            setSelectedMediaIndex(0);
+                            setMediaViewerVisible(true);
+                          }
                         }}
                         onLongPress={() => handleMessageLongPress(mediaFile)}
                         activeOpacity={0.8}
@@ -1008,12 +1166,19 @@ const MyCloudScreen = () => {
                           position: 'relative',
                           backgroundColor: 'rgba(0,0,0,0.1)',
                           marginBottom: otherFiles.length > 0 ? 8 : 0,
+                          borderWidth: isFileSelected ? 2 : 0,
+                          borderColor: colors.primary,
                         }}
                       >
                         {isVideo ? (
                           <VideoThumbnail videoUrl={mediaFile.fileUrl} style={{ width: '100%', height: '100%' }} />
                         ) : (
                           <Image source={{ uri: mediaFile.fileUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        )}
+                        {isFileSelected && (
+                          <View style={{ position: 'absolute', top: 4, right: 4 }}>
+                            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          </View>
                         )}
                       </TouchableOpacity>
                     );
@@ -1027,6 +1192,7 @@ const MyCloudScreen = () => {
                   {otherFiles.map((file, idx) => {
                     const fileName = file.fileName || '';
                     const ext = fileName.split('.').pop().toUpperCase();
+                    const isFileSelected = selectedIds.includes(file.id);
                     const getFileColor = (name) => {
                       const e = name.split('.').pop().toLowerCase();
                       if (e === 'pdf') return '#ef4444';
@@ -1038,7 +1204,13 @@ const MyCloudScreen = () => {
                     return (
                       <TouchableOpacity
                         key={file.id}
-                        onPress={() => handleItemPress(file)}
+                        onPress={() => {
+                          if (selectionMode) {
+                            toggleSelection(file.id);
+                          } else {
+                            handleItemPress(file);
+                          }
+                        }}
                         onLongPress={() => handleMessageLongPress(file)}
                         activeOpacity={0.8}
                         style={{
@@ -1046,9 +1218,9 @@ const MyCloudScreen = () => {
                           alignItems: 'center',
                           padding: 10,
                           borderRadius: 12,
-                          borderWidth: 1,
-                          backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                          borderColor: 'rgba(255, 255, 255, 0.25)',
+                          borderWidth: isFileSelected ? 2 : 1,
+                          backgroundColor: isFileSelected ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                          borderColor: isFileSelected ? '#fff' : 'rgba(255, 255, 255, 0.25)',
                           width: '100%',
                           marginTop: idx > 0 ? 6 : 0,
                         }}
@@ -1080,6 +1252,9 @@ const MyCloudScreen = () => {
                             marginTop: 2,
                           }}>{ext} • {formatSize(file.fileSize)}</Text>
                         </View>
+                        {isFileSelected && (
+                          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -1096,9 +1271,22 @@ const MyCloudScreen = () => {
     const displayContent = getDisplayMessageText(item);
     const replyData = getReplyPreview(item);
     const isMsg = Boolean(displayContent) && String(item.fileName || '').startsWith('message_');
+    const isSelected = selectedIds.includes(item.id);
 
     return (
       <View style={styles.messageRow}>
+        {selectionMode && (
+          <TouchableOpacity
+            style={styles.selectionCircle}
+            onPress={() => toggleSelection(item.id)}
+          >
+            <Ionicons
+              name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+              size={24}
+              color={isSelected ? colors.primary : colors.textSubtle}
+            />
+          </TouchableOpacity>
+        )}
         {/* Right side alignment as My Cloud represents personal space */}
         <View style={styles.messageContainer}>
           {/* Reply Banner */}
@@ -1118,12 +1306,17 @@ const MyCloudScreen = () => {
 
           {isMsg ? (
             <TouchableOpacity
+              onPress={() => {
+                if (selectionMode) {
+                  toggleSelection(item.id);
+                }
+              }}
               onLongPress={() => handleMessageLongPress(item)}
               activeOpacity={0.8}
               style={[
                 styles.bubble,
                 {
-                  backgroundColor: colors.primary,
+                  backgroundColor: isSelected ? colors.primary + 'CC' : colors.primary,
                   borderTopLeftRadius: 18,
                   borderTopRightRadius: 18,
                   borderBottomLeftRadius: 18,
@@ -1157,13 +1350,17 @@ const MyCloudScreen = () => {
           ) : item.typeFile === 'image' && item.fileUrl ? (
             <TouchableOpacity
               onPress={() => {
-                setMediaViewerList([{ url: item.fileUrl, type: 'IMAGE' }]);
-                setSelectedMediaIndex(0);
-                setMediaViewerVisible(true);
+                if (selectionMode) {
+                  toggleSelection(item.id);
+                } else {
+                  setMediaViewerList([{ url: item.fileUrl, type: 'IMAGE' }]);
+                  setSelectedMediaIndex(0);
+                  setMediaViewerVisible(true);
+                }
               }}
               onLongPress={() => handleMessageLongPress(item)}
               activeOpacity={0.9}
-              style={styles.imageMessageContainer}
+              style={[styles.imageMessageContainer, isSelected && styles.selectedOverlay]}
             >
               <Image source={{ uri: item.fileUrl }} style={styles.imageMessageStyle} resizeMode="cover" />
               <View style={styles.mediaTimeOverlay}>
@@ -1173,13 +1370,17 @@ const MyCloudScreen = () => {
           ) : item.typeFile === 'video' && item.fileUrl ? (
             <TouchableOpacity
               onPress={() => {
-                setMediaViewerList([{ url: item.fileUrl, type: 'VIDEO' }]);
-                setSelectedMediaIndex(0);
-                setMediaViewerVisible(true);
+                if (selectionMode) {
+                  toggleSelection(item.id);
+                } else {
+                  setMediaViewerList([{ url: item.fileUrl, type: 'VIDEO' }]);
+                  setSelectedMediaIndex(0);
+                  setMediaViewerVisible(true);
+                }
               }}
               onLongPress={() => handleMessageLongPress(item)}
               activeOpacity={0.9}
-              style={styles.imageMessageContainer}
+              style={[styles.imageMessageContainer, isSelected && styles.selectedOverlay]}
             >
               <VideoThumbnail videoUrl={item.fileUrl} style={styles.imageMessageStyle} />
               <View style={styles.mediaTimeOverlay}>
@@ -1188,13 +1389,19 @@ const MyCloudScreen = () => {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              onPress={() => handleItemPress(item)}
+              onPress={() => {
+                if (selectionMode) {
+                  toggleSelection(item.id);
+                } else {
+                  handleItemPress(item);
+                }
+              }}
               onLongPress={() => handleMessageLongPress(item)}
               activeOpacity={0.9}
               style={[
                 styles.bubble,
                 {
-                  backgroundColor: colors.primary,
+                  backgroundColor: isSelected ? colors.primary + 'CC' : colors.primary,
                   borderTopLeftRadius: 18,
                   borderTopRightRadius: 18,
                   borderBottomLeftRadius: 18,
@@ -1271,34 +1478,52 @@ const MyCloudScreen = () => {
 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/(main)/profile')}>
-          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
-        </TouchableOpacity>
-
-        {searchOpen ? (
-          <TextInput
-            style={[styles.searchInput, { color: colors.foreground, backgroundColor: colors.input }]}
-            placeholder="Tìm kiếm tệp..."
-            placeholderTextColor={colors.textSubtle}
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            autoFocus
-          />
+        {selectionMode ? (
+          <>
+            <TouchableOpacity style={styles.backBtn} onPress={() => { setSelectionMode(false); setSelectedIds([]); }}>
+              <Ionicons name="close" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+            <View style={styles.titleContainer}>
+              <Text style={[styles.title, { color: colors.foreground }]}>Đã chọn {selectedIds.length}</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.actionIcon} onPress={handleBulkDelete}>
+                <Ionicons name="trash-outline" size={22} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          </>
         ) : (
-          <View style={styles.titleContainer}>
-            <Text style={[styles.title, { color: colors.foreground }]}>Cloud của tôi</Text>
-            <Text style={[styles.subtitle, { color: colors.textMuted }]}>Thư mục cá nhân</Text>
-          </View>
-        )}
+          <>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/(main)/profile')}>
+              <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+            </TouchableOpacity>
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.actionIcon} onPress={() => setSearchOpen(!searchOpen)}>
-            <Ionicons name={searchOpen ? 'close' : 'search'} size={22} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionIcon} onPress={handleRefresh}>
-            <Ionicons name="refresh" size={22} color={colors.foreground} />
-          </TouchableOpacity>
-        </View>
+            {searchOpen ? (
+              <TextInput
+                style={[styles.searchInput, { color: colors.foreground, backgroundColor: colors.input }]}
+                placeholder="Tìm kiếm tệp..."
+                placeholderTextColor={colors.textSubtle}
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoFocus
+              />
+            ) : (
+              <View style={styles.titleContainer}>
+                <Text style={[styles.title, { color: colors.foreground }]}>Cloud của tôi</Text>
+                <Text style={[styles.subtitle, { color: colors.textMuted }]}>Thư mục cá nhân</Text>
+              </View>
+            )}
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.actionIcon} onPress={() => setSearchOpen(!searchOpen)}>
+                <Ionicons name={searchOpen ? 'close' : 'search'} size={22} color={colors.foreground} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionIcon} onPress={handleRefresh}>
+                <Ionicons name="refresh" size={22} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Filter Tabs */}
@@ -1771,6 +1996,15 @@ const styles = StyleSheet.create({
   mediaTimeText: {
     fontSize: 9,
     color: '#ffffff',
+  },
+  selectionCircle: {
+    justifyContent: 'center',
+    marginRight: 12,
+    paddingLeft: 4,
+  },
+  selectedOverlay: {
+    borderWidth: 3,
+    borderColor: '#3b82f6',
   },
   videoOverlayPlay: {
     position: 'absolute',

@@ -25,7 +25,21 @@ const HomeScreen = () => {
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
-  
+  // Chỉ hiện loading ban đầu nếu chưa có dữ liệu hội thoại
+  const [showInitialLoading, setShowInitialLoading] = useState(conversations.length === 0);
+
+  useEffect(() => {
+    // Nếu chưa có hội thoại, đợi 2s để tạo hiệu ứng mượt mà (chỉ lần đầu đăng nhập)
+    if (conversations.length === 0) {
+      const timer = setTimeout(() => {
+        setShowInitialLoading(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowInitialLoading(false);
+    }
+  }, []);
+
   // States cho phân loại
   const [filterType, setFilterType] = useState('all'); // 'all', 'unread'
   const [selectedTags, setSelectedTags] = useState([]);
@@ -413,9 +427,18 @@ const HomeScreen = () => {
         </View>
 
 
-        {loading && !refreshing && conversations.length === 0 ? (
+        {/*
+           Chỉ hiển thị màn hình loading trung tâm khi:
+           1. Đang tải (loading) HOẶC đang trong thời gian chờ 2s (showInitialLoading)
+           2. VÀ Quan trọng: Danh sách hội thoại hiện tại phải đang trống (conversations.length === 0)
+           3. VÀ Không phải đang thực hiện thao tác kéo để làm mới (refreshing)
+        */}
+        {((loading || showInitialLoading) && conversations.length === 0 && !refreshing) ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#667eea" />
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={[styles.loadingText, { color: colors.textMuted, marginTop: 15 }]}>
+              Đang tải dữ liệu...
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -426,7 +449,7 @@ const HomeScreen = () => {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Không tìm thấy hội thoại nào</Text>
+                <Text style={styles.emptyText}>Chưa có hội thoại nào</Text>
               </View>
             }
           />
@@ -744,6 +767,7 @@ const styles = StyleSheet.create({
 
   lastMessageUnread: { fontWeight: '700', color: '#111827' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { fontSize: 16, fontWeight: '600' },
   emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100 },
   emptyText: { color: '#9ca3af', fontSize: 16 },
 

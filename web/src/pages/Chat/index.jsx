@@ -19,7 +19,7 @@ import WelcomeCarousel from '../../components/WelcomeCarousel';
 import VideoCall from '../../components/VideoCall';
 import MediaLightbox from '../../components/MediaLightbox';
 import MyCloud from '../../components/MyCloud/MyCloud';
-import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal, Cloud } from 'lucide-react';
+import { MessageSquare, Bell, Users, Settings, LogOut, Search, Plus, User, UserPlus, FolderDown, Mail, BellOff, EyeOff, Clock, Trash2, AlertTriangle, Pin, Sun, Moon, Contact, Stars as SparklesIcon, ChevronDown, MoreHorizontal, Cloud, X } from 'lucide-react';
 import { fetchNotifications, setPendingRequests, setPendingGroups } from '../../store/notificationSlice';
 import { setActiveConversation, setConversations } from '../../store/chatSlice';
 import { useTheme } from '../../hooks/useTheme';
@@ -60,6 +60,14 @@ const Chat = () => {
   const [isLanguageSettingsOpen, setIsLanguageSettingsOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isMyCloudView, setIsMyCloudView] = useState(false);
+  const [activeTab, setActiveTab] = useState('priority'); // 'priority', 'hidden'
+  const [hiddenConvIds, setHiddenConvIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('hidden_conversation_ids')) || [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -73,6 +81,21 @@ const Chat = () => {
   const openLightbox = (images, index = 0) => {
     setLightboxData({ isOpen: true, images, currentIndex: index });
   };
+
+  const [toast, setToast] = useState(null);
+  const toastTimeoutRef = React.useRef(null);
+  const showToast = (message, type = 'success') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ message, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  };
+
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('spam');
+  const [reportNotes, setReportNotes] = useState('');
+  const [reportingConvId, setReportingConvId] = useState(null);
 
   const TAGS = [
     { key: 'customer', label: 'Khách hàng', color: 'bg-red-500' },
@@ -221,16 +244,16 @@ const Chat = () => {
   const remoteInfo = React.useMemo(() => {
     // Tìm conversation liên quan đến cuộc gọi đang diễn ra
     const currentCallCid = activeCallCid || incomingSignal?.conversationId;
-    const callConv = currentCallCid ? conversations.find(c => 
-      String(c.conversationId) === String(currentCallCid) || 
+    const callConv = currentCallCid ? conversations.find(c =>
+      String(c.conversationId) === String(currentCallCid) ||
       String(c.id) === String(currentCallCid)
     ) : null;
 
     // Xác định xem cuộc gọi này có phải là cuộc gọi nhóm hay không (hoàn toàn đồng bộ)
-    const isActuallyGroup = isGroupCall || 
-      (callConv ? (callConv.type === 'GROUP' || callConv.isGroup) : false) || 
-      String(currentCallCid).includes('GROUP') || 
-      incomingSignal?.isGroup === true || 
+    const isActuallyGroup = isGroupCall ||
+      (callConv ? (callConv.type === 'GROUP' || callConv.isGroup) : false) ||
+      String(currentCallCid).includes('GROUP') ||
+      incomingSignal?.isGroup === true ||
       outgoingTarget?.isGroup === true;
 
     // 1. Ưu tiên xử lý cuộc gọi NHÓM
@@ -433,7 +456,42 @@ const Chat = () => {
 
   const handleSidebarContextMenu = (e, conversationId) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, conversationId });
+    const menuWidth = 256; // Width of the menu (w-64 is 256px)
+    const menuHeight = 420; // Approximate height of the menu with all options
+
+    let x = e.clientX;
+    let y = e.clientY;
+
+    if (e.type === 'click') {
+      const rect = e.currentTarget.getBoundingClientRect();
+      // Position the menu to the right of the button (sits beautifully in the right-side chat area)
+      x = rect.right + 12;
+      y = rect.top;
+
+      // If x overflows the screen width (e.g. smaller screens or mobile), align it to the left of the button instead
+      if (x + menuWidth > window.innerWidth) {
+        x = rect.left - menuWidth - 8;
+      }
+
+      // If y overflows the screen height, adjust it upwards so it aligns with the bottom of the button
+      if (y + menuHeight > window.innerHeight) {
+        y = Math.max(16, rect.bottom - menuHeight);
+      }
+    } else {
+      // For right-click, ensure it fits inside the viewport boundaries
+      if (x + menuWidth > window.innerWidth) {
+        x = window.innerWidth - menuWidth - 16;
+      }
+      if (y + menuHeight > window.innerHeight) {
+        y = window.innerHeight - menuHeight - 16;
+      }
+    }
+
+    // Ensure coordinates are never negative or offscreen
+    x = Math.max(16, x);
+    y = Math.max(16, y);
+
+    setContextMenu({ x, y, conversationId });
   };
 
   useEffect(() => {
@@ -494,6 +552,13 @@ const Chat = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredConversations = conversations.filter(conv => {
+    const isHidden = hiddenConvIds.includes(conv.conversationId);
+    if (activeTab === 'hidden') {
+      if (!isHidden) return false;
+    } else {
+      if (isHidden) return false;
+    }
+
     // 1. Filter by unread status if active
     if (filterType === 'unread' && (conv.unreadCount || 0) === 0) return false;
 
@@ -592,7 +657,7 @@ const Chat = () => {
           <nav className={`flex ${isMobile ? 'flex-row items-center flex-1 justify-around h-full' : 'flex-col space-y-6 items-center'} w-full`}>
             {/* Chat Icon */}
             <div className="relative group">
-              <button 
+              <button
                 onClick={() => setIsMyCloudView(false)}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
@@ -795,11 +860,28 @@ const Chat = () => {
             </div>
 
             <div className="flex items-center justify-between border-b border-black/10 dark:border-white/5 pb-1">
-              <div className="flex items-center space-x-6">
-                <div className="text-[14px] font-bold pb-2 relative text-blue-500 cursor-pointer">
+              <div className="flex items-center space-x-5">
+                {/* Ưu tiên Tab */}
+                <button
+                  onClick={() => setActiveTab('priority')}
+                  className={`text-[14px] font-bold pb-2 relative transition-all active:scale-95 ${activeTab === 'priority' ? 'text-blue-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-white'}`}
+                >
                   <span>Ưu tiên</span>
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                </div>
+                  {activeTab === 'priority' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                  )}
+                </button>
+
+                {/* Ẩn Tab */}
+                <button
+                  onClick={() => setActiveTab('hidden')}
+                  className={`text-[14px] font-bold pb-2 relative transition-all active:scale-95 ${activeTab === 'hidden' ? 'text-blue-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-white'}`}
+                >
+                  <span>Ẩn</span>
+                  {activeTab === 'hidden' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                  )}
+                </button>
               </div>
 
               <div className="relative pb-2">
@@ -1004,8 +1086,7 @@ const Chat = () => {
             className="fixed bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)] rounded-2xl py-2 w-64 z-[9999] animate-slide-up"
             style={{
               top: contextMenu.y,
-              left: contextMenu.x,
-              transform: (contextMenu.y + 450 > window.innerHeight) ? 'translateY(-100%)' : 'none'
+              left: contextMenu.x
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1023,42 +1104,29 @@ const Chat = () => {
                 <Pin size={16} className={`text-slate-400 group-hover:text-indigo-500 ${conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'fill-indigo-500 text-indigo-500' : ''}`} />
                 <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
               </div>
-            </button>
-
-
-            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
-              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-                <FolderDown size={16} className="text-slate-400 group-hover:text-indigo-500" />
-                <span>Chuyển sang mục Khác</span>
-              </div>
-            </button>
-
-
-            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
-              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-                <Mail size={16} className="text-slate-400 group-hover:text-indigo-500" />
-                <span>Đánh dấu chưa đọc</span>
-              </div>
-            </button>
-
-            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
-              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-                <BellOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
-                <span>Tắt thông báo</span>
-              </div>
-            </button>
-
-            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
+            </button>            <button
+              onClick={() => {
+                const convId = contextMenu.conversationId;
+                let newHidden;
+                if (hiddenConvIds.includes(convId)) {
+                  newHidden = hiddenConvIds.filter(id => id !== convId);
+                  showToast("Đã bỏ ẩn cuộc trò chuyện này!", "success");
+                } else {
+                  newHidden = [...hiddenConvIds, convId];
+                  showToast("Đã ẩn cuộc trò chuyện này!", "success");
+                  if (activeConversationId === convId) {
+                    selectConversation(null);
+                  }
+                }
+                setHiddenConvIds(newHidden);
+                localStorage.setItem('hidden_conversation_ids', JSON.stringify(newHidden));
+                setContextMenu(null);
+              }}
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3"
+            >
               <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
                 <EyeOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
-                <span>Ẩn trò chuyện</span>
-              </div>
-            </button>
-
-            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-b border-slate-50 mb-1 pb-3">
-              <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
-                <Clock size={16} className="text-slate-400 group-hover:text-indigo-500" />
-                <span>Tin nhắn tự xóa</span>
+                <span>{hiddenConvIds.includes(contextMenu.conversationId) ? 'Bỏ ẩn trò chuyện' : 'Ẩn trò chuyện'}</span>
               </div>
             </button>
 
@@ -1072,7 +1140,16 @@ const Chat = () => {
               </div>
             </button>
 
-            <button className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group">
+            <button
+              onClick={() => {
+                setReportingConvId(contextMenu.conversationId);
+                setReportReason('spam');
+                setReportNotes('');
+                setIsReportModalOpen(true);
+                setContextMenu(null);
+              }}
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors group border-t border-slate-50 mt-1"
+            >
               <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
                 <AlertTriangle size={16} className="text-slate-400 group-hover:text-red-500" />
                 <span>Báo xấu</span>
@@ -1095,6 +1172,113 @@ const Chat = () => {
         onClose={() => setIsFriendsOpen(false)}
         initialView={friendsInitialView}
       />
+
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 backdrop-blur-md bg-black/40 animate-fade-in" onClick={() => setIsReportModalOpen(false)}>
+          <div
+            className={`w-full max-w-md rounded-[32px] shadow-2xl border transition-all duration-300 scale-in-center p-6 ${isDark ? "bg-[#1a1e26] border-white/5 text-white" : "bg-white border-slate-100 text-slate-800"
+              }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/5 mb-4">
+              <div className="flex items-center space-x-2.5">
+                <AlertTriangle className="text-rose-500 animate-pulse" size={22} />
+                <h3 className="text-lg font-black tracking-tight">Báo cáo hội thoại</h3>
+              </div>
+              <button
+                onClick={() => setIsReportModalOpen(false)}
+                className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors text-slate-400"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm opacity-60 leading-relaxed font-medium">
+                Vui lòng chọn lý do báo cáo cuộc trò chuyện này. Đội ngũ kiểm duyệt sẽ kiểm tra nội dung trong vòng 24h.
+              </p>
+
+              <div className="space-y-2">
+                {[
+                  { key: 'spam', label: 'Spam / Tin nhắn rác' },
+                  { key: 'harassment', label: 'Quấy rối / Đe dọa' },
+                  { key: 'scam', label: 'Lừa đảo / Giả mạo' },
+                  { key: 'inappropriate', label: 'Nội dung phản cảm / Độc hại' },
+                  { key: 'other', label: 'Lý do khác' }
+                ].map(item => (
+                  <label
+                    key={item.key}
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all active:scale-[0.99] ${reportReason === item.key
+                        ? (isDark ? 'border-rose-500/50 bg-rose-500/10' : 'border-rose-500 bg-rose-50')
+                        : (isDark ? 'border-white/5 bg-white/5 hover:bg-white/10' : 'border-slate-200 bg-white hover:bg-slate-50')
+                      }`}
+                  >
+                    <span className="text-[14px] font-bold">{item.label}</span>
+                    <input
+                      type="radio"
+                      name="reportReason"
+                      value={item.key}
+                      checked={reportReason === item.key}
+                      onChange={() => setReportReason(item.key)}
+                      className="accent-rose-500 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">Chi tiết lý do báo cáo (Không bắt buộc)</label>
+                <textarea
+                  value={reportNotes}
+                  onChange={(e) => setReportNotes(e.target.value)}
+                  placeholder="Nhập thêm chi tiết phản ánh của bạn..."
+                  className={`w-full p-4 rounded-2xl text-sm border focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all min-h-[80px] max-h-[140px] resize-y placeholder:text-foreground/20 font-medium ${isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'
+                    }`}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex space-x-3">
+              <button
+                onClick={() => setIsReportModalOpen(false)}
+                className={`flex-1 py-3.5 rounded-2xl font-bold transition-all active:scale-95 text-[14px] border ${isDark ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
+                  }`}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => {
+                  const reportPayload = {
+                    reportId: 'REP#' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+                    reporterId: myId,
+                    reporterName: user?.fullName || user?.name || 'Người dùng',
+                    conversationId: reportingConvId,
+                    conversationName: conversations?.find(c => c.conversationId === reportingConvId)?.name || 'Hội thoại',
+                    reason: reportReason,
+                    notes: reportNotes,
+                    timestamp: new Date().toISOString()
+                  };
+
+                  try {
+                    const existing = JSON.parse(localStorage.getItem('submitted_reports')) || [];
+                    localStorage.setItem('submitted_reports', JSON.stringify([...existing, reportPayload]));
+                    console.log("[Moderation] 🛡️ Report payload successfully sent to Moderation Queue:", reportPayload);
+                  } catch (e) {
+                    console.error("Failed to save report payload to localStorage", e);
+                  }
+
+                  showToast("Gửi báo cáo thành công! Cảm ơn đóng góp của bạn.", "success");
+                  setIsReportModalOpen(false);
+                  setReportNotes('');
+                }}
+                className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-all active:scale-95 text-[14px] shadow-lg shadow-rose-500/20"
+              >
+                Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <MediaLightbox
         isOpen={lightboxData.isOpen}
@@ -1132,14 +1316,14 @@ const Chat = () => {
           const cid = String(c.id || c.conversationId || '');
           const callCid = String(activeCallCid || '');
           const incomingCid = String(incomingSignal?.conversationId || '');
-          
+
           // So khớp chính xác hoặc so khớp sau khi loại bỏ tiền tố GROUP#
           const sanitize = (id) => id.replace('GROUP#', '').trim();
-          
-          return cid === callCid || 
-                 cid === incomingCid || 
-                 sanitize(cid) === sanitize(callCid) || 
-                 sanitize(cid) === sanitize(incomingCid);
+
+          return cid === callCid ||
+            cid === incomingCid ||
+            sanitize(cid) === sanitize(callCid) ||
+            sanitize(cid) === sanitize(incomingCid);
         }) || activeConversation}
         ringDuration={ringDuration}
         onClose={() => {
@@ -1147,6 +1331,19 @@ const Chat = () => {
           setOutgoingTarget(null);
         }}
       />
+
+      {toast && (
+        <div className="fixed top-6 right-6 z-[10000] animate-in fade-in slide-in-from-top-6 duration-300">
+          <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl backdrop-blur-xl border shadow-2xl transition-all ${isDark
+              ? 'bg-slate-900/90 border-white/10 text-white shadow-black/40'
+              : 'bg-white/95 border-slate-200 text-slate-800 shadow-indigo-100'
+            }`}>
+            <div className={`w-3 h-3 rounded-full ${toast.type === 'error' ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+              }`} />
+            <p className="text-[14px] font-bold tracking-tight">{toast.message}</p>
+          </div>
+        </div>
+      )}
     </div >
   );
 };

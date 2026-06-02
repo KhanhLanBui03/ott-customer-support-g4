@@ -23,6 +23,7 @@ import {
   updateConversationWallpaper,
   updateMemberRoleLocal,
   removeMemberLocal,
+  removeConversationLocal,
   getRealId
 } from '../../../src/store/chatSlice';
 import { conversationApi } from '../../../src/api/chatApi';
@@ -242,9 +243,11 @@ const ChatInfoScreen = () => {
           onPress: async () => {
             try {
               await conversationApi.deleteConversationForMe(realId);
+              dispatch(removeConversationLocal({ conversationId: realId }));
               router.replace('/(main)');
             } catch (err) {
-              Alert.alert('Lỗi', 'Không thể rời nhóm lúc này.');
+              const msg = err.response?.data?.message || 'Không thể rời nhóm lúc này.';
+              Alert.alert('Lỗi', msg);
             }
           }
         }
@@ -264,9 +267,11 @@ const ChatInfoScreen = () => {
           onPress: async () => {
             try {
               await conversationApi.disbandGroup(realId);
+              dispatch(removeConversationLocal({ conversationId: realId }));
               router.replace('/(main)');
             } catch (err) {
-              Alert.alert('Lỗi', 'Không thể giải tán nhóm lúc này.');
+              const msg = err.response?.data?.message || 'Không thể giải tán nhóm lúc này.';
+              Alert.alert('Lỗi', msg);
             }
           }
         }

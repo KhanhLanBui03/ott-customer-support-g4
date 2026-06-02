@@ -185,10 +185,18 @@ const ChatBubble = ({
     (message.content && message.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ||
     (firstMedia && String(firstMedia).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
 
-  const isImageOrVideoUrl = (url) => {
+  const isVideoUrl = (url) => {
     if (!url || typeof url !== 'string') return false;
-    const lower = url.toLowerCase();
-    return lower.match(/\.(jpeg|jpg|gif|png|webp|heic|svg|mp4|webm|ogg|mov|qt|mkv)(\?|$)/i);
+    return url.toLowerCase().match(/\.(mp4|webm|ogg|mov|qt|mkv)(\?|$)/i);
+  };
+
+  const isImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    return url.toLowerCase().match(/\.(jpeg|jpg|gif|png|webp|heic|svg)(\?|$)/i);
+  };
+
+  const isImageOrVideoUrl = (url) => {
+    return isImageUrl(url) || isVideoUrl(url);
   };
 
   const imagesAndVideos = useMemo(() => {
@@ -590,7 +598,7 @@ const ChatBubble = ({
                   const renderGridItem = (url, index, gridStyle, totalCount) => {
                     const fullUrl = getFullUrl(url);
                     const isLastItem = index === 3 && totalCount > 4;
-                    const isVideo = String(url).toLowerCase().match(/\.(mp4|webm|ogg|mov|qt|mkv)(\?|$)/i) || message.type === 'VIDEO';
+                    const isVideo = isVideoUrl(url) || (message.type === 'VIDEO' && !isImageUrl(url));
                     return (
                       <TouchableOpacity key={index} activeOpacity={0.9} style={[styles.gridImageContainer, gridStyle]} onPress={() => { setSelectedMediaIndex(index); setMediaViewerVisible(true); }}>
                         {isVideo ? <VideoThumbnail videoUrl={fullUrl} style={styles.gridImage} /> : <Image source={{ uri: fullUrl }} style={styles.gridImage} resizeMode="cover" />}
@@ -814,7 +822,7 @@ const ChatBubble = ({
         </View>
       </Modal>
 
-      <MediaViewer visible={mediaViewerVisible} onClose={() => setMediaViewerVisible(false)} allMedia={imagesAndVideos.map(url => ({ url: getFullUrl(url), type: String(url).toLowerCase().match(/\.(mp4|webm|ogg|mov|qt|mkv)(\?|$)/i) ? 'VIDEO' : 'IMAGE' }))} initialIndex={selectedMediaIndex} />
+      <MediaViewer visible={mediaViewerVisible} onClose={() => setMediaViewerVisible(false)} allMedia={imagesAndVideos.map(url => ({ url: getFullUrl(url), type: (isVideoUrl(url) || (message.type === 'VIDEO' && !isImageUrl(url))) ? 'VIDEO' : 'IMAGE' }))} initialIndex={selectedMediaIndex} />
       <FileViewerModal visible={fileViewerVisible} onClose={() => setFileViewerVisible(false)} fileUrl={selectedFile.url} fileName={selectedFile.name} />
       <VoteDetailsModal
         visible={voteDetailsVisible}

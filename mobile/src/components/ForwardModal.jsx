@@ -75,35 +75,53 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
       const getMimeType = (fileName) => {
         if (!fileName) return 'application/octet-stream';
         const lower = fileName.toLowerCase();
-        if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-        if (lower.endsWith('.png')) return 'image/png';
-        if (lower.endsWith('.gif')) return 'image/gif';
-        if (lower.endsWith('.webp')) return 'image/webp';
-        if (lower.endsWith('.heic')) return 'image/heic';
-        if (lower.endsWith('.mp4')) return 'video/mp4';
-        if (lower.endsWith('.mov') || lower.endsWith('.qt')) return 'video/quicktime';
-        if (lower.endsWith('.mkv')) return 'video/x-matroska';
-        if (lower.endsWith('.mp3')) return 'audio/mpeg';
-        if (lower.endsWith('.wav')) return 'audio/wav';
-        if (lower.endsWith('.m4a')) return 'audio/m4a';
-        if (lower.endsWith('.aac')) return 'audio/aac';
-        if (lower.endsWith('.pdf')) return 'application/pdf';
-        if (lower.endsWith('.txt')) return 'text/plain';
-        if (lower.endsWith('.doc') || lower.endsWith('.docx')) return 'application/msword';
+        const extensionMap = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp',
+          '.heic': 'image/heic',
+          '.mp4': 'video/mp4',
+          '.mov': 'video/quicktime',
+          '.qt': 'video/quicktime',
+          '.mkv': 'video/x-matroska',
+          '.mp3': 'audio/mpeg',
+          '.wav': 'audio/wav',
+          '.m4a': 'audio/m4a',
+          '.aac': 'audio/aac',
+          '.pdf': 'application/pdf',
+          '.txt': 'text/plain',
+          '.doc': 'application/msword',
+          '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          '.xls': 'application/vnd.ms-excel',
+          '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          '.ppt': 'application/vnd.ms-powerpoint',
+          '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          '.zip': 'application/zip',
+          '.rar': 'application/x-rar-compressed',
+          '.7z': 'application/x-7z-compressed',
+        };
+        for (const [ext, mime] of Object.entries(extensionMap)) {
+          if (lower.endsWith(ext)) return mime;
+        }
         return 'application/octet-stream';
       };
 
       const extractObjectKey = (inputUrl) => {
         if (!inputUrl) return '';
         try {
+          if (!inputUrl.startsWith('http')) return inputUrl;
           const parsed = new URL(inputUrl);
+          const host = (parsed.hostname || '').toLowerCase();
           const pathname = decodeURIComponent(parsed.pathname || '').replace(/^\/+/, '');
           const segments = pathname.split('/').filter(Boolean);
-          const host = (parsed.hostname || '').toLowerCase();
-          if (host === 's3.amazonaws.com' || host.startsWith('s3.')) {
-            return segments.length > 1 ? segments.slice(1).join('/') : pathname;
+
+          if (host === 's3.amazonaws.com' || /^s3[.-]/.test(host)) {
+            if (segments.length > 1) return segments.slice(1).join('/');
           }
-          return segments.join('/');
+          if (host.includes('.s3.')) return pathname;
+          return pathname;
         } catch (error) {
           return '';
         }
@@ -116,6 +134,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
             const response = await axiosClient.get('/media/presigned-download', {
               params: { objectKey, expiresInMinutes: 15 }
             });
+            // axiosClient is configured to return response.data which is the ApiResponse
             return response?.data?.url || response?.url || inputUrl;
           } catch (e) {
             console.log('Presigned download error, using direct URL', e);
@@ -141,15 +160,19 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
         const text = messageToForward.content || '';
         const fileName = `forwarded_${Date.now()}.txt`;
         const tempUri = `${FileSystem.cacheDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(tempUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+        try {
+          await FileSystem.writeAsStringAsync(tempUri, text, { encoding: FileSystem.EncodingType.UTF8 });
 
-        const formData = new FormData();
-        formData.append('file', {
-          uri: Platform.OS === 'ios' ? tempUri.replace('file://', '') : tempUri,
-          name: fileName,
-          type: 'text/plain',
-        });
-        await myCloudApi.uploadFile(formData);
+          const formData = new FormData();
+          formData.append('file', {
+            uri: Platform.OS === 'ios' ? tempUri.replace('file://', '') : tempUri,
+            name: fileName,
+            type: 'text/plain',
+          });
+          await myCloudApi.uploadFile(formData);
+        } finally {
+          await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+        }
       } else {
         const mediaUrls = messageToForward.mediaUrls || messageToForward.media_urls || [];
         if (mediaUrls.length > 0) {
@@ -164,29 +187,37 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
             }
             
             const tempUri = `${FileSystem.cacheDirectory}${name}`;
-            const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
-            
-            const formData = new FormData();
-            formData.append('file', {
-              uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
-              name: name,
-              type: getMimeType(name)
-            });
-            await myCloudApi.uploadFile(formData);
+            try {
+              const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
+
+              const formData = new FormData();
+              formData.append('file', {
+                uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
+                name: name,
+                type: getMimeType(name)
+              });
+              await myCloudApi.uploadFile(formData);
+            } finally {
+              await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+            }
           }
         } else if (messageToForward.content && messageToForward.content.startsWith('http')) {
            const freshUrl = await getFreshUrl(messageToForward.content);
            let name = messageToForward.fileName || cleanFileName(messageToForward.content);
            const tempUri = `${FileSystem.cacheDirectory}${name}`;
-           const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
+           try {
+             const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
 
-           const formData = new FormData();
-           formData.append('file', {
-             uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
-             name: name,
-             type: getMimeType(name)
-           });
-           await myCloudApi.uploadFile(formData);
+             const formData = new FormData();
+             formData.append('file', {
+               uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
+               name: name,
+               type: getMimeType(name)
+             });
+             await myCloudApi.uploadFile(formData);
+           } finally {
+             await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+           }
         }
       }
     } catch (err) {

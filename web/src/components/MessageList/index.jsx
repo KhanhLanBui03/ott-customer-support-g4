@@ -338,6 +338,37 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     });
   };
 
+  const handleUserClick = (senderId, senderName) => {
+    if (!senderId) return;
+    
+    // Check if it's me
+    if (String(senderId) === String(meId)) {
+      setSelectedUserInfo({
+        ...user,
+        id: meId,
+        name: user.fullName || user.name || senderName
+      });
+      setIsUserInfoModalOpen(true);
+      return;
+    }
+
+    const member = currentConv?.members?.find(m => String(m.userId || m.id) === String(senderId));
+    if (member) {
+      setSelectedUserInfo({
+        ...member,
+        id: member.userId || member.id,
+        name: member.fullName || member.name
+      });
+      setIsUserInfoModalOpen(true);
+    } else {
+      setSelectedUserInfo({
+        id: senderId,
+        name: senderName || 'User'
+      });
+      setIsUserInfoModalOpen(true);
+    }
+  };
+
   const renderContentWithMentions = (content, isMe) => {
     if (!content) return null;
     // Regex to find @mentions (handles spaces using \u200B marker)
@@ -1117,16 +1148,25 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         {!isMe && msg.type !== 'VOTE' && (
                           <div className="w-9 h-9 flex-shrink-0 mb-1">
                             {(isLastInGroup || msg.type === 'CALL_LOG') ? (
-                              <div className={cn(
-                                "w-full h-full rounded-[14px] overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform animate-in zoom-in duration-300 flex items-center justify-center",
-                                msg.senderId === 'shop-expert-ai-bot' ? "bg-indigo-600" : "bg-surface-200"
-                              )}>
+                              <div
+                                onClick={() => handleUserClick(msg.senderId, msg.senderName)}
+                                className={cn(
+                                  "w-full h-full rounded-[14px] overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform animate-in zoom-in duration-300 flex items-center justify-center cursor-pointer",
+                                  msg.senderId === 'shop-expert-ai-bot' ? "bg-indigo-600" : "bg-surface-200"
+                                )}
+                              >
                                 {msg.senderId === 'shop-expert-ai-bot' ? (
                                   <SparklesIcon className="text-white" size={16} />
                                 ) : (msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
-                                  <img src={msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl} className="w-full h-full object-cover" alt="" />
+                                  <img
+                                    src={msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl}
+                                    className="w-full h-full object-cover"
+                                    alt=""
+                                  />
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-foreground/40 font-black italic uppercase text-sm">{msg.senderName?.charAt(0) || '?'}</div>
+                                  <div className="w-full h-full flex items-center justify-center text-foreground/40 font-black italic uppercase text-sm">
+                                    {msg.senderName?.charAt(0) || '?'}
+                                  </div>
                                 )}
                               </div>
                             ) : <div className="w-9" />}
@@ -1138,7 +1178,12 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           isMe ? "items-end" : "items-start"
                         )}>
                           {(isFirstInGroup || msg.type === 'CALL_LOG') && !isMe && msg.type !== 'VOTE' && currentConv?.type === 'GROUP' && (
-                            <p className={`text-[10px] font-black uppercase tracking-widest ml-3 mb-1.5 opacity-60 ${getMemberColor(msg.senderId, currentConv?.members)}`}>{msg.senderName || t('chat.member')}</p>
+                            <p 
+                              onClick={() => handleUserClick(msg.senderId, msg.senderName)}
+                              className={`text-[10px] font-black uppercase tracking-widest ml-3 mb-1.5 opacity-60 cursor-pointer hover:underline ${getMemberColor(msg.senderId, currentConv?.members)}`}
+                            >
+                              {msg.senderName || t('chat.member')}
+                            </p>
                           )}
                           {isFirstInGroup && msg.type === 'VOTE' && (
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400/80 mb-2 text-center w-full">{msg.senderName || t('chat.member')} {t('chat.created_poll')}</p>
