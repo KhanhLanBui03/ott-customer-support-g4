@@ -41,9 +41,9 @@ export const userApi = {
     return axiosClient.get('/users/search', { params: { phoneNumber } });
   },
 
-  // Delete account (lock for 30 days)
-  deleteAccount: () => {
-    return axiosClient.delete('/users/me');
+  // Delete account (lock for 30 days or delete permanently)
+  deleteAccount: (data) => {
+    return axiosClient.delete('/users/me', { data });
   },
 };
 

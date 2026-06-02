@@ -56,6 +56,25 @@ public class OtpService {
         return otp;
     }
 
+    public String generateAndStoreOtp(String email, String purpose) {
+        email = normalize(email);
+
+        String otp = hashUtil.generateRandomCode(6);
+        String hashed = hashUtil.hashPassword(otp);
+
+        String key = buildKey(email, purpose);
+        String attemptsKey = buildAttemptsKey(email, purpose);
+
+        // Save OTP in memory
+        otpStore.put(key, new InMemoryOtpEntry(hashed, expiresAtMillis(purpose)));
+
+        // Reset attempts
+        attemptsStore.remove(attemptsKey);
+
+        log.info("OTP generated and stored for {} with purpose {}", email, purpose);
+        return otp;
+    }
+
     /**
      * Verify OTP
      */

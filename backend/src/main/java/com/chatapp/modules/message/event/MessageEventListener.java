@@ -22,6 +22,7 @@ public class MessageEventListener {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final ConversationRepository conversationRepository;
+    private final com.chatapp.modules.contact.repository.FriendshipRepository friendshipRepository;
 
     @EventListener
     public void handleMessageEvent(MessageEvent event) {
@@ -73,6 +74,25 @@ public class MessageEventListener {
                     if (!user2.equals("shop-expert-ai-bot")) targetUserIds.add(user2);
                     log.debug("Ensured SINGLE chat participants are in target list: {} and {}", user1, user2);
                 }
+            }
+
+            // Filter out users who have blocked the sender of this event
+            String senderId = null;
+            Object eventPayload = event.getPayload();
+            if (eventPayload instanceof com.chatapp.modules.message.domain.Message) {
+                senderId = ((com.chatapp.modules.message.domain.Message) eventPayload).getSenderId();
+            } else if (eventPayload instanceof java.util.Map) {
+                senderId = (String) ((java.util.Map<?, ?>) eventPayload).get("userId");
+                if (senderId == null) {
+                    senderId = (String) ((java.util.Map<?, ?>) eventPayload).get("senderId");
+                }
+            }
+
+            if (senderId != null) {
+                final String finalSenderId = senderId;
+                targetUserIds.removeIf(memberId -> friendshipRepository.find(memberId, finalSenderId)
+                        .map(f -> "BLOCKED".equals(f.getStatus()))
+                        .orElse(false));
             }
 
             // 3. Broadcast to all target users

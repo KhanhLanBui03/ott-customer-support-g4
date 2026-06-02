@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
 import MessageModal from '../../../src/components/MessageModal';
-import { fetchMessages, fetchConversationDetail, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
+import { fetchMessages, fetchConversationDetail, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage, updateMemberFriendshipStatus } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi, chatApi } from '../../../src/api/chatApi';
 import { friendApi } from '../../../src/api/friendApi';
@@ -451,17 +451,34 @@ const ChatDetailScreen = () => {
     return localFriendship?.isRequester !== undefined ? localFriendship.isRequester : otherMember?.isRequester;
   }, [localFriendship, otherMember]);
 
+  // When Redux friendshipStatus changes from another screen (e.g. chat-info block/unblock),
+  // reset localFriendship so it doesn't override the new Redux value
+  const prevReduxFriendshipRef = React.useRef(otherMember?.friendshipStatus);
+  useEffect(() => {
+    const newReduxStatus = otherMember?.friendshipStatus;
+    if (newReduxStatus !== prevReduxFriendshipRef.current) {
+      prevReduxFriendshipRef.current = newReduxStatus;
+      // Clear localFriendship so Redux takes over
+      setLocalFriendship(null);
+    }
+  }, [otherMember?.friendshipStatus]);
+
+  const isBlockedByOther = useMemo(() => {
+    return friendshipStatus === 'BLOCKED' && isRequester === false;
+  }, [friendshipStatus, isRequester]);
+
   const otherAvatar = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.avatarUrl || conversation.avatar;
     return otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic || paramAvatar;
   }, [conversation, otherMember, paramAvatar]);
 
   const isOnline = useMemo(() => {
-    if (conversation?.type === 'GROUP') return false;
+    if (conversation?.type === 'GROUP' || isBlockedByOther) return false;
     return String(otherMember?.status || '').toUpperCase() === 'ONLINE' || otherMember?.isOnline === true;
-  }, [conversation, otherMember]);
+  }, [conversation, otherMember, isBlockedByOther]);
 
   const onlineUsers = useMemo(() => {
+    if (isBlockedByOther) return [];
     const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
     return (conversation?.members || [])
       .filter(member => {
@@ -470,7 +487,7 @@ const ChatDetailScreen = () => {
           (String(member.status || member.presence || '').toUpperCase() === 'ONLINE' || member.isOnline === true);
       })
       .map(member => String(member.userId || member.id || ''));
-  }, [conversation, currentUser]);
+  }, [conversation, currentUser, isBlockedByOther]);
 
   const showStrangerBar = useMemo(() => {
     if (isAI) return false;
@@ -536,6 +553,27 @@ const ChatDetailScreen = () => {
     } catch (err) {
       console.error("Failed to reject friend request:", err);
       Alert.alert("Lỗi", "Không thể từ chối kết bạn. Vui lòng thử lại.");
+    }
+  };
+
+  const handleUnblock = async () => {
+    const targetUserId = otherMember?.userId || otherMember?.id;
+    if (!targetUserId) return;
+    try {
+      await friendApi.unblockUser(targetUserId);
+      // 1. Update Redux store immediately so chat-info screen also reflects the change
+      dispatch(updateMemberFriendshipStatus({
+        userId: String(targetUserId),
+        friendshipStatus: 'NONE',
+        isRequester: null,
+      }));
+      // 2. Update local state as well (for immediate UI in this screen)
+      setLocalFriendship({ status: 'NONE', isRequester: null });
+      // 3. Refresh conversation list in background
+      dispatch(fetchConversations());
+    } catch (err) {
+      console.error("Failed to unblock user:", err);
+      Alert.alert("Lỗi", "Không thể bỏ chặn người dùng. Vui lòng thử lại.");
     }
   };
 
@@ -926,6 +964,7 @@ const ChatDetailScreen = () => {
                   onLongPress={handleLongPressMessage}
                   onPressReply={handleScrollToMessage}
                   highlightedMessageId={highlightedMessageId}
+                  isBlockedByOther={isBlockedByOther}
                 />
               </ImageBackground>
             </View>
@@ -946,17 +985,43 @@ const ChatDetailScreen = () => {
               onLongPress={handleLongPressMessage}
               onPressReply={handleScrollToMessage}
               highlightedMessageId={highlightedMessageId}
+              isBlockedByOther={isBlockedByOther}
             />
           )}
         </View>
 
-        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.background }}>
+        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.background, paddingHorizontal: 16 }}>
           {isRestricted ? (
             <View style={[styles.restrictedContainer, { backgroundColor: isDark ? colors.surface100 : '#f8fafc', borderTopColor: colors.border }]}>
               <MaterialIcons name="lock-outline" size={20} color={colors.textMuted} />
               <Text style={[styles.restrictedText, { color: colors.textMuted }]}>Chỉ quản trị viên mới có thể gửi tin nhắn</Text>
             </View>
-
+          ) : (friendshipStatus === 'BLOCKED' && isRequester === true) ? (
+            <View style={[
+              styles.blockedContainer,
+              { 
+                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.15)'
+              }
+            ]}>
+              <View style={styles.blockedHeader}>
+                <View style={[styles.shieldIconCircle, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                  <MaterialCommunityIcons name="shield-alert-outline" size={24} color="#ef4444" />
+                </View>
+                <View style={styles.blockedTextGroup}>
+                  <Text style={[styles.blockedTitle, { color: colors.foreground }]}>Không thể gửi tin nhắn</Text>
+                  <Text style={[styles.blockedSubtitle, { color: colors.textMuted }]}>
+                    Bạn đã chặn tài khoản này. Hãy bỏ chặn để tiếp tục trò chuyện.
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.unblockButton}
+                onPress={handleUnblock}
+              >
+                <Text style={styles.unblockButtonText}>BỎ CHẶN</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <MessageInput
               ref={messageInputRef}
@@ -964,8 +1029,6 @@ const ChatDetailScreen = () => {
               members={conversation?.members || []}
               onSendMessage={handleSendMessage}
               onOpenPoll={handleOpenPoll}
-
-
               onTypingChange={(isTyping) => {
                 if (isTyping) {
                   sendTypingStart(realId);
@@ -1311,6 +1374,56 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  blockedContainer: {
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 12,
+    marginVertical: 8,
+  },
+  blockedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  shieldIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockedTextGroup: {
+    flex: 1,
+  },
+  blockedTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  blockedSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  unblockButton: {
+    backgroundColor: '#ef4444',
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  unblockButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1.5,
   },
 });
 

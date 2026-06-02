@@ -33,6 +33,7 @@ const LoginScreen = () => {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [lockedAt, setLockedAt] = useState(null);
   const [focusedInput, setFocusedInput] = useState(''); // '' or 'email' or 'password'
+  const [deletionDate, setDeletionDate] = useState(null);
 
   // Clear errors when entering page
   useEffect(() => {
@@ -42,23 +43,43 @@ const LoginScreen = () => {
   // Handle system error messages
   useEffect(() => {
     if (authError) {
-      const isLocked = (typeof authError === 'object' && authError.code === 'ACCOUNT_LOCKED') || 
-                      (typeof authError === 'string' && authError.includes('trạng thái chờ xóa'));
+      const errorObj = typeof authError === 'object' ? (authError.error || authError) : null;
+      const errorMessage = typeof authError === 'object'
+        ? (authError.message || authError.error?.message || 'Đăng nhập thất bại')
+        : authError;
+
+      const isLocked = (errorObj?.code === 'ACCOUNT_LOCKED') ||
+                      (errorMessage && typeof errorMessage === 'string' && errorMessage.includes('trạng thái chờ xóa'));
 
       if (isLocked) {
-        const lockTime = authError.metadata?.lockedAt || new Date().toISOString();
+        const lockType = errorObj?.metadata?.lockType || authError.metadata?.lockType;
+
+        // Tài khoản bị Admin khóa do vi phạm → Hiển thị thông báo lỗi inline
+        if (lockType === 'ADMIN_LOCK') {
+          const adminMsg = errorObj?.message || authError.message || 'Tài khoản của bạn đã bị khóa do vi phạm chính sách cộng đồng.';
+          setLocalError(adminMsg);
+          return;
+        }
+
+        // Người dùng tự xóa tài khoản → Hiển thị modal khôi phục
+        const lockTime = errorObj?.metadata?.lockedAt || authError.metadata?.lockedAt || new Date().toISOString();
+        const deleteTime = errorObj?.metadata?.deletionDate || authError.metadata?.deletionDate || null;
         setLockedAt(lockTime);
+        setDeletionDate(deleteTime);
         setShowRestoreModal(true);
         setLocalError('');
         return;
       }
 
-      if (authError === 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.') {
-        setLocalError(authError);
-      } else if (authError.includes('Invalid credentials') || authError.includes('401')) {
+      // Nếu là lỗi hết hạn phiên, hiển thị trực tiếp
+      if (errorMessage === 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.') {
+        setLocalError(errorMessage);
+      }
+      // Việt hóa lỗi đăng nhập thất bại phổ biến
+      else if (errorMessage && (errorMessage.includes('Invalid credentials') || errorMessage.includes('401'))) {
         setLocalError('Email hoặc mật khẩu không chính xác');
       } else {
-        setLocalError(authError);
+        setLocalError(errorMessage);
       }
     }
   }, [authError]);
@@ -100,8 +121,8 @@ const LoginScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -122,15 +143,15 @@ const LoginScreen = () => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Gmail</Text>
               <View style={[
-                styles.inputWrapper, 
+                styles.inputWrapper,
                 localError ? styles.inputErrorBorder : null,
                 focusedInput === 'email' ? styles.inputActiveBorder : null
               ]}>
-                <MaterialCommunityIcons 
-                  name="email-outline" 
-                  size={20} 
-                  color={focusedInput === 'email' ? '#6366f1' : '#64748b'} 
-                  style={styles.inputIcon} 
+                <MaterialCommunityIcons
+                  name="email-outline"
+                  size={20}
+                  color={focusedInput === 'email' ? '#6366f1' : '#64748b'}
+                  style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
@@ -154,15 +175,15 @@ const LoginScreen = () => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Mật khẩu</Text>
               <View style={[
-                styles.inputWrapper, 
+                styles.inputWrapper,
                 localError ? styles.inputErrorBorder : null,
                 focusedInput === 'password' ? styles.inputActiveBorder : null
               ]}>
-                <MaterialCommunityIcons 
-                  name="lock-outline" 
-                  size={20} 
-                  color={focusedInput === 'password' ? '#6366f1' : '#64748b'} 
-                  style={styles.inputIcon} 
+                <MaterialCommunityIcons
+                  name="lock-outline"
+                  size={20}
+                  color={focusedInput === 'password' ? '#6366f1' : '#64748b'}
+                  style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
@@ -236,81 +257,86 @@ const LoginScreen = () => {
         visible={showRestoreModal}
         email={email}
         lockedAt={lockedAt}
+        deletionDate={deletionDate}
         onClose={() => setShowRestoreModal(false)}
+        onRestoreSuccess={() => {
+          setShowRestoreModal(false);
+          handleLogin();
+        }}
       />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#0c0714', 
-    position: 'relative' 
+  container: {
+    flex: 1,
+    backgroundColor: '#0c0714',
+    position: 'relative'
   },
-  scrollContent: { 
-    flexGrow: 1, 
-    paddingHorizontal: 20, 
-    paddingVertical: 32, 
-    justifyContent: 'center' 
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 32,
+    justifyContent: 'center'
   },
   glow1: {
-    width: 300, 
-    height: 300, 
-    borderRadius: 150, 
-    backgroundColor: '#7c3aed', 
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: '#7c3aed',
     opacity: 0.12,
-    position: 'absolute', 
-    top: -50, 
+    position: 'absolute',
+    top: -50,
     right: -50,
   },
   glow2: {
-    width: 300, 
-    height: 300, 
-    borderRadius: 150, 
-    backgroundColor: '#4f46e5', 
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: '#4f46e5',
     opacity: 0.1,
-    position: 'absolute', 
-    bottom: -50, 
+    position: 'absolute',
+    bottom: -50,
     left: -50,
   },
-  header: { 
-    alignItems: 'center', 
-    marginBottom: 32 
+  header: {
+    alignItems: 'center',
+    marginBottom: 32
   },
   logoContainer: {
-    width: 80, 
-    height: 80, 
-    backgroundColor: 'rgba(255, 255, 255, 0.03)', 
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 24,
-    justifyContent: 'center', 
-    alignItems: 'center', 
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
-    borderWidth: 1, 
+    borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  appName: { 
-    fontSize: 32, 
-    fontWeight: '900', 
-    color: '#ffffff', 
-    marginBottom: 8, 
-    letterSpacing: -0.5 
+  appName: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#ffffff',
+    marginBottom: 8,
+    letterSpacing: -0.5
   },
-  appNameHighlight: { 
-    color: '#6366f1' 
+  appNameHighlight: {
+    color: '#6366f1'
   },
-  subtitle: { 
-    fontSize: 14, 
-    color: '#94a3b8', 
-    textAlign: 'center', 
-    fontWeight: '500' 
+  subtitle: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    fontWeight: '500'
   },
-  form: { 
+  form: {
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderWidth: 1, 
-    borderColor: 'rgba(255, 255, 255, 0.06)', 
-    borderRadius: 32, 
-    padding: 24, 
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 32,
+    padding: 24,
     paddingBottom: 28,
     gap: 20,
     shadowColor: '#000',
@@ -319,112 +345,112 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 5,
   },
-  inputGroup: { 
-    gap: 8 
+  inputGroup: {
+    gap: 8
   },
-  label: { 
-    fontSize: 12, 
-    fontWeight: '700', 
-    color: '#94a3b8', 
-    marginLeft: 4, 
-    textTransform: 'uppercase', 
-    letterSpacing: 1 
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1
   },
   inputWrapper: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(22, 15, 38, 0.3)',
-    borderWidth: 1, 
-    borderColor: 'rgba(255, 255, 255, 0.08)', 
-    borderRadius: 18, 
-    paddingHorizontal: 16, 
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 18,
+    paddingHorizontal: 16,
     height: 56,
   },
-  inputActiveBorder: { 
-    borderColor: 'rgba(99, 102, 241, 0.5)', 
-    backgroundColor: 'rgba(22, 15, 38, 0.5)' 
+  inputActiveBorder: {
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+    backgroundColor: 'rgba(22, 15, 38, 0.5)'
   },
-  inputErrorBorder: { 
-    borderColor: '#ef4444', 
-    backgroundColor: 'rgba(239, 68, 68, 0.02)' 
+  inputErrorBorder: {
+    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.02)'
   },
-  inputIcon: { 
-    marginRight: 12 
+  inputIcon: {
+    marginRight: 12
   },
-  input: { 
-    flex: 1, 
-    fontSize: 15, 
+  input: {
+    flex: 1,
+    fontSize: 15,
     color: '#f8fafc',
     paddingVertical: 0
   },
-  toggleButton: { 
-    padding: 4 
+  toggleButton: {
+    padding: 4
   },
   errorContainer: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 8, 
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    padding: 14, 
-    borderRadius: 16, 
-    borderWidth: 1, 
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.15)',
   },
-  errorText: { 
-    color: '#ef4444', 
-    fontSize: 13, 
+  errorText: {
+    color: '#ef4444',
+    fontSize: 13,
     fontWeight: '600',
     flex: 1
   },
   loginButton: {
-    height: 56, 
-    backgroundColor: '#ffffff', 
+    height: 56,
+    backgroundColor: '#ffffff',
     borderRadius: 28,
-    alignItems: 'center', 
-    justifyContent: 'center', 
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#ffffff', 
+    shadowColor: '#ffffff',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, 
-    shadowRadius: 8, 
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 4,
   },
-  loginButtonDisabled: { 
-    backgroundColor: 'rgba(255, 255, 255, 0.4)', 
-    elevation: 0 
+  loginButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    elevation: 0
   },
-  loginButtonText: { 
-    color: '#0c0714', 
-    fontSize: 15, 
-    fontWeight: '800', 
-    letterSpacing: 1 
+  loginButtonText: {
+    color: '#0c0714',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 1
   },
-  forgotPasswordButton: { 
-    alignItems: 'center', 
-    paddingVertical: 8 
+  forgotPasswordButton: {
+    alignItems: 'center',
+    paddingVertical: 8
   },
-  forgotPasswordText: { 
-    color: '#818cf8', 
-    fontSize: 13, 
+  forgotPasswordText: {
+    color: '#818cf8',
+    fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
-  footer: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    gap: 6, 
-    marginTop: 20 
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 20
   },
-  footerText: { 
-    fontSize: 14, 
-    color: '#64748b' 
+  footerText: {
+    fontSize: 14,
+    color: '#64748b'
   },
-  registerLink: { 
-    fontSize: 14, 
-    fontWeight: '700', 
-    color: '#818cf8' 
+  registerLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#818cf8'
   },
 });
 

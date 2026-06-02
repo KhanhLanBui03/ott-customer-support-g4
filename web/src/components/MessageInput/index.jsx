@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { Send, Smile, Paperclip, X, Loader2, Sticker, Search, Image as ImageIconLucide, BarChart2, ShieldAlert, FileText, Stars as SparklesIcon, Mic, Square, Video } from 'lucide-react';
 import { chatApi } from '../../api/chatApi';
+import { friendApi } from '../../api/friendApi';
 import { notificationApi } from '../../api/notificationApi';
 import { useChat } from '../../hooks/useChat';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
@@ -26,7 +27,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
   const { sendMessage, sendTyping } = useWebSocket();
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
-  const { conversations, friends, messages } = useChat();
+  const { conversations, friends, messages, fetchFriends, fetchConversations } = useChat();
   const { isRecording, durationFormatted, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
   const fileInputRef = useRef();
   const imageInputRef = useRef();
@@ -632,6 +633,22 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleUnblock = async (otherMemberId) => {
+    if (!otherMemberId) return;
+    try {
+      await friendApi.unblockUser(otherMemberId);
+      if (typeof fetchFriends === 'function') {
+        await fetchFriends();
+      }
+      if (typeof fetchConversations === 'function') {
+        await fetchConversations();
+      }
+    } catch (err) {
+      console.error("Unblock failed from input bar:", err);
+      alert(t('info.unblock_failed') || "Không thể bỏ chặn người dùng này.");
+    }
+  };
+
   // Check for blocks or restrictions
   const renderInputArea = () => {
     const currentConv = conversations.find(c => c.conversationId === conversationId) || (
@@ -651,21 +668,42 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
         return mId !== '' && mId !== uId;
       });
 
-      const isBlocked = Array.isArray(friends) && friends.some(f => {
+      const friendRecord = Array.isArray(friends) && friends.find(f => {
         const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
         const mId = String(otherMember?.userId || otherMember?.id || '').toLowerCase();
         return fId !== '' && fId === mId && f.status === 'BLOCKED';
       });
 
-      if (isBlocked) {
-        return (
-          <div className="flex items-center justify-center space-x-3 p-4 bg-red-50/50 dark:bg-red-500/5 rounded-[32px] border border-red-500/10 animate-pulse">
-            <ShieldAlert className="text-red-500" size={20} />
-            <span className="text-sm font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
-              {t('chat.cannot_send_message')}
-            </span>
-          </div>
-        );
+      if (friendRecord) {
+        if (friendRecord.isRequester) {
+          // Blocker: Show warning banner with a red "Bỏ chặn" (Unblock) button
+          return (
+            <div className="flex items-center justify-between p-3.5 pl-5 pr-4 rounded-[32px] bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border border-red-500/20 dark:border-red-500/10 shadow-2xl relative z-10 transition-all duration-300">
+              <div className="flex items-center space-x-4 flex-1">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 dark:bg-red-500/20 text-red-500 flex items-center justify-center shadow-lg shadow-red-500/10 shrink-0">
+                  <ShieldAlert size={22} className="animate-pulse" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 tracking-tight leading-tight">
+                    Không thể gửi tin nhắn
+                  </p>
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                    Bạn đã chặn tài khoản này. Hãy bỏ chặn để tiếp tục trò chuyện.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleUnblock(otherMember?.userId || otherMember?.id)}
+                className="px-6 py-3.5 bg-red-600 hover:bg-red-700 hover:scale-[1.03] active:scale-95 text-white text-[11px] font-black uppercase tracking-[0.15em] rounded-[18px] transition-all shadow-lg shadow-red-600/25 shrink-0 ml-4"
+              >
+                Bỏ chặn
+              </button>
+            </div>
+          );
+        } else {
+          // Blocked user: Shadow block. Do not show warning banner, let them type and send!
+        }
       }
     }
 

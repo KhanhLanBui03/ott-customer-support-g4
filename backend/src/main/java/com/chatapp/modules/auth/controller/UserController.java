@@ -9,6 +9,8 @@ import com.chatapp.modules.auth.service.SessionService;
 import com.chatapp.common.util.ValidationUtil;
 import com.chatapp.modules.conversation.repository.ConversationRepository;
 import com.chatapp.modules.conversation.repository.UserConversationRepository;
+import com.chatapp.modules.admin.domain.AdminSystemLog;
+import com.chatapp.modules.admin.repository.AdminSystemLogRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -182,6 +184,9 @@ public class UserController {
     @org.springframework.beans.factory.annotation.Autowired
     private SessionService sessionService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private AdminSystemLogRepository logRepository;
+
     private String getUserId(jakarta.servlet.http.HttpServletRequest request) {
         
         String authHeader = request.getHeader("Authorization");
@@ -258,24 +263,114 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(data, "User found"));
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatapp.common.util.HashUtil hashUtil;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatapp.modules.auth.service.EmailService emailService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatapp.modules.auth.service.UserAnonymizationService userAnonymizationService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatapp.modules.auth.service.OtpService otpService;
+
     @DeleteMapping("/me")
-    public ResponseEntity<ApiResponse<String>> deleteAccount(Authentication authentication) {
+    public ResponseEntity<ApiResponse<String>> deleteAccount(
+            Authentication authentication,
+            @Valid @RequestBody com.chatapp.modules.auth.dto.request.DeleteAccountRequest request
+    ) {
         String userId = getAuthUserId(authentication);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ValidationException("User not found"));
 
-        user.setStatus("LOCKED");
-        user.setUpdatedAt(System.currentTimeMillis());
-        userRepository.save(user);
+        // Verify password
+        if (!hashUtil.verifyPassword(request.getPassword(), user.getPasswordHash())) {
+            throw new ValidationException("Mật khẩu không chính xác.");
+        }
 
-        // Invalidate all user sessions to force logout on all devices
-        sessionService.invalidateAllUserSessions(userId);
+        if ("HARD".equalsIgnoreCase(request.getDeleteType())) {
+            // Check if OTP code is provided
+            if (request.getOtpCode() == null || request.getOtpCode().trim().isEmpty()) {
+                if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
+                    throw new ValidationException("Tài khoản của bạn chưa cập nhật Email nên không thể nhận mã OTP để xóa vĩnh viễn.");
+                }
 
-        System.out.println("=================================================");
-        System.out.println("USER STATUS CHANGED: User " + userId + " is now " + user.getStatus());
-        System.out.println("=================================================");
+                // Generate and store OTP in memory
+                String otp = otpService.generateAndStoreOtp(user.getEmail(), "DELETE_ACCOUNT");
 
-        return ResponseEntity.ok(ApiResponse.success("Account locked successfully", "Account will be deleted after 30 days"));
+                // Send custom email warning containing the OTP
+                try {
+                    emailService.sendDeleteAccountOtp(user.getEmail(), otp);
+                } catch (Exception e) {
+                    System.err.println("Gửi mail OTP xóa tài khoản thất bại: " + e.getMessage());
+                    throw new ValidationException("Không thể gửi mã OTP tới email của bạn lúc này. Vui lòng thử lại sau.");
+                }
+
+                return ResponseEntity.ok(ApiResponse.success("OTP_REQUIRED", "Mã xác thực đã được gửi tới email của bạn. Vui lòng nhập OTP để hoàn tất."));
+            }
+
+            // Verify OTP code
+            boolean isOtpValid = otpService.verifyOtp(user.getEmail(), request.getOtpCode().trim(), "DELETE_ACCOUNT");
+            if (!isOtpValid) {
+                throw new ValidationException("Mã OTP xác thực không hợp lệ hoặc đã hết hạn.");
+            }
+
+            // Hard Delete: Anonymize immediately
+            userAnonymizationService.anonymizeUser(user);
+
+            // Invalidate all sessions
+            sessionService.invalidateAllUserSessions(userId);
+
+            // Save Admin System Log
+            AdminSystemLog log = AdminSystemLog.builder()
+                    .actionType("USER_HARD_DELETED")
+                    .description("Tài khoản \"" + user.getFullName() + "\" đã bị xóa vĩnh viễn và ẩn danh hóa (phía người dùng).")
+                    .targetId(userId)
+                    .targetName(user.getFullName())
+                    .createdAt(System.currentTimeMillis())
+                    .build();
+            logRepository.save(log);
+
+            return ResponseEntity.ok(ApiResponse.success("Account deleted permanently", "Your account has been deleted immediately."));
+
+        } else if ("SOFT".equalsIgnoreCase(request.getDeleteType())) {
+            // Soft Delete: Lock for 30 days
+            long deletionTime = System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000);
+            user.setStatus("LOCKED");
+            user.setDeletionDate(deletionTime);
+            user.setUpdatedAt(System.currentTimeMillis());
+            userRepository.save(user);
+
+            // Invalidate all sessions
+            sessionService.invalidateAllUserSessions(userId);
+
+            // Gửi email thông báo
+            if (user.getEmail() != null && !user.getEmail().isEmpty()) {
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+                String dateStr = sdf.format(new java.util.Date(deletionTime));
+                String restoreLink = "http://localhost:5173/quick-restore?email=" + user.getEmail();
+                try {
+                    emailService.sendDeletionNotice(user.getEmail(), dateStr, restoreLink);
+                } catch (Exception e) {
+                    System.err.println("Gửi mail thông báo xóa tài khoản thất bại: " + e.getMessage());
+                }
+            }
+
+            // Save Admin System Log
+            AdminSystemLog log = AdminSystemLog.builder()
+                    .actionType("USER_LOCKED")
+                    .description("Tài khoản \"" + user.getFullName() + "\" vừa tự khóa tài khoản chờ xóa sau 30 ngày.")
+                    .targetId(userId)
+                    .targetName(user.getFullName())
+                    .createdAt(System.currentTimeMillis())
+                    .build();
+            logRepository.save(log);
+
+            return ResponseEntity.ok(ApiResponse.success("Account locked successfully", "Account will be deleted after 30 days"));
+        } else {
+            throw new ValidationException("Loại yêu cầu xóa không hợp lệ (SOFT hoặc HARD).");
+        }
     }
 
     private String getAuthUserId(Authentication authentication) {

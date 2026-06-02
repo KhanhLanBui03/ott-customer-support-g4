@@ -5,7 +5,7 @@ export const userApi = {
   updateProfile: (data) => axiosClient.put('/users/me', data),
   syncContacts: (phoneNumbers) => axiosClient.post('/users/sync-contacts', { phoneNumbers }),
   getUserById: (id) => axiosClient.get(`/users/${id}`),
-  deleteAccount: () => axiosClient.delete('/users/me'),
+  deleteAccount: (data) => axiosClient.delete('/users/me', { data }),
 };
 
 export default userApi;

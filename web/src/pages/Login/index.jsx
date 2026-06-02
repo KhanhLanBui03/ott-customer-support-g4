@@ -15,6 +15,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [lockedAt, setLockedAt] = useState(null);
+  const [deletionDate, setDeletionDate] = useState(null);
   const [loginMode, setLoginMode] = useState('password'); // 'password' or 'qr'
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
@@ -38,20 +39,32 @@ const Login = () => {
     e.preventDefault();
     setError('');
     try {
-      await login({ email, password }, { remember: rememberMe });
+      const authData = await login({ email, password }, { remember: rememberMe });
       if (rememberMe) {
         setRememberedEmail(email.trim());
       } else {
         setRememberedEmail('');
       }
-      navigate('/');
+      
+      if (authData.user?.role === 'ADMIN') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       const errorData = err?.response?.data?.error;
       const message = err?.response?.data?.message || t('auth.errors.access_denied');
+      const lockType = errorData?.metadata?.lockType;
 
-      // Handle locked account
       if (errorData?.code === 'ACCOUNT_LOCKED') {
+        // Admin locked the account due to violation
+        if (lockType === 'ADMIN_LOCK') {
+          setError(errorData?.message || 'Tài khoản của bạn đã bị khóa do vi phạm chính sách cộng đồng.');
+          return;
+        }
+        // User-initiated soft delete — show restore modal
         setLockedAt(errorData.metadata?.lockedAt);
+        setDeletionDate(errorData.metadata?.deletionDate);
         setShowRestoreModal(true);
         return;
       }
@@ -193,6 +206,13 @@ const Login = () => {
                 {t('auth.register_link')}
               </Link>
             </p>
+
+            <div className="text-center pt-6">
+              <Link to="/admin/login" className="text-[10px] font-mono font-black text-white/20 uppercase tracking-[0.2em] hover:text-white/50 transition-colors inline-flex items-center gap-2">
+                <Shield size={12} />
+                Dành cho Quản trị viên
+              </Link>
+            </div>
           </>
         ) : (
           <QrLogin onBack={() => setLoginMode('password')} />
@@ -203,6 +223,7 @@ const Login = () => {
         <AccountRestoreModal
           email={email}
           lockedAt={lockedAt}
+          deletionDate={deletionDate}
           onClose={() => setShowRestoreModal(false)}
         />
       )}

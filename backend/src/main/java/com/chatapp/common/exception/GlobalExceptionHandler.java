@@ -137,10 +137,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleAccountLocked(
             LockedAccountException ex, WebRequest request) {
         log.warn("LockedAccountException: {}", ex.getMessage());
+        
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("lockedAt", ex.getLockedAt());
+        metadata.put("lockType", ex.getLockType() != null ? ex.getLockType() : "DELETION");
+        if (ex.getDeletionDate() != null) {
+            metadata.put("deletionDate", ex.getDeletionDate());
+        }
+
         ErrorDTO error = ErrorDTO.builder()
                 .code("ACCOUNT_LOCKED")
                 .message(ex.getMessage())
-                .metadata(Map.of("lockedAt", ex.getLockedAt()))
+                .metadata(metadata)
                 .build();
         ApiResponse<?> response = ApiResponse.error(error, HttpStatus.FORBIDDEN.value());
         response.setPath(request.getDescription(false).replace("uri=", ""));

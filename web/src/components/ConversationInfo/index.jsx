@@ -17,7 +17,7 @@ import { updateConversationWallpaper, updateConversation } from '../../store/cha
 import GroupAvatar from '../GroupAvatar';
 import AIAssistantPanel from '../AIAssistantPanel';
 
-const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox, allChatImages }) => {
+const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox, allChatImages, onReport }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
   const { messages, fetchConversations, inviteMember, removeMember, fetchFriends, friends: allFriends, selectConversation } = useChat();
@@ -1066,6 +1066,20 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         </button>
                       );
                     })()}
+                    
+                    {!conversation.isAI && (
+                      <button 
+                        onClick={onReport}
+                        className="w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-500 hover:border-rose-100 dark:hover:border-rose-500/20 cursor-pointer"
+                      >
+                        <div className="w-11 h-11 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform bg-rose-100/50 dark:bg-rose-500/5 text-rose-500">
+                          <AlertTriangle size={22} />
+                        </div>
+                        <span className="text-[15px] font-black tracking-tight text-foreground">
+                          Báo cáo vi phạm
+                        </span>
+                      </button>
+                    )}
                    
                 </div>
               )}

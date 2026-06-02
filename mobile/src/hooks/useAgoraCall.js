@@ -362,7 +362,8 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                 });
 
                 console.log('📝 [useAgoraCall] Sending final CALL_LOG:', statusStr);
-                chatApi.sendMessage({ conversationId: cid, content, type: 'CALL_LOG' });
+                chatApi.sendMessage({ conversationId: cid, content, type: 'CALL_LOG' })
+                    .catch(err => console.error('❌ [useAgoraCall] Failed to send final log (async):', err));
             } catch (err) {
                 console.error('❌ [useAgoraCall] Failed to send final log:', err);
             }
@@ -595,18 +596,34 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
     const finalizeStartCall = useCallback(async (type, cid, isGroupCall, isJoining, config, receiverInfo) => {
         try {
             if (!isJoining) {
-                emitCallSignal(cid, {
-                    type: 'CALL_INVITE',
-                    callType: type,
-                    isGroup: isGroupCall,
-                    conversationType: isGroupCall ? 'GROUP' : 'SINGLE',
-                    senderAvatar: user?.avatar || user?.avatarUrl,
-                    conversationName: activeConversation?.name,
-                    conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
-                    senderName: myFullName,
-                    inviteTime: getTrueTime(),
-                    agoraConfig: config
-                }, myFullName);
+                let isBlocked = false;
+                if (!isGroupCall && activeConversation) {
+                    const partner = activeConversation.members?.find(m => {
+                        const mid = m.userId || m.id || m._id;
+                        const uid = user?.userId || user?.id || user?._id;
+                        return mid && mid !== 'undefined' && mid !== 'null' && uid && String(mid).trim() !== String(uid).trim();
+                    });
+                    if (partner?.friendshipStatus === 'BLOCKED') {
+                        isBlocked = true;
+                    }
+                }
+
+                if (!isBlocked) {
+                    emitCallSignal(cid, {
+                        type: 'CALL_INVITE',
+                        callType: type,
+                        isGroup: isGroupCall,
+                        conversationType: isGroupCall ? 'GROUP' : 'SINGLE',
+                        senderAvatar: user?.avatar || user?.avatarUrl,
+                        conversationName: activeConversation?.name,
+                        conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
+                        senderName: myFullName,
+                        inviteTime: getTrueTime(),
+                        agoraConfig: config
+                    }, myFullName);
+                } else {
+                    console.log('[Agora] Signal CALL_INVITE suppressed on mobile due to block status.');
+                }
             } else {
                 isInitiatorRef.current = false;
             }

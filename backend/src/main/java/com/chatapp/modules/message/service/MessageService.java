@@ -132,15 +132,18 @@ public class MessageService {
             log.info("Processing message from {} to {}", command.getSenderId(), command.getConversationId());
 
             // Check for block (1-1 chats only)
+            String receiverId = null;
             if (command.getConversationId().startsWith("SINGLE#")) {
                 String[] parts = command.getConversationId().split("#");
                 if (parts.length >= 3) {
                     String userA = parts[1];
                     String userB = parts[2];
-                    if (friendshipService.isBlocked(userA, userB)) {
-                        log.warn("Blocked message attempt: {} and {} have a block relationship", userA, userB);
+                    receiverId = userA.equals(command.getSenderId()) ? userB : userA;
+                    
+                    if (friendshipService.hasBlocked(command.getSenderId(), receiverId)) {
+                        log.warn("Blocked message attempt: Sender {} blocked receiver {}", command.getSenderId(), receiverId);
                         throw new com.chatapp.common.exception.ValidationException(
-                                "Không thể gửi tin nhắn. Người dùng đã bị chặn.");
+                                "Không thể gửi tin nhắn. Bạn đã chặn người này.");
                     }
                 }
             } else {
@@ -176,6 +179,11 @@ public class MessageService {
                     senderName,
                     command.getContent(),
                     type);
+
+            if (receiverId != null && friendshipService.hasBlocked(receiverId, command.getSenderId())) {
+                log.info("Receiver {} has blocked sender {}, hiding message", receiverId, command.getSenderId());
+                message.setHiddenForUsers(List.of(receiverId));
+            }
 
             if (command.getMediaUrls() != null && !command.getMediaUrls().isEmpty()) {
                 message.setMediaUrls(command.getMediaUrls());

@@ -303,6 +303,22 @@ const chatSlice = createSlice({
         }
       });
     },
+    // Update friendshipStatus + isRequester for a member across ALL conversations
+    // Used for optimistic block/unblock so chat screen and chat-info stay in sync
+    updateMemberFriendshipStatus: (state, action) => {
+      const { userId, friendshipStatus, isRequester } = action.payload;
+      if (!userId) return;
+      state.conversations.forEach((conv, idx) => {
+        if (!conv.members) return;
+        const memberIdx = conv.members.findIndex(m => String(m.userId || m.id) === String(userId));
+        if (memberIdx !== -1) {
+          state.conversations[idx].members[memberIdx].friendshipStatus = friendshipStatus;
+          if (isRequester !== undefined) {
+            state.conversations[idx].members[memberIdx].isRequester = isRequester;
+          }
+        }
+      });
+    },
     addMessage: (state, action) => {
       const { conversationId, message, currentUserId } = action.payload;
       if (!message || (!message.content && !message.type)) return;
@@ -632,6 +648,7 @@ export const {
   updateConversationWallpaper,
   markConversationRead,
   updateMemberInfo,
+  updateMemberFriendshipStatus,
   setTyping,
   setUserStatus,
   setMessageRead,

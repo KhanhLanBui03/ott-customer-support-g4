@@ -68,6 +68,9 @@ public class User {
     @DynamoDBAttribute(attributeName = "updatedAt")
     private Long updatedAt;
 
+    @DynamoDBAttribute(attributeName = "deletionDate")
+    private Long deletionDate;
+
     @DynamoDBAttribute(attributeName = "publicKeyRSA")
     private String publicKeyRSA; // For E2E encryption
 
@@ -76,6 +79,18 @@ public class User {
 
     @DynamoDBAttribute(attributeName = "preferredLanguage")
     private String preferredLanguage; // "vie_Latn", "eng_Latn", null = tắt dịch
+
+    @DynamoDBAttribute(attributeName = "role")
+    private String role; // "USER", "ADMIN"
+
+    @DynamoDBAttribute(attributeName = "violationCount")
+    private Integer violationCount;
+
+    @DynamoDBAttribute(attributeName = "lockCount")
+    private Integer lockCount;
+
+    @DynamoDBAttribute(attributeName = "lockUntil")
+    private Long lockUntil;
 
     @DynamoDBIgnore
     private Integer loginFailCount; // This will be in Redis
@@ -91,6 +106,7 @@ public class User {
                 .firstName(firstName)
                 .lastName(lastName)
                 .status("OFFLINE")
+                .role("USER")
                 .isVerified(false)
                 .isActive(true)
                 .createdAt(now)

@@ -28,6 +28,7 @@ const MessageList = React.forwardRef(({
   onPressReply,
   sendReadReceipt,
   highlightedMessageId = null,
+  isBlockedByOther = false,
 }, ref) => {
   const { colors, isDark } = useTheme();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -166,7 +167,8 @@ const MessageList = React.forwardRef(({
   };
 
   const renderMessage = ({ item, index }) => {
-    const otherOnline = onlineUsers.some(id => String(id) !== String(currentUserId || ''));
+    // When blocked by other, treat them as offline to show single checkmark only
+    const otherOnline = !isBlockedByOther && onlineUsers.some(id => String(id) !== String(currentUserId || ''));
     const latestReadBy = getLatestReadBy(item);
 
     // Logic hiển thị trạng thái "Đã gửi/Đã nhận"
