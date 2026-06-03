@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ChatApp",
+    "name": "F5 Chat",
     "slug": "chat-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,14 +9,15 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Cho phép $(PRODUCT_NAME) truy cập camera để nhận diện khuôn mặt bảo vệ quyền riêng tư.",
+        "NSCameraUsageDescription": "Cho phép F5 Chat truy cập camera để nhận diện khuôn mặt bảo vệ quyền riêng tư.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.chatapp"
     },
     "android": {
       "package": "com.chatapp",
-      "usesCleartextTraffic": true,
+      "versionCode": 1,
+      "usesCleartextTraffic": false,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
@@ -40,7 +41,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "adabdfeb-af00-489b-b630-24fe2e656786"
+        "projectId": "8be3f988-3209-4b85-a92f-3ec9bc619268"
       }
     }
   }

@@ -81,7 +81,7 @@ export default function MainLayout() {
       });
     }
     return () => disconnectSocket();
-  }, [accessToken, user?.userId, user?.id, t]);
+  }, [accessToken, user?.userId, user?.id]);
 
   // Global Call Integration
   const {
