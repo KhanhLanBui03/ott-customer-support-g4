@@ -915,9 +915,9 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                    {conversation.type === 'GROUP' && (
                      <button 
                        onClick={handleLeaveGroup}
-                       className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-orange-100 dark:hover:border-orange-500/20"
+                       className="w-full flex items-center space-x-5 px-5 py-4 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:border-orange-100 dark:hover:border-orange-500/20"
                      >
-                        <div className="w-11 h-11 rounded-2xl bg-orange-100/50 dark:bg-orange-500/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <div className="w-11 h-11 rounded-2xl bg-orange-100/50 dark:bg-orange-500/20 flex items-center justify-center group-hover:scale-110 transition-transform text-orange-600 dark:text-orange-400">
                            <LogOut size={22} />
                         </div>
                         <span className="text-[15px] font-black tracking-tight text-foreground">{t('info.leave_group')}</span>
@@ -929,13 +929,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                        disabled={!isOwner}
                        className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all border border-transparent ${
                          isOwner 
-                           ? 'hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 group scale-100 hover:scale-[1.02] hover:border-red-100 dark:hover:border-red-500/20 cursor-pointer' 
+                           ? 'hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 group scale-100 hover:scale-[1.02] hover:border-red-100 dark:hover:border-red-500/20 cursor-pointer' 
                            : 'text-foreground/40 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
                        }`}
                      >
                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
                           isOwner 
-                            ? 'bg-red-100/50 dark:bg-red-500/5 group-hover:scale-110 text-red-600' 
+                            ? 'bg-red-100/50 dark:bg-red-500/20 group-hover:scale-110 text-red-600 dark:text-red-400' 
                             : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
                         }`}>
                            <AlertTriangle size={22} />
@@ -952,20 +952,20 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         disabled={!isAdmin}
                         className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all border border-transparent ${
                           isAdmin 
-                            ? 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-indigo-600 group scale-100 hover:scale-[1.02] hover:border-indigo-100 dark:hover:border-indigo-500/20 cursor-pointer' 
+                            ? 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 group scale-100 hover:scale-[1.02] hover:border-indigo-100 dark:hover:border-indigo-500/20 cursor-pointer' 
                             : 'text-foreground/40 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
                         }`}
                      >
                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
                           isAdmin 
-                            ? 'bg-indigo-100/50 dark:bg-indigo-500/5 group-hover:scale-110 text-indigo-600' 
+                            ? 'bg-indigo-100/50 dark:bg-indigo-500/20 group-hover:scale-110 text-indigo-600 dark:text-indigo-400' 
                             : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
                         }`}>
                            <MessageSquareLock size={22} />
                         </div>
                         <div className="flex flex-col items-start text-left flex-1">
-                          <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.chat_restriction')}</span>
-                          <span className="text-[10px] font-bold opacity-70 mt-0.5">
+                          <span className="text-[15px] font-black tracking-tight text-foreground">{t('info.chat_restriction')}</span>
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
                             {isRestrictedLocal ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
                           </span>
                         </div>
@@ -980,20 +980,20 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                          disabled={!isAdmin}
                          className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all border border-transparent ${
                            isAdmin 
-                             ? 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-indigo-600 group scale-100 hover:scale-[1.02] hover:border-indigo-100 dark:hover:border-indigo-500/20 cursor-pointer' 
+                             ? 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 group scale-100 hover:scale-[1.02] hover:border-indigo-100 dark:hover:border-indigo-500/20 cursor-pointer' 
                              : 'text-foreground/40 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
                          }`}
                       >
                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
                            isAdmin 
-                             ? 'bg-indigo-100/50 dark:bg-indigo-500/5 group-hover:scale-110 text-indigo-600' 
+                             ? 'bg-indigo-100/50 dark:bg-indigo-500/20 group-hover:scale-110 text-indigo-600 dark:text-indigo-400' 
                              : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
                          }`}>
                             <ShieldCheck size={22} />
                          </div>
                          <div className="flex flex-col items-start text-left flex-1">
-                           <span className="text-[15px] font-black tracking-tight text-inherit">{t('info.member_approval')}</span>
-                           <span className="text-[10px] font-bold opacity-70 mt-0.5">
+                           <span className="text-[15px] font-black tracking-tight text-foreground">{t('info.member_approval')}</span>
+                           <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
                              {isApprovalRequiredLocal ? t('info.enabled') : t('info.disabled')} • {isAdmin ? t('info.admin_can_change') : t('info.admin_permit_only')}
                            </span>
                          </div>
@@ -1051,12 +1051,14 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                           }}
                           className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent ${
                             isBlocked 
-                              ? 'hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 hover:border-emerald-100 dark:hover:border-emerald-500/20' 
-                              : 'hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 hover:border-red-100 dark:hover:border-red-500/20'
+                              ? 'hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:border-emerald-100 dark:hover:border-emerald-500/20' 
+                              : 'hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 dark:text-red-400 hover:border-red-100 dark:hover:border-red-500/20'
                           }`}
                         >
                           <div className={`w-11 h-11 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${
-                            isBlocked ? 'bg-emerald-100/50 dark:bg-emerald-500/5 text-emerald-600' : 'bg-red-100/50 dark:bg-red-500/5 text-red-500'
+                            isBlocked 
+                              ? 'bg-emerald-100/50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+                              : 'bg-red-100/50 dark:bg-red-500/20 text-red-500 dark:text-red-400'
                           }`}>
                               {isBlocked ? <ShieldCheck size={22} /> : <Shield size={22} />}
                           </div>
@@ -1070,9 +1072,9 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                     {!conversation.isAI && (
                       <button 
                         onClick={onReport}
-                        className="w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-500 hover:border-rose-100 dark:hover:border-rose-500/20 cursor-pointer"
+                        className="w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all group scale-100 hover:scale-[1.02] border border-transparent hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-500 dark:text-rose-400 hover:border-rose-100 dark:hover:border-rose-500/20 cursor-pointer"
                       >
-                        <div className="w-11 h-11 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform bg-rose-100/50 dark:bg-rose-500/5 text-rose-500">
+                        <div className="w-11 h-11 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform bg-rose-100/50 dark:bg-rose-500/20 text-rose-500 dark:text-rose-400">
                           <AlertTriangle size={22} />
                         </div>
                         <span className="text-[15px] font-black tracking-tight text-foreground">
