@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import GroupAvatar from '../GroupAvatar';
 import { useTranslation } from 'react-i18next';
+import { translateSystemMessage } from '../../utils/systemMessageTranslator';
 
 const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin, onDelete, onUpdateTag }) => {
   const { t } = useTranslation();
@@ -16,6 +17,11 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
   const getPreviewText = (conv) => {
     const raw = String(conv?.lastMessage || '').trim();
     if (!raw) return '';
+
+    // Handle system messages
+    if (conv?.lastMessageSenderId === 'SYSTEM') {
+      return translateSystemMessage(raw, t);
+    }
 
     // Handle recalled messages
     if (raw === '[Tin nhắn đã bị thu hồi]') return t('sidebar.recalled');

@@ -683,6 +683,21 @@
       "refresh": "Làm mới",
       "clear_all": "Xóa tất cả",
       "clear_all_confirm": "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trên Cloud?"
+    },
+    "system_msg": {
+      "created_group": "{{name}} đã tạo nhóm.",
+      "joined_group": "{{name}} vừa tham gia nhóm.",
+      "changed_avatar": "{{name}} đã thay đổi ảnh đại diện nhóm.",
+      "renamed_group": "{{name}} đã đổi tên nhóm thành \"{{groupName}}\".",
+      "transfer_owner": "Trưởng nhóm đã nhường quyền cho {{name}}.",
+      "left_group": "{{name}} đã rời nhóm.",
+      "removed_member": "{{admin}} đã xóa {{member}} khỏi nhóm.",
+      "promoted_admin": "{{admin}} đã bổ nhiệm {{member}} làm phó nhóm.",
+      "demoted_member": "{{admin}} đã giáng cấp {{member}} làm thành viên.",
+      "chat_restriction_enabled": "{{name}} đã bật chế độ giới hạn người có thể chat.",
+      "chat_restriction_disabled": "{{name}} đã tắt chế độ giới hạn người có thể chat.",
+      "member_approval_enabled": "{{name}} đã bật chế độ kiểm duyệt thành viên mới.",
+      "member_approval_disabled": "{{name}} đã tắt chế độ kiểm duyệt thành viên mới."
     }
   }
 }

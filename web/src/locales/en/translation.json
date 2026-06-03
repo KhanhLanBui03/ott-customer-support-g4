@@ -679,6 +679,21 @@
       "refresh": "Refresh",
       "clear_all": "Clear all",
       "clear_all_confirm": "Are you sure you want to clear all data in Cloud?"
+    },
+    "system_msg": {
+      "created_group": "{{name}} created the group.",
+      "joined_group": "{{name}} joined the group.",
+      "changed_avatar": "{{name}} changed the group avatar.",
+      "renamed_group": "{{name}} renamed the group to \"{{groupName}}\".",
+      "transfer_owner": "The group owner transferred ownership to {{name}}.",
+      "left_group": "{{name}} left the group.",
+      "removed_member": "{{admin}} removed {{member}} from the group.",
+      "promoted_admin": "{{admin}} promoted {{member}} to co-leader.",
+      "demoted_member": "{{admin}} demoted {{member}} to member.",
+      "chat_restriction_enabled": "{{name}} restricted chat to admins only.",
+      "chat_restriction_disabled": "{{name}} allowed everyone to chat.",
+      "member_approval_enabled": "{{name}} enabled new member approval.",
+      "member_approval_disabled": "{{name}} disabled new member approval."
     }
   }
 }

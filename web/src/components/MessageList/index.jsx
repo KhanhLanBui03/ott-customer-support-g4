@@ -42,6 +42,7 @@ import { recallMessage, removeMessage, pinMessageOptimistic, unpinMessageOptimis
 import VoteDetailsModal from '../VoteDetailsModal';
 import { useTheme } from '../../hooks/useTheme';
 import UserInfoModal from '../UserInfoModal';
+import { translateSystemMessage } from '../../utils/systemMessageTranslator';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -1134,7 +1135,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         <div className="flex items-center space-x-2">
                           <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
                           <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/30' : 'text-slate-500'}`}>
-                            {msg.content}
+                            {translateSystemMessage(msg.content, t)}
                           </span>
                           <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-indigo-500/30' : 'bg-slate-400'}`}></span>
                         </div>
