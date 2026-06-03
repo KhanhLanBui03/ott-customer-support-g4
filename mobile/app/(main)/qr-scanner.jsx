@@ -4,11 +4,13 @@ import { Camera, CameraView } from 'expo-camera';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { useSelector } from 'react-redux';
 import CONFIG from '../../src/config';
 
 export default function QrScannerScreen() {
+  const { t } = useTranslation();
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const router = useRouter();
@@ -43,12 +45,21 @@ export default function QrScannerScreen() {
   const handleBarCodeScanned = async ({ type, data }) => {
     setScanned(true);
     
+    if (data && data.startsWith('GROUP_JOIN:')) {
+      const conversationId = data.replace('GROUP_JOIN:', '');
+      router.push({
+        pathname: '/(main)/group-preview',
+        params: { conversationId }
+      });
+      return;
+    }
+    
     // Check if the data is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     
     if (!uuidRegex.test(data)) {
-      Alert.alert('Lỗi', 'Mã QR không hợp lệ', [
-        { text: 'Quét lại', onPress: () => setScanned(false) }
+      Alert.alert(t('common.error'), t('chat.invalid_qr'), [
+        { text: t('chat.scan_again'), onPress: () => setScanned(false) }
       ]);
       return;
     }
@@ -74,8 +85,14 @@ export default function QrScannerScreen() {
       }
     } catch (err) {
       console.log('Error scanning QR:', err);
-      Alert.alert('Lỗi', 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ', [
-        { text: 'OK', onPress: () => router.back() }
+      Alert.alert(t('common.error'), t('auth.errors.session_expired'), [
+        { text: 'OK', onPress: () => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(main)');
+          }
+        }}
       ]);
     }
   };
@@ -86,13 +103,19 @@ export default function QrScannerScreen() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.data.success) {
-        Alert.alert('Thành công', 'Đã xác nhận đăng nhập thành công', [
-          { text: 'OK', onPress: () => router.back() }
+        Alert.alert(t('common.success'), t('auth.qr_login_success'), [
+          { text: 'OK', onPress: () => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(main)');
+            }
+          }}
         ]);
       }
     } catch (err) {
-      const errorMsg = err.response?.data?.message || 'Không thể xác nhận đăng nhập';
-      Alert.alert('Lỗi', errorMsg, [
+      const errorMsg = err.response?.data?.message || t('auth.errors.generic_error');
+      Alert.alert(t('common.error'), errorMsg, [
         { text: 'OK', onPress: () => {
           setShowConfirm(false);
           setScanned(false);
@@ -109,7 +132,11 @@ export default function QrScannerScreen() {
     } catch (err) {
       console.log('Error canceling login:', err);
     }
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(main)');
+    }
   };
 
   if (hasPermission === null) {
@@ -118,9 +145,15 @@ export default function QrScannerScreen() {
   if (hasPermission === false) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: colors.foreground }}>Không có quyền truy cập camera</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Quay lại</Text>
+        <Text style={{ color: colors.foreground }}>{t('chat.no_camera_permission')}</Text>
+        <TouchableOpacity style={styles.button} onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(main)');
+          }
+        }}>
+          <Text style={styles.buttonText}>{t('common.back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -142,7 +175,7 @@ export default function QrScannerScreen() {
 
           {/* Title */}
           <Text style={[styles.confirmTitle, { color: colors.foreground }]}>
-            Đăng nhập Chat app Web bằng mã QR trên thiết bị lạ?
+            {t('auth.qr_confirm_title')}
           </Text>
 
           {/* Warning banner */}
@@ -151,23 +184,23 @@ export default function QrScannerScreen() {
             borderColor: isDark ? '#5c1d24' : '#ffccc7'
           }]}>
             <Text style={[styles.warningText, { color: isDark ? '#ff7875' : '#ff4d4f' }]}>
-              <Text style={{ fontWeight: 'bold' }}>Cảnh báo: </Text>
-              Tài khoản có thể bị chiếm đoạt nếu đây không phải thiết bị của bạn. Bấm <Text style={{ fontWeight: 'bold' }}>Từ chối</Text> nếu ai đó yêu cầu bạn đăng nhập bằng mã QR để bình chọn, trúng thưởng, nhận khuyến mãi...
+              <Text style={{ fontWeight: 'bold' }}>{t('common.warning')}: </Text>
+              {t('auth.qr_warning_desc')} <Text style={{ fontWeight: 'bold' }}>{t('chat.stranger_bar.decline')}</Text> {t('auth.qr_warning_hint')}
             </Text>
           </View>
 
           {/* Details */}
           <View style={styles.detailsList}>
             <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: isDark ? '#aaa' : '#666' }]}>Trình duyệt:</Text>
+              <Text style={[styles.detailLabel, { color: isDark ? '#aaa' : '#666' }]}>{t('common.browser')}:</Text>
               <Text style={[styles.detailValue, { color: colors.foreground }]}>{scannedUserAgent}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: isDark ? '#aaa' : '#666' }]}>Thời gian:</Text>
+              <Text style={[styles.detailLabel, { color: isDark ? '#aaa' : '#666' }]}>{t('common.time')}:</Text>
               <Text style={[styles.detailValue, { color: colors.foreground }]}>{scanTime}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: isDark ? '#aaa' : '#666' }]}>Địa điểm:</Text>
+              <Text style={[styles.detailLabel, { color: isDark ? '#aaa' : '#666' }]}>{t('common.location')}:</Text>
               <Text style={[styles.detailValue, { color: colors.foreground }]}>Hồ Chí Minh, Việt Nam</Text>
             </View>
           </View>
@@ -179,13 +212,13 @@ export default function QrScannerScreen() {
             style={[styles.primaryButton, { backgroundColor: '#007AFF' }]} 
             onPress={handleConfirmLogin}
           >
-            <Text style={styles.primaryButtonText}>Đăng nhập</Text>
+            <Text style={styles.primaryButtonText}>{t('auth.login')}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.secondaryButton, { backgroundColor: isDark ? '#333' : '#f3f4f6' }]} 
             onPress={handleCancelLogin}
           >
-            <Text style={[styles.secondaryButtonText, { color: isDark ? '#fff' : '#1f2937' }]}>Từ chối</Text>
+            <Text style={[styles.secondaryButtonText, { color: isDark ? '#fff' : '#1f2937' }]}>{t('chat.stranger_bar.decline')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -204,10 +237,19 @@ export default function QrScannerScreen() {
       
       <View style={styles.overlay}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(main)');
+              }
+            }}
+            style={styles.backButton}
+          >
             <MaterialCommunityIcons name="arrow-left" size={28} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.title}>Quét mã QR</Text>
+          <Text style={styles.title}>{t('chat.scan_qr')}</Text>
           <View style={{ width: 28 }} />
         </View>
         
@@ -218,7 +260,7 @@ export default function QrScannerScreen() {
             <View style={[styles.corner, styles.bottomLeft]} />
             <View style={[styles.corner, styles.bottomRight]} />
           </View>
-          <Text style={styles.instructions}>Hướng camera vào mã QR trên màn hình web để đăng nhập</Text>
+          <Text style={styles.instructions}>{t('chat.scan_instructions')}</Text>
         </View>
       </View>
     </View>

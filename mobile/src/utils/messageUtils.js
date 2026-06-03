@@ -39,7 +39,7 @@ export const getPreviewText = (lastMessage) => {
     if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
       return '[GIF]';
     }
-    return '[Đính kèm]';
+    return `🔗 ${raw}`;
   }
 
   if (type === 'STICKER') return '[Sticker]';

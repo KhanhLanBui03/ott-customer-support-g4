@@ -13,6 +13,8 @@ import com.chatapp.modules.myclouds.mapper.MyCloudMapper;
 import com.chatapp.modules.myclouds.repository.MyCloudRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.chatapp.modules.message.event.MessageEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,7 +30,11 @@ import java.util.stream.Collectors;
 public class MyCloudService {
     private final ValidationMyCloud validationMyCloud;
     private final MyCloudRepository myCloudRepository;
-    private final SettingUpS3 settingUpS3;
+    private final S3Service s3Service;
+    private final AmazonS3 amazonS3;
+    private final ApplicationEventPublisher eventPublisher;
+
+
     @Value("${aws.s3.bucket}")
     private String bucketName;
     private final MyCloudMapper myCloudMapper;
@@ -92,8 +98,21 @@ public class MyCloudService {
         log.info("Saved MyCloud item: {}", entity.getId());
 
         // 3. Trả về DTO với presigned URL
-        return myCloudMapper.toMyCloudResponse(entity);
+        MyCloudResponse response = toResponse(entity);
 
+        // 4. Phát event WebSocket để đồng bộ tức thời cho các client khác (như web/mobile đang mở song song)
+        try {
+            eventPublisher.publishEvent(MessageEvent.of("MY_CLOUD_UPDATE", "SYSTEM", Map.of(
+                    "userId", userId,
+                    "action", "UPLOAD",
+                    "item", response
+            )));
+            log.info("Published MY_CLOUD_UPDATE UPLOAD event for user: {}", userId);
+        } catch (Exception ex) {
+            log.error("Failed to publish MY_CLOUD_UPDATE event: {}", ex.getMessage());
+        }
+
+        return response;
     }
 
     // ─── Read ────────────────────────────────────────────────────────────────
@@ -142,6 +161,17 @@ public class MyCloudService {
         // (có thể dùng S3 lifecycle policy để dọn sau)
         myCloudRepository.delete(entity);
         log.info("Soft-deleted file: {}", fileId);
+
+        try {
+            eventPublisher.publishEvent(MessageEvent.of("MY_CLOUD_UPDATE", "SYSTEM", Map.of(
+                    "userId", userId,
+                    "action", "DELETE",
+                    "fileId", fileId
+            )));
+            log.info("Published MY_CLOUD_UPDATE DELETE event for file: {} and user: {}", fileId, userId);
+        } catch (Exception ex) {
+            log.error("Failed to publish MY_CLOUD_UPDATE delete event: {}", ex.getMessage());
+        }
     }
 
 }

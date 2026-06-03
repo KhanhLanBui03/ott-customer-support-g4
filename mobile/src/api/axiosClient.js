@@ -12,13 +12,31 @@ const axiosClient = axios.create({
   timeout: 60000, // Tăng lên 60s để hỗ trợ upload nhiều ảnh/file lớn
 });
 
-// Interceptor cho Request: Luôn đính kèm Token mới nhất
+// Interceptor cho Request: Luôn đính kèm Token, Session ID và User ID mới nhất
 axiosClient.interceptors.request.use(
   async (config) => {
     try {
       const token = await SecureStore.getItemAsync('accessToken');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+      
+      const sessionId = await SecureStore.getItemAsync('sessionId');
+      if (sessionId) {
+        config.headers['X-Session-Id'] = sessionId;
+      }
+
+      const userRaw = await SecureStore.getItemAsync('user');
+      if (userRaw) {
+        try {
+          const userObj = JSON.parse(userRaw);
+          const userId = userObj?.userId || userObj?.id;
+          if (userId) {
+            config.headers['X-User-Id'] = userId;
+          }
+        } catch (e) {
+          console.error('Error parsing user object in request interceptor:', e);
+        }
       }
     } catch (error) {
       console.error('Request Interceptor Error:', error);
@@ -73,6 +91,7 @@ axiosClient.interceptors.response.use(
         // Nếu refresh thất bại -> Logout
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
+        await SecureStore.deleteItemAsync('sessionId');
         await SecureStore.deleteItemAsync('user');
         
         if (store && !isUnauthorizedAlertShowing) {
@@ -96,6 +115,7 @@ axiosClient.interceptors.response.use(
     if (error.response?.status === 401) {
        await SecureStore.deleteItemAsync('accessToken');
        await SecureStore.deleteItemAsync('refreshToken');
+       await SecureStore.deleteItemAsync('sessionId');
        await SecureStore.deleteItemAsync('user');
        
        if (store && !isUnauthorizedAlertShowing) {

@@ -361,6 +361,11 @@ public class FriendshipService {
         return f2.isPresent() && Friendship.Status.BLOCKED.name().equals(f2.get().getStatus());
     }
 
+    public boolean hasBlocked(String blockerId, String blockedId) {
+        Optional<Friendship> f = friendshipRepository.find(blockerId, blockedId);
+        return f.isPresent() && Friendship.Status.BLOCKED.name().equals(f.get().getStatus());
+    }
+
     private FriendshipResponse mapToResponse(String friendId, String status, boolean isRequester, Long createdAt) {
         User user = userRepository.findById(friendId).orElse(null);
         if (user == null) return null;

@@ -18,9 +18,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { friendApi } from '../../src/api/friendApi';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 
 const ContactsScreen = () => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const dispatch = useDispatch();
@@ -104,20 +106,21 @@ const ContactsScreen = () => {
 
   const handleUnfriend = (friend) => {
     Alert.alert(
-      'Xác nhận hủy kết bạn',
-      `Bạn có chắc chắn muốn hủy kết bạn với ${friend.fullName || 'người này'}?`,
+      t('friends.unfriend_confirm'),
+      `${t('friends.unfriend_confirm')} ${friend.fullName || friend.name}?`,
       [
-        { text: 'Quay lại', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Hủy kết bạn', 
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await friendApi.unfriend(friend.userId || friend.id);
               setFriends(prev => prev.filter(f => (f.userId || f.id) !== (friend.userId || friend.id)));
-              Alert.alert('Thành công', 'Đã hủy kết bạn.');
+              Alert.alert(t('common.success'), t('common.success'));
+              DeviceEventEmitter.emit('friendship_changed');
             } catch (err) {
-              Alert.alert('Lỗi', 'Không thể thực hiện yêu cầu lúc này.');
+              Alert.alert(t('common.error'), t('common.error'));
             }
           }
         }
@@ -132,8 +135,8 @@ const ContactsScreen = () => {
         style={styles.avatar} 
       />
       <View style={styles.infoContainer}>
-        <Text style={[styles.name, { color: colors.foreground }]}>{item.fullName || item.username || 'Người dùng'}</Text>
-        <Text style={[styles.phone, { color: colors.textMuted }]}>{item.phoneNumber || 'Không có số điện thoại'}</Text>
+        <Text style={[styles.name, { color: colors.foreground }]}>{item.fullName || item.username || t('common.user')}</Text>
+        <Text style={[styles.phone, { color: colors.textMuted }]}>{item.phoneNumber || t('user_info.no_phone')}</Text>
       </View>
       <View style={styles.actions}>
         <TouchableOpacity 
@@ -157,13 +160,13 @@ const ContactsScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Danh sách bạn bè</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('friends.title_list')}</Text>
           <TouchableOpacity 
             style={[styles.requestButton, { backgroundColor: colors.primary }]}
             onPress={() => router.push('/notifications')}
           >
             <MaterialIcons name="notifications" size={18} color="#fff" />
-            <Text style={styles.requestButtonText}>Lời mời</Text>
+            <Text style={styles.requestButtonText}>{t('friends.tabs.requests')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -171,7 +174,7 @@ const ContactsScreen = () => {
           <MaterialIcons name="search" size={20} color={colors.textSubtle} style={styles.searchIcon} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Tìm kiếm bạn bè trong danh sách..."
+            placeholder={t('friends.search_placeholder')}
             placeholderTextColor={colors.textSubtle}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -203,7 +206,7 @@ const ContactsScreen = () => {
             <View style={styles.emptyContainer}>
               <MaterialIcons name="people-outline" size={64} color="#cbd5e1" />
               <Text style={styles.emptyText}>
-                {searchQuery ? 'Không tìm thấy bạn bè nào khớp' : 'Chưa có bạn bè nào trong danh sách'}
+                {searchQuery ? t('friends.no_friends') : t('friends.search_user_hint')}
               </Text>
             </View>
           }

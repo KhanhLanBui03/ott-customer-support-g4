@@ -22,9 +22,11 @@ import { mediaApi } from '../../src/api/mediaApi';
 import { restoreState } from '../../src/store/authSlice';
 import * as SecureStore from 'expo-secure-store';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 
 const EditProfileScreen = () => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const router = useRouter();
 
@@ -44,7 +46,7 @@ const EditProfileScreen = () => {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền truy cập album ảnh.');
+      Alert.alert(t('common.error'), t('profile.avatar_failed'));
       return;
     }
 
@@ -86,7 +88,7 @@ const EditProfileScreen = () => {
       }
     } catch (error) {
       console.error('Upload image failed:', error);
-      Alert.alert('Lỗi', 'Không thể tải ảnh lên máy chủ.');
+      Alert.alert(t('common.error'), t('profile.avatar_failed'));
     } finally {
       setIsUploading(false);
     }
@@ -94,7 +96,7 @@ const EditProfileScreen = () => {
 
   const handleSave = async () => {
     if (!firstName.trim() || !lastName.trim()) {
-      Alert.alert('Lỗi', 'Họ và Tên không được để trống');
+      Alert.alert(t('common.error'), t('auth.errors.generic_error'));
       return;
     }
 
@@ -126,14 +128,19 @@ const EditProfileScreen = () => {
       // Lưu vào máy
       await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
 
-      Alert.alert('Thành công', 'Thông tin hồ sơ đã được cập nhật!', [
-        { text: 'OK', onPress: () => router.push('/profile') }
+      Alert.alert(t('common.success'), t('profile.update_success'), [
+        {
+          text: 'OK',
+          onPress: () => {
+            router.navigate('/(main)/profile');
+          }
+        }
       ]);
     } catch (error) {
       // Bỏ qua log error nếu là 401 vì đã được xử lý toàn cục ở axiosClient
       if (error.response?.status !== 401) {
         console.error('Update Profile Error:', error);
-        Alert.alert('Lỗi', 'Không thể cập nhật hồ sơ. Vui lòng thử lại sau.');
+        Alert.alert(t('common.error'), t('profile.update_failed'));
       }
     } finally {
       setLoading(false);
@@ -144,8 +151,13 @@ const EditProfileScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>HỒ SƠ CỦA BẠN</Text>
-          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.closeButton}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('profile.edit_profile').toUpperCase()}</Text>
+          <TouchableOpacity
+            onPress={() => {
+              router.navigate('/(main)/profile');
+            }}
+            style={styles.closeButton}
+          >
             <Ionicons name="close" size={26} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
@@ -179,23 +191,23 @@ const EditProfileScreen = () => {
           <View style={styles.form}>
             <View style={styles.inputRow}>
               <View style={[styles.inputGroup, { flex: 1, marginRight: 12 }]}>
-                <Text style={[styles.label, { color: colors.textSubtle }]}>HỌ</Text>
-                <TextInput style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} value={lastName} onChangeText={setLastName} placeholder="Họ" placeholderTextColor={colors.textSubtle} />
+                <Text style={[styles.label, { color: colors.textSubtle }]}>{t('profile.last_name').toUpperCase()}</Text>
+                <TextInput style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} value={lastName} onChangeText={setLastName} placeholder={t('profile.last_name')} placeholderTextColor={colors.textSubtle} />
               </View>
               <View style={[styles.inputGroup, { flex: 1.5 }]}>
-                <Text style={[styles.label, { color: colors.textSubtle }]}>TÊN</Text>
-                <TextInput style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} value={firstName} onChangeText={setFirstName} placeholder="Tên" placeholderTextColor={colors.textSubtle} />
+                <Text style={[styles.label, { color: colors.textSubtle }]}>{t('profile.first_name').toUpperCase()}</Text>
+                <TextInput style={[styles.input, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]} value={firstName} onChangeText={setFirstName} placeholder={t('profile.first_name')} placeholderTextColor={colors.textSubtle} />
               </View>
 
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSubtle }]}>TIỂU SỬ</Text>
+              <Text style={[styles.label, { color: colors.textSubtle }]}>{t('profile.bio').toUpperCase()}</Text>
               <TextInput
                 style={[styles.input, styles.textArea, { backgroundColor: colors.input, borderColor: colors.border, color: colors.foreground }]}
                 value={bio}
                 onChangeText={setBio}
-                placeholder="Nhập tiểu sử của bạn..."
+                placeholder={t('profile.bio_placeholder')}
                 placeholderTextColor={colors.textSubtle}
                 multiline
                 numberOfLines={3}
@@ -209,7 +221,7 @@ const EditProfileScreen = () => {
             onPress={handleSave}
             disabled={loading || isUploading}
           >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>LƯU THAY ĐỔI</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{t('profile.save_btn').toUpperCase()}</Text>}
           </TouchableOpacity>
 
         </ScrollView>

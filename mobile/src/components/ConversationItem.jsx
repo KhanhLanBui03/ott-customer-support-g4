@@ -40,7 +40,7 @@ const ConversationItem = ({ conversation, onPress, isActive }) => {
           borderBottomColor: colors.border 
         },
         isActive && { 
-          backgroundColor: isDark ? colors.surface200 : '#f0f2ff',
+          backgroundColor: isDark ? colors.surface200 : 'rgba(99, 102, 241, 0.1)',
           borderLeftColor: colors.primary 
         }
       ]}
@@ -74,14 +74,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderLeftWidth: 3,
     borderLeftColor: 'transparent',
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
 
   active: {
-    backgroundColor: '#f0f2ff',
-    borderLeftColor: '#667eea',
   },
 
   avatar: {
@@ -89,7 +85,6 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     marginRight: 12,
-    backgroundColor: '#e5e7eb',
   },
 
   content: {
@@ -107,19 +102,16 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
     flex: 1,
   },
 
   time: {
     fontSize: 12,
-    color: '#999',
     marginLeft: 8,
   },
 
   preview: {
     fontSize: 13,
-    color: '#666',
     marginTop: 4,
   },
 });

@@ -28,6 +28,10 @@ const MessageList = React.forwardRef(({
   onPressReply,
   sendReadReceipt,
   highlightedMessageId = null,
+  isBlockedByOther = false,
+  translatedMessages = {},
+  translationLoading = {},
+  onTranslate,
 }, ref) => {
   const { colors, isDark } = useTheme();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -166,7 +170,8 @@ const MessageList = React.forwardRef(({
   };
 
   const renderMessage = ({ item, index }) => {
-    const otherOnline = onlineUsers.some(id => String(id) !== String(currentUserId || ''));
+    // When blocked by other, treat them as offline to show single checkmark only
+    const otherOnline = !isBlockedByOther && onlineUsers.some(id => String(id) !== String(currentUserId || ''));
     const latestReadBy = getLatestReadBy(item);
 
     // Logic hiển thị trạng thái "Đã gửi/Đã nhận"
@@ -229,6 +234,9 @@ const MessageList = React.forwardRef(({
           isHighlighted={highlightedMessageId === (item.messageId || item.id)}
           allMessages={messages}
           members={members}
+          translatedMessages={translatedMessages}
+          translationLoading={translationLoading}
+          onTranslate={onTranslate}
         />
 
       </View>
@@ -363,7 +371,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#667eea',
   },
   typingContainer: {
     paddingLeft: 48,
@@ -374,7 +381,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#f3f4f6',
     borderRadius: 20,
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
@@ -394,12 +400,10 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#9ca3af',
   },
   typingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6b7280',
   },
   dateSeparatorContainer: {
     alignItems: 'center',
@@ -429,7 +433,6 @@ const styles = StyleSheet.create({
   },
   loadingMoreText: {
     fontSize: 12,
-    color: '#9ca3af',
     fontWeight: '500',
   },
 });

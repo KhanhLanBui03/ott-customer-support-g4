@@ -20,9 +20,11 @@ import { userApi } from '../../src/api/userApi';
 import * as SecureStore from 'expo-secure-store';
 import DeleteAccountModal from '../../src/components/DeleteAccountModal';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 
 const ProfileScreen = () => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const dispatch = useDispatch();
 
@@ -72,7 +74,7 @@ const ProfileScreen = () => {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ marginTop: 10, color: colors.foreground }}>Đang tải hồ sơ...</Text>
+          <Text style={{ marginTop: 10, color: colors.foreground }}>{t('chat.loading')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -82,17 +84,17 @@ const ProfileScreen = () => {
   const displayUser = {
     userId: user.userId || 'N/A',
     phoneNumber: user.phoneNumber || 'N/A',
-    email: user.email || 'Chưa cập nhật email',
-    fullName: user.fullName || (user.lastName && user.firstName ? `${user.lastName} ${user.firstName}` : 'Người dùng'),
+    email: user.email || t('profile.no_email'),
+    fullName: user.fullName || (user.lastName && user.firstName ? `${user.lastName} ${user.firstName}` : t('common.user')),
     avatar: user.avatarUrl || user.avatar || `https://ui-avatars.com/api/?name=${user.firstName || 'U'}&background=random`,
-    bio: user.bio || user.statusMessage || 'Chưa có tiểu sử',
+    bio: user.bio || user.statusMessage || t('profile.bio_placeholder'),
     status: user.status || 'online',
   };
 
   const handleLogout = () => {
-    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', onPress: () => dispatch(logoutUser()), style: 'destructive' },
+    Alert.alert(t('logout.title'), t('logout.confirm_question'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('logout.btn_confirm'), onPress: () => dispatch(logoutUser()), style: 'destructive' },
     ]);
   };
 
@@ -124,41 +126,69 @@ const ProfileScreen = () => {
 
           <View style={[styles.statusBadge, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}>
             <View style={[styles.statusDot, { backgroundColor: displayUser.status === 'online' ? '#10b981' : colors.textSubtle }]} />
-            <Text style={[styles.statusText, { color: colors.textMuted }]}>{displayUser.status === 'online' ? 'Online' : 'Offline'}</Text>
+            <Text style={[styles.statusText, { color: colors.textMuted }]}>{displayUser.status === 'online' ? t('sidebar.online') : t('sidebar.offline')}</Text>
           </View>
         </View>
 
 
         {/* Details Section - Khôi phục đầy đủ */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Thông tin tài khoản</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('info.privacy')}</Text>
           <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
             <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>Tiểu sử</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>{t('profile.bio')}</Text>
               <Text style={[styles.infoValue, { color: colors.foreground }]}>{displayUser.bio}</Text>
             </View>
             <View style={[styles.infoDivider, { backgroundColor: colors.border }]} />
             <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>Email</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>{t('profile.email')}</Text>
               <Text style={[styles.infoValue, { color: colors.foreground }]}>{displayUser.email}</Text>
             </View>
             <View style={[styles.infoDivider, { backgroundColor: colors.border }]} />
             <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>ID Người dùng</Text>
+              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>{t('profile.user_id')}</Text>
               <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{displayUser.userId}</Text>
             </View>
           </View>
         </View>
 
 
+        {/* Personal Storage */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('info.shared_media')}</Text>
+          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/my-cloud')}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="cloud-done-outline" size={20} color={colors.primary} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('cloud.title')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Settings */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('settings.title')}</Text>
+          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/settings')}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="settings-outline" size={20} color={colors.primary} />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('info.customization')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Settings & Support */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Bảo mật & Hỗ trợ</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('info.privacy')}</Text>
           <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
             <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => router.push('/(main)/change-password')}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Đổi mật khẩu</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('password.title')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
             </TouchableOpacity>
@@ -166,7 +196,7 @@ const ProfileScreen = () => {
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-                <Text style={[styles.menuItemText, { color: '#ef4444' }]}>Đăng xuất</Text>
+                <Text style={[styles.menuItemText, { color: '#ef4444' }]}>{t('logout.title')}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -175,12 +205,12 @@ const ProfileScreen = () => {
 
         {/* Danger Zone */}
         <View style={[styles.section, { marginBottom: 30 }]}>
-          <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>Vùng nguy hiểm</Text>
+          <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>{t('delete_account.title')}</Text>
           <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
             <TouchableOpacity style={styles.menuItem} onPress={() => setShowDeleteModal(true)}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                <Text style={[styles.menuItemText, { color: '#ef4444' }]}>Xóa tài khoản</Text>
+                <Text style={[styles.menuItemText, { color: '#ef4444' }]}>{t('delete_account.title')}</Text>
               </View>
             </TouchableOpacity>
           </View>

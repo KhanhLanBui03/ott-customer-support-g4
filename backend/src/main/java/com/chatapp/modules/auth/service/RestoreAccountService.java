@@ -53,6 +53,27 @@ public class RestoreAccountService {
         }
     }
 
+    public void verifyOtpAndReactivate(RestoreVerifyOtpRequest request) {
+        boolean isValid = otpService.verifyOtp(request.getEmail(), request.getOtp(), OTP_PURPOSE);
+        if (!isValid) {
+            throw new ValidationException("Mã OTP không hợp lệ hoặc đã hết hạn.");
+        }
+
+        User user = userRepository.findByEmail(request.getEmail().toLowerCase())
+                .orElseThrow(() -> new NotFoundException("Người dùng không tồn tại."));
+
+        if (!"LOCKED".equals(user.getStatus())) {
+            throw new ValidationException("Tài khoản này không ở trạng thái chờ xóa.");
+        }
+
+        user.setStatus("OFFLINE");
+        user.setDeletionDate(null);
+        user.setUpdatedAt(System.currentTimeMillis());
+
+        userRepository.save(user);
+        log.info("Account reactivated successfully via OTP for user: {}", user.getUserId());
+    }
+
     public void resetPasswordAndActivate(RestoreResetPasswordRequest request) {
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new ValidationException("Mật khẩu xác nhận không khớp.");
@@ -80,5 +101,21 @@ public class RestoreAccountService {
         
         userRepository.save(user);
         log.info("Account restored successfully for user: {}", user.getUserId());
+    }
+
+    public void quickCancel(String email) {
+        User user = userRepository.findByEmail(email.toLowerCase())
+                .orElseThrow(() -> new NotFoundException("Người dùng không tồn tại."));
+
+        if (!"LOCKED".equals(user.getStatus())) {
+            throw new ValidationException("Tài khoản này không ở trạng thái chờ xóa.");
+        }
+
+        user.setStatus("OFFLINE");
+        user.setDeletionDate(null);
+        user.setUpdatedAt(System.currentTimeMillis());
+
+        userRepository.save(user);
+        log.info("Quick restore successful for user email: {}", email);
     }
 }

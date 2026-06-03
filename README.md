@@ -397,3 +397,53 @@ For questions, issues, or suggestions:
 ---
 
 **Made with ❤️ for scalable, secure communication**
+
+10:02 PM
+Để tối ưu hóa quy trình này một cách triệt để, giải quyết cả 3 vấn đề (UX, Vận hành, và Pháp lý), đồng thời phù hợp với một ứng dụng nhắn tin (Chat App), tôi đề xuất thiết kế lại quy trình theo sơ đồ tối ưu dưới đây.
+
+1. Quy trình tối ưu chi tiết (Tự động hóa 100%)
+Thay vì cần Admin phê duyệt hay gửi email thủ công, chúng ta sẽ tự động hóa toàn bộ bằng mã nguồn (Backend và Cron Job).
+
+Bước 1: Yêu cầu xóa trên Giao diện (Client-side)
+Khi người dùng vào phần cài đặt và chọn "Xóa tài khoản", hệ thống hiển thị một Popup/Form:
+
+Lựa chọn hình thức:
+Tạm khóa tài khoản (Soft Delete): Tài khoản sẽ bị ẩn ngay lập tức. Người dùng có 30 ngày để đăng nhập lại và khôi phục. Sau 30 ngày sẽ bị xóa vĩnh viễn.
+Xóa vĩnh viễn ngay lập tức (Hard Delete): Tài khoản và toàn bộ dữ liệu cá nhân bị xóa/ẩn danh ngay lập tức, không thể khôi phục.
+Xác thực bảo mật bắt buộc: Để tránh trường hợp người khác cầm máy xóa hộ, yêu cầu người dùng nhập mật khẩu hoặc nhập mã OTP gửi về Email/SĐT của họ trước khi xác nhận.
+Bước 2: Xử lý ở Backend
+Nếu chọn "Tạm khóa 30 ngày":
+Đổi trạng thái User thành PENDING_DELETE (hoặc LOCKED).
+Lưu trường deletion_date = CURRENT_DATE + 30 days vào bảng User.
+Thu hồi tất cả phiên đăng nhập: Xóa Refresh Token của user đó trong database/Redis để buộc user đăng xuất ra khỏi mọi thiết bị ngay lập tức.
+Gửi Email tự động: Hệ thống tự động gửi 1 email duy nhất thông báo: "Tài khoản của bạn đã được lên lịch xóa vào ngày [Date]. Nếu bạn không thực hiện yêu cầu này hoặc muốn khôi phục, vui lòng click vào nút dưới đây để Hủy yêu cầu xóa trước ngày [Date]."
+Nếu chọn "Xóa ngay lập tức":
+Thực hiện quy trình xóa/ẩn danh dữ liệu ngay lập tức (Xem chi tiết phần 2).
+Bước 3: Cron Job tự động (Tác vụ chạy ngầm)
+Viết một Scheduler (ví dụ: dùng @Scheduled trong Spring Boot) chạy vào mỗi đêm lúc 2:00 AM.
+Nhiệm vụ của Scheduler: Tìm tất cả User có trạng thái PENDING_DELETE và có ngày deletion_date <= CURRENT_DATE, sau đó thực hiện xóa/ẩn danh dữ liệu của họ.
+2. Gợi ý xử lý Dữ liệu đối với dự án Chat App (Quan trọng)
+Vì dự án của bạn là Chat App, việc xóa hoàn toàn một User khỏi Database (Hard Delete) bằng câu lệnh DELETE FROM users rất dễ gây lỗi khóa ngoại (Foreign Key Constraint) hoặc làm hỏng cấu trúc hiển thị tin nhắn của những người dùng khác trong đoạn chat cũ.
+
+Do đó, thay vì xóa hoàn toàn dòng (row) của User, bạn nên sử dụng giải pháp Ẩn danh hóa dữ liệu (Anonymization):
+
+Thông tin	Khi hoạt động (Active)	Sau khi Xóa vĩnh viễn (Anonymized)
+ID User	usr_98234	Giữ nguyên (để tránh lỗi liên kết tin nhắn)
+Họ tên hiển thị	Nguyễn Văn A	Đổi thành Người dùng đã xóa (Deleted User)
+Email / Số điện thoại	vana@gmail.com	Xóa hoặc mã hóa: deleted_98234@app.com (để giải phóng Email/SĐT này cho người khác đăng ký mới nếu cần)
+Mật khẩu	Mật khẩu đã mã hóa	Đổi thành một chuỗi ngẫu nhiên vô nghĩa (ngăn đăng nhập lại)
+Ảnh đại diện (Avatar)	Link ảnh trên S3	Đổi thành ảnh mặc định của hệ thống / Xóa ảnh trên S3
+FCM Token (Thông báo đẩy)	Chuỗi token	Xóa sạch (để thiết bị của họ không bao giờ nhận được thông báo tin nhắn mới nữa)
+3. Cách xử lý nếu người dùng chọn "KHÔNG" (Muốn hủy yêu cầu xóa)
+Khi người dùng bấm vào link hủy xóa trong email, hoặc cố gắng đăng nhập lại trong vòng 30 ngày:
+
+Nếu họ đăng nhập lại trong 30 ngày:
+Hệ thống nhận diện trạng thái tài khoản là PENDING_DELETE.
+Hiển thị thông báo: "Tài khoản của bạn đang trong quá trình chờ xóa. Bạn có muốn kích hoạt lại tài khoản của mình không?"
+Nếu chọn Có (Kích hoạt lại): Cập nhật trạng thái về ACTIVE, xóa trường deletion_date, cho phép đăng nhập thành công.
+Nếu chọn Không: Giữ nguyên trạng thái và thoát ra ngoài.
+Nếu họ bấm vào link Hủy xóa trong email:
+Chuyển hướng người dùng đến một trang Web xác nhận: "Yêu cầu khôi phục tài khoản thành công!".
+Backend chuyển trạng thái User về ACTIVE và xóa deletion_date.
+10:02 PM
+

@@ -54,4 +54,10 @@ public class Conversation {
 
     @DynamoDBAttribute(attributeName = "onlyAdminsCanChat")
     private Boolean onlyAdminsCanChat;
+
+    @DynamoDBAttribute(attributeName = "memberApprovalRequired")
+    private Boolean memberApprovalRequired;
+
+    @DynamoDBAttribute(attributeName = "violationCount")
+    private Integer violationCount;
 }

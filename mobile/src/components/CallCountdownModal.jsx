@@ -2,10 +2,12 @@ import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
 const CallCountdownModal = ({ visible, countdown, onCancel, callType = 'video' }) => {
+  const { t } = useTranslation();
   const size = 160;
   const strokeWidth = 8;
   const center = size / 2;
@@ -54,11 +56,11 @@ const CallCountdownModal = ({ visible, countdown, onCancel, callType = 'video' }
           </View>
 
           <Text style={styles.title}>
-            {callType === 'video' ? 'Chuẩn bị gọi video nhóm...' : 'Chuẩn bị gọi thoại nhóm...'}
+            {callType === 'video' ? t('chat.countdown_video') : t('chat.countdown_voice')}
           </Text>
 
           <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-            <Text style={styles.cancelText}>Hủy</Text>
+            <Text style={styles.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </View>

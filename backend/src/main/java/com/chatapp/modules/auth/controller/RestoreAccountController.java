@@ -37,9 +37,25 @@ public class RestoreAccountController {
         return ApiResponse.success(null, "Mã OTP hợp lệ.");
     }
 
+    @PostMapping("/verify-otp-reactivate")
+    public ApiResponse<Void> verifyOtpReactivate(@Valid @RequestBody RestoreVerifyOtpRequest request) {
+        restoreAccountService.verifyOtpAndReactivate(request);
+        return ApiResponse.success(null, "Kích hoạt lại tài khoản thành công.");
+    }
+
     @PostMapping("/reset-password")
     public ApiResponse<Void> resetPassword(@Valid @RequestBody RestoreResetPasswordRequest request) {
         restoreAccountService.resetPasswordAndActivate(request);
         return ApiResponse.success(null, "Khôi phục tài khoản thành công. Vui lòng đăng nhập lại.");
+    }
+
+    @PostMapping("/quick-cancel")
+    public ApiResponse<Void> quickCancel(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        if (email == null || email.trim().isEmpty()) {
+            throw new com.chatapp.common.exception.ValidationException("Email không được để trống.");
+        }
+        restoreAccountService.quickCancel(email);
+        return ApiResponse.success(null, "Khôi phục tài khoản thành công.");
     }
 }

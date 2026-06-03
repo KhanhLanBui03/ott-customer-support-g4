@@ -9,7 +9,10 @@ import {
   Modal,
   ScrollView,
   PanResponder,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -38,8 +41,12 @@ const ChatBubble = ({
   onPressMessage,
   isHighlighted = false,
   allMessages = [],
-  members = []
+  members = [],
+  translatedMessages = {},
+  translationLoading = {},
+  onTranslate
 }) => {
+  const { t } = useTranslation();
 
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -70,7 +77,7 @@ const ChatBubble = ({
 
   const highlightBorder = highlightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', '#FFD700'],
+    outputRange: ['transparent', colors.primary],
   });
 
   const currentUserIdStr = String(user?.userId || user?.id || '');
@@ -184,6 +191,32 @@ const ChatBubble = ({
     (message.content && message.content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)) ||
     (firstMedia && String(firstMedia).match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i));
 
+  const isVideoUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    return url.toLowerCase().match(/\.(mp4|webm|ogg|mov|qt|mkv)(\?|$)/i);
+  };
+
+  const isImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    return url.toLowerCase().match(/\.(jpeg|jpg|gif|png|webp|heic|svg)(\?|$)/i);
+  };
+
+  const isImageOrVideoUrl = (url) => {
+    return isImageUrl(url) || isVideoUrl(url);
+  };
+
+  const imagesAndVideos = useMemo(() => {
+    if (message.type === 'VOICE' || message.isRecalled) return [];
+    return mediaFiles.filter(url => 
+      isImageOrVideoUrl(url) || message.type === 'IMAGE' || message.type === 'VIDEO'
+    );
+  }, [mediaFiles, message.type, message.isRecalled]);
+
+  const otherFiles = useMemo(() => {
+    if (message.type === 'VOICE' || message.isRecalled) return [];
+    return mediaFiles.filter(url => !imagesAndVideos.includes(url));
+  }, [mediaFiles, imagesAndVideos, message.type, message.isRecalled]);
+
   const reactionUserNamesFor = (emoji) => {
     if (!message.reactions || !message.reactions[emoji]) return [];
     return message.reactions[emoji].map(getReactionUserName);
@@ -258,11 +291,11 @@ const ChatBubble = ({
     if (hasReadByOther) return null;
     const statusText = !isOnline ? 'Đã gửi' : 'Đã nhận';
     const iconName = !isOnline ? 'check' : 'check-circle';
-    const iconColor = !isOnline ? '#6b7280' : '#4338ca';
+    const iconColor = !isOnline ? colors.textMuted : colors.primary;
     return (
       <View style={styles.deliveryStatus}>
         <MaterialIcons name={iconName} size={12} color={iconColor} />
-        <Text style={[styles.deliveryStatusText, !isOnline ? styles.deliveryStatusSent : styles.deliveryStatusOnline]}>{statusText}</Text>
+        <Text style={[styles.deliveryStatusText, { color: iconColor }]}>{statusText}</Text>
       </View>
     );
   };
@@ -311,21 +344,59 @@ const ChatBubble = ({
     }
   };
 
+  const renderTextWithLinks = (textVal) => {
+    if (!textVal) return [];
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
+    const parts = textVal.split(urlRegex);
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <Text
+            key={`link-${index}`}
+            style={{ textDecorationLine: 'underline', color: isOwn ? '#fff' : colors.primary }}
+            onPress={() => Linking.openURL(part)}
+          >
+            {part}
+          </Text>
+        );
+      }
+      return part;
+    });
+  };
+
   const renderTextWithMentions = (content) => {
     if (!content) return null;
-    if (members.length === 0) return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{content}</Text>;
+    if (members.length === 0) {
+      return (
+        <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>
+          {renderTextWithLinks(content)}
+        </Text>
+      );
+    }
 
     const currentConv = conversations.find(c => String(c.conversationId) === String(message.conversationId));
     const isGroup = currentConv?.type === 'GROUP';
 
-    if (!isGroup) return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{content}</Text>;
+    if (!isGroup) {
+      return (
+        <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>
+          {renderTextWithLinks(content)}
+        </Text>
+      );
+    }
 
     // Tạo regex từ danh sách tên thành viên
     const sortedMembers = [...members]
       .filter(m => (m.fullName || m.name))
       .sort((a, b) => (b.fullName || b.name).length - (a.fullName || a.name).length);
 
-    if (sortedMembers.length === 0 && !content.includes('@All')) return <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>{content}</Text>;
+    if (sortedMembers.length === 0 && !content.includes('@All')) {
+      return (
+        <Text style={[styles.text, isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]]}>
+          {renderTextWithLinks(content)}
+        </Text>
+      );
+    }
 
     const memberNames = sortedMembers.map(m => (m.fullName || m.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     const names = [...memberNames, 'All'].join('|');
@@ -354,7 +425,7 @@ const ChatBubble = ({
 
         );
       } else if (part) {
-        result.push(<Text key={i}>{part}</Text>);
+        result.push(...renderTextWithLinks(part));
       }
     }
 
@@ -405,7 +476,13 @@ const ChatBubble = ({
     <Animated.View {...panResponder.panHandlers} style={[styles.container, isOwn ? styles.ownContainer : styles.otherContainer, { transform: [{ translateX }] }]}>
       {!isOwn && (
         <TouchableOpacity style={styles.avatarContainer} onPress={handleAvatarPress}>
-          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          {message.senderId === 'shop-expert-ai-bot' ? (
+            <View style={[styles.avatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
+              <Ionicons name="sparkles" size={14} color="#6366f1" />
+            </View>
+          ) : (
+            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          )}
         </TouchableOpacity>
       )}
 
@@ -436,8 +513,8 @@ const ChatBubble = ({
               <>
                 {message.forwardedFrom && (
                   <View style={[styles.forwardedIndicator, isOwn ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
-                    <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : '#6366f1'} />
-                    <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: '#6366f1' }]}>Chuyển tiếp</Text>
+                    <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.primary} />
+                    <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.primary }]}>Chuyển tiếp</Text>
                   </View>
                 )}
                 {message.replyTo && (() => {
@@ -523,12 +600,31 @@ const ChatBubble = ({
                   );
                 })()}
 
-                {!message.isRecalled && (() => {
-                  const mediaUrls = message.mediaUrls || message.media_urls || [];
-                  if (mediaUrls.length === 0 || message.type === 'VOICE') return null;
-                  if (message.type === 'FILE') {
-                    const url = mediaUrls[0];
-                    if (!url) return null;
+                {!message.isRecalled && (mediaFiles.length > 0) && (() => {
+                  const renderGridItem = (url, index, gridStyle, totalCount) => {
+                    const fullUrl = getFullUrl(url);
+                    const isLastItem = index === 3 && totalCount > 4;
+                    const isVideo = isVideoUrl(url) || (message.type === 'VIDEO' && !isImageUrl(url));
+                    return (
+                      <TouchableOpacity key={index} activeOpacity={0.9} style={[styles.gridImageContainer, gridStyle]} onPress={() => { setSelectedMediaIndex(index); setMediaViewerVisible(true); }}>
+                        {isVideo ? <VideoThumbnail videoUrl={fullUrl} style={styles.gridImage} /> : <Image source={{ uri: fullUrl }} style={styles.gridImage} resizeMode="cover" />}
+                        {isLastItem && <View style={styles.moreImagesOverlay}><Text style={styles.moreImagesText}>+{totalCount - 4}</Text></View>}
+                      </TouchableOpacity>
+                    );
+                  };
+
+                  const renderMediaGrid = (gridUrls) => {
+                    const total = gridUrls.length;
+                    if (total === 0) return null;
+                    let gridContent = null;
+                    if (total === 1) gridContent = renderGridItem(gridUrls[0], 0, styles.singleImage, total);
+                    else if (total === 2) gridContent = (<View style={styles.row}>{renderGridItem(gridUrls[0], 0, styles.halfImage, total)}{renderGridItem(gridUrls[1], 1, styles.halfImage, total)}</View>);
+                    else if (total === 3) gridContent = (<View style={styles.row}>{renderGridItem(gridUrls[0], 0, styles.twoThirdImage, total)}<View style={styles.column}>{renderGridItem(gridUrls[1], 1, styles.oneThirdImage, total)}{renderGridItem(gridUrls[2], 2, styles.oneThirdImage, total)}</View></View>);
+                    else gridContent = (<View style={styles.grid2x2}><View style={styles.row}>{renderGridItem(gridUrls[0], 0, styles.quarterImage, total)}{renderGridItem(gridUrls[1], 1, styles.quarterImage, total)}</View><View style={styles.row}>{renderGridItem(gridUrls[2], 2, styles.quarterImage, total)}{renderGridItem(gridUrls[3], 3, styles.quarterImage, total)}</View></View>);
+                    return <View style={styles.mediaGridContainer}>{gridContent}</View>;
+                  };
+
+                  const renderFileItem = (url, index) => {
                     const fileName = url.split('/').pop();
                     const ext = fileName.split('.').pop().toUpperCase();
                     const getFileColor = (u) => {
@@ -540,7 +636,7 @@ const ChatBubble = ({
                       return '#6366f1';
                     };
                     return (
-                      <TouchableOpacity style={[styles.fileBubble, isOwn ? styles.ownFileBubble : [styles.otherFileBubble, { backgroundColor: colors.surface200, borderColor: colors.border }]]} onPress={async () => {
+                      <TouchableOpacity key={url + index} style={[styles.fileBubble, isOwn ? styles.ownFileBubble : [styles.otherFileBubble, { backgroundColor: colors.surface200, borderColor: colors.border }], { marginTop: index > 0 || imagesAndVideos.length > 0 ? 8 : 0 }]} onPress={async () => {
                         const fullUrl = getFullUrl(url);
                         const cleanName = decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''));
                         setSelectedFile({ url: fullUrl, name: cleanName });
@@ -550,31 +646,19 @@ const ChatBubble = ({
                         <View style={styles.fileInfo}>
                           <Text style={[styles.fileName, { color: colors.foreground }]} numberOfLines={1}>{decodeURIComponent(fileName.replace(/^[0-9a-f-]{36}_/, ''))}</Text>
                           <View style={styles.fileStatusRow}>
-                            <Text style={[styles.fileSize, { color: colors.textMuted }]}>{ext} • 22 KB</Text>
-                            {fileExists && <View style={styles.downloadedBadge}><MaterialIcons name="check-circle" size={12} color="#10b981" /><Text style={styles.downloadedText}>Đã có trên máy</Text></View>}
+                            <Text style={[styles.fileSize, { color: colors.textMuted }]}>{ext}</Text>
                           </View>
                         </View>
                       </TouchableOpacity>
-
-                    );
-                  }
-                  const total = mediaUrls.length;
-                  const renderGridItem = (url, index, gridStyle) => {
-                    const fullUrl = getFullUrl(url);
-                    const isLastItem = index === 3 && total > 4;
-                    return (
-                      <TouchableOpacity key={index} activeOpacity={0.9} style={[styles.gridImageContainer, gridStyle]} onPress={() => { setSelectedMediaIndex(index); setMediaViewerVisible(true); }}>
-                        {message.type === 'VIDEO' ? <VideoThumbnail videoUrl={fullUrl} style={styles.gridImage} /> : <Image source={{ uri: fullUrl }} style={styles.gridImage} resizeMode="cover" />}
-                        {isLastItem && <View style={styles.moreImagesOverlay}><Text style={styles.moreImagesText}>+{total - 4}</Text></View>}
-                      </TouchableOpacity>
                     );
                   };
-                  let gridContent = null;
-                  if (total === 1) gridContent = renderGridItem(mediaUrls[0], 0, styles.singleImage);
-                  else if (total === 2) gridContent = (<View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.halfImage)}{renderGridItem(mediaUrls[1], 1, styles.halfImage)}</View>);
-                  else if (total === 3) gridContent = (<View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.twoThirdImage)}<View style={styles.column}>{renderGridItem(mediaUrls[1], 1, styles.oneThirdImage)}{renderGridItem(mediaUrls[2], 2, styles.oneThirdImage)}</View></View>);
-                  else gridContent = (<View style={styles.grid2x2}><View style={styles.row}>{renderGridItem(mediaUrls[0], 0, styles.quarterImage)}{renderGridItem(mediaUrls[1], 1, styles.quarterImage)}</View><View style={styles.row}>{renderGridItem(mediaUrls[2], 2, styles.quarterImage)}{renderGridItem(mediaUrls[3], 3, styles.quarterImage)}</View></View>);
-                  return <View style={styles.mediaGridContainer}>{gridContent}</View>;
+
+                  return (
+                    <View style={{ width: '100%' }}>
+                      {imagesAndVideos.length > 0 && renderMediaGrid(imagesAndVideos)}
+                      {otherFiles.map((url, idx) => renderFileItem(url, idx))}
+                    </View>
+                  );
                 })()}
 
                 {message.isRecalled ? (
@@ -601,14 +685,14 @@ const ChatBubble = ({
                         let title = '';
                         let subtitle = '';
                         let iconName = 'phone';
-                        let iconColor = isOwn ? '#fff' : '#6366f1';
+                        let iconColor = isOwn ? '#fff' : colors.primary;
                         let isOngoing = status === 'ONGOING';
 
                         if (isOngoing) {
                           title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
                           iconName = cType === 'video' ? 'video' : 'phone-in-talk';
                           subtitle = 'Nhấn để tham gia';
-                          iconColor = isOwn ? '#fff' : '#6366f1';
+                          iconColor = isOwn ? '#fff' : colors.primary;
                         } else if (isOwn) {
                           title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
                           iconName = 'phone-outgoing';
@@ -619,7 +703,7 @@ const ChatBubble = ({
                             iconColor = isOwn ? '#fff' : '#10b981';
                           } else {
                             subtitle = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
-                            iconColor = isOwn ? 'rgba(255,255,255,0.8)' : '#ef4444';
+                            iconColor = isOwn ? 'rgba(255,255,255,0.8)' : colors.error;
                           }
                         } else {
                           if (status === 'SUCCESS') {
@@ -633,7 +717,7 @@ const ChatBubble = ({
                             title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
                             iconName = 'phone-missed';
                             subtitle = status === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
-                            iconColor = '#ef4444';
+                            iconColor = colors.error;
                           }
                         }
 
@@ -642,11 +726,11 @@ const ChatBubble = ({
                         return (
                           <View style={styles.callLogContainer}>
                             <View style={styles.callLogHeader}>
-                              <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(99, 102, 241, 0.1)' }]}>
+                              <View style={[styles.callIconWrapper, isOngoing && { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : `${colors.primary}1A` }]}>
                                 <MaterialCommunityIcons
                                   name={iconName}
                                   size={22}
-                                  color={isOngoing && !isOwn ? '#6366f1' : iconColor}
+                                  color={isOngoing && !isOwn ? colors.primary : iconColor}
                                 />
                               </View>
                                 <View style={styles.callLogTextGroup}>
@@ -692,7 +776,79 @@ const ChatBubble = ({
                     if (message.type === 'VOTE') {
                       return renderVoteContent();
                     }
-                    return message.content ? renderTextWithMentions(message.content) : null;
+                    return (
+                      <View style={{ width: '100%' }}>
+                        {message.content ? renderTextWithMentions(message.content) : null}
+                        
+                        {/* Translation Loading State */}
+                        {translationLoading && translationLoading[message.messageId] && (
+                          <View style={[
+                            styles.translationLoadingContainer,
+                            { borderTopColor: isOwn ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)' }
+                          ]}>
+                            <ActivityIndicator size="small" color={isOwn ? '#fff' : colors.primary} style={{ marginRight: 6 }} />
+                            <Text style={[styles.translationLoadingText, { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textMuted }]}>
+                              {t('chat.ai_translating') || 'AI đang dịch...'}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Translation Display */}
+                        {translatedMessages && translatedMessages[message.messageId] && (
+                          <View style={[
+                            styles.translationContainer,
+                            { borderTopColor: isOwn ? 'rgba(255,255,255,0.2)' : colors.border }
+                          ]}>
+                            <View style={styles.translationHeader}>
+                              <View style={styles.translationHeaderLeft}>
+                                <Ionicons name="sparkles" size={12} color={isOwn ? '#fff' : colors.primary} style={{ marginRight: 4 }} />
+                                <Text style={[styles.translationTitle, { color: isOwn ? 'rgba(255,255,255,0.8)' : colors.textMuted }]}>
+                                  {t('chat.ai_translation') || 'Bản dịch AI'}
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => onTranslate?.(message.messageId)}
+                                style={styles.translationReloadBtn}
+                              >
+                                <Ionicons name="refresh" size={12} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.primary} />
+                                <Text style={[styles.translationReloadText, { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.primary }]}>
+                                  {t('chat.reload_translation') || 'Dịch lại'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                            <Text style={[
+                              styles.translatedText,
+                              isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]
+                            ]}>
+                              {translatedMessages[message.messageId]}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Manual Translate Button */}
+                        {message.type === 'TEXT' &&
+                          !isOwn &&
+                          (!translatedMessages || !translatedMessages[message.messageId]) &&
+                          (!translationLoading || !translationLoading[message.messageId]) && (
+                            <TouchableOpacity
+                              onPress={() => onTranslate?.(message.messageId)}
+                              style={[
+                                styles.translateBtn,
+                                {
+                                  backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(99, 102, 241, 0.08)',
+                                  alignSelf: 'flex-start',
+                                  marginTop: 6
+                                }
+                              ]}
+                            >
+                              <Ionicons name="sparkles-outline" size={10} color={colors.primary} style={{ marginRight: 4 }} />
+                              <Text style={[styles.translateBtnText, { color: colors.primary }]}>
+                                {t('chat.translate_btn') || 'Dịch'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                      </View>
+                    );
                   })())}
 
 
@@ -744,7 +900,7 @@ const ChatBubble = ({
         </View>
       </Modal>
 
-      <MediaViewer visible={mediaViewerVisible} onClose={() => setMediaViewerVisible(false)} allMedia={(message.mediaUrls || message.media_urls || []).map(url => ({ url: getFullUrl(url), type: message.type }))} initialIndex={selectedMediaIndex} />
+      <MediaViewer visible={mediaViewerVisible} onClose={() => setMediaViewerVisible(false)} allMedia={imagesAndVideos.map(url => ({ url: getFullUrl(url), type: (isVideoUrl(url) || (message.type === 'VIDEO' && !isImageUrl(url))) ? 'VIDEO' : 'IMAGE' }))} initialIndex={selectedMediaIndex} />
       <FileViewerModal visible={fileViewerVisible} onClose={() => setFileViewerVisible(false)} fileUrl={selectedFile.url} fileName={selectedFile.name} />
       <VoteDetailsModal
         visible={voteDetailsVisible}
@@ -904,6 +1060,65 @@ const styles = StyleSheet.create({
   ongoingJoinBtnText: { color: '#6366f1', fontWeight: '900', fontSize: 15, letterSpacing: 0.5 },
   stickerBubbleContainer: { alignItems: 'center', justifyContent: 'center', padding: 4 },
   bubbleStickerImage: { width: 140, height: 140, resizeMode: 'contain' },
+  translateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  translateBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  translationLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  translationLoadingText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  translationContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    width: '100%',
+  },
+  translationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  translationHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  translationTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  translationReloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 2,
+  },
+  translationReloadText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  translatedText: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginTop: 2,
+  },
 });
 
 

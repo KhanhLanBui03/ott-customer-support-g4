@@ -1,6 +1,7 @@
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { onCallSignal, offCallSignal, emitCallSignal } from '../utils/socket';
 import { callApi } from '../api/callApi';
 import { ringtoneService } from '../utils/RingtoneService';
@@ -64,8 +65,9 @@ async function calibrateServerTime() {
 }
 
 export const useAgoraCall = (conversationId, activeConversation = null, isListener = true) => {
+    const { t } = useTranslation();
     const { user } = useSelector((state) => state.auth);
-    const { conversations } = useSelector((state) => state.chat);
+    const { conversations, friends } = useSelector((state) => state.chat);
     const myId = user?.userId || user?.id;
     const dispatch = useDispatch();
 
@@ -266,7 +268,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                     console.log('[Agora] Participant leaving group call:', cid);
                     emitCallSignal(cid, {
                         type: 'LEAVE',
-                        senderName: user?.fullName || 'Thành viên'
+                        senderName: user?.fullName || t('chat.member')
                     });
                 }
                 // Nếu callStatus là 'incoming' (người nghe từ chối cuộc gọi đến), ta không gửi bất kỳ tín hiệu nào để tránh tắt màn hình của người khác.
@@ -306,7 +308,8 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
 
                     const content = JSON.stringify({ callType: callType || 'audio', duration: callDuration, status: statusStr });
-                    chatApi.sendMessage({ conversationId: cid, content, type: 'CALL_LOG' });
+                    chatApi.sendMessage({ conversationId: cid, content, type: 'CALL_LOG' })
+                        .catch(err => console.error('[Agora] Failed to send final log (async):', err));
                 } catch (err) { console.error('[Agora] Log error:', err); }
             }
         }
@@ -324,11 +327,11 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
         setCallStatus('ended');
 
-        if (reason === 'REJECTED') setEndCallReason('Người nghe đã từ chối cuộc gọi');
-        else if (reason === 'BUSY') setEndCallReason('Người nghe đang bận');
-        else if (reason === 'MISSED') setEndCallReason('Cuộc gọi nhỡ');
-        else if (reason === 'ACCEPTED_ELSEWHERE') setEndCallReason('Đã trả lời trên thiết bị khác');
-        else setEndCallReason('Cuộc gọi đã kết thúc');
+        if (reason === 'REJECTED') setEndCallReason(t('chat.rejected'));
+        else if (reason === 'BUSY') setEndCallReason(t('chat.busy'));
+        else if (reason === 'MISSED') setEndCallReason(t('chat.missed_call'));
+        else if (reason === 'ACCEPTED_ELSEWHERE') setEndCallReason(t('chat.accepted_elsewhere'));
+        else setEndCallReason(t('chat.ended'));
 
         const delay = reason === 'ACCEPTED_ELSEWHERE' ? 0 : 800;
         // Giảm thời gian chờ đóng UI xuống còn 800ms để mượt hơn
@@ -420,13 +423,13 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
             updateRemoteUsers();
             hasHadRemoteRef.current = true;
 
-            const userName = member?.fullName || member?.name || 'Một thành viên';
+            const userName = member?.fullName || member?.name || t('chat.member');
             
             const timeSinceJoin = Date.now() - (joinTimeRef.current || 0);
             if (timeSinceJoin > 2000) {
-                setUserLeftMsg(`${userName} đã tham gia phòng`);
+                setUserLeftMsg(t('chat.user_joined', { name: userName }));
                 setTimeout(() => {
-                    setUserLeftMsg(prev => (prev && prev.includes(userName) && prev.includes('tham gia') ? null : prev));
+                    setUserLeftMsg(prev => (prev && prev.includes(userName) && (prev.includes('tham gia') || prev.includes('joined')) ? null : prev));
                 }, 3000);
             }
         };
@@ -633,8 +636,9 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                     updateRemoteUsers();
 
                     if (signal.type === 'LEAVE' || signal.type === 'HANGUP') {
-                        setUserLeftMsg(`${signal.senderName || 'Một thành viên'} đã rời phòng`);
-                        setTimeout(() => setUserLeftMsg(prev => (prev && prev.includes(signal.senderName || 'Một thành viên') && prev.includes('rời phòng') ? null : prev)), 3000);
+                        const userName = signal.senderName || t('chat.member');
+                        setUserLeftMsg(t('chat.user_left', { name: userName }));
+                        setTimeout(() => setUserLeftMsg(prev => (prev && prev.includes(userName) && (prev.includes('rời phòng') || prev.includes('left')) ? null : prev)), 3000);
                         return; // Chỉ thoát sớm nếu là LEAVE/HANGUP của nhóm
                     }
                 }
@@ -682,7 +686,8 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 }
             } else if (signal.type === 'LEAVE') {
                 console.log('[Agora] User left group:', signal.senderName);
-                setUserLeftMsg(`${signal.senderName || 'Một thành viên'} đã rời phòng`);
+                const userName = signal.senderName || t('chat.member');
+                setUserLeftMsg(t('chat.user_left', { name: userName }));
                 setTimeout(() => setUserLeftMsg(null), 3000);
             }
         };
@@ -737,16 +742,38 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
 
             // Gửi tín hiệu mời - CHỈ gửi nếu KHÔNG phải là tham gia vào cuộc gọi đang diễn ra
             if (!options.isJoin) {
-                emitCallSignal(conversationId, {
-                    type: 'CALL_INVITE',
-                    callType: type,
-                    isGroup: isGroupMode,
-                    senderAvatar: user?.avatar || user?.avatarUrl,
-                    conversationName: activeConversation?.name,
-                    conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
-                    conversationType: activeConversation?.type || (isGroupMode ? 'GROUP' : 'SINGLE'),
-                    inviteTime: getTrueTime()
-                }, user?.fullName || (user?.lastName && user?.firstName ? `${user.lastName} ${user.firstName}` : '') || user?.name || 'Người dùng');
+                let isBlocked = false;
+                if (!isGroupMode) {
+                    const other = activeConversationRef.current?.members?.find(m => {
+                        const mid = m.userId || m.id || m._id;
+                        return mid && String(mid).trim() !== String(myId).trim();
+                    });
+                    if (other) {
+                        const otherId = other.userId || other.id || other._id;
+                        const friendInfo = Array.isArray(friends) && friends.find(f => {
+                            const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+                            return fId !== '' && fId === String(otherId).toLowerCase();
+                        });
+                        if (friendInfo?.status === 'BLOCKED') {
+                            isBlocked = true;
+                        }
+                    }
+                }
+
+                if (!isBlocked) {
+                    emitCallSignal(conversationId, {
+                        type: 'CALL_INVITE',
+                        callType: type,
+                        isGroup: isGroupMode,
+                        senderAvatar: user?.avatar || user?.avatarUrl,
+                        conversationName: activeConversation?.name,
+                        conversationAvatar: activeConversation?.avatar || activeConversation?.avatarUrl,
+                        conversationType: activeConversation?.type || (isGroupMode ? 'GROUP' : 'SINGLE'),
+                        inviteTime: getTrueTime()
+                    }, user?.fullName || (user?.lastName && user?.firstName ? `${user.lastName} ${user.firstName}` : '') || user?.name || t('common.user'));
+                } else {
+                    console.log('[Agora] Signal CALL_INVITE suppressed due to block status.');
+                }
             }
 
             // Đối với cuộc gọi NHÓM, người gọi vào phòng luôn để chờ mọi người
@@ -764,7 +791,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                             status: 'ONGOING',
                             startTime: getTrueTime()
                         });
-                        chatApi.sendMessage({ conversationId, content, type: 'CALL_LOG' });
+                        await chatApi.sendMessage({ conversationId, content, type: 'CALL_LOG' });
                         ongoingLogSentRef.current = true;
                     } catch (err) {
                         console.error('[Agora] Failed to send ONGOING log:', err);
@@ -878,7 +905,7 @@ export const useAgoraCall = (conversationId, activeConversation = null, isListen
                 }
             }
 
-            emitCallSignal(channelId, { type: 'CALL_ACCEPTED', startTime: getTrueTime() }, user?.fullName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : '') || user?.name || 'Người dùng');
+            emitCallSignal(channelId, { type: 'CALL_ACCEPTED', startTime: getTrueTime() }, user?.fullName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : '') || user?.name || t('common.user'));
             setCallStatus('connected');
 
             const joinUid = toNumericUid(user?.userId || user?.id);

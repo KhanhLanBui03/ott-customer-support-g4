@@ -98,6 +98,10 @@ export const chatApi = {
     if (endTime) url += `&endTime=${endTime}`;
     return axiosClient.post(url);
   },
+  translateMessage: (messageId, conversationId, srcLang, tgtLang) =>
+    axiosClient.post(`/messages/${messageId}/translate`, { conversationId, srcLang, tgtLang }),
+  translateMessagesBatch: (conversationId, messageIds, srcLang, tgtLang) =>
+    axiosClient.post('/messages/translate-batch', { conversationId, messageIds, srcLang, tgtLang }),
 };
 
 /**
@@ -212,6 +216,11 @@ export const conversationApi = {
     return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-restriction`);
   },
   
+  // Toggle member approval requirement (Admin/Owner only)
+  toggleMemberApproval: (conversationId) => {
+    return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-approval`);
+  },
+  
   // Pinning endpoints
   pinMessage: (conversationId, messageId) => {
     return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/pin/${messageId}`);
@@ -221,6 +230,17 @@ export const conversationApi = {
   },
   togglePinConversation: (conversationId) => {
     return axiosClient.post(`/conversations/${encodeURIComponent(conversationId)}/toggle-pin`);
+  },
+  
+  // Group Join Requests
+  getPendingJoinRequests: (conversationId) => {
+    return axiosClient.get(`/conversations/${encodeURIComponent(conversationId)}/join-requests`);
+  },
+  approveJoinRequest: (requestId) => {
+    return axiosClient.post(`/conversations/join-requests/${encodeURIComponent(requestId)}/approve`);
+  },
+  rejectJoinRequest: (requestId) => {
+    return axiosClient.post(`/conversations/join-requests/${encodeURIComponent(requestId)}/reject`);
   },
 };
 

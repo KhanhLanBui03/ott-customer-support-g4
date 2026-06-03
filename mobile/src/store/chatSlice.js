@@ -303,6 +303,22 @@ const chatSlice = createSlice({
         }
       });
     },
+    // Update friendshipStatus + isRequester for a member across ALL conversations
+    // Used for optimistic block/unblock so chat screen and chat-info stay in sync
+    updateMemberFriendshipStatus: (state, action) => {
+      const { userId, friendshipStatus, isRequester } = action.payload;
+      if (!userId) return;
+      state.conversations.forEach((conv, idx) => {
+        if (!conv.members) return;
+        const memberIdx = conv.members.findIndex(m => String(m.userId || m.id) === String(userId));
+        if (memberIdx !== -1) {
+          state.conversations[idx].members[memberIdx].friendshipStatus = friendshipStatus;
+          if (isRequester !== undefined) {
+            state.conversations[idx].members[memberIdx].isRequester = isRequester;
+          }
+        }
+      });
+    },
     addMessage: (state, action) => {
       const { conversationId, message, currentUserId } = action.payload;
       if (!message || (!message.content && !message.type)) return;
@@ -492,7 +508,11 @@ const chatSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchConversations.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(fetchConversations.fulfilled, (state, action) => {
+        state.loading = false;
         const sortedConvs = (action.payload || []).map(conv => {
           let lastMessage = conv.lastMessage;
           if (lastMessage && (lastMessage.includes('chat-media/') || lastMessage.includes('voice-messages/') || lastMessage.includes('s3.ap-southeast-1') || lastMessage.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i))) {
@@ -521,6 +541,9 @@ const chatSlice = createSlice({
           const dateB = new Date(b.updatedAt || 0);
           return dateB - dateA;
         });
+      })
+      .addCase(fetchConversations.rejected, (state) => {
+        state.loading = false;
       })
       .addCase(fetchConversationDetail.fulfilled, (state, action) => {
         const conv = action.payload;
@@ -625,6 +648,7 @@ export const {
   updateConversationWallpaper,
   markConversationRead,
   updateMemberInfo,
+  updateMemberFriendshipStatus,
   setTyping,
   setUserStatus,
   setMessageRead,

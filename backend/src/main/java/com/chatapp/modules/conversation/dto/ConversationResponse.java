@@ -22,6 +22,7 @@ public class ConversationResponse {
     private Boolean isPinned;
     private String tag;
     private Boolean onlyAdminsCanChat;
+    private Boolean memberApprovalRequired;
     private Boolean hasUnreadMention;
 
     @Data

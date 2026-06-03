@@ -7,7 +7,12 @@
     "scheme": "chatapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cho phép $(PRODUCT_NAME) truy cập camera để nhận diện khuôn mặt bảo vệ quyền riêng tư.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.chatapp"
     },
     "android": {
       "package": "com.chatapp",
@@ -15,7 +20,9 @@
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "plugins": [
@@ -29,6 +36,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "adabdfeb-af00-489b-b630-24fe2e656786"
+      }
     }
   }
 }

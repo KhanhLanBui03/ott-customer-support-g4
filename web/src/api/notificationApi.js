@@ -13,8 +13,8 @@ export const notificationApi = {
   createNotification: (payload) => axiosClient.post(notificationPath('/create'), payload),
   getNotificationsByReceiverId: (receiverId) => axiosClient.get(notificationPath(`/receiver/${encodeURIComponent(receiverId)}`)),
   getNotificationsBySenderId: (senderId) => axiosClient.get(notificationPath(`/sender/${encodeURIComponent(senderId)}`)),
-  markNotificationAsRead: (id) => axiosClient.put(notificationPath('/update/isread'), null, { params: { id } }),
-  deleteNotification: (notificationId) => axiosClient.delete(notificationPath('/delete'), { data: { notificationId } }),
+  markNotificationAsRead: (id) => axiosClient.put(notificationPath('/update/isread'), null, { params: { id, isRead: true } }),
+  deleteNotification: (id) => axiosClient.delete(notificationPath('/delete'), { params: { id } }),
 };
 
 export default notificationApi;

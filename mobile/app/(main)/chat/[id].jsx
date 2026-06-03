@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground, DeviceEventEmitter } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import MessageList from '../../../src/components/MessageList';
 import MessageInput from '../../../src/components/MessageInput';
 import MessageModal from '../../../src/components/MessageModal';
-import { fetchMessages, fetchConversationDetail, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage } from '../../../src/store/chatSlice';
+import { fetchMessages, fetchConversationDetail, sendMessage, setCurrentConversation, clearCurrentConversation, getRealId, fetchConversations, setReplyingTo, clearReplyingTo, toggleMessageReaction, markConversationRead, recallMessage, deleteMessage, pinMessage, unpinMessage, updateMemberFriendshipStatus } from '../../../src/store/chatSlice';
 import { useWebSocket } from '../../../src/hooks/useWebSocket';
 import { conversationApi, chatApi } from '../../../src/api/chatApi';
 import { friendApi } from '../../../src/api/friendApi';
@@ -20,7 +20,10 @@ import { useTheme } from '../../../src/context/ThemeContext';
 
 
 
+import { useTranslation } from 'react-i18next';
+
 const ChatDetailScreen = () => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -35,6 +38,13 @@ const ChatDetailScreen = () => {
   const [forwardModalVisible, setForwardModalVisible] = useState(false);
   const [showAllPins, setShowAllPins] = useState(false);
   const [localFriendship, setLocalFriendship] = useState(null);
+  const [translatedMessages, setTranslatedMessages] = useState({});
+  const [translationLoading, setTranslationLoading] = useState({});
+
+  useEffect(() => {
+    setTranslatedMessages({});
+    setTranslationLoading({});
+  }, [conversationId]);
 
   // KÍCH HOẠT WEBSOCKET TRỰC TIẾP TẠI ĐÂY
   const { sendMessageRealtime, sendReadReceipt, sendTypingStart, sendTypingStop } = useWebSocket();
@@ -50,6 +60,10 @@ const ChatDetailScreen = () => {
   const realId = useMemo(() => getRealId(chatState, conversationId, currentUser?.userId || currentUser?.id), [chatState, conversationId, currentUser]);
   const messages = chatState.messages[realId] || [];
   const conversation = conversations.find(c => c.conversationId === realId);
+
+  const isAI = useMemo(() => {
+    return realId?.includes('shop-expert-ai-bot') || conversationId?.includes('shop-expert-ai-bot');
+  }, [realId, conversationId]);
 
   const wallpaperUrl = conversation?.wallpaperUrl || null;
   const isLoading = chatState.loading;
@@ -78,6 +92,20 @@ const ChatDetailScreen = () => {
     dispatch(fetchConversationDetail(conversationId));
     dispatch(fetchMessages(conversationId));
   }, [conversationId, currentUser?.userId, currentUser?.id, dispatch]);
+
+  // Lắng nghe sự kiện thay đổi trạng thái bạn bè để đồng bộ UI lập tức
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('friendship_changed', () => {
+      console.log('[Chat] friendship_changed event received, resetting local friendship and re-fetching details');
+      setLocalFriendship(null);
+      if (conversationId) {
+        dispatch(fetchConversationDetail(conversationId));
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [conversationId, dispatch]);
 
   // Effect 2: Xử lý focus/blur - CORE LOGIC cho seen/delivered
   // Y như web: vào chat = set active + gửi read receipt (→ seen)
@@ -306,7 +334,7 @@ const ChatDetailScreen = () => {
 
       chatApi.submitVote(realId, message.messageId, { optionIds }).catch(e => {
         console.error('Submit vote error:', e);
-        Alert.alert('Lỗi', 'Không thể gửi bình chọn. Vui lòng thử lại.');
+        Alert.alert(t('common.error'), t('chat.create_vote_error'));
       });
       return;
     }
@@ -319,16 +347,16 @@ const ChatDetailScreen = () => {
     if (message.action === 'CLOSE_VOTE') {
 
       Alert.alert(
-        'Xác nhận',
-        'Bạn có chắc chắn muốn kết thúc cuộc bình chọn này?',
+        t('common.confirm'),
+        t('chat.close_vote_confirm'),
         [
-          { text: 'Hủy', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Kết thúc',
+            text: t('chat.end'),
             style: 'destructive',
             onPress: () => chatApi.closeVote(realId, message.messageId).catch(e => {
               console.error('Close vote error:', e);
-              Alert.alert('Lỗi', 'Không thể kết thúc bình chọn.');
+              Alert.alert(t('common.error'), t('chat.close_vote_error'));
             })
           }
         ]
@@ -361,7 +389,7 @@ const ChatDetailScreen = () => {
       await chatApi.createVote(realId, voteData);
     } catch (err) {
       console.error('Failed to create vote:', err);
-      Alert.alert('Lỗi', 'Không thể tạo cuộc bình chọn. Vui lòng thử lại.');
+      Alert.alert(t('common.error'), t('chat.create_vote_error'));
     }
   };
 
@@ -433,17 +461,34 @@ const ChatDetailScreen = () => {
     return localFriendship?.isRequester !== undefined ? localFriendship.isRequester : otherMember?.isRequester;
   }, [localFriendship, otherMember]);
 
+  // When Redux friendshipStatus changes from another screen (e.g. chat-info block/unblock),
+  // reset localFriendship so it doesn't override the new Redux value
+  const prevReduxFriendshipRef = React.useRef(otherMember?.friendshipStatus);
+  useEffect(() => {
+    const newReduxStatus = otherMember?.friendshipStatus;
+    if (newReduxStatus !== prevReduxFriendshipRef.current) {
+      prevReduxFriendshipRef.current = newReduxStatus;
+      // Clear localFriendship so Redux takes over
+      setLocalFriendship(null);
+    }
+  }, [otherMember?.friendshipStatus]);
+
+  const isBlockedByOther = useMemo(() => {
+    return friendshipStatus === 'BLOCKED' && isRequester === false;
+  }, [friendshipStatus, isRequester]);
+
   const otherAvatar = useMemo(() => {
     if (conversation?.type === 'GROUP') return conversation.avatarUrl || conversation.avatar;
     return otherMember?.avatarUrl || otherMember?.avatar || otherMember?.profilePic || paramAvatar;
   }, [conversation, otherMember, paramAvatar]);
 
   const isOnline = useMemo(() => {
-    if (conversation?.type === 'GROUP') return false;
+    if (conversation?.type === 'GROUP' || isBlockedByOther) return false;
     return String(otherMember?.status || '').toUpperCase() === 'ONLINE' || otherMember?.isOnline === true;
-  }, [conversation, otherMember]);
+  }, [conversation, otherMember, isBlockedByOther]);
 
   const onlineUsers = useMemo(() => {
+    if (isBlockedByOther) return [];
     const currentUserIdStr = String(currentUser?.userId || currentUser?.id || '');
     return (conversation?.members || [])
       .filter(member => {
@@ -452,11 +497,12 @@ const ChatDetailScreen = () => {
           (String(member.status || member.presence || '').toUpperCase() === 'ONLINE' || member.isOnline === true);
       })
       .map(member => String(member.userId || member.id || ''));
-  }, [conversation, currentUser]);
+  }, [conversation, currentUser, isBlockedByOther]);
 
   const showStrangerBar = useMemo(() => {
+    if (isAI) return false;
     if (!conversation || conversation.type !== 'SINGLE') return false;
-    if (conversation.isAI || displayName?.toLowerCase()?.includes('assistant') || displayName?.toLowerCase()?.includes('copilot')) return false;
+    if (conversation.isAI || displayName?.toLowerCase()?.includes('assistant') || displayName?.toLowerCase()?.includes('copilot') || displayName?.toLowerCase()?.includes('shopexpert')) return false;
     // Only show the bar if we have CONFIRMED the friendship status from the backend
     // otherMember must exist and have a friendshipStatus field set by the server
     if (!otherMember) return false;
@@ -466,7 +512,7 @@ const ChatDetailScreen = () => {
     // Use localFriendship override if available (after user action), otherwise use server data
     const effectiveStatus = localFriendship?.status || serverStatus;
     return effectiveStatus !== 'ACCEPTED' && effectiveStatus !== 'BLOCKED' && effectiveStatus !== 'SELF';
-  }, [conversation, otherMember, localFriendship, displayName]);
+  }, [conversation, otherMember, localFriendship, displayName, isAI]);
 
   const handleSendFriendRequest = async () => {
     const targetUserId = otherMember?.userId || otherMember?.id;
@@ -477,7 +523,7 @@ const ChatDetailScreen = () => {
       dispatch(fetchConversations());
     } catch (err) {
       console.error("Failed to send friend request:", err);
-      Alert.alert("Lỗi", "Không thể gửi lời mời kết bạn. Vui lòng thử lại.");
+      Alert.alert(t('common.error'), t('friends.add_friend_failed'));
     }
   };
 
@@ -490,7 +536,7 @@ const ChatDetailScreen = () => {
       dispatch(fetchConversations());
     } catch (err) {
       console.error("Failed to cancel friend request:", err);
-      Alert.alert("Lỗi", "Không thể hủy lời mời kết bạn. Vui lòng thử lại.");
+      Alert.alert(t('common.error'), t('search.cancel_request_failed'));
     }
   };
 
@@ -503,7 +549,7 @@ const ChatDetailScreen = () => {
       dispatch(fetchConversations());
     } catch (err) {
       console.error("Failed to accept friend request:", err);
-      Alert.alert("Lỗi", "Không thể đồng ý kết bạn. Vui lòng thử lại.");
+      Alert.alert(t('common.error'), t('common.error'));
     }
   };
 
@@ -516,7 +562,28 @@ const ChatDetailScreen = () => {
       dispatch(fetchConversations());
     } catch (err) {
       console.error("Failed to reject friend request:", err);
-      Alert.alert("Lỗi", "Không thể từ chối kết bạn. Vui lòng thử lại.");
+      Alert.alert(t('common.error'), t('common.error'));
+    }
+  };
+
+  const handleUnblock = async () => {
+    const targetUserId = otherMember?.userId || otherMember?.id;
+    if (!targetUserId) return;
+    try {
+      await friendApi.unblockUser(targetUserId);
+      // 1. Update Redux store immediately so chat-info screen also reflects the change
+      dispatch(updateMemberFriendshipStatus({
+        userId: String(targetUserId),
+        friendshipStatus: 'NONE',
+        isRequester: null,
+      }));
+      // 2. Update local state as well (for immediate UI in this screen)
+      setLocalFriendship({ status: 'NONE', isRequester: null });
+      // 3. Refresh conversation list in background
+      dispatch(fetchConversations());
+    } catch (err) {
+      console.error("Failed to unblock user:", err);
+      Alert.alert(t('common.error'), t('info.unblock_failed'));
     }
   };
 
@@ -546,6 +613,29 @@ const ChatDetailScreen = () => {
     setModalVisible(true);
   };
 
+  const handleTranslate = async (messageId) => {
+    const msg = messages.find(m => m.messageId === messageId);
+    if (!msg || !msg.content) return;
+
+    const tgtLang = currentUser?.preferredLanguage || 'vie_Latn';
+    const srcLang = msg.language || 'vie_Latn';
+
+    setTranslationLoading(prev => ({ ...prev, [messageId]: true }));
+    try {
+      const res = await chatApi.translateMessage(messageId, realId, srcLang, tgtLang);
+      const translatedText = res.data?.data?.translated || res.data?.translated;
+      setTranslatedMessages(prev => ({ ...prev, [messageId]: translatedText }));
+    } catch (err) {
+      console.error("Translation failed:", err);
+      Alert.alert(
+        t('chat.translation_failed') || "Dịch thất bại",
+        err.response?.data?.message || err.message
+      );
+    } finally {
+      setTranslationLoading(prev => ({ ...prev, [messageId]: false }));
+    }
+  };
+
   const handleModalAction = (type, message) => {
     switch (type) {
       case 'reply':
@@ -568,10 +658,10 @@ const ChatDetailScreen = () => {
         }
         break;
       case 'delete':
-        Alert.alert('Xác nhận', 'Bạn có muốn xóa tin nhắn này ở phía bạn?', [
-          { text: 'Hủy', style: 'cancel' },
+        Alert.alert(t('common.confirm'), t('chat.delete_for_me_confirm'), [
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Xóa',
+            text: t('common.delete'),
             style: 'destructive',
             onPress: () => {
               dispatch(deleteMessage({
@@ -583,10 +673,10 @@ const ChatDetailScreen = () => {
         ]);
         break;
       case 'recall':
-        Alert.alert('Thu hồi tin nhắn', 'Tin nhắn này sẽ bị thu hồi với tất cả mọi người. Bạn có chắc chắn?', [
-          { text: 'Hủy', style: 'cancel' },
+        Alert.alert(t('chat.recall'), t('chat.recall_confirm'), [
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Thu hồi',
+            text: t('chat.recall'),
             style: 'destructive',
             onPress: () => {
               dispatch(recallMessage({
@@ -607,6 +697,9 @@ const ChatDetailScreen = () => {
       case 'unpin':
         dispatch(unpinMessage({ messageId: message.messageId, conversationId: realId }));
         break;
+      case 'translate':
+        handleTranslate(message.messageId);
+        break;
       default:
         console.log('Action not implemented:', type);
     }
@@ -620,7 +713,16 @@ const ChatDetailScreen = () => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(main)');
+              }
+            }}
+            style={styles.backButton}
+          >
             <Ionicons name="chevron-back" size={28} color={colors.primary} />
           </TouchableOpacity>
 
@@ -636,13 +738,19 @@ const ChatDetailScreen = () => {
             })}
           >
             <View style={styles.headerAvatarContainer}>
-              <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200 }]} />
-              {isOnline && <View style={[styles.headerOnlineBadge, { borderColor: colors.background }]} />}
+              {isAI ? (
+                <View style={[styles.headerAvatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
+                  <Ionicons name="sparkles" size={20} color="#6366f1" />
+                </View>
+              ) : (
+                <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200 }]} />
+              )}
+              {(isOnline || isAI) && <View style={[styles.headerOnlineBadge, { borderColor: colors.background }]} />}
             </View>
             <View style={styles.headerInfo}>
               <View style={styles.nameRow}>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
-                {conversation?.type === 'SINGLE' && otherMember?.friendshipStatus && (
+                {conversation?.type === 'SINGLE' && !isAI && otherMember?.friendshipStatus && (
                   <View style={[
                     styles.miniTag,
                     friendshipStatus === 'ACCEPTED' ? styles.friendMiniTag : [styles.strangerMiniTag, isDark && { backgroundColor: colors.surface200, borderColor: colors.border }]
@@ -651,30 +759,34 @@ const ChatDetailScreen = () => {
                       styles.miniTagText,
                       friendshipStatus === 'ACCEPTED' ? styles.friendMiniTagText : [styles.strangerMiniTagText, isDark && { color: colors.textSubtle }]
                     ]}>
-                      {friendshipStatus === 'ACCEPTED' ? 'BẠN' : 'LẠ'}
+                      {friendshipStatus === 'ACCEPTED' ? t('chat.friend').toUpperCase() : t('chat.stranger_bar.title').toUpperCase()}
                     </Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.headerStatus, isOnline ? styles.statusOnline : [styles.statusOffline, { color: colors.textSubtle }]]} numberOfLines={1}>
-                {otherMember
+              <Text style={[styles.headerStatus, (isOnline || isAI) ? styles.statusOnline : [styles.statusOffline, { color: colors.textSubtle }]]} numberOfLines={1}>
+                {isAI ? t('chat.online') : (otherMember
                   ? formatLastSeen(otherMember.status || otherMember.presence, otherMember.lastSeenAt || otherMember.last_seen_at)
                   : (conversation?.type === 'GROUP'
-                    ? `${conversation?.members?.length || 0} thành viên`
-                    : (isOnline ? 'Đang hoạt động' : 'Ngoại tuyến')
+                    ? t('chat.member_count', { count: conversation?.members?.length || 0 })
+                    : (isOnline ? t('chat.online') : t('chat.offline'))
                   )
-                }
+                )}
               </Text>
             </View>
           </TouchableOpacity>
 
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('audio')}>
-              <MaterialIcons name="call" size={24} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('video')}>
-              <MaterialIcons name="videocam" size={24} color={colors.primary} />
-            </TouchableOpacity>
+            {!isAI && (
+              <>
+                <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('audio')}>
+                  <MaterialIcons name="call" size={24} color={colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerActionButton} onPress={() => handleStartCall('video')}>
+                  <MaterialIcons name="videocam" size={24} color={colors.primary} />
+                </TouchableOpacity>
+              </>
+            )}
             <TouchableOpacity
               style={styles.headerActionButton}
               onPress={() => router.push({
@@ -704,15 +816,15 @@ const ChatDetailScreen = () => {
                 <View style={styles.ongoingOnlineDot} />
               </View>
               <View>
-                <Text style={styles.ongoingCallTitle}>Cuộc gọi nhóm đang diễn ra</Text>
-                <Text style={styles.ongoingCallSub}>Nhấn để tham gia cùng mọi người</Text>
+                <Text style={styles.ongoingCallTitle}>{t('chat.ongoing_group_call')}</Text>
+                <Text style={styles.ongoingCallSub}>{t('chat.join_call_hint')}</Text>
               </View>
             </View>
             <TouchableOpacity
               style={styles.joinButton}
               onPress={() => handleStartCall(lastCallMsg?.callType || 'video', true, lastCallMsg?.startTime)}
             >
-              <Text style={styles.joinButtonText}>Tham gia ngay</Text>
+              <Text style={styles.joinButtonText}>{t('chat.join_now')}</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         )}
@@ -732,7 +844,7 @@ const ChatDetailScreen = () => {
                   style={styles.pinnedInfo}
                   onPress={() => handleScrollToMessage(conversation.pinnedMessages[conversation.pinnedMessages.length - 1].messageId)}
                 >
-                  <Text style={styles.pinnedTypeLabel}>TIN NHẮN</Text>
+                  <Text style={styles.pinnedTypeLabel}>{t('chat.message').toUpperCase()}</Text>
                   <Text style={styles.pinnedPreview} numberOfLines={1}>
                     <Text style={styles.pinnedSenderName}>
                       {conversation.pinnedMessages[conversation.pinnedMessages.length - 1].senderName}:
@@ -747,7 +859,7 @@ const ChatDetailScreen = () => {
                       style={styles.webMoreBadge}
                       onPress={() => setShowAllPins(true)}
                     >
-                      <Text style={styles.webMoreBadgeText}>+{conversation.pinnedMessages.length} ghim</Text>
+                      <Text style={styles.webMoreBadgeText}>+{conversation.pinnedMessages.length} {t('chat.ghim')}</Text>
                       <Ionicons name="chevron-down" size={14} color="#fff" />
                     </TouchableOpacity>
                   )}
@@ -762,12 +874,12 @@ const ChatDetailScreen = () => {
             ) : (
               <View style={styles.expandedContainer}>
                 <View style={styles.expandedHeader}>
-                  <Text style={styles.expandedHeaderText}>DANH SÁCH GHIM ({conversation.pinnedMessages.length})</Text>
+                  <Text style={styles.expandedHeaderText}>{t('chat.pinned_list', { count: conversation.pinnedMessages.length }).toUpperCase()}</Text>
                   <TouchableOpacity
                     style={styles.collapseButton}
                     onPress={() => setShowAllPins(false)}
                   >
-                    <Text style={styles.collapseButtonText}>THU GỌN</Text>
+                    <Text style={styles.collapseButtonText}>{t('chat.collapse').toUpperCase()}</Text>
                     <Ionicons name="chevron-up" size={14} color="#94a3b8" />
                   </TouchableOpacity>
                 </View>
@@ -782,7 +894,7 @@ const ChatDetailScreen = () => {
                         style={styles.pinnedInfo}
                         onPress={() => handleScrollToMessage(pin.messageId)}
                       >
-                        <Text style={styles.pinnedTypeLabel}>TIN NHẮN</Text>
+                        <Text style={styles.pinnedTypeLabel}>{t('chat.message').toUpperCase()}</Text>
                         <Text style={styles.pinnedPreview} numberOfLines={1}>
                           <Text style={styles.pinnedSenderName}>{pin.senderName}: </Text>
                           {getPinnedPreviewText(pin)}
@@ -801,10 +913,10 @@ const ChatDetailScreen = () => {
                 <TouchableOpacity
                   style={styles.viewAllFooter}
                   onPress={() => {
-                    Alert.alert('Thông báo', 'Tính năng đang được phát triển. Đây sẽ là nơi hiển thị toàn bộ lịch sử tin nhắn ghim của nhóm.');
+                    Alert.alert(t('common.success'), t('chat.view_all_pins_tooltip'));
                   }}
                 >
-                  <Text style={styles.viewAllFooterText}>XEM TẤT CẢ Ở BẢNG TIN NHÓM</Text>
+                  <Text style={styles.viewAllFooterText}>{t('chat.view_all_pins_tooltip').toUpperCase()}</Text>
                   <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
                 </TouchableOpacity>
               </View>
@@ -820,9 +932,9 @@ const ChatDetailScreen = () => {
                   const status = localFriendship?.status || otherMember?.friendshipStatus || 'NONE';
                   const req = localFriendship?.isRequester !== undefined ? localFriendship.isRequester : otherMember?.isRequester;
                   if (status === 'PENDING') {
-                    return req ? 'Đã gửi lời mời kết bạn' : 'Người này đã gửi lời mời kết bạn';
+                    return req ? t('chat.friend_request_sent') : t('chat.friend_request_received');
                   }
-                  return 'Gửi yêu cầu kết bạn tới người này';
+                  return t('chat.send_friend_request_prompt');
                 })()}
               </Text>
             </View>
@@ -835,17 +947,17 @@ const ChatDetailScreen = () => {
                   if (req) {
                     return (
                       <TouchableOpacity style={[styles.actionButton, styles.cancelButton]} onPress={handleCancelFriendRequest}>
-                        <Text style={styles.actionButtonText}>Hủy yêu cầu</Text>
+                        <Text style={styles.actionButtonText}>{t('chat.cancel_request')}</Text>
                       </TouchableOpacity>
                     );
                   } else {
                     return (
                       <View style={{ flexDirection: 'row', gap: 8 }}>
                         <TouchableOpacity style={[styles.actionButton, styles.acceptButton]} onPress={handleAcceptFriendRequest}>
-                          <Text style={styles.actionButtonText}>Đồng ý</Text>
+                          <Text style={styles.actionButtonText}>{t('chat.stranger_bar.accept')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.actionButton, styles.rejectButton, { backgroundColor: isDark ? colors.surface300 : '#e2e8f0' }]} onPress={handleRejectFriendRequest}>
-                          <Text style={[styles.actionButtonText, { color: isDark ? colors.foreground : '#475569' }]}>Từ chối</Text>
+                          <Text style={[styles.actionButtonText, { color: isDark ? colors.foreground : '#475569' }]}>{t('chat.stranger_bar.decline')}</Text>
                         </TouchableOpacity>
                       </View>
                     );
@@ -853,7 +965,7 @@ const ChatDetailScreen = () => {
                 }
                 return (
                   <TouchableOpacity style={[styles.actionButton, styles.sendButton]} onPress={handleSendFriendRequest}>
-                    <Text style={styles.actionButtonText}>Gửi kết bạn</Text>
+                    <Text style={styles.actionButtonText}>{t('chat.add_friend_btn')}</Text>
                   </TouchableOpacity>
                 );
               })()}
@@ -888,6 +1000,10 @@ const ChatDetailScreen = () => {
                   onLongPress={handleLongPressMessage}
                   onPressReply={handleScrollToMessage}
                   highlightedMessageId={highlightedMessageId}
+                  isBlockedByOther={isBlockedByOther}
+                  translatedMessages={translatedMessages}
+                  translationLoading={translationLoading}
+                  onTranslate={handleTranslate}
                 />
               </ImageBackground>
             </View>
@@ -908,17 +1024,46 @@ const ChatDetailScreen = () => {
               onLongPress={handleLongPressMessage}
               onPressReply={handleScrollToMessage}
               highlightedMessageId={highlightedMessageId}
+              isBlockedByOther={isBlockedByOther}
+              translatedMessages={translatedMessages}
+              translationLoading={translationLoading}
+              onTranslate={handleTranslate}
             />
           )}
         </View>
 
-        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.background }}>
+        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.background, paddingHorizontal: 16 }}>
           {isRestricted ? (
             <View style={[styles.restrictedContainer, { backgroundColor: isDark ? colors.surface100 : '#f8fafc', borderTopColor: colors.border }]}>
               <MaterialIcons name="lock-outline" size={20} color={colors.textMuted} />
-              <Text style={[styles.restrictedText, { color: colors.textMuted }]}>Chỉ quản trị viên mới có thể gửi tin nhắn</Text>
+              <Text style={[styles.restrictedText, { color: colors.textMuted }]}>{t('chat.only_admin_can_send')}</Text>
             </View>
-
+          ) : (friendshipStatus === 'BLOCKED' && isRequester === true) ? (
+            <View style={[
+              styles.blockedContainer,
+              { 
+                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.15)'
+              }
+            ]}>
+              <View style={styles.blockedHeader}>
+                <View style={[styles.shieldIconCircle, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                  <MaterialCommunityIcons name="shield-alert-outline" size={24} color="#ef4444" />
+                </View>
+                <View style={styles.blockedTextGroup}>
+                  <Text style={[styles.blockedTitle, { color: colors.foreground }]}>{t('chat.cannot_send_message')}</Text>
+                  <Text style={[styles.blockedSubtitle, { color: colors.textMuted }]}>
+                    {t('chat.block_user_confirm', { name: displayName }).replace('Bạn có chắc chắn muốn chặn ', 'Bạn đã chặn ').replace('?', '.') + ' ' + t('info.unblock_user').replace('Bỏ chặn người này', 'Hãy bỏ chặn để tiếp tục trò chuyện.')}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.unblockButton}
+                onPress={handleUnblock}
+              >
+                <Text style={styles.unblockButtonText}>{t('info.unblock_user').replace('Bỏ chặn người này', 'BỎ CHẶN')}</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <MessageInput
               ref={messageInputRef}
@@ -926,8 +1071,6 @@ const ChatDetailScreen = () => {
               members={conversation?.members || []}
               onSendMessage={handleSendMessage}
               onOpenPoll={handleOpenPoll}
-
-
               onTypingChange={(isTyping) => {
                 if (isTyping) {
                   sendTypingStart(realId);
@@ -1273,6 +1416,56 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  blockedContainer: {
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 12,
+    marginVertical: 8,
+  },
+  blockedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  shieldIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockedTextGroup: {
+    flex: 1,
+  },
+  blockedTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  blockedSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  unblockButton: {
+    backgroundColor: '#ef4444',
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  unblockButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1.5,
   },
 });
 

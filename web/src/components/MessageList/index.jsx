@@ -269,6 +269,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const menuNodeRef = useRef(null);
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
+  const { friends } = useSelector(state => state.chat);
   const [activeMenu, setActiveMenu] = useState(null);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [optimisticReactions, setOptimisticReactions] = useState({}); // { messageId: [reactions] }
@@ -290,6 +291,22 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const preferredLanguage = user?.preferredLanguage;
   const currentConv = conversations?.find(c => c.conversationId === conversationId);
 
+  const otherMember = currentConv?.members?.find(m => {
+    const mId = String(m.userId || m.id || '').toLowerCase();
+    const myId = String(meId || '').toLowerCase();
+    return mId !== '' && mId !== myId;
+  });
+  const otherMemberId = otherMember?.userId || otherMember?.id;
+
+  const isBlockedByOther = React.useMemo(() => {
+    if (!otherMemberId || currentConv?.type !== 'SINGLE') return false;
+    const friendRecord = Array.isArray(friends) && friends.find(f => {
+      const fId = String(f.userId || f.id || f.friendId || '').toLowerCase();
+      return fId !== '' && fId === String(otherMemberId).toLowerCase();
+    });
+    return friendRecord && friendRecord.status === 'BLOCKED' && !friendRecord.isRequester;
+  }, [friends, otherMemberId, currentConv]);
+
   const handleMentionClick = (mentionText) => {
     const name = mentionText.startsWith('@') ? mentionText.substring(1) : mentionText;
     const cleanName = name.replace('\u200B', '').trim();
@@ -305,6 +322,65 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
         ...member,
         id: member.userId || member.id,
         name: member.fullName || member.name
+      });
+      setIsUserInfoModalOpen(true);
+    }
+  };
+
+  const renderTextWithLinks = (text, isMe) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
+    const subParts = text.split(urlRegex);
+    return subParts.map((subPart, j) => {
+      if (subPart.match(urlRegex)) {
+        return (
+          <a
+            key={`link-${j}`}
+            href={subPart}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "underline font-bold transition-opacity hover:opacity-85",
+              isMe
+                ? "text-white hover:text-white/80"
+                : "text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-500"
+            )}
+          >
+            {subPart}
+          </a>
+        );
+      }
+      return subPart;
+    });
+  };
+
+  const handleUserClick = (senderId, senderName) => {
+    if (!senderId) return;
+    
+    // Check if it's me
+    if (String(senderId) === String(meId)) {
+      setSelectedUserInfo({
+        ...user,
+        id: meId,
+        name: user.fullName || user.name || senderName
+      });
+      setIsUserInfoModalOpen(true);
+      return;
+    }
+
+    const member = currentConv?.members?.find(m => String(m.userId || m.id) === String(senderId));
+    if (member) {
+      setSelectedUserInfo({
+        ...member,
+        id: member.userId || member.id,
+        name: member.fullName || member.name
+      });
+      setIsUserInfoModalOpen(true);
+    } else {
+      setSelectedUserInfo({
+        id: senderId,
+        name: senderName || 'User'
       });
       setIsUserInfoModalOpen(true);
     }
@@ -334,7 +410,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
           </span>
         );
       }
-      return part;
+      return renderTextWithLinks(part, isMe);
     });
   };
 
@@ -1089,11 +1165,25 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                         {!isMe && msg.type !== 'VOTE' && (
                           <div className="w-9 h-9 flex-shrink-0 mb-1">
                             {(isLastInGroup || msg.type === 'CALL_LOG') ? (
-                              <div className="w-full h-full rounded-[14px] bg-surface-200 overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform animate-in zoom-in duration-300">
-                                {(msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
-                                  <img src={msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl} className="w-full h-full object-cover" alt="" />
+                              <div
+                                onClick={() => handleUserClick(msg.senderId, msg.senderName)}
+                                className={cn(
+                                  "w-full h-full rounded-[14px] overflow-hidden border-2 border-background shadow-md group-hover:scale-110 transition-transform animate-in zoom-in duration-300 flex items-center justify-center cursor-pointer",
+                                  msg.senderId === 'shop-expert-ai-bot' ? "bg-indigo-600" : "bg-surface-200"
+                                )}
+                              >
+                                {msg.senderId === 'shop-expert-ai-bot' ? (
+                                  <SparklesIcon className="text-white" size={16} />
+                                ) : (msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl) ? (
+                                  <img
+                                    src={msg.senderAvatarUrl || msg.senderAvatar || currentConv?.members?.find(m => m.userId === msg.senderId)?.avatarUrl}
+                                    className="w-full h-full object-cover"
+                                    alt=""
+                                  />
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-foreground/40 font-black italic uppercase text-sm">{msg.senderName?.charAt(0) || '?'}</div>
+                                  <div className="w-full h-full flex items-center justify-center text-foreground/40 font-black italic uppercase text-sm">
+                                    {msg.senderName?.charAt(0) || '?'}
+                                  </div>
                                 )}
                               </div>
                             ) : <div className="w-9" />}
@@ -1105,7 +1195,12 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                           isMe ? "items-end" : "items-start"
                         )}>
                           {(isFirstInGroup || msg.type === 'CALL_LOG') && !isMe && msg.type !== 'VOTE' && currentConv?.type === 'GROUP' && (
-                            <p className={`text-[10px] font-black uppercase tracking-widest ml-3 mb-1.5 opacity-60 ${getMemberColor(msg.senderId, currentConv?.members)}`}>{msg.senderName || t('chat.member')}</p>
+                            <p 
+                              onClick={() => handleUserClick(msg.senderId, msg.senderName)}
+                              className={`text-[10px] font-black uppercase tracking-widest ml-3 mb-1.5 opacity-60 cursor-pointer hover:underline ${getMemberColor(msg.senderId, currentConv?.members)}`}
+                            >
+                              {msg.senderName || t('chat.member')}
+                            </p>
                           )}
                           {isFirstInGroup && msg.type === 'VOTE' && (
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400/80 mb-2 text-center w-full">{msg.senderName || t('chat.member')} {t('chat.created_poll')}</p>
@@ -1805,7 +1900,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             );
                                           }
 
-                                          const isOtherOnline = currentConv?.members?.some(m =>
+                                          const isOtherOnline = !isBlockedByOther && currentConv?.members?.some(m =>
                                             String(m.userId || m.id) !== String(meId) &&
                                             (String(m.status || m.presence || '').toUpperCase() === 'ONLINE' || m.isOnline === true)
                                           );

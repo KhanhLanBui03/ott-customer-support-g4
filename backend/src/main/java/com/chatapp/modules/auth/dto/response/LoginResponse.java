@@ -20,6 +20,7 @@ public class LoginResponse {
     private String bio;
     private String email;
     private String status;
+    private String role;
     private String accessToken;
     private String refreshToken;
     private String tokenType; // "Bearer"
