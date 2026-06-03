@@ -50,6 +50,27 @@
       }
     },
     "chat": {
+      "title": "メッセージ",
+      "priority": "優先",
+      "hidden_tab": "非表示",
+      "all": "すべて",
+      "unread": "未読",
+      "filter_by_status": "ステータスでフィルター",
+      "filter_by_tag": "カテゴリでフィルター",
+      "clear": "クリア",
+      "close": "閉じる",
+      "context_menu_title": "会話のオプション",
+      "pin_conv": "会話をピン留め",
+      "unpin_conv": "会話のピン留めを解除",
+      "hide_conv": "会話を非表示にする",
+      "unhide_conv": "会話を表示する",
+      "delete_conv": "会話を削除する",
+      "unhide_success": "会話が表示されました！",
+      "hide_success": "会話が非表示になりました！",
+      "tooltip_light_mode": "ライトモードに切り替え",
+      "tooltip_dark_mode": "ダークモードに切り替え",
+      "tooltip_new_group": "新しいグループを作成",
+      "tooltip_search_user": "ユーザーを検索",
       "online": "オンライン",
       "offline": "オフライン",
       "just_now": "たった今アクティブ",
@@ -161,7 +182,6 @@
       "incoming_voice_call": "音声着信",
       "missed_video_call": "不在ビデオ通話",
       "missed_voice_call": "不在音声通話",
-      "join_now": "今すぐ参加",
       "call_back": "折り返す",
       "ai_translating": "AI翻訳中...",
       "ai_translation": "AI翻訳",
@@ -178,7 +198,6 @@
       "share": "共有",
       "reaction": "リアクション",
       "times": "回",
-      "close": "閉じる",
       "reaction_list": "このリアクションを選んだユーザー一覧",
       "no_reactions": "まだリアクションはありません。",
       "someone": "誰か",
@@ -300,6 +319,13 @@
         "search": "検索"
       }
     },
+    "logout": {
+      "title": "ログアウト",
+      "confirm_question": "本当にログアウトしますか？",
+      "confirm_desc": "セッションが終了します。サービスを引き続き利用するには再度ログインする必要があります。",
+      "btn_cancel": "キャンセル",
+      "btn_confirm": "ログアウトする"
+    },
     "profile": {
       "title": "プロフィール",
       "avatar_success": "アバターを更新しました",
@@ -344,7 +370,11 @@
       "group_prefix": "グループ：",
       "inviter_prefix": "送信者：",
       "user_fallback": "ユーザー",
-      "someone": "誰か"
+      "someone": "誰か",
+      "friend_request_msg": "{{name}} があなたに友達リクエストを送りました。",
+      "friend_accepted_msg": "{{name}} があなたの友達リクエストを承認しました。",
+      "friend_rejected_msg": "{{name}} があなたの友達リクエストを拒否しました。",
+      "group_join_rejected": "グループ {{groupName}} への参加申請が拒否されました"
     },
     "cloud": {
       "title": "マイクラウド",
@@ -374,7 +404,16 @@
       "files": "ファイル",
       "refresh": "更新",
       "clear_all": "すべて削除",
-      "clear_all_confirm": "クラウド上のすべてのデータを削除してもよろしいですか？"
+      "clear_all_confirm": "クラウド上のすべてのデータを削除してもよろしいですか？",
+      "input_placeholder": "クラウドへのメッセージを入力...",
+      "send_file": "ファイルを送信",
+      "replying_to_self": "自分自身に返信中",
+      "replying_to_user": "{{name}} に返信中",
+      "preview_file_title": "クラウドでファイルをプレビュー",
+      "no_preview_link": "プレビューリンクはありません。",
+      "unsupported_preview_title": "このファイルタイプの直接プレビューはサポートされていません",
+      "unsupported_preview_desc": "ダウンロードして外部アプリケーションで開くことができます。",
+      "delete_group": "このファイルグループを削除"
     },
     "system_msg": {
       "created_group": "{{name}} がグループを作成しました。",

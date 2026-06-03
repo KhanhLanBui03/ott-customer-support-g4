@@ -50,6 +50,27 @@
       }
     },
     "chat": {
+      "title": "Messages",
+      "priority": "Priorité",
+      "hidden_tab": "Masqué",
+      "all": "Tous",
+      "unread": "Non lus",
+      "filter_by_status": "Par statut",
+      "filter_by_tag": "Par catégorie",
+      "clear": "Effacer",
+      "close": "Fermer",
+      "context_menu_title": "Options de conversation",
+      "pin_conv": "Épingler la conversation",
+      "unpin_conv": "Désépingler la conversation",
+      "hide_conv": "Masquer la conversation",
+      "unhide_conv": "Afficher la conversation",
+      "delete_conv": "Supprimer la conversation",
+      "unhide_success": "Conversation affichée !",
+      "hide_success": "Conversation masquée !",
+      "tooltip_light_mode": "Passer en mode clair",
+      "tooltip_dark_mode": "Passer en mode sombre",
+      "tooltip_new_group": "Créer un nouveau groupe",
+      "tooltip_search_user": "Rechercher un utilisateur",
       "online": "En ligne",
       "offline": "Hors ligne",
       "just_now": "À l'instant",
@@ -177,7 +198,6 @@
       "share": "Partager",
       "reaction": "Réaction",
       "times": "fois",
-      "close": "Fermer",
       "reaction_list": "Liste des personnes ayant réagi",
       "no_reactions": "Aucune réaction pour l'instant.",
       "someone": "Quelqu'un",
@@ -523,6 +543,13 @@
         "search": "Rechercher"
       }
     },
+    "logout": {
+      "title": "Déconnexion",
+      "confirm_question": "Êtes-vous sûr de vouloir vous déconnecter ?",
+      "confirm_desc": "Votre session se terminera et vous devrez vous reconnecter pour continuer à utiliser nos services.",
+      "btn_cancel": "Annuler",
+      "btn_confirm": "Confirmer la déconnexion"
+    },
     "profile": {
       "title": "Profil personnel",
       "avatar_success": "Photo de profil mise à jour avec succès",
@@ -567,7 +594,11 @@
       "group_prefix": "Groupe :",
       "inviter_prefix": "De :",
       "user_fallback": "Utilisateur",
-      "someone": "Quelqu'un"
+      "someone": "Quelqu'un",
+      "friend_request_msg": "{{name}} vous a envoyé une demande d'ami.",
+      "friend_accepted_msg": "{{name}} a accepté votre demande d'ami.",
+      "friend_rejected_msg": "{{name}} a refusé votre demande d'ami.",
+      "group_join_rejected": "Votre demande d'adhésion au groupe {{groupName}} a été refusée"
     },
     "cloud": {
       "title": "Mon Cloud",
@@ -597,7 +628,16 @@
       "files": "fichier(s)",
       "refresh": "Actualiser",
       "clear_all": "Tout supprimer",
-      "clear_all_confirm": "Êtes-vous sûr de vouloir supprimer toutes les données du Cloud ?"
+      "clear_all_confirm": "Êtes-vous sûr de vouloir supprimer toutes les données du Cloud ?",
+      "input_placeholder": "Saisir un message pour le Cloud...",
+      "send_file": "Envoyer le fichier",
+      "replying_to_self": "Répondre à soi-même",
+      "replying_to_user": "Répondre à {{name}}",
+      "preview_file_title": "Aperçu du fichier dans le Cloud",
+      "no_preview_link": "Aucun lien d'aperçu disponible.",
+      "unsupported_preview_title": "L'aperçu direct n'est pas pris en charge pour ce type de fichier",
+      "unsupported_preview_desc": "Vous pouvez toujours le télécharger pour l'ouvrir avec une application externe.",
+      "delete_group": "Supprimer ce groupe de fichiers"
     },
     "system_msg": {
       "created_group": "{{name}} a créé le groupe.",

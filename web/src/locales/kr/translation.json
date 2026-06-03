@@ -50,6 +50,27 @@
       }
     },
     "chat": {
+      "title": "메시지",
+      "priority": "우선",
+      "hidden_tab": "숨김",
+      "all": "전체",
+      "unread": "읽지 않음",
+      "filter_by_status": "상태별 필터",
+      "filter_by_tag": "카테고리별 필터",
+      "clear": "지우기",
+      "close": "닫기",
+      "context_menu_title": "대화 옵션",
+      "pin_conv": "대화 고정",
+      "unpin_conv": "대화 고정 해제",
+      "hide_conv": "대화 숨기기",
+      "unhide_conv": "대화 숨김 해제",
+      "delete_conv": "대화 삭제",
+      "unhide_success": "대화 숨김이 해제되었습니다!",
+      "hide_success": "대화가 숨겨졌습니다!",
+      "tooltip_light_mode": "라이트 모드로 전환",
+      "tooltip_dark_mode": "다크 모드로 전환",
+      "tooltip_new_group": "새 그룹 만들기",
+      "tooltip_search_user": "사용자 검색",
       "online": "온라인",
       "offline": "오프라인",
       "just_now": "방금 활동",
@@ -161,7 +182,6 @@
       "incoming_voice_call": "수신 음성 통화",
       "missed_video_call": "부재중 화상 통화",
       "missed_voice_call": "부재중 음성 통화",
-      "join_now": "지금 참여",
       "call_back": "다시 전화",
       "ai_translating": "AI 번역 중...",
       "ai_translation": "AI 번역",
@@ -178,7 +198,6 @@
       "share": "공유",
       "reaction": "반응",
       "times": "회",
-      "close": "닫기",
       "reaction_list": "이 반응을 선택한 사람 목록",
       "no_reactions": "아직 반응이 없습니다.",
       "someone": "누군가",
@@ -524,6 +543,13 @@
         "search": "검색"
       }
     },
+    "logout": {
+      "title": "로그아웃",
+      "confirm_question": "정말 로그아웃하시겠습니까?",
+      "confirm_desc": "세션이 종료되며 서비스를 계속 이용하려면 다시 로그인해야 합니다.",
+      "btn_cancel": "취소",
+      "btn_confirm": "로그아웃 확인"
+    },
     "profile": {
       "title": "내 프로필",
       "avatar_success": "프로필 사진이 성공적으로 업데이트되었습니다",
@@ -568,7 +594,11 @@
       "group_prefix": "그룹:",
       "inviter_prefix": "보낸 사람:",
       "user_fallback": "사용자",
-      "someone": "누군가"
+      "someone": "누군가",
+      "friend_request_msg": "{{name}} 님이 친구 요청을 보냈습니다.",
+      "friend_accepted_msg": "{{name}} 님이 친구 요청을 수락했습니다.",
+      "friend_rejected_msg": "{{name}} 님이 친구 요청을 거절했습니다.",
+      "group_join_rejected": "그룹 {{groupName}} 가입 요청이 거절되었습니다"
     },
     "cloud": {
       "title": "내 클라우드",
@@ -598,7 +628,16 @@
       "files": "파일",
       "refresh": "새로 고침",
       "clear_all": "전체 삭제",
-      "clear_all_confirm": "클라우드의 모든 데이터를 삭제하시겠습니까?"
+      "clear_all_confirm": "클라우드의 모든 데이터를 삭제하시겠습니까?",
+      "input_placeholder": "클라우드로 보낼 메시지 입력...",
+      "send_file": "파일 전송",
+      "replying_to_self": "나에게 답장 중",
+      "replying_to_user": "{{name}}에게 답장 중",
+      "preview_file_title": "클라우드에서 파일 미리보기",
+      "no_preview_link": "미리보기 링크가 없습니다.",
+      "unsupported_preview_title": "이 파일 형식은 직접 미리보기를 지원하지 않습니다",
+      "unsupported_preview_desc": "다운로드하여 외부 애플리케이션으로 열 수 있습니다.",
+      "delete_group": "이 파일 그룹 삭제"
     },
     "system_msg": {
       "created_group": "{{name}} 님이 그룹을 생성했습니다.",
@@ -618,4 +657,3 @@
     }
   }
 }
-

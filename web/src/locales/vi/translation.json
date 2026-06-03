@@ -189,7 +189,6 @@
       "accepted_elsewhere": "Đã trả lời trên thiết bị khác",
       "user_joined": "{{name}} đã tham gia phòng",
       "user_left": "{{name}} đã rời phòng",
-      "join_now": "Tham gia ngay",
       "call_back": "Gọi lại",
       "ai_translating": "AI đang dịch...",
       "ai_translation": "Bản dịch AI",
@@ -208,7 +207,6 @@
       "share": "Chia sẻ",
       "reaction": "Biểu cảm",
       "times": "lượt",
-      "close": "Đóng",
       "reaction_list": "Danh sách người đã chọn biểu cảm này",
       "no_reactions": "Chưa có ai phản ứng.",
       "someone": "Ai đó",
@@ -653,7 +651,11 @@
       "group_prefix": "Nhóm:",
       "inviter_prefix": "Từ:",
       "user_fallback": "Người dùng",
-      "someone": "Ai đó"
+      "someone": "Ai đó",
+      "friend_request_msg": "{{name}} đã gửi lời mời kết bạn.",
+      "friend_accepted_msg": "{{name}} đã chấp nhận lời mời kết bạn.",
+      "friend_rejected_msg": "{{name}} đã từ chối lời mời kết bạn.",
+      "group_join_rejected": "Bạn đã bị từ chối vào nhóm {{groupName}}"
     },
     "cloud": {
       "title": "Cloud của tôi",
@@ -683,7 +685,16 @@
       "files": "tệp tin",
       "refresh": "Làm mới",
       "clear_all": "Xóa tất cả",
-      "clear_all_confirm": "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trên Cloud?"
+      "clear_all_confirm": "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trên Cloud?",
+      "input_placeholder": "Nhập tin nhắn gửi tới Cloud...",
+      "send_file": "Gửi tệp",
+      "replying_to_self": "Đang trả lời chính mình",
+      "replying_to_user": "Đang trả lời {{name}}",
+      "preview_file_title": "Xem trước tệp trong Cloud",
+      "no_preview_link": "Không có link xem trước.",
+      "unsupported_preview_title": "Không hỗ trợ xem trực tiếp loại file này",
+      "unsupported_preview_desc": "Bạn vẫn có thể tải về để mở bằng ứng dụng ngoài.",
+      "delete_group": "Xóa nhóm file này"
     },
     "system_msg": {
       "created_group": "{{name}} đã tạo nhóm.",

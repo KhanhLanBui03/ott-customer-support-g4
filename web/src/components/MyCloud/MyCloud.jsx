@@ -632,7 +632,7 @@ const MyCloud = ({ isDark }) => {
                                   className={`w-full flex items-center space-x-3 px-4 py-3.5 text-[13px] font-bold rounded-2xl transition-all ${isDark ? 'hover:bg-white/5 text-white/90' : 'hover:bg-slate-50 text-slate-700'}`}
                                 >
                                   <Reply size={18} className="text-indigo-400" />
-                                  <span>Trả lời</span>
+                                  <span>{t('chat.reply')}</span>
                                 </button>
                                 <div className={`h-px mx-4 my-1 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
                                 <button
@@ -645,7 +645,7 @@ const MyCloud = ({ isDark }) => {
                                   className={`w-full flex items-center space-x-3 px-4 py-3.5 text-[13px] font-bold rounded-2xl transition-all ${isDark ? 'hover:bg-red-500/10 text-red-500' : 'hover:bg-red-50 text-red-600'}`}
                                 >
                                   <Trash2 size={18} />
-                                  <span>Xóa nhóm file này</span>
+                                  <span>{t('cloud.delete_group')}</span>
                                 </button>
                               </div>
                             </div>
@@ -823,7 +823,7 @@ const MyCloud = ({ isDark }) => {
                                   rel="noreferrer"
                                   onClick={(e) => e.stopPropagation()}
                                   className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
-                                  title="Tải về"
+                                  title={t('media.download')}
                                 >
                                   <Download size={14} />
                                 </a>
@@ -846,7 +846,7 @@ const MyCloud = ({ isDark }) => {
                                   className={`w-full flex items-center space-x-3 px-4 py-3.5 text-[13px] font-bold rounded-2xl transition-all ${isDark ? 'hover:bg-white/5 text-white/90' : 'hover:bg-slate-50 text-slate-700'}`}
                                 >
                                   <Reply size={18} className="text-indigo-400" />
-                                  <span>Trả lời</span>
+                                  <span>{t('chat.reply')}</span>
                                 </button>
                                 <div className={`h-px mx-4 my-1 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
                                 <button
@@ -879,7 +879,7 @@ const MyCloud = ({ isDark }) => {
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isDark ? 'bg-indigo-500/20 text-indigo-300 group-hover/avatar:bg-indigo-500 group-hover/avatar:text-white' : 'bg-indigo-50 text-indigo-600'} border border-indigo-500/30 overflow-hidden shadow-sm`}>
                           <HardDrive size={16} />
                         </div>
-                        <span className="text-[9px] font-black mt-1.5 opacity-40 uppercase tracking-tighter">Bạn</span>
+                        <span className="text-[9px] font-black mt-1.5 opacity-40 uppercase tracking-tighter">{t('common.you')}</span>
                       </div>
                     )}
                   </div>
@@ -912,8 +912,10 @@ const MyCloud = ({ isDark }) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
-                    <span className="text-[11px] font-black text-indigo-500 uppercase tracking-widest">ĐANG TRẢ LỜI {user?.fullName || 'CHÍNH MÌNH'}</span>
-                    <span className={`text-[11px] font-bold uppercase ${isDark ? 'text-white/40' : 'text-slate-400'}`}>BẠN</span>
+                    <span className="text-[11px] font-black text-indigo-500 uppercase tracking-widest">
+                      {user?.fullName ? t('cloud.replying_to_user', { name: user.fullName }).toUpperCase() : t('cloud.replying_to_self').toUpperCase()}
+                    </span>
+                    <span className={`text-[11px] font-bold uppercase ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{t('common.you').toUpperCase()}</span>
                   </div>
                   <div className={`text-[13px] truncate font-semibold ${isDark ? 'text-white/80' : 'text-slate-600'}`}>
                     {getDisplayMessageText(replyingTo) || replyingTo.fileName}
@@ -934,7 +936,7 @@ const MyCloud = ({ isDark }) => {
           <button
             onClick={() => fileInputRef.current.click()}
             className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isDark ? 'hover:bg-white/10 text-white/55' : 'hover:bg-white text-slate-500'}`}
-            title="Đính kèm"
+            title={t('chat.attachment')}
           >
             <Paperclip size={18} />
           </button>
@@ -955,14 +957,14 @@ const MyCloud = ({ isDark }) => {
                 sendTextMessageToCloud();
               }
             }}
-            placeholder="Type a message to Cloud"
+            placeholder={t('cloud.input_placeholder')}
             className={`flex-1 min-h-[42px] bg-transparent outline-none text-sm font-medium ${isDark ? 'text-white/85 placeholder-white/40' : 'text-slate-700 placeholder-slate-400'}`}
           />
           <button
             disabled={uploading}
             onClick={() => fileInputRef.current.click()}
             className="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/25 disabled:opacity-60"
-            title="Gửi tệp"
+            title={t('cloud.send_file')}
           >
             {uploading ? (
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -975,7 +977,7 @@ const MyCloud = ({ isDark }) => {
             className="ml-2 px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold"
             disabled={uploading || !messageText.trim()}
           >
-            Send
+            {t('chat.send')}
           </button>
         </div>
       </div>
@@ -999,7 +1001,7 @@ const MyCloud = ({ isDark }) => {
           <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-white/5' : 'border-slate-100'}`}>
             <div className="min-w-0">
               <h3 className="text-[15px] font-black truncate">{previewFile.fileName}</h3>
-              <p className={`text-[11px] mt-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Xem trước tệp trong Cloud</p>
+              <p className={`text-[11px] mt-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{t('cloud.preview_file_title')}</p>
             </div>
             <button
               onClick={closePreview}
@@ -1017,7 +1019,7 @@ const MyCloud = ({ isDark }) => {
               if (!url) {
                 return (
                   <div className="h-[70vh] flex items-center justify-center text-sm opacity-70">
-                    Không có link xem trước.
+                    {t('cloud.no_preview_link')}
                   </div>
                 );
               }
@@ -1058,9 +1060,9 @@ const MyCloud = ({ isDark }) => {
                     {getFileIcon(previewFile.typeFile)}
                   </div>
                   <div>
-                    <h4 className="text-lg font-bold">Không hỗ trợ xem trực tiếp loại file này</h4>
+                    <h4 className="text-lg font-bold">{t('cloud.unsupported_preview_title')}</h4>
                     <p className={`text-sm mt-1 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                      Bạn vẫn có thể tải về để mở bằng ứng dụng ngoài.
+                      {t('cloud.unsupported_preview_desc')}
                     </p>
                   </div>
                 </div>

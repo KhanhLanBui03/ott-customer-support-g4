@@ -50,6 +50,27 @@
       }
     },
     "chat": {
+      "title": "消息",
+      "priority": "优先",
+      "hidden_tab": "隐藏",
+      "all": "全部",
+      "unread": "未读",
+      "filter_by_status": "按状态筛选",
+      "filter_by_tag": "按分类筛选",
+      "clear": "清除",
+      "close": "关闭",
+      "context_menu_title": "会话选项",
+      "pin_conv": "置顶会话",
+      "unpin_conv": "取消置顶会话",
+      "hide_conv": "隐藏会话",
+      "unhide_conv": "取消隐藏会话",
+      "delete_conv": "删除会话",
+      "unhide_success": "已取消隐藏该会话！",
+      "hide_success": "已隐藏该会话！",
+      "tooltip_light_mode": "切换到日间模式",
+      "tooltip_dark_mode": "切换到夜间模式",
+      "tooltip_new_group": "创建新群组",
+      "tooltip_search_user": "搜索用户",
       "online": "在线",
       "offline": "离线",
       "just_now": "刚刚活跃",
@@ -177,7 +198,6 @@
       "share": "分享",
       "reaction": "表情回应",
       "times": "次",
-      "close": "关闭",
       "reaction_list": "已选择此表情的用户列表",
       "no_reactions": "暂无回应。",
       "someone": "某人",
@@ -523,6 +543,13 @@
         "search": "搜索"
       }
     },
+    "logout": {
+      "title": "退出登录",
+      "confirm_question": "您确定要退出登录吗？",
+      "confirm_desc": "您的会话将结束，您需要重新登录才能继续使用我们的服务。",
+      "btn_cancel": "取消",
+      "btn_confirm": "确认退出"
+    },
     "profile": {
       "title": "个人资料",
       "avatar_success": "头像更新成功",
@@ -567,7 +594,11 @@
       "group_prefix": "群组：",
       "inviter_prefix": "来自：",
       "user_fallback": "用户",
-      "someone": "某人"
+      "someone": "某人",
+      "friend_request_msg": "{{name}} 向你发送了好友请求。",
+      "friend_accepted_msg": "{{name}} 接受了你的好友请求。",
+      "friend_rejected_msg": "{{name}} 拒绝了你的好友请求。",
+      "group_join_rejected": "你加入群组 {{groupName}} 的申请已被拒绝"
     },
     "cloud": {
       "title": "我的云盘",
@@ -597,7 +628,16 @@
       "files": "个文件",
       "refresh": "刷新",
       "clear_all": "清空全部",
-      "clear_all_confirm": "确定要删除云盘上的所有数据吗？"
+      "clear_all_confirm": "确定要删除云盘上的所有数据吗？",
+      "input_placeholder": "输入发送到云端的消息...",
+      "send_file": "发送文件",
+      "replying_to_self": "正在回复自己",
+      "replying_to_user": "正在回复 {{name}}",
+      "preview_file_title": "在云端预览文件",
+      "no_preview_link": "无可用预览链接。",
+      "unsupported_preview_title": "不支持直接预览此类型文件",
+      "unsupported_preview_desc": "您仍可以下载并使用外部应用程序打开。",
+      "delete_group": "删除此文件组"
     },
     "system_msg": {
       "created_group": "{{name}} 创建了群组。",

@@ -11,6 +11,7 @@ import { fetchConversations, fetchFriends } from '../../store/chatSlice';
 import { useEffect } from 'react';
 import { UserCheck, UserX } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
+import { translateNotificationMessage } from '../../utils/notificationMessageTranslator';
 
 const NotificationModal = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
@@ -253,7 +254,7 @@ const NotificationModal = ({ isOpen, onClose }) => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className={`text-sm font-bold leading-tight ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
-                          {activity.message}
+                          {translateNotificationMessage(activity.message, t)}
                         </p>
                         <p className={`text-[9px] font-bold uppercase mt-1 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                           {formatNotificationTime(activity.createdAt || activity.timestamp)}
