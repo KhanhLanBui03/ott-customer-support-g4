@@ -19,7 +19,7 @@
   --color-sidebar: var(--sidebar);
   --color-surface-100: var(--surface-100);
   --color-surface-200: var(--surface-200);
-  --color-surface-300: #e2e8f0;
+  --color-surface-300: var(--surface-300);
   --color-surface-400: #cbd5e1;
   
   --font-serif: "Outfit", "system-ui", -apple-system, sans-serif;
