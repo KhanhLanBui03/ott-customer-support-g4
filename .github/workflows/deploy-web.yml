@@ -24,8 +24,8 @@ jobs:
 
     - name: Install Dependencies & Build Web
       env:
-        VITE_API_URL: http://13.212.79.212:8080/api/v1
-        VITE_WS_URL_STOMP: http://13.212.79.212:8080/ws/chat
+        VITE_API_URL: https://api.f5chat.online/api/v1
+        VITE_WS_URL_STOMP: https://api.f5chat.online/ws/chat
         VITE_SOCKET_IO: "false"
         VITE_AGORA_APP_ID: 71fffdd590e54202bc1ea70e751324ce
       run: |
