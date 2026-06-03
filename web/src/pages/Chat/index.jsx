@@ -550,6 +550,7 @@ const Chat = () => {
 
     selectConversation(aiConvId);
     setSearchTerm(''); // Clear search if any
+    setIsMyCloudView(false);
     if (isMobile) setIsInfoOpen(false);
   };
 
@@ -666,12 +667,12 @@ const Chat = () => {
                 onClick={() => setIsMyCloudView(false)}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center ${(!isMyCloudView && activeConversationId) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] group relative transition-all active:scale-95
+                  flex items-center justify-center ${!isMyCloudView ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] group relative transition-all active:scale-95
                 `}
               >
-                <MessageSquare size={isMobile ? 22 : 24} fill={(!isMyCloudView && activeConversationId) ? "currentColor" : "none"} className="opacity-90" />
+                <MessageSquare size={isMobile ? 22 : 24} fill={!isMyCloudView ? "currentColor" : "none"} className="opacity-90" />
               </button>
-              {!isMobile && !isMyCloudView && activeConversationId && (
+              {!isMobile && !isMyCloudView && (
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full" />
               )}
             </div>
