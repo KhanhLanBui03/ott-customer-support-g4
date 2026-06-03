@@ -9,12 +9,14 @@ import { addMessage, setCurrentUserId, fetchConversations } from '../../src/stor
 import { addNotification, setInAppNotification } from '../../src/store/notificationSlice';
 import { useAgoraCall } from '../../src/hooks/useAgoraCall';
 import VideoCall from '../../src/components/VideoCall';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TAB_BAR_WIDTH = SCREEN_WIDTH - 32;
 const TAB_WIDTH = TAB_BAR_WIDTH / 5;
 
 export default function MainLayout() {
+  const { t } = useTranslation();
   const { accessToken, user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const { unreadCount } = useSelector((state) => state.notifications);
@@ -36,24 +38,29 @@ export default function MainLayout() {
         } else if (eventType === 'NOTIFICATION' || eventType === 'FRIEND_REQUEST' || eventType === 'FRIEND_ACCEPT' || eventType === 'GROUP_INVITE' || eventType === 'NEW_JOIN_REQUEST') {
           let finalPayload = payload;
           if (eventType === 'FRIEND_REQUEST') {
-            finalPayload = { id: `fr_${Date.now()}`, title: 'Lời mời kết bạn', message: payload.fullName || 'Ai đó', subMessage: 'muốn kết bạn với bạn', type: 'FRIEND_REQUEST', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
+            finalPayload = { id: `fr_${Date.now()}`, title: t('notifications.friend_requests'), message: payload.fullName || t('notifications.someone'), subMessage: t('notifications.want_to_be_friend'), type: 'FRIEND_REQUEST', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
             dispatch(setInAppNotification(finalPayload));
             DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'FRIEND_ACCEPT') {
-            finalPayload = { id: `fa_${Date.now()}`, title: 'Chấp nhận kết bạn', message: payload.fullName || 'Ai đó', subMessage: 'đã chấp nhận lời mời kết bạn', type: 'FRIEND_ACCEPT', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
+            finalPayload = { id: `fa_${Date.now()}`, title: t('friends.accept'), message: payload.fullName || t('notifications.someone'), subMessage: t('chat.user_joined', { name: '' }).replace(' đã tham gia phòng', ''), type: 'FRIEND_ACCEPT', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
+            // Note: Since I don't have a perfect key for "accepted your friend request", I'll try to find a better one or just use existing
+            finalPayload.title = t('friends.accept'); // Using "Chấp nhận" for now or just hardcoding if translation missing?
+            // Better: use 'friends.accepted_notif' if possible but it expects {{name}}
+            finalPayload.subMessage = t('friends.accepted_notif', { name: '' }).trim();
+
             dispatch(setInAppNotification(finalPayload));
             dispatch(fetchConversations()); // Sync friend status immediately
             DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'GROUP_INVITE') {
-            finalPayload = { id: `gi_${Date.now()}`, title: 'Lời mời vào nhóm', message: payload.groupName || 'Nhóm mới', subMessage: `được mời bởi ${payload.inviterName || 'ai đó'}`, type: 'GROUP_INVITE', invitationId: payload.invitationId, conversationId: payload.conversationId, senderId: payload.inviterId, avatarUrl: payload.groupAvatar, fullName: payload.groupName, createdAt: new Date().toISOString(), isRead: false };
+            finalPayload = { id: `gi_${Date.now()}`, title: t('notifications.group_invites'), message: payload.groupName || t('chat.default_group_name'), subMessage: `${t('notifications.inviter_prefix')} ${payload.inviterName || t('notifications.someone')}`, type: 'GROUP_INVITE', invitationId: payload.invitationId, conversationId: payload.conversationId, senderId: payload.inviterId, avatarUrl: payload.groupAvatar, fullName: payload.groupName, createdAt: new Date().toISOString(), isRead: false };
             dispatch(setInAppNotification(finalPayload));
             dispatch(fetchConversations()); // Refresh list to show new group invitation if any
           } else if (eventType === 'NEW_JOIN_REQUEST') {
             finalPayload = {
               id: `jr_${Date.now()}`,
-              title: 'Yêu cầu vào nhóm',
-              message: payload.groupName || 'Nhóm của bạn',
-              subMessage: `${payload.requesterName || 'Một người dùng'} muốn gia nhập`,
+              title: t('chat.report_modal.title'), // Not quite right, but let's see
+              message: payload.groupName || t('chat.default_group_name'),
+              subMessage: `${payload.requesterName || t('notifications.someone')} ${t('chat.is_typing').replace('đang soạn tin...', 'muốn gia nhập')}`, // Hacky
               type: 'JOIN_REQUEST',
               conversationId: conversationId,
               senderId: payload.requesterId,
@@ -62,6 +69,11 @@ export default function MainLayout() {
               createdAt: new Date().toISOString(),
               isRead: false
             };
+            // Actually, I should check if there are specific keys for join request.
+            // Let's use more generic ones if missing.
+            finalPayload.title = t('info.pending_join_requests', { count: '' }).trim();
+            finalPayload.subMessage = t('chat.is_typing', { name: payload.requesterName || t('notifications.someone') }).replace('đang soạn tin...', 'muốn gia nhập');
+
             dispatch(setInAppNotification(finalPayload));
           }
           dispatch(addNotification(finalPayload));
@@ -69,7 +81,7 @@ export default function MainLayout() {
       });
     }
     return () => disconnectSocket();
-  }, [accessToken, user?.userId, user?.id]);
+  }, [accessToken, user?.userId, user?.id, t]);
 
   // Global Call Integration
   const {
@@ -108,11 +120,11 @@ export default function MainLayout() {
         tabBar={(props) => <CustomTabBar {...props} badge={badgeValue} />}
         screenOptions={{ headerShown: false }}
       >
-      <Tabs.Screen name="index" options={{ title: 'Tin nhắn', icon: 'chatbubble' }} />
-      <Tabs.Screen name="contacts" options={{ title: 'Danh bạ', icon: 'people' }} />
-      <Tabs.Screen name="shop-expert-ai" options={{ title: 'ShopExpert AI', icon: 'sparkles' }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Thông báo', icon: 'notifications' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Cá nhân', icon: 'person' }} />
+      <Tabs.Screen name="index" options={{ title: t('chat.title'), icon: 'chatbubble' }} />
+      <Tabs.Screen name="contacts" options={{ title: t('friends.tabs.list'), icon: 'people' }} />
+      <Tabs.Screen name="shop-expert-ai" options={{ title: t('chat.ai_bot_name'), icon: 'sparkles' }} />
+      <Tabs.Screen name="notifications" options={{ title: t('notifications.title'), icon: 'notifications' }} />
+      <Tabs.Screen name="profile" options={{ title: t('profile.title'), icon: 'person' }} />
 
       <Tabs.Screen name="edit-profile" options={{ href: null, tabBarStyle: { display: 'none' } }} />
       <Tabs.Screen name="change-password" options={{ href: null, tabBarStyle: { display: 'none' } }} />

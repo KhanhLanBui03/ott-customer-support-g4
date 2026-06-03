@@ -171,6 +171,13 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.error = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
     },
+    updateUser: (state, action) => {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+        // Sync with SecureStore
+        SecureStore.setItemAsync('user', JSON.stringify(state.user));
+      }
+    },
   },
   extraReducers: (builder) => {
     // Login user
@@ -275,5 +282,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setOtpPhoneNumber, restoreState, sessionExpired } = authSlice.actions;
+export const { clearError, setOtpPhoneNumber, restoreState, sessionExpired, updateUser } = authSlice.actions;
 export default authSlice.reducer;

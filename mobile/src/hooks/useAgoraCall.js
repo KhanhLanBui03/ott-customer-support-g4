@@ -1,7 +1,8 @@
-import { Audio } from 'expo-av';
 import { useEffect, useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PermissionsAndroid, Platform, Alert } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Audio } from 'expo-av';
 import { onCallSignal, offCallSignal, emitCallSignal } from '../utils/socket';
 import { callApi } from '../api/callApi';
 import { chatApi } from '../api/chatApi';
@@ -69,6 +70,7 @@ async function calibrateServerTime() {
 }
 
 export const useAgoraCall = (activeConversationId = null, activeConversation = null, isListener = true) => {
+    const { t } = useTranslation();
     const user = useSelector(state => state.auth.user);
     const callState = useSelector(state => state.call);
     const dispatch = useDispatch();
@@ -84,7 +86,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
     const myFullName = user?.fullName || user?.name ||
         (user?.firstName || user?.lastName
             ? [user.lastName, user.firstName].filter(Boolean).join(' ')
-            : null) || 'Người dùng';
+            : null) || t('common.user');
 
     const conversationsRef = useRef(conversations);
     useEffect(() => {
@@ -389,10 +391,11 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
 
 
-        let msg = 'Cuộc gọi đã kết thúc';
-        if (reason === 'REJECTED') msg = 'Người nghe đã từ chối';
-        else if (reason === 'BUSY') msg = 'Người nghe đang bận';
-        else if (reason === 'MISSED') msg = 'Cuộc gọi nhỡ';
+        let msg = t('chat.ended');
+        if (reason === 'REJECTED') msg = t('chat.rejected');
+        else if (reason === 'BUSY') msg = t('chat.busy');
+        else if (reason === 'MISSED') msg = t('chat.missed_call');
+        else if (reason === 'ACCEPTED_ELSEWHERE') msg = t('chat.accepted_elsewhere');
         dispatch(setEndCallReason(msg));
 
         // Tự động quay lại chat sau 2s (theo yêu cầu)
@@ -453,8 +456,8 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                     ? (signal.conversationAvatar || actualData.conversationAvatar)
                     : (signal.senderAvatar || actualData.senderAvatar || actualData.senderInfo?.avatarUrl);
                 let name = isGroupCall
-                    ? (signal.conversationName || actualData.conversationName || 'Cuộc gọi nhóm')
-                    : (senderName || signal.senderName || actualData.senderName || 'Người dùng');
+                    ? (signal.conversationName || actualData.conversationName || t('chat.group_fallback'))
+                    : (senderName || signal.senderName || actualData.senderName || t('common.user'));
 
                 // Fallback tìm tên chuẩn của người gọi cá nhân trong danh sách hội thoại
                 if (!isGroupCall && cleanSenderId) {
@@ -690,7 +693,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                 return mid && mid !== 'undefined' && mid !== 'null' && uid && String(mid).trim() !== String(uid).trim();
             }) : null;
 
-            const finalName = receiverInfo?.name || activeConversation?.name || partner?.fullName || partner?.name || 'Người dùng';
+            const finalName = receiverInfo?.name || activeConversation?.name || partner?.fullName || partner?.name || t('common.user');
             const finalAvatar = receiverInfo?.avatar || activeConversation?.avatar || activeConversation?.avatarUrl || partner?.avatar || partner?.avatarUrl;
 
             dispatch(setCallerInfo({ name: finalName, avatar: finalAvatar, id: partner?.userId || partner?.id || partner?._id }));

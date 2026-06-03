@@ -10,7 +10,9 @@ import {
   ScrollView,
   PanResponder,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -39,8 +41,12 @@ const ChatBubble = ({
   onPressMessage,
   isHighlighted = false,
   allMessages = [],
-  members = []
+  members = [],
+  translatedMessages = {},
+  translationLoading = {},
+  onTranslate
 }) => {
+  const { t } = useTranslation();
 
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -770,7 +776,79 @@ const ChatBubble = ({
                     if (message.type === 'VOTE') {
                       return renderVoteContent();
                     }
-                    return message.content ? renderTextWithMentions(message.content) : null;
+                    return (
+                      <View style={{ width: '100%' }}>
+                        {message.content ? renderTextWithMentions(message.content) : null}
+                        
+                        {/* Translation Loading State */}
+                        {translationLoading && translationLoading[message.messageId] && (
+                          <View style={[
+                            styles.translationLoadingContainer,
+                            { borderTopColor: isOwn ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)' }
+                          ]}>
+                            <ActivityIndicator size="small" color={isOwn ? '#fff' : colors.primary} style={{ marginRight: 6 }} />
+                            <Text style={[styles.translationLoadingText, { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.textMuted }]}>
+                              {t('chat.ai_translating') || 'AI đang dịch...'}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Translation Display */}
+                        {translatedMessages && translatedMessages[message.messageId] && (
+                          <View style={[
+                            styles.translationContainer,
+                            { borderTopColor: isOwn ? 'rgba(255,255,255,0.2)' : colors.border }
+                          ]}>
+                            <View style={styles.translationHeader}>
+                              <View style={styles.translationHeaderLeft}>
+                                <Ionicons name="sparkles" size={12} color={isOwn ? '#fff' : colors.primary} style={{ marginRight: 4 }} />
+                                <Text style={[styles.translationTitle, { color: isOwn ? 'rgba(255,255,255,0.8)' : colors.textMuted }]}>
+                                  {t('chat.ai_translation') || 'Bản dịch AI'}
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => onTranslate?.(message.messageId)}
+                                style={styles.translationReloadBtn}
+                              >
+                                <Ionicons name="refresh" size={12} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.primary} />
+                                <Text style={[styles.translationReloadText, { color: isOwn ? 'rgba(255,255,255,0.7)' : colors.primary }]}>
+                                  {t('chat.reload_translation') || 'Dịch lại'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                            <Text style={[
+                              styles.translatedText,
+                              isOwn ? styles.ownText : [styles.otherText, { color: colors.foreground }]
+                            ]}>
+                              {translatedMessages[message.messageId]}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Manual Translate Button */}
+                        {message.type === 'TEXT' &&
+                          !isOwn &&
+                          (!translatedMessages || !translatedMessages[message.messageId]) &&
+                          (!translationLoading || !translationLoading[message.messageId]) && (
+                            <TouchableOpacity
+                              onPress={() => onTranslate?.(message.messageId)}
+                              style={[
+                                styles.translateBtn,
+                                {
+                                  backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(99, 102, 241, 0.08)',
+                                  alignSelf: 'flex-start',
+                                  marginTop: 6
+                                }
+                              ]}
+                            >
+                              <Ionicons name="sparkles-outline" size={10} color={colors.primary} style={{ marginRight: 4 }} />
+                              <Text style={[styles.translateBtnText, { color: colors.primary }]}>
+                                {t('chat.translate_btn') || 'Dịch'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                      </View>
+                    );
                   })())}
 
 
@@ -982,6 +1060,65 @@ const styles = StyleSheet.create({
   ongoingJoinBtnText: { color: '#6366f1', fontWeight: '900', fontSize: 15, letterSpacing: 0.5 },
   stickerBubbleContainer: { alignItems: 'center', justifyContent: 'center', padding: 4 },
   bubbleStickerImage: { width: 140, height: 140, resizeMode: 'contain' },
+  translateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  translateBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  translationLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  translationLoadingText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  translationContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    width: '100%',
+  },
+  translationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  translationHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  translationTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  translationReloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 2,
+  },
+  translationReloadText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  translatedText: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginTop: 2,
+  },
 });
 
 

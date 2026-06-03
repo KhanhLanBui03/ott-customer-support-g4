@@ -567,8 +567,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                    <QrCode size={20} />
                 </div>
                 <div className="text-left flex-1">
-                   <p className="text-[14px] font-black">Mã QR nhóm</p>
-                   <p className="text-[10px] font-bold opacity-60">Quét mã QR để gia nhập nhóm nhanh chóng</p>
+                   <p className="text-[14px] font-black">{t('info.group_qr')}</p>
+                   <p className="text-[10px] font-bold opacity-60">{t('info.group_qr_desc')}</p>
                 </div>
              </button>
           </div>
@@ -1098,8 +1098,8 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
             </button>
 
             <div className="text-center space-y-1">
-              <h3 className="text-lg font-black text-foreground">Mã QR nhóm</h3>
-              <p className="text-xs text-foreground/65">Quét mã này bằng camera hoặc scanner để gia nhập nhóm</p>
+              <h3 className="text-lg font-black text-foreground">{t('info.group_qr')}</h3>
+              <p className="text-xs text-foreground/65">{t('info.group_qr_instructions')}</p>
             </div>
 
             <div className="bg-white p-6 rounded-[24px] flex items-center justify-center shadow-inner border border-slate-100 mx-auto w-fit">
@@ -1114,7 +1114,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
             <div className="text-center space-y-2">
               <p className="text-sm font-bold text-foreground truncate max-w-full px-2">{conversation.name}</p>
               <p className="text-[11px] text-indigo-500 font-bold bg-indigo-500/10 px-3 py-1 rounded-full w-fit mx-auto">
-                {conversation.members?.length || 0} thành viên
+                {t('chat.member_count', { count: conversation.members?.length || 0 })}
               </p>
             </div>
           </div>

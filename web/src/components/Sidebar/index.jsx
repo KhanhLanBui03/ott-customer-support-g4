@@ -32,13 +32,13 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
 
     // Handle URLs
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      if (isAudioUrl(raw)) return '[Tin nhắn thoại]';
+      if (isAudioUrl(raw)) return t('sidebar.voice_message');
       const lowerRaw = raw.toLowerCase();
       if (lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com')) {
-        return '[Nhãn dán]';
+        return t('sidebar.sticker');
       }
       if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
-        return '[GIF]';
+        return t('sidebar.gif');
       }
       return `🔗 ${raw}`;
     }
@@ -46,6 +46,11 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
     // Handle explicit tags
     const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại', 'nhãn dán', 'gif', 'hình ảnh'];
     if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
+      if (raw.toLowerCase().includes('thoại')) return t('sidebar.voice_message');
+      if (raw.toLowerCase().includes('video')) return t('sidebar.video_call');
+      if (raw.toLowerCase().includes('đính kèm') || raw.toLowerCase().includes('file')) return t('sidebar.attachment');
+      if (raw.toLowerCase().includes('nhãn dán')) return t('sidebar.sticker');
+      if (raw.toLowerCase().includes('gif')) return t('sidebar.gif');
       return raw;
     }
 

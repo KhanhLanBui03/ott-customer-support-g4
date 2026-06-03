@@ -98,6 +98,10 @@ export const chatApi = {
     if (endTime) url += `&endTime=${endTime}`;
     return axiosClient.post(url);
   },
+  translateMessage: (messageId, conversationId, srcLang, tgtLang) =>
+    axiosClient.post(`/messages/${messageId}/translate`, { conversationId, srcLang, tgtLang }),
+  translateMessagesBatch: (conversationId, messageIds, srcLang, tgtLang) =>
+    axiosClient.post('/messages/translate-batch', { conversationId, messageIds, srcLang, tgtLang }),
 };
 
 /**

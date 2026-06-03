@@ -1,6 +1,13 @@
-export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberMap = {}, myInfo = {}) => {
+export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberMap = {}, myInfo = {}, i18n = {}) => {
     const memberMapJson = JSON.stringify(initialMemberMap);
     const myInfoJson = JSON.stringify(myInfo);
+
+    // Default translations if not provided
+    const labels = {
+        you: i18n.you || 'Bạn (You)',
+        tapToAudio: i18n.tapToAudio || 'Chạm để bật âm thanh (Tap to turn on audio)',
+        memberPrefix: i18n.memberPrefix || 'Thành viên'
+    };
 
     return `
 <!DOCTYPE html>
@@ -140,18 +147,18 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
         border: 1px solid rgba(255,255,255,0.1);
       }
       
-      #unlock-layer { position: fixed; inset: 0; background: rgba(0,0,0,0.8); color: white; display: none; align-items: center; justify-content: center; z-index: 1000; }
+      #unlock-layer { position: fixed; inset: 0; background: rgba(0,0,0,0.8); color: white; display: none; align-items: center; justify-content: center; z-index: 1000; text-align: center; padding: 20px; }
     </style>
   </head>
   <body class="${isGroup ? 'group-mode' : 'single-mode'}">
-    <div id="unlock-layer">Chạm để bật âm thanh</div>
+    <div id="unlock-layer">${labels.tapToAudio}</div>
     <div id="main-grid">
         <div id="local-container" class="video-tile local">
             <div id="local-placeholder" class="avatar-placeholder">
                 <div class="avatar-circle" id="local-avatar"></div>
             </div>
             <div id="local-player" class="video-view"></div>
-            <div class="member-label">Bạn (You)</div>
+            <div class="member-label">${labels.you}</div>
         </div>
     </div>
 
@@ -218,7 +225,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
             tile.id = uid.toString();
             tile.className = 'video-tile remote';
             
-            const info = memberMap[uid.toString()] || { name: 'Thành viên ' + uid };
+            const info = memberMap[uid.toString()] || { name: '${labels.memberPrefix} ' + uid };
             
             const placeholder = document.createElement('div');
             placeholder.className = 'avatar-placeholder';

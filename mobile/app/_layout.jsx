@@ -8,6 +8,7 @@ import { restoreState, sessionExpired } from '../src/store/authSlice';
 import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import InAppNotification from '../src/components/common/InAppNotification';
+import '../src/locales/i18n';
 
 // Keep splash screen visible while we fetch auth state
 SplashScreen.preventAutoHideAsync();
