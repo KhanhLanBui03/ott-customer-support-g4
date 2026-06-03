@@ -556,6 +556,7 @@ const Chat = () => {
 
   const isMobile = useMediaQuery('(max-width: 1024px)');
   const [searchTerm, setSearchTerm] = useState('');
+  const isAIChatActive = !isMyCloudView && (activeConversationId?.includes('shop-expert-ai-bot') || false);
 
   const filteredConversations = conversations.filter(conv => {
     const isHidden = hiddenConvIds.includes(conv.conversationId);
@@ -667,12 +668,12 @@ const Chat = () => {
                 onClick={() => setIsMyCloudView(false)}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center ${!isMyCloudView ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] group relative transition-all active:scale-95
+                  flex items-center justify-center ${(!isMyCloudView && !isAIChatActive) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] group relative transition-all active:scale-95
                 `}
               >
-                <MessageSquare size={isMobile ? 22 : 24} fill={!isMyCloudView ? "currentColor" : "none"} className="opacity-90" />
+                <MessageSquare size={isMobile ? 22 : 24} fill={(!isMyCloudView && !isAIChatActive) ? "currentColor" : "none"} className="opacity-90" />
               </button>
-              {!isMobile && !isMyCloudView && (
+              {!isMobile && !isMyCloudView && !isAIChatActive && (
                 <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full" />
               )}
             </div>
@@ -705,14 +706,14 @@ const Chat = () => {
                 onClick={handleSelectAI}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
+                  flex items-center justify-center ${isAIChatActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] transition-all group active:scale-95
                 `}
                 title="ShopExpert AI"
               >
-                <SparklesIcon size={isMobile ? 22 : 24} />
+                <SparklesIcon size={isMobile ? 22 : 24} fill={isAIChatActive ? "currentColor" : "none"} />
               </button>
               {!isMobile && (
-                <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-indigo-400 rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className={`absolute -left-11 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-indigo-500 rounded-r-full transition-opacity ${isAIChatActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
               )}
             </div>
 
