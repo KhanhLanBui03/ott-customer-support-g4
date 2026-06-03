@@ -9,7 +9,7 @@ import java.util.List;
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE)
 @Builder
 public class MyCloudResponse {
-    String id;
+    private String id;
     private String fileName;
     private String fileUrl;     // presigned URL (hết hạn sau 1 giờ)
     private String typeFile;    // image | video | audio | document | other
