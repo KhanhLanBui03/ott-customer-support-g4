@@ -29,7 +29,7 @@ jobs:
         VITE_AGORA_APP_ID: 71fffdd590e54202bc1ea70e751324ce
       run: |
         cd web
-        npm ci
+        npm install --legacy-peer-deps
         npm run build
 
     - name: Configure AWS Credentials
