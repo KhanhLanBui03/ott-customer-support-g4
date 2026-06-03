@@ -936,7 +936,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
                           isOwner 
                             ? 'bg-red-100/50 dark:bg-red-500/20 group-hover:scale-110 text-red-600 dark:text-red-400' 
-                            : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
+                            : 'bg-surface-200 dark:bg-surface-300 text-slate-500 dark:text-slate-400'
                         }`}>
                            <AlertTriangle size={22} />
                         </div>
@@ -959,7 +959,7 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
                           isAdmin 
                             ? 'bg-indigo-100/50 dark:bg-indigo-500/20 group-hover:scale-110 text-indigo-600 dark:text-indigo-400' 
-                            : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
+                            : 'bg-surface-200 dark:bg-surface-300 text-slate-500 dark:text-slate-400'
                         }`}>
                            <MessageSquareLock size={22} />
                         </div>
@@ -981,13 +981,13 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
                          className={`w-full flex items-center space-x-5 px-5 py-4 rounded-[24px] transition-all border border-transparent ${
                            isAdmin 
                              ? 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 group scale-100 hover:scale-[1.02] hover:border-indigo-100 dark:hover:border-indigo-500/20 cursor-pointer' 
-                             : 'text-foreground/40 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
+                             : 'text-slate-500 dark:text-slate-400 cursor-not-allowed bg-surface-100 dark:bg-surface-200 opacity-60'
                          }`}
                       >
                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-transform ${
                            isAdmin 
                              ? 'bg-indigo-100/50 dark:bg-indigo-500/20 group-hover:scale-110 text-indigo-600 dark:text-indigo-400' 
-                             : 'bg-surface-200 dark:bg-surface-300 text-foreground/40'
+                             : 'bg-surface-200 dark:bg-surface-300 text-slate-500 dark:text-slate-400'
                          }`}>
                             <ShieldCheck size={22} />
                          </div>
