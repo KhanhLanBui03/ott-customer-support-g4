@@ -597,8 +597,8 @@ const Chat = () => {
       {(!isMobile || !activeConversationId) && (
         <div className={`
           ${isMobile
-            ? 'fixed bottom-0 left-0 right-0 h-20 w-full flex-row px-6 items-center justify-around border-t border-white/5 bg-[#0b0e14]/95 backdrop-blur-xl'
-            : 'w-[88px] flex-col py-9 space-y-8 items-center border-r border-white/5 bg-[#0b0e14]'}
+            ? 'fixed bottom-0 left-0 right-0 h-20 w-full flex-row px-6 items-center justify-around border-t border-slate-200 dark:border-white/5 bg-slate-50/95 dark:bg-[#0b0e14]/95 backdrop-blur-xl'
+            : 'w-[88px] flex-col py-9 space-y-8 items-center border-r border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#0b0e14]'}
           flex flex-shrink-0 z-50
         `}>
           <div className="relative group">
@@ -606,14 +606,14 @@ const Chat = () => {
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className={`
                 ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                rounded-2xl bg-white/5 p-0.5 border border-white/10 hover:border-indigo-500/50 hover:scale-105 transition-all cursor-pointer overflow-hidden shadow-2xl
+                rounded-2xl bg-slate-200/50 dark:bg-white/5 p-0.5 border border-slate-300 dark:border-white/10 hover:border-indigo-500/50 hover:scale-105 transition-all cursor-pointer overflow-hidden shadow-2xl
               `}
             >
               {user?.avatar ? (
                 <img src={user.avatar} alt="" className="w-full h-full object-cover rounded-2xl" />
               ) : (
-                <div className="w-full h-full bg-slate-800 flex items-center justify-center rounded-2xl">
-                  <User className="text-white/20" size={isMobile ? 20 : 24} />
+                <div className="w-full h-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center rounded-2xl">
+                  <User className="text-slate-500 dark:text-white/20" size={isMobile ? 20 : 24} />
                 </div>
               )}
             </div>
@@ -667,7 +667,7 @@ const Chat = () => {
                 onClick={() => setIsMyCloudView(false)}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center ${!isMyCloudView ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] group relative transition-all active:scale-95
+                  flex items-center justify-center ${!isMyCloudView ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5'} rounded-[22px] group relative transition-all active:scale-95
                 `}
               >
                 <MessageSquare size={isMobile ? 22 : 24} fill={!isMyCloudView ? "currentColor" : "none"} className="opacity-90" />
@@ -683,13 +683,13 @@ const Chat = () => {
                 onClick={() => setIsNotificationOpen(true)}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
+                  flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
                 `}
                 title="Thông báo"
               >
                 <Bell size={isMobile ? 22 : 24} />
                 {unreadCount > 0 && (
-                  <div className="absolute top-2 right-2 min-w-[20px] h-[20px] px-1 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#0b0e14]">
+                  <div className="absolute top-2 right-2 min-w-[20px] h-[20px] px-1 bg-red-500 rounded-full flex items-center justify-center border-2 border-slate-50 dark:border-[#0b0e14]">
                     <span className="text-[10px] font-black text-white">{unreadCount}</span>
                   </div>
                 )}
@@ -705,7 +705,7 @@ const Chat = () => {
                 onClick={handleSelectAI}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
+                  flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
                 `}
                 title="ShopExpert AI"
               >
@@ -725,7 +725,7 @@ const Chat = () => {
                 }}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
+                  flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 rounded-[22px] transition-all group active:scale-95
                 `}
                 title="Danh bạ bạn bè"
               >
@@ -747,7 +747,7 @@ const Chat = () => {
                 }}
                 className={`
                   ${isMobile ? 'w-11 h-11' : 'w-14 h-14'}
-                  flex items-center justify-center ${isMyCloudView ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-white/40 hover:text-white hover:bg-white/5'} rounded-[22px] transition-all group active:scale-95
+                  flex items-center justify-center ${isMyCloudView ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5'} rounded-[22px] transition-all group active:scale-95
                 `}
                 title="Cloud của tôi"
               >
@@ -763,7 +763,7 @@ const Chat = () => {
               <div className="relative group">
                 <button
                   onClick={() => setIsLogoutModalOpen(true)}
-                  className="w-11 h-11 flex items-center justify-center text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-[22px] transition-all group active:scale-95"
+                  className="w-11 h-11 flex items-center justify-center text-slate-500 hover:text-red-500 hover:bg-red-50 dark:text-white/40 dark:hover:text-red-400 dark:hover:bg-red-400/10 rounded-[22px] transition-all group active:scale-95"
                   title="Đăng xuất"
                 >
                   <LogOut size={22} />
@@ -776,13 +776,13 @@ const Chat = () => {
             <div className="flex flex-col space-y-4 items-center">
               <button
                 onClick={() => setIsLanguageSettingsOpen(true)}
-                className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 rounded-2xl transition-all active:scale-95"
+                className="w-14 h-14 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 dark:text-white/20 dark:hover:text-white dark:hover:bg-white/5 rounded-2xl transition-all active:scale-95"
               >
                 <Settings size={24} />
               </button>
               <button
                 onClick={() => setIsLogoutModalOpen(true)}
-                className="w-14 h-14 flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all active:scale-95"
+                className="w-14 h-14 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:text-white/20 dark:hover:text-red-400 dark:hover:bg-red-400/10 rounded-2xl transition-all active:scale-95"
               >
                 <LogOut size={24} />
               </button>
