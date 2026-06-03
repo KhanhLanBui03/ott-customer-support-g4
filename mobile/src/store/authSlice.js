@@ -16,10 +16,13 @@ export const loginUser = createAsyncThunk(
       const response = await authApi.login(credentials);
       
       // Save tokens to SecureStore (Mobile) or localStorage (Web)
-      const { accessToken, refreshToken } = response.data;
+      const { accessToken, refreshToken, sessionId } = response.data;
       if (Platform.OS !== 'web') {
         await SecureStore.setItemAsync('accessToken', accessToken);
         await SecureStore.setItemAsync('refreshToken', refreshToken);
+        if (sessionId) {
+          await SecureStore.setItemAsync('sessionId', sessionId);
+        }
         await SecureStore.setItemAsync('user', JSON.stringify({
            userId: response.data.userId,
            phoneNumber: response.data.phoneNumber,
@@ -30,6 +33,9 @@ export const loginUser = createAsyncThunk(
       } else {
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
+        if (sessionId) {
+          localStorage.setItem('sessionId', sessionId);
+        }
         localStorage.setItem('user', JSON.stringify({
            userId: response.data.userId,
            phoneNumber: response.data.phoneNumber,
@@ -65,10 +71,13 @@ export const verifyOtp = createAsyncThunk(
       const response = await authApi.verifyOtp(otpData);
       
       // Save tokens to SecureStore (Mobile) or localStorage (Web)
-      const { accessToken, refreshToken } = response.data;
+      const { accessToken, refreshToken, sessionId } = response.data;
       if (Platform.OS !== 'web') {
         await SecureStore.setItemAsync('accessToken', accessToken);
         await SecureStore.setItemAsync('refreshToken', refreshToken);
+        if (sessionId) {
+          await SecureStore.setItemAsync('sessionId', sessionId);
+        }
         
         let userToSave = response.data.user;
         if (!userToSave) {
@@ -84,6 +93,9 @@ export const verifyOtp = createAsyncThunk(
       } else {
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
+        if (sessionId) {
+          localStorage.setItem('sessionId', sessionId);
+        }
         localStorage.setItem('user', JSON.stringify(response.data.user || {
             userId: response.data.userId,
             phoneNumber: response.data.phoneNumber,
@@ -124,9 +136,17 @@ export const logoutUser = createAsyncThunk(
       }
 
       // 2. Clear local storage
-      await SecureStore.deleteItemAsync('accessToken');
-      await SecureStore.deleteItemAsync('refreshToken');
-      await SecureStore.deleteItemAsync('user');
+      if (Platform.OS !== 'web') {
+        await SecureStore.deleteItemAsync('accessToken');
+        await SecureStore.deleteItemAsync('refreshToken');
+        await SecureStore.deleteItemAsync('sessionId');
+        await SecureStore.deleteItemAsync('user');
+      } else {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('sessionId');
+        localStorage.removeItem('user');
+      }
       
       return null;
     } catch (error) {

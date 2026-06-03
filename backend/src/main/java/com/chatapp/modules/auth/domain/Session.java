@@ -44,7 +44,7 @@ public class Session {
     private Long lastAccessedAt;
 
     @DynamoDBAttribute(attributeName = "isValid")
-    private Boolean isValid;
+    private Boolean valid;
 
     @DynamoDBAttribute(attributeName = "ipAddress")
     private String ipAddress;
@@ -68,13 +68,14 @@ public class Session {
                 .expiresAt(expiresAt)
                 .createdAt(now)
                 .lastAccessedAt(now)
-                .isValid(true)
+                .valid(true)
                 .build();
     }
 
     /**
      * Check if session is still valid
      */
+    @DynamoDBIgnore
     public boolean isExpired() {
         if (expiresAt == null) {
             return true;
@@ -86,7 +87,7 @@ public class Session {
      * Invalidate session - EXPLICITLY set isValid to false
      */
     public void invalidate() {
-        this.isValid = false;
+        this.valid = false;
     }
 
     /**
@@ -161,12 +162,22 @@ public class Session {
         this.lastAccessedAt = lastAccessedAt;
     }
 
+    @DynamoDBIgnore
     public Boolean getIsValid() {
-        return isValid;
+        return valid;
     }
 
+    @DynamoDBIgnore
     public void setIsValid(Boolean isValid) {
-        this.isValid = isValid;
+        this.valid = isValid;
+    }
+
+    public Boolean getValid() {
+        return valid;
+    }
+
+    public void setValid(Boolean valid) {
+        this.valid = valid;
     }
 
     public String getIpAddress() {
