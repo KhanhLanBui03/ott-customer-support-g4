@@ -53,8 +53,8 @@ jobs:
           cd /home/${{ secrets.EC2_USERNAME }}/chat-app/backend
           
           # Restart container với image mới
-          docker-compose -f docker-compose.prod.yml down
-          docker-compose -f docker-compose.prod.yml up -d
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
           
           # Dọn dẹp các Docker image cũ không dùng đến để tránh đầy ổ đĩa
           docker image prune -f
