@@ -42,8 +42,8 @@ jobs:
 
     - name: Deploy to S3 Bucket
       run: |
-        # Đẩy đè tất cả file tĩnh vào S3 bucket
-        aws s3 sync web/dist/ s3://amzn-s3-ott-n4 --delete
+        # Đẩy đè tất cả file tĩnh vào S3 bucket (không dùng --delete để tránh xóa các thư mục tải lên của user như avatars/ hay chat/)
+        aws s3 sync web/dist/ s3://amzn-s3-ott-n4
 
     - name: Invalidate CloudFront Distribution Cache
       run: |
