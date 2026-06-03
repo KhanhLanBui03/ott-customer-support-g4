@@ -4,6 +4,10 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 
 import translationEN from './locales/en/translation.json';
 import translationVI from './locales/vi/translation.json';
+import translationCN from './locales/cn/translation.json';
+import translationFR from './locales/fr/translation.json';
+import translationJP from './locales/jp/translation.json';
+import translationKR from './locales/kr/translation.json';
 
 // Mapping between AI language codes and UI language codes
 export const LANGUAGE_MAP = {
@@ -18,6 +22,10 @@ export const LANGUAGE_MAP = {
 const resources = {
   en: translationEN,
   vi: translationVI,
+  zh: translationCN,
+  fr: translationFR,
+  ja: translationJP,
+  ko: translationKR,
 };
 
 i18n
