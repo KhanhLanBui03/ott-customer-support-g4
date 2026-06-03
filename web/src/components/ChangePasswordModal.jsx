@@ -87,7 +87,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
     <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl animate-fade-in ${isDark ? 'bg-slate-950/40' : 'bg-slate-200/40'}`}>
       <div className={`w-full max-w-lg rounded-[40px] shadow-2xl relative overflow-hidden border ${isDark ? 'bg-surface-200 border-white/5' : 'bg-white border-slate-100'}`}>
         <div className={`h-20 flex items-center justify-between px-10 border-b sticky top-0 backdrop-blur-md ${isDark ? 'bg-surface-100/50 border-white/5' : 'bg-white/50 border-slate-50'}`}>
-          <h2 className={`font-black uppercase tracking-[0.2em] text-[12px] ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('password.title')}</h2>
+          <h2 className={`font-bold tracking-tight text-lg ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('password.title')}</h2>
           <button onClick={handleClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-white/5 text-white/40' : 'hover:bg-slate-100 text-slate-400'}`}>
             <X size={24} />
           </button>
@@ -97,8 +97,8 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             
             <div className="space-y-2 relative">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
-                <Lock size={12} /><span>{t('password.old_password')}</span>
+              <label className={`text-sm font-medium px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                <Lock size={14} /><span>{t('password.old_password')}</span>
               </label>
               <div className="relative">
                 <input
@@ -109,7 +109,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                     if(errorMsg.includes(t('password.old_password').toLowerCase())) setErrorMsg('');
                   }}
                   placeholder={t('password.old_password_placeholder')}
-                  className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
+                  className={`w-full px-5 py-3 border rounded-2xl text-sm transition-all focus:outline-none ${
                     errorMsg.includes(t('password.old_password').toLowerCase()) 
                       ? 'border-red-500/50 focus:border-red-500' 
                       : (isDark ? 'border-white/10 focus:border-indigo-500' : 'border-slate-200 focus:border-slate-400')
@@ -117,25 +117,25 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                 />
                 {successMsg && (
                   <div className="absolute inset-y-0 right-4 flex items-center">
-                    <CheckCircle2 size={18} className="text-cursor-success" />
+                    <CheckCircle2 size={18} className="text-emerald-500" />
                   </div>
                 )}
               </div>
               {errorMsg && errorMsg.includes(t('password.old_password').toLowerCase()) && (
-                <p className="text-[11px] text-red-500 font-mono font-bold px-1 mt-1">{errorMsg}</p>
+                <p className="text-xs text-red-500 font-medium px-1 mt-1">{errorMsg}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
-                <Lock size={12} /><span>{t('password.new_password')}</span>
+              <label className={`text-sm font-medium px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                <Lock size={14} /><span>{t('password.new_password')}</span>
               </label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder={t('password.new_password_placeholder')}
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
+                className={`w-full px-5 py-3 border rounded-2xl text-sm transition-all focus:outline-none ${
                   isDark 
                     ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
                     : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
@@ -143,59 +143,59 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
               />
               
               {/* Password Requirements */}
-              <div className={`mt-3 p-4 rounded-2xl border space-y-2 ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/50 border-cursor-dark/5'}`}>
-                <div className={`text-[10px] font-mono font-black uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>{t('password.requirements_title')}</div>
-                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.length ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
-                  {reqs.length ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
+              <div className={`mt-3 p-4 rounded-2xl border space-y-2 ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/50 border-slate-100'}`}>
+                <div className={`text-xs font-bold mb-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>{t('password.requirements_title')}</div>
+                <div className={`text-xs flex items-center space-x-2 ${reqs.length ? 'text-emerald-500' : (isDark ? 'text-white/40' : 'text-slate-400')}`}>
+                  {reqs.length ? <CheckCircle2 size={14}/> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
                   <span>{t('password.req_length')}</span>
                 </div>
-                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.lower ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
-                  {reqs.lower ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
+                <div className={`text-xs flex items-center space-x-2 ${reqs.lower ? 'text-emerald-500' : (isDark ? 'text-white/40' : 'text-slate-400')}`}>
+                  {reqs.lower ? <CheckCircle2 size={14}/> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
                   <span>{t('password.req_lower')}</span>
                 </div>
-                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.upper ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
-                  {reqs.upper ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
+                <div className={`text-xs flex items-center space-x-2 ${reqs.upper ? 'text-emerald-500' : (isDark ? 'text-white/40' : 'text-slate-400')}`}>
+                  {reqs.upper ? <CheckCircle2 size={14}/> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
                   <span>{t('password.req_upper')}</span>
                 </div>
-                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.number ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
-                  {reqs.number ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
+                <div className={`text-xs flex items-center space-x-2 ${reqs.number ? 'text-emerald-500' : (isDark ? 'text-white/40' : 'text-slate-400')}`}>
+                  {reqs.number ? <CheckCircle2 size={14}/> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
                   <span>{t('password.req_number')}</span>
                 </div>
-                <div className={`text-[11px] font-mono font-bold flex items-center space-x-2 ${reqs.special ? 'text-cursor-success' : (isDark ? 'text-white/60' : 'text-cursor-dark/60')}`}>
-                  {reqs.special ? <CheckCircle2 size={12}/> : <div className="w-3 h-3 rounded-full border border-current opacity-50" />}
+                <div className={`text-xs flex items-center space-x-2 ${reqs.special ? 'text-emerald-500' : (isDark ? 'text-white/40' : 'text-slate-400')}`}>
+                  {reqs.special ? <CheckCircle2 size={14}/> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
                   <span>{t('password.req_special')}</span>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-cursor-dark/60'}`}>
-                <Lock size={12} /><span>{t('password.confirm_password')}</span>
+              <label className={`text-sm font-medium px-1 flex items-center space-x-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                <Lock size={14} /><span>{t('password.confirm_password')}</span>
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder={t('password.confirm_password_placeholder')}
-                className={`w-full px-5 py-3 border rounded-2xl text-sm font-mono font-bold transition-all focus:outline-none ${
+                className={`w-full px-5 py-3 border rounded-2xl text-sm transition-all focus:outline-none ${
                   isDark 
                     ? 'bg-surface-100 border-white/10 text-white placeholder:text-white/30 focus:border-indigo-500' 
                     : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
                 }`}
               />
                {confirmPassword && newPassword !== confirmPassword && (
-                <p className="text-[11px] text-red-500 font-mono font-bold px-1 mt-1">{t('password.error_mismatch')}</p>
+                <p className="text-xs text-red-500 font-medium px-1 mt-1">{t('password.error_mismatch')}</p>
               )}
             </div>
 
             {errorMsg && !errorMsg.toLowerCase().includes(t('password.old_password').toLowerCase()) && (
-              <p className="text-[11px] text-red-500 font-mono font-bold text-center px-1">{errorMsg}</p>
+              <p className="text-xs text-red-500 font-medium text-center px-1">{errorMsg}</p>
             )}
 
             <button
               type="submit"
               disabled={loading || !isNewPasswordValid || !currentPassword || newPassword !== confirmPassword}
-              className={`w-full py-4 mt-4 rounded-2xl font-mono font-black uppercase tracking-[0.4em] text-[11px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center space-x-3 ${
+              className={`w-full py-4 mt-4 rounded-2xl font-bold text-sm shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center space-x-3 ${
                 isDark ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'
               }`}
             >

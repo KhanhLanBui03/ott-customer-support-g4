@@ -29,6 +29,9 @@ const MessageList = React.forwardRef(({
   sendReadReceipt,
   highlightedMessageId = null,
   isBlockedByOther = false,
+  translatedMessages = {},
+  translationLoading = {},
+  onTranslate,
 }, ref) => {
   const { colors, isDark } = useTheme();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -231,6 +234,9 @@ const MessageList = React.forwardRef(({
           isHighlighted={highlightedMessageId === (item.messageId || item.id)}
           allMessages={messages}
           members={members}
+          translatedMessages={translatedMessages}
+          translationLoading={translationLoading}
+          onTranslate={onTranslate}
         />
 
       </View>

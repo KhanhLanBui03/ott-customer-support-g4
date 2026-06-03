@@ -24,11 +24,13 @@ import { fetchNotifications, setPendingRequests, setPendingGroups } from '../../
 import { setActiveConversation, setConversations } from '../../store/chatSlice';
 import { useTheme } from '../../hooks/useTheme';
 import { useDispatch, useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { chatApi } from '../../api/chatApi';
 import { friendApi } from '../../api/friendApi';
 import adminApi from '../../api/adminApi';
 
 const Chat = () => {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const dispatch = useDispatch();
@@ -100,12 +102,12 @@ const Chat = () => {
   const [reportingConvId, setReportingConvId] = useState(null);
 
   const TAGS = [
-    { key: 'customer', label: 'Khách hàng', color: 'bg-red-500' },
-    { key: 'family', label: 'Gia đình', color: 'bg-emerald-500' },
-    { key: 'work', label: 'Công việc', color: 'bg-orange-500' },
-    { key: 'friends', label: 'Bạn bè', color: 'bg-purple-500' },
-    { key: 'later', label: 'Trả lời sau', color: 'bg-yellow-500' },
-    { key: 'colleague', label: 'Đồng nghiệp', color: 'bg-blue-500' }
+    { key: 'customer', label: t('sidebar.tags.customer'), color: 'bg-red-500' },
+    { key: 'family', label: t('sidebar.tags.family'), color: 'bg-emerald-500' },
+    { key: 'work', label: t('sidebar.tags.work'), color: 'bg-orange-500' },
+    { key: 'friends', label: t('sidebar.tags.friends'), color: 'bg-purple-500' },
+    { key: 'later', label: t('sidebar.tags.later'), color: 'bg-yellow-500' },
+    { key: 'colleague', label: t('sidebar.tags.colleague'), color: 'bg-blue-500' }
   ];
 
   const activeConversation = React.useMemo(() => {
@@ -211,7 +213,7 @@ const Chat = () => {
       const isGroup = activeConversation.type === 'GROUP';
       if (isGroup) {
         setOutgoingTarget({
-          name: activeConversation.name || 'Nhóm trò chuyện',
+          name: activeConversation.name || t('chat.group_fallback', 'Nhóm trò chuyện'),
           avatar: activeConversation.avatar || null,
           isGroup: true
         });
@@ -221,7 +223,7 @@ const Chat = () => {
           return mid && String(mid).trim() !== String(myId).trim();
         });
         setOutgoingTarget({
-          name: other?.fullName || other?.name || activeConversation.name || 'Người dùng',
+          name: other?.fullName || other?.name || activeConversation.name || t('chat.user_fallback', 'Người dùng'),
           avatar: other?.avatar || other?.avatarUrl || null,
           isGroup: false
         });
@@ -262,7 +264,7 @@ const Chat = () => {
     // 1. Ưu tiên xử lý cuộc gọi NHÓM
     if (isActuallyGroup) {
       return {
-        name: callConv?.name || outgoingTarget?.name || incomingSignal?.conversationName || 'Nhóm trò chuyện',
+        name: callConv?.name || outgoingTarget?.name || incomingSignal?.conversationName || t('chat.group_fallback', 'Nhóm trò chuyện'),
         avatar: callConv?.avatar || callConv?.avatarUrl || outgoingTarget?.avatar || incomingSignal?.conversationAvatar || null
       };
     }
@@ -629,28 +631,28 @@ const Chat = () => {
                   ${isDark ? 'bg-[#1e2330] border-white/10 shadow-black/40' : 'bg-white border-slate-100 shadow-slate-200'}
                 `}>
                   <div className={`px-5 py-3 border-b mb-2 ${isDark ? 'border-white/10' : 'border-slate-50'}`}>
-                    <h3 className={`font-bold truncate text-base ${isDark ? 'text-white' : 'text-slate-800'}`}>{user?.fullName || 'Người dùng'}</h3>
+                    <h3 className={`font-bold truncate text-base ${isDark ? 'text-white' : 'text-slate-800'}`}>{user?.fullName || t('common.user')}</h3>
                   </div>
                   <button
                     onClick={() => { setIsUserMenuOpen(false); setIsProfileOpen(true); }}
                     className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
                       }`}
                   >
-                    Hồ sơ của bạn
+                    {t('profile.edit_profile')}
                   </button>
                   <button
                     onClick={() => { setIsUserMenuOpen(false); setIsChangePasswordOpen(true); }}
                     className={`w-full text-left px-5 py-3 text-[14px] transition-colors ${isDark ? 'text-white/80 hover:bg-white/5 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
                       }`}
                   >
-                    Đổi mật khẩu
+                    {t('password.title')}
                   </button>
                   <button
                     onClick={() => { setIsUserMenuOpen(false); setIsDeleteAccountOpen(true); }}
                     className={`w-full text-left px-5 py-3 text-[14px] transition-colors border-t font-medium ${isDark ? 'text-red-400 hover:bg-red-400/10 border-white/10' : 'text-red-500 hover:bg-red-50 border-slate-50'
                       }`}
                   >
-                    Xóa tài khoản
+                    {t('delete_account.title')}
                   </button>
                 </div>
               </>
@@ -797,19 +799,19 @@ const Chat = () => {
         }>
           <div className={`${isMobile ? 'p-4 space-y-4' : 'p-6 space-y-6'}`}>
             <div className="flex items-center justify-between">
-              <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-black text-foreground tracking-tighter`}>Tin nhắn</h1>
+              <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-black text-foreground tracking-tighter`}>{t('chat.title')}</h1>
               <div className="flex items-center space-x-1">
                 <button
                   onClick={toggleTheme}
                   className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-all active:scale-90"
-                  title={isDark ? "Sang chế độ sáng" : "Sang chế độ tối"}
+                  title={isDark ? t('chat.tooltip_light_mode') : t('chat.tooltip_dark_mode')}
                 >
                   {isDark ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
                 <button
                   onClick={() => setIsGroupModalOpen(true)}
                   className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors relative group/addgroup"
-                  title="Tạo nhóm mới"
+                  title={t('chat.tooltip_new_group')}
                 >
                   <div className="relative">
                     <Users size={isMobile ? 18 : 20} />
@@ -822,7 +824,7 @@ const Chat = () => {
                     setIsFriendsOpen(true);
                   }}
                   className="p-2 hover:bg-surface-100 rounded-xl text-foreground/40 transition-colors"
-                  title="Tìm kiếm người dùng"
+                  title={t('chat.tooltip_search_user')}
                 >
                   <UserPlus size={isMobile ? 18 : 20} />
                 </button>
@@ -836,7 +838,7 @@ const Chat = () => {
                 </div>
                 <input
                   type="text"
-                  placeholder="Tìm kiếm..."
+                  placeholder={`${t('chat.search_placeholder', { type: '' }).replace('...', '').trim()}...`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-12 pr-4 py-2 bg-surface-200 text-foreground text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-foreground/30 font-medium"
@@ -857,7 +859,7 @@ const Chat = () => {
                   onClick={() => setSearchTerm('')}
                   className="text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors whitespace-nowrap pr-2"
                 >
-                  Đóng
+                  {t('chat.close')}
                 </button>
               )}
             </div>
@@ -869,7 +871,7 @@ const Chat = () => {
                   onClick={() => setActiveTab('priority')}
                   className={`text-[14px] font-bold pb-2 relative transition-all active:scale-95 ${activeTab === 'priority' ? 'text-blue-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-white'}`}
                 >
-                  <span>Ưu tiên</span>
+                  <span>{t('chat.priority')}</span>
                   {activeTab === 'priority' && (
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
                   )}
@@ -880,7 +882,7 @@ const Chat = () => {
                   onClick={() => setActiveTab('hidden')}
                   className={`text-[14px] font-bold pb-2 relative transition-all active:scale-95 ${activeTab === 'hidden' ? 'text-blue-500' : 'text-slate-400 hover:text-slate-600 dark:hover:text-white'}`}
                 >
-                  <span>Ẩn</span>
+                  <span>{t('chat.hidden_tab')}</span>
                   {activeTab === 'hidden' && (
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
                   )}
@@ -899,7 +901,7 @@ const Chat = () => {
                     }`}
                   style={!(isFilterMenuOpen || filterType !== 'all') ? { color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'black' } : {}}
                 >
-                  <span>{(filterType === 'unread' || selectedTags.length > 0) ? (filterType === 'unread' ? 'Chưa đọc' : `Phân loại (${selectedTags.length})`) : 'Phân loại'}</span>
+                  <span>{(filterType === 'unread' || selectedTags.length > 0) ? (filterType === 'unread' ? t('chat.unread') : `${t('chat.classify')} (${selectedTags.length})`) : t('chat.classify')}</span>
                   <ChevronDown size={14} strokeWidth={2.5} className={`transition-transform duration-300 ${isFilterMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -910,14 +912,14 @@ const Chat = () => {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="px-4 py-1.5 mb-1">
-                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>Theo trạng thái</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>{t('chat.filter_by_status')}</p>
                     </div>
 
                     <button
                       onClick={() => { setFilterType('all'); setIsFilterMenuOpen(false); }}
                       className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group"
                     >
-                      <span className={`text-[13px] font-bold ${filterType === 'all' ? 'text-blue-500 dark:text-blue-400' : ''}`} style={filterType !== 'all' ? { color: isDark ? '#ffffff' : '#1e293b' } : {}}>Tất cả</span>
+                      <span className={`text-[13px] font-bold ${filterType === 'all' ? 'text-blue-500 dark:text-blue-400' : ''}`} style={filterType !== 'all' ? { color: isDark ? '#ffffff' : '#1e293b' } : {}}>{t('chat.all')}</span>
                       <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterType === 'all' ? 'border-blue-500 bg-blue-500/20' : ''}`}
                         style={filterType !== 'all' ? { borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#cbd5e1' } : {}}>
                         {filterType === 'all' && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
@@ -929,7 +931,7 @@ const Chat = () => {
                       className="w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group"
                     >
                       <div className="flex items-center space-x-2">
-                        <span className={`text-[13px] font-bold ${filterType === 'unread' ? 'text-blue-500 dark:text-blue-400' : ''}`} style={filterType !== 'unread' ? { color: isDark ? '#ffffff' : '#1e293b' } : {}}>Chưa đọc</span>
+                        <span className={`text-[13px] font-bold ${filterType === 'unread' ? 'text-blue-500 dark:text-blue-400' : ''}`} style={filterType !== 'unread' ? { color: isDark ? '#ffffff' : '#1e293b' } : {}}>{t('chat.unread')}</span>
                         {conversations.filter(c => (c.unreadCount || 0) > 0).length > 0 && (
                           <span className="flex items-center justify-center min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-black rounded-full shadow-lg shadow-red-500/20">
                             {conversations.filter(c => (c.unreadCount || 0) > 0).length}
@@ -945,13 +947,13 @@ const Chat = () => {
                     <div className="h-px bg-border dark:bg-white/5 my-2" />
 
                     <div className="px-4 py-1.5 mb-1 flex items-center justify-between">
-                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>Theo thẻ phân loại</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#64748b' }}>{t('chat.filter_by_tag')}</p>
                       {selectedTags.length > 0 && (
                         <button
                           onClick={() => setSelectedTags([])}
                           className="text-[10px] font-black text-indigo-500 hover:text-indigo-600 uppercase"
                         >
-                          Xóa
+                          {t('chat.clear')}
                         </button>
                       )}
                     </div>
@@ -995,7 +997,7 @@ const Chat = () => {
           <div className={`flex-1 overflow-y-auto no-scrollbar ${isMobile ? 'pb-20' : ''}`}>
             {loading && conversations.length === 0 ? (
               <div className="p-8 text-center text-[10px] font-mono font-black uppercase tracking-[0.3em] text-foreground/40 animate-pulse">
-                Đang đồng bộ...
+                {t('chat.loading')}
               </div>
             ) : (
               <Sidebar
@@ -1106,7 +1108,7 @@ const Chat = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-4 py-2 border-b border-slate-50 mb-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tùy chọn hội thoại</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('chat.context_menu_title')}</p>
             </div>
             <button
               onClick={() => {
@@ -1117,7 +1119,7 @@ const Chat = () => {
             >
               <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
                 <Pin size={16} className={`text-slate-400 group-hover:text-indigo-500 ${conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'fill-indigo-500 text-indigo-500' : ''}`} />
-                <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}</span>
+                <span>{conversations.find(c => c.conversationId === contextMenu.conversationId)?.isPinned ? t('chat.unpin_conv') : t('chat.pin_conv')}</span>
               </div>
             </button>            <button
               onClick={() => {
@@ -1125,10 +1127,10 @@ const Chat = () => {
                 let newHidden;
                 if (hiddenConvIds.includes(convId)) {
                   newHidden = hiddenConvIds.filter(id => id !== convId);
-                  showToast("Đã bỏ ẩn cuộc trò chuyện này!", "success");
+                  showToast(t('chat.unhide_success'), "success");
                 } else {
                   newHidden = [...hiddenConvIds, convId];
-                  showToast("Đã ẩn cuộc trò chuyện này!", "success");
+                  showToast(t('chat.hide_success'), "success");
                   if (activeConversationId === convId) {
                     selectConversation(null);
                   }
@@ -1141,7 +1143,7 @@ const Chat = () => {
             >
               <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
                 <EyeOff size={16} className="text-slate-400 group-hover:text-indigo-500" />
-                <span>{hiddenConvIds.includes(contextMenu.conversationId) ? 'Bỏ ẩn trò chuyện' : 'Ẩn trò chuyện'}</span>
+                <span>{hiddenConvIds.includes(contextMenu.conversationId) ? t('chat.unhide_conv') : t('chat.hide_conv')}</span>
               </div>
             </button>
 
@@ -1151,7 +1153,7 @@ const Chat = () => {
             >
               <div className="flex items-center space-x-3 text-[13px] font-bold">
                 <Trash2 size={16} />
-                <span>Xóa hội thoại</span>
+                <span>{t('chat.delete_conv')}</span>
               </div>
             </button>
 
@@ -1167,7 +1169,7 @@ const Chat = () => {
             >
               <div className="flex items-center space-x-3 text-[13px] font-bold text-slate-700">
                 <AlertTriangle size={16} className="text-slate-400 group-hover:text-red-500" />
-                <span>Báo xấu</span>
+                <span>{t('chat.report')}</span>
               </div>
             </button>
           </div >
@@ -1198,7 +1200,7 @@ const Chat = () => {
             <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/5 mb-4">
               <div className="flex items-center space-x-2.5">
                 <AlertTriangle className="text-rose-500 animate-pulse" size={22} />
-                <h3 className="text-lg font-black tracking-tight">Báo cáo hội thoại</h3>
+                <h3 className="text-lg font-black tracking-tight">{t('chat.report_modal.title')}</h3>
               </div>
               <button
                 onClick={() => setIsReportModalOpen(false)}
@@ -1210,16 +1212,16 @@ const Chat = () => {
 
             <div className="space-y-4">
               <p className="text-sm opacity-60 leading-relaxed font-medium">
-                Vui lòng chọn lý do báo cáo cuộc trò chuyện này. Đội ngũ kiểm duyệt sẽ kiểm tra nội dung trong vòng 24h.
+                {t('chat.report_modal.description')}
               </p>
 
               <div className="space-y-2">
                 {[
-                  { key: 'spam', label: 'Spam / Tin nhắn rác' },
-                  { key: 'harassment', label: 'Quấy rối / Đe dọa' },
-                  { key: 'scam', label: 'Lừa đảo / Giả mạo' },
-                  { key: 'inappropriate', label: 'Nội dung phản cảm / Độc hại' },
-                  { key: 'other', label: 'Lý do khác' }
+                  { key: 'spam', label: t('chat.report_modal.reason_spam') },
+                  { key: 'harassment', label: t('chat.report_modal.reason_harassment') },
+                  { key: 'scam', label: t('chat.report_modal.reason_scam') },
+                  { key: 'inappropriate', label: t('chat.report_modal.reason_inappropriate') },
+                  { key: 'other', label: t('chat.report_modal.reason_other') }
                 ].map(item => (
                   <label
                     key={item.key}
@@ -1242,11 +1244,11 @@ const Chat = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">Chi tiết lý do báo cáo (Không bắt buộc)</label>
+                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">{t('chat.report_modal.details_label')}</label>
                 <textarea
                   value={reportNotes}
                   onChange={(e) => setReportNotes(e.target.value)}
-                  placeholder="Nhập thêm chi tiết phản ánh của bạn..."
+                  placeholder={t('chat.report_modal.details_placeholder')}
                   className={`w-full p-4 rounded-2xl text-sm border focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all min-h-[80px] max-h-[140px] resize-y placeholder:text-foreground/20 font-medium ${isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'
                     }`}
                 />
@@ -1259,7 +1261,7 @@ const Chat = () => {
                 className={`flex-1 py-3.5 rounded-2xl font-bold transition-all active:scale-95 text-[14px] border ${isDark ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
                   }`}
               >
-                Hủy bỏ
+                {t('chat.report_modal.cancel')}
               </button>
               <button
                 onClick={() => {
@@ -1278,11 +1280,11 @@ const Chat = () => {
 
                   adminApi.submitReport(targetId, targetType, reportReason, reportNotes)
                     .then(() => {
-                      showToast("Gửi báo cáo thành công! Cảm ơn đóng góp của bạn.", "success");
+                      showToast(t('chat.report_modal.success'), "success");
                     })
                     .catch((err) => {
                       console.error("Gửi báo cáo thất bại:", err);
-                      showToast("Gửi báo cáo thất bại. Vui lòng thử lại sau.", "error");
+                      showToast(t('chat.report_modal.error'), "error");
                     })
                     .finally(() => {
                       setIsReportModalOpen(false);
@@ -1291,7 +1293,7 @@ const Chat = () => {
                 }}
                 className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-all active:scale-95 text-[14px] shadow-lg shadow-rose-500/20"
               >
-                Gửi báo cáo
+                {t('chat.report_modal.submit')}
               </button>
             </div>
           </div>

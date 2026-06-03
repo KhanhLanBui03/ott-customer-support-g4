@@ -1396,7 +1396,32 @@ public class ConversationService {
         response.put("conversationId", conversationId);
         response.put("name", conv.getName());
         response.put("avatarUrl", conv.getAvatarUrl());
-        response.put("memberCount", conv.getMemberIds() != null ? conv.getMemberIds().size() : 0);
+
+        // Log memberIds để debug
+        if (conv.getMemberIds() != null) {
+            log.info("[JOIN-INFO] conversationId={} memberIds={}", conversationId, conv.getMemberIds());
+            // Log detailed member info
+            for (String memberId : conv.getMemberIds()) {
+                userRepository.findById(memberId).ifPresentOrElse(
+                    user -> log.info("[JOIN-INFO-MEMBER] memberId={} phone={} fullName={}", memberId, user.getPhoneNumber(), user.getFullName()),
+                    () -> log.info("[JOIN-INFO-MEMBER] memberId={} NOT FOUND IN DATABASE", memberId)
+                );
+            }
+        }
+
+        // Count only members that exist in database and are not AI bots
+        int memberCount = 0;
+        if (conv.getMemberIds() != null) {
+            for (String memberId : conv.getMemberIds()) {
+                if (!memberId.contains("ai-bot")) {
+                    // Check if user exists in database
+                    if (userRepository.findById(memberId).isPresent()) {
+                        memberCount++;
+                    }
+                }
+            }
+        }
+        response.put("memberCount", memberCount);
         response.put("memberApprovalRequired", conv.getMemberApprovalRequired() != null && Boolean.TRUE.equals(conv.getMemberApprovalRequired()));
         
         boolean alreadyMember = conv.getMemberIds() != null && conv.getMemberIds().contains(userId);

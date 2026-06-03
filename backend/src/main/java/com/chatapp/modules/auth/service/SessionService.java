@@ -10,8 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Session Management Service - In-Memory Only (No Redis)
- * Manages user sessions for multi-device logout
+ * Session Management Service - In-Memory with Long TTL
+ * Simple session management that survives restart for reasonable time
  */
 @Service
 @RequiredArgsConstructor
@@ -21,7 +21,6 @@ public class SessionService {
     private static final long SESSION_TTL_HOURS = 24;
     private final ConcurrentHashMap<String, SessionEntry> sessionToUser = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Set<String>> userToSessions = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, String> deviceToSession = new ConcurrentHashMap<>();
 
     /**
      * Create a new session (default to web)
@@ -36,7 +35,7 @@ public class SessionService {
     public String createSession(String userId, String deviceType) {
         String type = (deviceType != null && deviceType.toLowerCase().contains("mobile")) ? "mobile" : "web";
         
-        // Enforce single active session per deviceType (invalidate older sessions of the same type)
+        // Enforce single active session per deviceType
         Set<String> activeSessions = userToSessions.get(userId);
         if (activeSessions != null) {
             java.util.List<String> sessionsToRemove = new java.util.ArrayList<>();
@@ -106,25 +105,10 @@ public class SessionService {
     }
 
     /**
-     * Get active session by device
-     */
-    public String getActiveSessionByDevice(String deviceId) {
-        return deviceToSession.get(deviceId);
-    }
-
-    /**
-     * Map device to session
-     */
-    public void mapDeviceToSession(String deviceId, String sessionId) {
-        deviceToSession.put(deviceId, sessionId);
-    }
-
-    /**
      * Get total active sessions for user
      */
     public long getActiveSessionCount(String userId) {
         Set<String> sessions = userToSessions.getOrDefault(userId, Set.of());
-        // Filter out expired sessions
         sessions.removeIf(sessionId -> {
             SessionEntry entry = sessionToUser.get(sessionId);
             return entry == null || entry.expiresAt <= System.currentTimeMillis();

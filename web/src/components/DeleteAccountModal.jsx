@@ -38,11 +38,11 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
 
   const handleDelete = async () => {
     if (!password.trim()) {
-      setError('Vui lòng nhập mật khẩu để xác minh chính chủ.');
+      setError(t('delete_account.verify_password'));
       return;
     }
     if (isOtpRequired && !otpCode.trim()) {
-      setError('Vui lòng nhập mã OTP xác thực.');
+      setError(t('delete_account.enter_otp'));
       return;
     }
     
@@ -88,7 +88,7 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
         setError('');
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Không thể gửi lại mã OTP. Vui lòng thử lại sau.');
+      setError(err?.response?.data?.message || t('delete_account.resend_failed'));
     } finally {
       setLoading(false);
     }
@@ -115,13 +115,13 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
               </div>
               <p className="font-serif text-[16px] text-cursor-success font-bold leading-relaxed">
                 {deleteType === 'SOFT' 
-                  ? 'Đã yêu cầu tạm khóa tài khoản thành công!' 
-                  : 'Tài khoản đã được xóa vĩnh viễn!'}
+                  ? t('delete_account.success_soft_title')
+                  : t('delete_account.success_hard_title')}
               </p>
               <p className={`font-serif text-[14px] leading-relaxed px-4 ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
                 {deleteType === 'SOFT'
-                  ? 'Tài khoản của bạn đã tạm thời bị ẩn. Bạn có 30 ngày để đăng nhập lại và khôi phục. Hệ thống đang đăng xuất...'
-                  : 'Dữ liệu cá nhân của bạn đã được ẩn danh hóa. Hệ thống đang đăng xuất...'}
+                  ? t('delete_account.success_soft_desc')
+                  : t('delete_account.success_hard_desc')}
               </p>
             </div>
           ) : isOtpRequired ? (
@@ -130,15 +130,15 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
                 <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto text-red-500 mb-2">
                   <AlertTriangle size={32} />
                 </div>
-                <h3 className="text-lg font-black text-white">XÁC THỰC OTP CUỐI CÙNG</h3>
+                <h3 className="text-lg font-black text-white">{t('delete_account.otp_title')}</h3>
                 <p className="text-red-400 text-xs font-serif leading-relaxed px-2">
-                  CẢNH BÁO: Đây là cảnh báo cuối cùng. Khi bạn nhập OTP và xác nhận, tài khoản của bạn sẽ bị xóa vĩnh viễn lập tức và không thể khôi phục!
+                  {t('delete_account.otp_warning')}
                 </p>
               </div>
 
               <div className="space-y-2 text-center">
                 <label className={`block text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                  Nhập mã OTP 6 số đã gửi tới Email
+                  {t('delete_account.otp_input_label')}
                 </label>
                 <div className="relative my-6 flex justify-between items-center max-w-[320px] mx-auto">
                   {/* Hidden input to capture keyboard events and autocomplete codes */}
@@ -199,7 +199,7 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
                           : 'text-slate-400/50 cursor-not-allowed'
                     }`}
                   >
-                    {timer > 0 ? `Gửi lại mã sau ${timer}s` : 'Gửi lại mã ngay'}
+                    {timer > 0 ? t('delete_account.resend_otp_after', { time: timer }) : t('delete_account.resend_otp_now')}
                   </button>
                 </div>
               </div>
@@ -218,14 +218,14 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
                     isDark ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                   }`}
                 >
-                  Quay lại / Hủy
+                  {t('delete_account.back_cancel')}
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={loading}
                   className="flex-1 py-4 bg-red-700 hover:bg-red-800 text-white rounded-2xl font-serif font-black uppercase tracking-[0.2em] text-[11px] shadow-xl active:scale-95 transition-all disabled:opacity-50"
                 >
-                  {loading ? t('password.btn_processing') : 'Xác nhận xóa'}
+                  {loading ? t('password.btn_processing') : t('delete_account.btn_confirm')}
                 </button>
               </div>
             </div>
@@ -234,7 +234,7 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
               {/* Delete Type Selection */}
               <div className="w-full space-y-3">
                 <label className={`block text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                  Chọn hình thức xóa
+                  {t('delete_account.select_type')}
                 </label>
                 <div className="grid grid-cols-2 gap-4">
                   <button
@@ -246,8 +246,8 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
                         : isDark ? 'border-white/5 bg-white/5 hover:bg-white/10 text-white/50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500'
                     }`}
                   >
-                    <span className="font-bold text-[13px]">Tạm khóa 30 ngày</span>
-                    <span className="text-[9px] opacity-75">Có thể khôi phục</span>
+                    <span className="font-bold text-[13px]">{t('delete_account.soft_type_label')}</span>
+                    <span className="text-[9px] opacity-75">{t('delete_account.soft_type_desc')}</span>
                   </button>
                   <button
                     type="button"
@@ -258,8 +258,8 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
                         : isDark ? 'border-white/5 bg-white/5 hover:bg-white/10 text-white/50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500'
                     }`}
                   >
-                    <span className="font-bold text-[13px]">Xóa vĩnh viễn ngay</span>
-                    <span className="text-[9px] opacity-75">Không thể khôi phục</span>
+                    <span className="font-bold text-[13px]">{t('delete_account.hard_type_label')}</span>
+                    <span className="text-[9px] opacity-75">{t('delete_account.hard_type_desc')}</span>
                   </button>
                 </div>
               </div>
@@ -272,11 +272,11 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
               }`}>
                 {deleteType === 'SOFT' ? (
                   <span>
-                    Tài khoản của bạn sẽ được ẩn ngay lập tức. Bạn có <strong>30 ngày</strong> để đăng nhập lại hoặc click vào link trong email để khôi phục tài khoản. Sau 30 ngày tài khoản sẽ bị ẩn danh hóa vĩnh viễn.
+                    {t('delete_account.soft_warning')}
                   </span>
                 ) : (
                   <span>
-                    <strong>CẢNH BÁO:</strong> Tài khoản và toàn bộ thông tin cá nhân của bạn sẽ bị <strong>ẩn danh hóa vĩnh viễn ngay lập tức</strong>. Mọi liên kết sẽ bị hủy bỏ và không thể khôi phục dưới bất kỳ hình thức nào.
+                    {t('delete_account.hard_warning')}
                   </span>
                 )}
               </div>
@@ -284,12 +284,12 @@ const DeleteAccountModal = ({ isOpen, onClose }) => {
               {/* Password Input */}
               <div className="w-full space-y-2">
                 <label className={`block text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                  Xác thực mật khẩu
+                  {t('delete_account.password_label')}
                 </label>
                 <input
                   type="password"
                   required
-                  placeholder="Nhập mật khẩu xác nhận..."
+                  placeholder={t('delete_account.password_placeholder')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={`w-full px-5 py-4 border rounded-2xl text-sm focus:outline-none transition-all ${

@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTheme } from '../../../src/context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getRealId,
@@ -68,6 +69,7 @@ const SectionHeader = ({ title, colors }) => (
 );
 
 const ChatInfoScreen = () => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -107,7 +109,7 @@ const ChatInfoScreen = () => {
   }, [conversation, currentUser]);
 
   const isGroup = conversation?.type === 'GROUP' || paramType === 'GROUP';
-  const displayName = isGroup ? (conversation?.name || paramName || 'Nhóm chat') : (otherParticipant?.fullName || otherParticipant?.name || paramName || 'Thông tin hội thoại');
+  const displayName = isGroup ? (conversation?.name || paramName || t('info.group_chat')) : (otherParticipant?.fullName || otherParticipant?.name || paramName || t('info.title'));
   const avatarUrl = isGroup ? (conversation?.avatarUrl || paramAvatar) : (otherParticipant?.avatarUrl || otherParticipant?.avatar || otherParticipant?.profilePic || paramAvatar);
   const isOnline = !isGroup && (isAI || otherParticipant?.status === 'ONLINE' || otherParticipant?.isOnline === true);
 
@@ -135,12 +137,12 @@ const ChatInfoScreen = () => {
 
   const handleBlock = useCallback(() => {
     Alert.alert(
-      'Chặn người dùng',
-      `Bạn có chắc chắn muốn chặn ${displayName}? Người này sẽ không thể gửi tin nhắn cho bạn.`,
+      t('info.block_user'),
+      t('info.block_user_confirm', { name: displayName }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Chặn',
+          text: t('info.block_user'),
           style: 'destructive',
           onPress: async () => {
             if (!otherUserId) return;
@@ -153,7 +155,7 @@ const ChatInfoScreen = () => {
             }));
             try {
               await friendApi.blockUser(otherUserId);
-              Alert.alert('Đã chặn', `Bạn đã chặn ${displayName}.`);
+              Alert.alert(t('info.blocked'), t('info.blocked_success_msg', { name: displayName }));
             } catch (err) {
               // Rollback
               dispatch(updateMemberFriendshipStatus({
@@ -161,7 +163,7 @@ const ChatInfoScreen = () => {
                 friendshipStatus: 'NONE',
                 isRequester: null,
               }));
-              Alert.alert('Lỗi', 'Không thể chặn người dùng này. Vui lòng thử lại.');
+              Alert.alert(t('common.error'), t('info.block_failed'));
             } finally {
               setIsBlockLoading(false);
             }
@@ -169,16 +171,16 @@ const ChatInfoScreen = () => {
         }
       ]
     );
-  }, [otherUserId, displayName, dispatch]);
+  }, [otherUserId, displayName, dispatch, t]);
 
   const handleUnblock = useCallback(() => {
     Alert.alert(
-      'Bỏ chặn người dùng',
-      `Bỏ chặn ${displayName}? Người này có thể gửi tin nhắn cho bạn trở lại.`,
+      t('info.unblock_user'),
+      t('info.unblock_user_confirm', { name: displayName }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Bỏ chặn',
+          text: t('info.unblock_user'),
           onPress: async () => {
             if (!otherUserId) return;
             setIsBlockLoading(true);
@@ -190,7 +192,7 @@ const ChatInfoScreen = () => {
             }));
             try {
               await friendApi.unblockUser(otherUserId);
-              Alert.alert('Đã bỏ chặn', `Bạn đã bỏ chặn ${displayName}.`);
+              Alert.alert(t('info.unblocked'), t('info.unblocked_success_msg', { name: displayName }));
             } catch (err) {
               // Rollback
               dispatch(updateMemberFriendshipStatus({
@@ -198,7 +200,7 @@ const ChatInfoScreen = () => {
                 friendshipStatus: 'BLOCKED',
                 isRequester: true,
               }));
-              Alert.alert('Lỗi', 'Không thể bỏ chặn người dùng này. Vui lòng thử lại.');
+              Alert.alert(t('common.error'), t('info.unblock_failed'));
             } finally {
               setIsBlockLoading(false);
             }
@@ -206,13 +208,13 @@ const ChatInfoScreen = () => {
         }
       ]
     );
-  }, [otherUserId, displayName, dispatch]);
+  }, [otherUserId, displayName, dispatch, t]);
 
   const handleWallpaperChange = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Quyền truy cập bị từ chối', 'Vui lòng cấp quyền truy cập ảnh.');
+        Alert.alert(t('common.error'), t('profile.avatar_failed'));
         return;
       }
 
@@ -248,9 +250,9 @@ const ChatInfoScreen = () => {
       await conversationApi.updateConversationWallpaper(targetId, uploadedUrl);
       dispatch(updateConversationWallpaper({ conversationId: targetId, wallpaperUrl: uploadedUrl }));
 
-      Alert.alert('Thành công', 'Đã cập nhật ảnh nền.');
+      Alert.alert(t('common.success'), t('info.wallpaper_updated'));
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể cập nhật ảnh nền.');
+      Alert.alert(t('common.error'), t('info.wallpaper_update_failed'));
     } finally {
       setIsWallpaperLoading(false);
     }
@@ -262,9 +264,9 @@ const ChatInfoScreen = () => {
     try {
       await conversationApi.updateConversationWallpaper(targetId, null);
       dispatch(updateConversationWallpaper({ conversationId: targetId, wallpaperUrl: null }));
-      Alert.alert('Thành công', 'Đã xóa ảnh nền.');
+      Alert.alert(t('common.success'), t('info.wallpaper_removed'));
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể xóa ảnh nền.');
+      Alert.alert(t('common.error'), t('info.wallpaper_remove_failed'));
     } finally {
       setIsWallpaperLoading(false);
     }
@@ -276,7 +278,7 @@ const ChatInfoScreen = () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Quyền truy cập bị từ chối', 'Vui lòng cấp quyền truy cập ảnh.');
+        Alert.alert(t('common.error'), t('profile.avatar_failed'));
         return;
       }
 
@@ -315,10 +317,10 @@ const ChatInfoScreen = () => {
         avatarUrl: uploadedUrl
       }));
 
-      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện nhóm.');
+      Alert.alert(t('common.success'), t('info.group_avatar_updated'));
     } catch (error) {
       console.error('[AvatarChangeError]', error);
-      Alert.alert('Lỗi', 'Không thể cập nhật ảnh đại diện nhóm.');
+      Alert.alert(t('common.error'), t('info.group_avatar_update_failed'));
     } finally {
       setIsAvatarLoading(false);
     }
@@ -326,12 +328,12 @@ const ChatInfoScreen = () => {
 
   const handleLeaveGroup = () => {
     Alert.alert(
-      'Xác nhận',
-      'Bạn có chắc chắn muốn rời khỏi nhóm này?',
+      t('common.confirm'),
+      t('info.leave_group_confirm'),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Rời nhóm',
+          text: t('info.leave_group'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -339,8 +341,8 @@ const ChatInfoScreen = () => {
               dispatch(removeConversationLocal({ conversationId: realId }));
               router.replace('/(main)');
             } catch (err) {
-              const msg = err.response?.data?.message || 'Không thể rời nhóm lúc này.';
-              Alert.alert('Lỗi', msg);
+              const msg = err.response?.data?.message || t('info.leave_group_error');
+              Alert.alert(t('common.error'), msg);
             }
           }
         }
@@ -350,12 +352,12 @@ const ChatInfoScreen = () => {
 
   const handleDisbandGroup = () => {
     Alert.alert(
-      'Giải tán nhóm',
-      'Bạn có chắc chắn muốn giải tán nhóm này? Toàn bộ tin nhắn và thành viên sẽ bị xóa.',
+      t('info.disband_group'),
+      t('info.disband_group_confirm'),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Giải tán',
+          text: t('info.disband'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -363,8 +365,8 @@ const ChatInfoScreen = () => {
               dispatch(removeConversationLocal({ conversationId: realId }));
               router.replace('/(main)');
             } catch (err) {
-              const msg = err.response?.data?.message || 'Không thể giải tán nhóm lúc này.';
-              Alert.alert('Lỗi', msg);
+              const msg = err.response?.data?.message || t('info.disband_group_error');
+              Alert.alert(t('common.error'), msg);
             }
           }
         }
@@ -415,7 +417,7 @@ const ChatInfoScreen = () => {
         conversationId: realId,
         onlyAdminsCanChat: originalValue
       }));
-      Alert.alert('Lỗi', 'Không thể thay đổi quyền gửi tin nhắn.');
+      Alert.alert(t('common.error'), t('info.chat_restriction_error'));
     }
   };
 
@@ -446,7 +448,7 @@ const ChatInfoScreen = () => {
         conversationId: realId,
         memberApprovalRequired: originalValue
       }));
-      Alert.alert('Lỗi', 'Không thể thay đổi thiết lập duyệt thành viên.');
+      Alert.alert(t('common.error'), t('info.member_approval_error'));
     }
   };
 
@@ -463,17 +465,17 @@ const ChatInfoScreen = () => {
     if (isOwner) {
       if (isMemberAdmin) {
         actions.push({
-          text: 'Gỡ chức phó nhóm',
+          text: t('info.demote_admin'),
           onPress: () => updateMemberRole(memberId, 'MEMBER')
         });
       } else {
         actions.push({
-          text: 'Bổ nhiệm phó nhóm',
+          text: t('info.promote_admin'),
           onPress: () => updateMemberRole(memberId, 'ADMIN')
         });
       }
       actions.push({
-        text: 'Xóa khỏi nhóm',
+        text: t('info.remove_from_group'),
         style: 'destructive',
         onPress: () => removeFromGroup(memberId, member.fullName)
       });
@@ -481,7 +483,7 @@ const ChatInfoScreen = () => {
     // Nếu tôi là ADMIN (phó nhóm)
     else if (myRole === 'ADMIN' && !isMemberAdmin) {
       actions.push({
-        text: 'Xóa khỏi nhóm',
+        text: t('info.remove_from_group'),
         style: 'destructive',
         onPress: () => removeFromGroup(memberId, member.fullName)
       });
@@ -490,8 +492,8 @@ const ChatInfoScreen = () => {
     if (actions.length > 0) {
       Alert.alert(
         member.fullName,
-        'Chọn hành động quản lý thành viên',
-        [...actions, { text: 'Đóng', style: 'cancel' }]
+        t('info.member_actions_title'),
+        [...actions, { text: t('common.close'), style: 'cancel' }]
       );
     }
   };
@@ -500,28 +502,28 @@ const ChatInfoScreen = () => {
     try {
       await conversationApi.assignRole(realId, userId, role);
       dispatch(updateMemberRoleLocal({ conversationId: realId, userId, role }));
-      Alert.alert('Thành công', `Đã ${role === 'ADMIN' ? 'bổ nhiệm' : 'gỡ chức'} phó nhóm.`);
+      Alert.alert(t('common.success'), role === 'ADMIN' ? t('info.promote_success') : t('info.demote_success'));
     } catch (err) {
-      Alert.alert('Lỗi', 'Không thể cập nhật quyền thành viên.');
+      Alert.alert(t('common.error'), t('info.update_role_error'));
     }
   };
 
   const removeFromGroup = async (userId, name) => {
     Alert.alert(
-      'Xác nhận',
-      `Bạn có chắc chắn muốn xóa ${name} ra khỏi nhóm?`,
+      t('common.confirm'),
+      t('info.remove_member_confirm', { name }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Xóa',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await conversationApi.removeMember(realId, userId);
               dispatch(removeMemberLocal({ conversationId: realId, userId }));
-              Alert.alert('Thành công', 'Đã xóa thành viên.');
+              Alert.alert(t('common.success'), t('info.remove_member_success'));
             } catch (err) {
-              Alert.alert('Lỗi', 'Không thể xóa thành viên.');
+              Alert.alert(t('common.error'), t('info.remove_member_error'));
             }
           }
         }
@@ -572,12 +574,12 @@ const ChatInfoScreen = () => {
     try {
       const res = await conversationApi.approveJoinRequest(requestId);
       if (res?.success) {
-        Alert.alert('Thành công', 'Đã duyệt thành viên vào nhóm.');
+        Alert.alert(t('common.success'), t('info.approve_join_success'));
         fetchJoinRequests();
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể duyệt yêu cầu.';
-      Alert.alert('Lỗi', msg);
+      const msg = err.response?.data?.message || t('info.approve_join_error');
+      Alert.alert(t('common.error'), msg);
     }
   };
 
@@ -585,12 +587,12 @@ const ChatInfoScreen = () => {
     try {
       const res = await conversationApi.rejectJoinRequest(requestId);
       if (res?.success) {
-        Alert.alert('Thành công', 'Đã từ chối yêu cầu vào nhóm.');
+        Alert.alert(t('common.success'), t('info.reject_join_success'));
         fetchJoinRequests();
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể từ chối yêu cầu.';
-      Alert.alert('Lỗi', msg);
+      const msg = err.response?.data?.message || t('info.reject_join_error');
+      Alert.alert(t('common.error'), msg);
     }
   };
 
@@ -613,7 +615,7 @@ const ChatInfoScreen = () => {
         >
           <Ionicons name="close" size={28} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông tin {isGroup ? 'nhóm' : 'hội thoại'}</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('info.conversation_info_type', { type: isGroup ? t('chat.group').toLowerCase() : t('info.conversation').toLowerCase() })}</Text>
         <View style={{ width: 48 }} />
       </View>
 
@@ -647,10 +649,10 @@ const ChatInfoScreen = () => {
           </TouchableOpacity>
           <Text style={[styles.userName, { color: colors.foreground }]}>{displayName}</Text>
           {isGroup ? (
-            <Text style={[styles.memberCountText, { color: colors.textMuted }]}>{conversation?.members?.length || 0} thành viên</Text>
+            <Text style={[styles.memberCountText, { color: colors.textMuted }]}>{t('info.member_count', { count: conversation?.members?.length || 0 })}</Text>
           ) : (
             <View style={[styles.statusBadge, isOnline ? styles.statusActive : styles.statusInactive]}>
-              <Text style={styles.statusText}>{isOnline ? 'ĐANG HOẠT ĐỘNG' : 'NGOẠI TUYẾN'}</Text>
+              <Text style={styles.statusText}>{isOnline ? t('chat.online').toUpperCase() : t('chat.offline').toUpperCase()}</Text>
             </View>
           )}
         </View>
@@ -659,12 +661,12 @@ const ChatInfoScreen = () => {
         {isGroup && (
           <>
             <View style={[styles.separator, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : colors.surface100 }]} />
-            <SectionHeader title="MÃ QR NHÓM" colors={colors} />
+            <SectionHeader title={t('info.group_qr').toUpperCase()} colors={colors} />
             <View style={styles.section}>
               <InfoItem
                 icon={<MaterialIcons name="qr-code" size={22} color={colors.primary} />}
-                label="Mã QR nhóm"
-                description="Tất cả thành viên đều có thể xem và quét để vào nhóm"
+                label={t('info.group_qr')}
+                description={t('info.group_qr_desc')}
                 color={colors.primary}
                 onPress={() => setIsQRModalVisible(true)}
                 colors={colors}
@@ -675,7 +677,7 @@ const ChatInfoScreen = () => {
             {isAdmin && joinRequests.length > 0 && (
               <>
                 <View style={[styles.separator, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : colors.surface100 }]} />
-                <SectionHeader title={`YÊU CẦU VÀO NHÓM (${joinRequests.length})`} colors={colors} />
+                <SectionHeader title={t('info.pending_join_requests', { count: joinRequests.length }).toUpperCase()} colors={colors} />
                 <View style={styles.section}>
                   {joinRequests.map((req) => (
                     <View key={req.requestId || req.id} style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.05)', borderColor: '#f59e0b', borderWidth: 0.5 }]}>
@@ -686,7 +688,7 @@ const ChatInfoScreen = () => {
                         />
                         <View style={styles.memberInfo}>
                           <Text style={[styles.memberName, { color: colors.foreground }]}>{req.fullName || req.user?.fullName}</Text>
-                          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Muốn gia nhập nhóm</Text>
+                          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('info.wants_to_join')}</Text>
                         </View>
                       </View>
                       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -694,13 +696,13 @@ const ChatInfoScreen = () => {
                           style={{ backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 }}
                           onPress={() => handleApproveRequest(req.requestId || req.id)}
                         >
-                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Duyệt</Text>
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{t('info.approve')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 }}
                           onPress={() => handleRejectRequest(req.requestId || req.id)}
                         >
-                          <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: '600' }}>Từ chối</Text>
+                          <Text style={{ color: colors.foreground, fontSize: 12, fontWeight: '600' }}>{t('info.reject')}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -722,12 +724,12 @@ const ChatInfoScreen = () => {
         {/* Members Section for Group */}
         {isGroup && (
           <>
-            <SectionHeader title="THÀNH VIÊN NHÓM" colors={colors} />
+            <SectionHeader title={t('info.members').toUpperCase()} colors={colors} />
             <View style={styles.section}>
               {(isAdmin || !isApprovalRequiredLocal) && (
                 <InfoItem
                   icon={<MaterialIcons name="person-add" size={22} color="#667eea" />}
-                  label="Thêm thành viên"
+                  label={t('info.add_member')}
                   color="#667eea"
                   onPress={() => setIsInviteModalVisible(true)}
                   colors={colors}
@@ -745,15 +747,15 @@ const ChatInfoScreen = () => {
                     <View style={styles.memberInfo}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={[styles.memberName, { color: colors.foreground }]}>{member.fullName}</Text>
-                        {isMe && <Text style={[styles.meLabel, { color: colors.textSubtle }]}> (Bạn)</Text>}
+                        {isMe && <Text style={[styles.meLabel, { color: colors.textSubtle }]}> ({t('common.you')})</Text>}
                       </View>
                       <View style={styles.roleContainer}>
                         {member.role === 'OWNER' ? (
-                          <Text style={styles.roleTextOwner}>TRƯỞNG NHÓM</Text>
+                          <Text style={styles.roleTextOwner}>{t('info.role_owner').toUpperCase()}</Text>
                         ) : member.role === 'ADMIN' ? (
-                          <Text style={styles.roleTextAdmin}>PHÓ NHÓM</Text>
+                          <Text style={styles.roleTextAdmin}>{t('info.role_admin').toUpperCase()}</Text>
                         ) : (
-                          <Text style={styles.roleTextMember}>THÀNH VIÊN</Text>
+                          <Text style={styles.roleTextMember}>{t('info.role_member').toUpperCase()}</Text>
                         )}
                       </View>
                     </View>
@@ -770,25 +772,25 @@ const ChatInfoScreen = () => {
         )}
 
         {/* Media & Files */}
-        <SectionHeader title="DỮ LIỆU CHIA SẺ" colors={colors} />
+        <SectionHeader title={t('info.shared_data').toUpperCase()} colors={colors} />
         <View style={styles.section}>
           <InfoItem
             icon={<MaterialIcons name="image" size={22} color={colors.textMuted} />}
-            label="ẢNH/VIDEO ĐÃ CHIA SẺ"
+            label={t('info.shared_media').toUpperCase()}
             onPress={() => router.push(`/shared-media/${encodeURIComponent(realId || conversationId)}`)}
             colors={colors}
             isDark={isDark}
           />
           <InfoItem
             icon={<MaterialIcons name="insert-drive-file" size={22} color={colors.textMuted} />}
-            label="FILE ĐÃ CHIA SẺ"
+            label={t('info.shared_files').toUpperCase()}
             onPress={() => router.push(`/shared-files/${encodeURIComponent(realId || conversationId)}`)}
             colors={colors}
             isDark={isDark}
           />
           <InfoItem
             icon={<MaterialIcons name="link" size={22} color={colors.textMuted} />}
-            label="LINK ĐÃ CHIA SẺ"
+            label={t('info.shared_links').toUpperCase()}
             onPress={() => router.push(`/shared-links/${encodeURIComponent(realId || conversationId)}`)}
             colors={colors}
             isDark={isDark}
@@ -796,14 +798,14 @@ const ChatInfoScreen = () => {
         </View>
 
         {/* Interface Customization */}
-        <SectionHeader title="TÙY CHỈNH GIAO DIỆN" colors={colors} />
+        <SectionHeader title={t('info.customization').toUpperCase()} colors={colors} />
 
         {wallpaperUrl && (
           <View style={styles.previewContainer}>
             <View style={styles.wallpaperPreviewCard}>
               <Image source={{ uri: wallpaperUrl }} style={styles.wallpaperPreviewImage} />
               <View style={styles.previewOverlay}>
-                <Text style={styles.previewText}>Ảnh nền hiện tại</Text>
+                <Text style={styles.previewText}>{t('info.current_wallpaper')}</Text>
               </View>
             </View>
           </View>
@@ -823,9 +825,9 @@ const ChatInfoScreen = () => {
               <MaterialIcons name="wallpaper" size={22} color="#fff" />
             </View>
             <View style={styles.customActionContent}>
-              <Text style={[styles.customActionTitle, { color: colors.foreground }]}>Thay đổi ảnh nền</Text>
+              <Text style={[styles.customActionTitle, { color: colors.foreground }]}>{t('info.change_wallpaper')}</Text>
               <Text style={[styles.customActionSub, { color: colors.textMuted }]}>
-                {isWallpaperLoading ? 'Đang tải...' : 'Tùy chỉnh hình nền cho cuộc trò chuyện'}
+                {isWallpaperLoading ? t('common.loading') : t('info.change_wallpaper_desc')}
               </Text>
             </View>
           </Pressable>
@@ -842,21 +844,21 @@ const ChatInfoScreen = () => {
               <MaterialIcons name="delete-outline" size={22} color="#ef4444" />
             </View>
             <View style={styles.deleteActionContent}>
-              <Text style={styles.deleteActionTitle}>Xóa ảnh nền</Text>
-              <Text style={[styles.deleteActionSub, { color: colors.textMuted }]}>Quay về giao diện mặc định</Text>
+              <Text style={styles.deleteActionTitle}>{t('info.remove_wallpaper')}</Text>
+              <Text style={[styles.deleteActionSub, { color: colors.textMuted }]}>{t('info.remove_wallpaper_desc')}</Text>
             </View>
           </Pressable>
         </View>
 
         {/* Privacy & Danger Zone */}
-        <SectionHeader title="QUYỀN RIÊNG TƯ & QUẢN LÝ" colors={colors} />
+        <SectionHeader title={t('chat.privacy_management').toUpperCase()} colors={colors} />
         <View style={styles.section}>
           {isGroup ? (
             <>
               {/* Rời nhóm - Ai cũng thấy */}
               <InfoItem
                 icon={<MaterialIcons name="exit-to-app" size={22} color="#ef4444" />}
-                label="Rời khỏi nhóm"
+                label={t('info.leave_group')}
                 color="#ef4444"
                 onPress={handleLeaveGroup}
                 showArrow={false}
@@ -865,10 +867,11 @@ const ChatInfoScreen = () => {
               />
 
               {/* Giải tán nhóm - Chỉ Chủ nhóm (Owner) thấy */}
+              <SectionHeader title={t('info.privacy_management').toUpperCase()} colors={colors} />
               <InfoItem
                 icon={<MaterialIcons name="delete-forever" size={22} color={isOwner ? "#ef4444" : "#4b5563"} />}
-                label="Giải tán nhóm"
-                description={!isOwner ? "Chỉ trưởng nhóm mới có quyền" : "Xóa toàn bộ tin nhắn và thành viên"}
+                label={t('info.disband_group')}
+                description={!isOwner ? t('info.owner_only_permission') : t('info.disband_group_desc')}
                 color={isOwner ? "#ef4444" : "#4b5563"}
                 onPress={handleDisbandGroup}
                 disabled={!isOwner}
@@ -880,8 +883,8 @@ const ChatInfoScreen = () => {
               {/* Chỉ Admin có thể chat - Chủ nhóm và Phó nhóm thấy */}
               <InfoItem
                 icon={<MaterialIcons name="chat-bubble-outline" size={22} color={isAdmin ? colors.foreground : colors.textSubtle} />}
-                label="Chỉ Admin mới có thể chat"
-                description={isAdmin ? 'Cho phép Trưởng/ Phó nhóm gửi tin nhắn' : 'Chỉ quản trị viên mới có quyền'}
+                label={t('info.only_admin_can_chat_toggle')}
+                description={isAdmin ? t('info.only_admin_can_chat_desc') : t('info.admin_only_permission')}
                 disabled={!isAdmin}
                 onPress={() => handleToggleChatRestriction(!isRestrictedLocal)}
                 showArrow={false}
@@ -903,8 +906,8 @@ const ChatInfoScreen = () => {
               {/* Kiểm soát thêm thành viên */}
               <InfoItem
                 icon={<MaterialIcons name="security" size={22} color={isAdmin ? colors.foreground : colors.textSubtle} />}
-                label="Kiểm soát thêm thành viên"
-                description={isAdmin ? 'Duyệt thành viên mới trước khi gia nhập' : 'Chỉ quản trị viên mới có quyền'}
+                label={t('info.member_approval_toggle')}
+                description={isAdmin ? t('info.member_approval_desc') : t('info.admin_only_permission')}
                 disabled={!isAdmin}
                 onPress={() => handleToggleMemberApproval(!isApprovalRequiredLocal)}
                 showArrow={false}
@@ -944,8 +947,8 @@ const ChatInfoScreen = () => {
                     }
                   </View>
                   <View style={styles.blockActionContent}>
-                    <Text style={[styles.blockActionTitle, { color: '#ef4444' }]}>Bỏ chặn {displayName}</Text>
-                    <Text style={[styles.blockActionSub, { color: colors.textMuted }]}>Cho phép nhắn tin trở lại</Text>
+                    <Text style={[styles.blockActionTitle, { color: '#ef4444' }]}>{t('info.unblock_user_btn', { name: displayName })}</Text>
+                    <Text style={[styles.blockActionSub, { color: colors.textMuted }]}>{t('info.unblock_desc')}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={22} color="#ef4444" />
                 </Pressable>
@@ -967,8 +970,8 @@ const ChatInfoScreen = () => {
                     }
                   </View>
                   <View style={styles.blockActionContent}>
-                    <Text style={[styles.blockActionTitle, { color: colors.foreground }]}>Chặn {displayName}</Text>
-                    <Text style={[styles.blockActionSub, { color: colors.textMuted }]}>Ngừng nhận tin nhắn từ người này</Text>
+                    <Text style={[styles.blockActionTitle, { color: colors.foreground }]}>{t('info.block_user_btn', { name: displayName })}</Text>
+                    <Text style={[styles.blockActionSub, { color: colors.textMuted }]}>{t('info.block_desc')}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={22} color={colors.textMuted} />
                 </Pressable>
@@ -979,7 +982,7 @@ const ChatInfoScreen = () => {
                 <View style={[styles.blockedByBanner, { backgroundColor: isDark ? 'rgba(234,179,8,0.1)' : 'rgba(234,179,8,0.08)', borderColor: 'rgba(234,179,8,0.3)' }]}>
                   <MaterialIcons name="info-outline" size={18} color="#eab308" style={{ marginRight: 8 }} />
                   <Text style={{ fontSize: 13, color: '#eab308', fontWeight: '600', flex: 1 }}>
-                    Người này đã hạn chế tin nhắn với bạn
+                    {t('info.blocked_by_other')}
                   </Text>
                 </View>
               )}
@@ -988,8 +991,8 @@ const ChatInfoScreen = () => {
 
           <InfoItem
             icon={<MaterialIcons name="report" size={22} color="#f43f5e" />}
-            label="Báo cáo vi phạm"
-            description="Báo cáo cuộc trò chuyện này vì hành vi vi phạm"
+            label={t('info.report_violation')}
+            description={t('info.report_violation_desc')}
             color="#f43f5e"
             onPress={() => setIsReportModalVisible(true)}
             showArrow={true}
@@ -1028,9 +1031,9 @@ const ChatInfoScreen = () => {
                 <MaterialIcons name="close" size={24} color={colors.foreground} />
               </TouchableOpacity>
 
-              <Text style={[styles.qrTitle, { color: colors.foreground }]}>Mã QR nhóm</Text>
+              <Text style={[styles.qrTitle, { color: colors.foreground }]}>{t('info.group_qr')}</Text>
               <Text style={[styles.qrSubtitle, { color: colors.textMuted }]}>
-                Quét mã QR bằng camera hoặc scanner của ứng dụng để gia nhập nhóm
+                {t('info.group_qr_modal_desc')}
               </Text>
 
               <View style={[styles.qrCodeWrapper, { backgroundColor: '#ffffff', borderColor: colors.border }]}>
@@ -1045,7 +1048,7 @@ const ChatInfoScreen = () => {
                 {conversation?.name || displayName}
               </Text>
               <Text style={[styles.qrGroupInfo, { color: colors.primary }]}>
-                {conversation?.members?.length || 0} thành viên
+                {t('info.member_count', { count: conversation?.members?.length || 0 })}
               </Text>
             </Pressable>
           </Pressable>

@@ -5,11 +5,13 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../src/context/ThemeContext';
 
 const SettingsScreen = () => {
   const { colors, isDark, toggleTheme } = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -20,7 +22,7 @@ const SettingsScreen = () => {
         >
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Cài đặt</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('settings.title')}</Text>
         <View style={{ width: 42 }} />
       </View>
 
@@ -29,13 +31,13 @@ const SettingsScreen = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="color-palette-outline" size={20} color={colors.textSubtle} />
-            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>Giao diện</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>{t('settings.appearance')}</Text>
           </View>
           <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name={isDark ? 'moon' : 'sunny-outline'} size={20} color={isDark ? '#fbbf24' : '#f59e0b'} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Chế độ tối</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{isDark ? t('chat.tooltip_light_mode') : t('chat.tooltip_dark_mode')}</Text>
               </View>
               <Switch
                 value={isDark} onValueChange={toggleTheme}
@@ -44,6 +46,19 @@ const SettingsScreen = () => {
                 ios_backgroundColor="#d1d5db"
               />
             </View>
+
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/language-settings')}
+            >
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="language-outline" size={20} color="#3b82f6" />
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('settings.language_title')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -51,13 +66,13 @@ const SettingsScreen = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="notifications-outline" size={20} color={colors.textSubtle} />
-            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>Thông báo</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>{t('settings.notifications')}</Text>
           </View>
           <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="chatbubble-outline" size={20} color={colors.textMuted} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Thông báo tin nhắn</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('settings.message_notifications')}</Text>
               </View>
               <Switch value={true} trackColor={{ false: '#d1d5db', true: '#818cf8' }} thumbColor="#6366f1" ios_backgroundColor="#d1d5db" />
             </View>
@@ -65,7 +80,7 @@ const SettingsScreen = () => {
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="volume-high-outline" size={20} color={colors.textMuted} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Âm thanh</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('settings.sounds')}</Text>
               </View>
               <Switch value={true} trackColor={{ false: '#d1d5db', true: '#818cf8' }} thumbColor="#6366f1" ios_backgroundColor="#d1d5db" />
             </View>
@@ -76,13 +91,13 @@ const SettingsScreen = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="server-outline" size={20} color={colors.textSubtle} />
-            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>Dữ liệu & Lưu trữ</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>{t('settings.data_storage')}</Text>
           </View>
           <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
             <TouchableOpacity style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="image-outline" size={20} color={colors.textMuted} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Tự động tải ảnh</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('settings.auto_download_images')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
             </TouchableOpacity>
@@ -90,7 +105,7 @@ const SettingsScreen = () => {
             <TouchableOpacity style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="videocam-outline" size={20} color={colors.textMuted} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Tự động tải video</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('settings.auto_download_videos')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
             </TouchableOpacity>
@@ -101,13 +116,13 @@ const SettingsScreen = () => {
         <View style={[styles.section, { marginBottom: 30 }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="information-circle-outline" size={20} color={colors.textSubtle} />
-            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>Về ứng dụng</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>{t('settings.about')}</Text>
           </View>
           <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="logo-react" size={20} color="#61dafb" />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>Phiên bản</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('settings.version')}</Text>
               </View>
               <Text style={[styles.versionText, { color: colors.textSubtle }]}>1.0.0</Text>
             </View>

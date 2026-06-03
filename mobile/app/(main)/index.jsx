@@ -14,9 +14,12 @@ import { TAGS, getTagByKey } from '../../src/constants/tags';
 import { conversationApi } from '../../src/api/chatApi';
 import { useTheme } from '../../src/context/ThemeContext';
 import { getPreviewText } from '../../src/utils/messageUtils';
+import { useTranslation } from 'react-i18next';
+import * as SecureStore from 'expo-secure-store';
 
 
 const HomeScreen = () => {
+  const { t } = useTranslation();
   const router = useRouter();
   const dispatch = useDispatch();
   const { conversations, loading } = useSelector((state) => state.chat);
@@ -24,6 +27,36 @@ const HomeScreen = () => {
   const { colors, isDark, toggleTheme } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // --- Ẩn hội thoại ---
+  const [activeTab, setActiveTab] = useState('priority'); // 'priority' | 'hidden'
+  const [hiddenConvIds, setHiddenConvIds] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await SecureStore.getItemAsync('hidden_conversation_ids');
+        if (stored) setHiddenConvIds(JSON.parse(stored));
+      } catch (e) {}
+    })();
+  }, []);
+
+  const saveHiddenConvIds = async (ids) => {
+    setHiddenConvIds(ids);
+    try {
+      await SecureStore.setItemAsync('hidden_conversation_ids', JSON.stringify(ids));
+    } catch (e) {}
+  };
+
+  const handleToggleHide = (conv) => {
+    const convId = conv.conversationId;
+    const newHidden = hiddenConvIds.includes(convId)
+      ? hiddenConvIds.filter(id => id !== convId)
+      : [...hiddenConvIds, convId];
+    saveHiddenConvIds(newHidden);
+    setActionModalVisible(false);
+  };
+  // --- Kết thúc ẩn hội thoại ---
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
@@ -78,6 +111,14 @@ const HomeScreen = () => {
   // Logic lọc danh sách và phân đoạn Ghim
   const displayConversations = useMemo(() => {
     let filtered = conversations.filter(conv => {
+      // Lọc theo tab ẩn/hiển thị
+      const isHidden = hiddenConvIds.includes(conv.conversationId);
+      if (activeTab === 'hidden') {
+        if (!isHidden) return false;
+      } else {
+        if (isHidden) return false;
+      }
+
       // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -106,15 +147,18 @@ const HomeScreen = () => {
       return true;
     });
 
+    // Tab hidden: không phân chia ghim/thường
+    if (activeTab === 'hidden') return filtered;
+
     const pinned = filtered.filter(c => c.isPinned);
     const regular = filtered.filter(c => !c.isPinned);
 
     const result = [];
     if (pinned.length > 0) {
-      result.push({ isHeader: true, title: 'Hội thoại được ghim' });
+      result.push({ isHeader: true, title: t('chat.pinned_messages') });
       result.push(...pinned);
       if (regular.length > 0) {
-        result.push({ isHeader: true, title: 'Tất cả tin nhắn' });
+        result.push({ isHeader: true, title: t('chat.all') });
         result.push(...regular);
       }
     } else {
@@ -122,7 +166,7 @@ const HomeScreen = () => {
     }
     
     return result;
-  }, [conversations, filterType, selectedTags, searchQuery]);
+  }, [conversations, filterType, selectedTags, searchQuery, hiddenConvIds, activeTab]);
 
   const handleUpdateTag = async (conversationId, tagKey) => {
     try {
@@ -152,16 +196,16 @@ const HomeScreen = () => {
     setActionModalVisible(false);
     if (!otherUserId) return;
     
-    const displayName = conv.name || 'Người dùng';
+    const displayName = conv.name || t('common.user');
 
     if (isBlocked) {
       Alert.alert(
-        'Bỏ chặn người dùng',
-        `Bỏ chặn ${displayName}? Người này có thể gửi tin nhắn cho bạn trở lại.`,
+        t('info.unblock_user'),
+        `${t('info.unblock_user')} ${displayName}?`,
         [
-          { text: 'Hủy', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Bỏ chặn',
+            text: t('info.unblock_user'),
             onPress: async () => {
               dispatch(updateMemberFriendshipStatus({
                 userId: otherUserId,
@@ -170,14 +214,14 @@ const HomeScreen = () => {
               }));
               try {
                 await friendApi.unblockUser(otherUserId);
-                Alert.alert('Đã bỏ chặn', `Bạn đã bỏ chặn ${displayName}.`);
+                Alert.alert(t('common.success'), t('info.unblocked_success', { name: displayName }));
               } catch (err) {
                 dispatch(updateMemberFriendshipStatus({
                   userId: otherUserId,
                   friendshipStatus: 'BLOCKED',
                   isRequester: true,
                 }));
-                Alert.alert('Lỗi', 'Không thể bỏ chặn người dùng này.');
+                Alert.alert(t('common.error'), t('info.unblock_failed'));
               }
             }
           }
@@ -185,12 +229,12 @@ const HomeScreen = () => {
       );
     } else {
       Alert.alert(
-        'Chặn người dùng',
-        `Bạn có chắc chắn muốn chặn ${displayName}? Người này sẽ không thể gửi tin nhắn cho bạn.`,
+        t('info.block_user'),
+        t('info.block_user_confirm', { name: displayName }),
         [
-          { text: 'Hủy', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Chặn',
+            text: t('chat.block_user'),
             style: 'destructive',
             onPress: async () => {
               dispatch(updateMemberFriendshipStatus({
@@ -200,14 +244,14 @@ const HomeScreen = () => {
               }));
               try {
                 await friendApi.blockUser(otherUserId);
-                Alert.alert('Đã chặn', `Bạn đã chặn ${displayName}.`);
+                Alert.alert(t('common.success'), t('chat.success.blocked_user', { defaultValue: `Đã chặn ${displayName}` }));
               } catch (err) {
                 dispatch(updateMemberFriendshipStatus({
                   userId: otherUserId,
                   friendshipStatus: 'NONE',
                   isRequester: null,
                 }));
-                Alert.alert('Lỗi', 'Không thể chặn người dùng này.');
+                Alert.alert(t('common.error'), t('info.block_failed'));
               }
             }
           }
@@ -222,12 +266,12 @@ const HomeScreen = () => {
     if (ref) ref.close();
 
     Alert.alert(
-      'Xóa cuộc trò chuyện',
-      `Bạn có chắc chắn muốn xóa cuộc trò chuyện với "${name}"? Hành động này không thể hoàn tác.`,
+      t('chat.delete_conv'),
+      `${t('chat.delete_for_me_confirm')} "${name}"?`,
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Xóa', 
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -235,7 +279,7 @@ const HomeScreen = () => {
               dispatch(removeConversationLocal({ conversationId }));
             } catch (err) {
               console.error('Delete conversation error:', err);
-              Alert.alert('Lỗi', 'Không thể xóa cuộc trò chuyện lúc này.');
+              Alert.alert(t('common.error'), t('chat.error'));
             }
           }
         }
@@ -256,7 +300,7 @@ const HomeScreen = () => {
       >
         <Animated.View style={[styles.deleteActionItem, { transform: [{ translateX: 0 }] }]}>
           <MaterialCommunityIcons name="trash-can-outline" size={28} color="#fff" />
-          <Text style={styles.deleteActionText}>Xóa</Text>
+          <Text style={styles.deleteActionText}>{t('common.delete')}</Text>
         </Animated.View>
       </TouchableOpacity>
     );
@@ -282,8 +326,8 @@ const HomeScreen = () => {
       : null;
 
     const displayName = item.type === 'SINGLE'
-      ? (otherMember?.fullName || otherMember?.name || otherMember?.firstName || item.name || 'Người dùng')
-      : (item.name || 'Nhóm chat');
+      ? (otherMember?.fullName || otherMember?.name || otherMember?.firstName || item.name || t('common.user'))
+      : (item.name || t('chat.default_group_name'));
 
     const avatarUrl = getAvatarUrl(
       item.type === 'SINGLE'
@@ -310,16 +354,16 @@ const HomeScreen = () => {
     const lastSenderId = String(item.lastMessageSenderId || item.lastSenderId || '');
     const lastSender = members.find(m => String(m.userId || m.id) === lastSenderId);
     
-    let senderName = 'Thành viên';
+    let senderName = t('chat.member');
     if (lastSender) {
-      senderName = lastSender.fullName || lastSender.name || lastSender.firstName || 'Thành viên';
+      senderName = lastSender.fullName || lastSender.name || lastSender.firstName || t('chat.member');
     } else if (item.lastMessageSenderName || item.lastSenderName) {
       senderName = item.lastMessageSenderName || item.lastSenderName;
     }
 
     const previewText = isMentioned 
       ? `${senderName}: ${lastMessagePreview}`
-      : (isOwnLastMessage ? `Bạn: ${lastMessagePreview}` : (item.type === 'GROUP' ? `${senderName}: ${lastMessagePreview}` : lastMessagePreview));
+      : (isOwnLastMessage ? `${t('chat.you')} ${lastMessagePreview}` : (item.type === 'GROUP' ? `${senderName}: ${lastMessagePreview}` : lastMessagePreview));
 
 
 
@@ -419,7 +463,7 @@ const HomeScreen = () => {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header chính */}
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Tin nhắn</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('chat.title')}</Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity 
               style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
@@ -459,7 +503,7 @@ const HomeScreen = () => {
           <View style={[styles.searchBar, { backgroundColor: isDark ? colors.surface200 : '#f3f4f6' }]}>
             <MaterialIcons name="search" size={20} color={colors.textMuted} />
             <TextInput
-              placeholder="Tìm kiếm hội thoại..."
+              placeholder={t('chat.search_placeholder', { type: t('chat.group').toLowerCase() })}
               placeholderTextColor={colors.textMuted}
               style={[styles.searchInput, { color: colors.foreground }]}
               value={searchQuery}
@@ -477,24 +521,32 @@ const HomeScreen = () => {
 
         {/* Tabs Phân loại (Đồng bộ Web) */}
         <View style={[styles.filterTabs, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity style={styles.tabItem}>
-            <Text style={styles.tabTextActive}>Ưu tiên</Text>
-            <View style={styles.tabIndicator} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.filterButton, (filterType !== 'all' || selectedTags.length > 0) ? styles.filterButtonActive : { backgroundColor: colors.surface200 }]} 
-            onPress={() => setFilterVisible(true)}
-          >
-            <Text style={[styles.filterButtonText, (filterType !== 'all' || selectedTags.length > 0) ? styles.filterButtonTextActive : { color: colors.textMuted }]}>
-              {filterType === 'unread' ? 'Chưa đọc' : selectedTags.length > 0 ? `Phân loại (${selectedTags.length})` : 'Phân loại'}
-            </Text>
-            <Ionicons 
-              name="chevron-down" 
-              size={14} 
-              color={(filterType !== 'all' || selectedTags.length > 0) ? "#fff" : colors.textMuted} 
-            />
-          </TouchableOpacity>
+          <View style={styles.tabsRow}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('priority')}>
+              <Text style={[styles.tabText, activeTab === 'priority' && styles.tabTextActive]}>{t('chat.priority')}</Text>
+              {activeTab === 'priority' && <View style={styles.tabIndicator} />}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('hidden')}>
+              <Text style={[styles.tabText, activeTab === 'hidden' && styles.tabTextActive]}>{t('chat.hidden_tab')}</Text>
+              {activeTab === 'hidden' && <View style={styles.tabIndicator} />}
+            </TouchableOpacity>
+          </View>
+
+          {activeTab === 'priority' && (
+            <TouchableOpacity 
+              style={[styles.filterButton, (filterType !== 'all' || selectedTags.length > 0) ? styles.filterButtonActive : { backgroundColor: colors.surface200 }]} 
+              onPress={() => setFilterVisible(true)}
+            >
+              <Text style={[styles.filterButtonText, (filterType !== 'all' || selectedTags.length > 0) ? styles.filterButtonTextActive : { color: colors.textMuted }]}>
+                {filterType === 'unread' ? t('chat.unread') : selectedTags.length > 0 ? `${t('chat.classify')} (${selectedTags.length})` : t('chat.classify')}
+              </Text>
+              <Ionicons 
+                name="chevron-down" 
+                size={14} 
+                color={(filterType !== 'all' || selectedTags.length > 0) ? "#fff" : colors.textMuted} 
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
 
@@ -508,7 +560,7 @@ const HomeScreen = () => {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#6366f1" />
             <Text style={[styles.loadingText, { color: colors.textMuted, marginTop: 15 }]}>
-              Đang tải dữ liệu...
+              {t('chat.loading_content')}
             </Text>
           </View>
         ) : (
@@ -520,7 +572,7 @@ const HomeScreen = () => {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Chưa có hội thoại nào</Text>
+                <Text style={styles.emptyText}>{t('chat.no_conversations_desc')}</Text>
               </View>
             }
           />
@@ -532,12 +584,12 @@ const HomeScreen = () => {
             <View style={styles.modalOverlay}>
               <TouchableWithoutFeedback>
                 <View style={[styles.filterModalContainer, { backgroundColor: colors.card }]}>
-                  <Text style={[styles.modalLabel, { color: colors.textSubtle }]}>THEO TRẠNG THÁI</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSubtle }]}>{t('chat.filter_by_status').toUpperCase()}</Text>
                   <TouchableOpacity 
                     style={styles.filterOption} 
                     onPress={() => { setFilterType('all'); setFilterVisible(false); }}
                   >
-                    <Text style={[styles.optionText, { color: colors.foreground }, filterType === 'all' && styles.optionTextActive]}>Tất cả</Text>
+                    <Text style={[styles.optionText, { color: colors.foreground }, filterType === 'all' && styles.optionTextActive]}>{t('chat.all')}</Text>
                     <View style={[styles.radioCircle, { borderColor: colors.border }, filterType === 'all' && styles.radioActive]}>
                       {filterType === 'all' && <View style={styles.radioDot} />}
                     </View>
@@ -547,7 +599,7 @@ const HomeScreen = () => {
                     onPress={() => { setFilterType('unread'); setFilterVisible(false); }}
                   >
                     <View style={styles.nameRow}>
-                      <Text style={[styles.optionText, { color: colors.foreground }, filterType === 'unread' && styles.optionTextActive]}>Chưa đọc</Text>
+                      <Text style={[styles.optionText, { color: colors.foreground }, filterType === 'unread' && styles.optionTextActive]}>{t('chat.unread')}</Text>
                       {conversations.filter(c => c.unreadCount > 0).length > 0 && (
                         <View style={styles.countBadge}>
                           <Text style={styles.countBadgeText}>{conversations.filter(c => c.unreadCount > 0).length}</Text>
@@ -562,10 +614,10 @@ const HomeScreen = () => {
                   <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
                   
                   <View style={styles.modalHeaderRow}>
-                    <Text style={[styles.modalLabel, { color: colors.textSubtle }]}>THEO THẺ PHÂN LOẠI</Text>
+                    <Text style={[styles.modalLabel, { color: colors.textSubtle }]}>{t('chat.filter_by_tag').toUpperCase()}</Text>
                     {selectedTags.length > 0 && (
                       <TouchableOpacity onPress={() => setSelectedTags([])}>
-                        <Text style={styles.clearText}>XÓA</Text>
+                        <Text style={styles.clearText}>{t('chat.clear').toUpperCase()}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -583,7 +635,7 @@ const HomeScreen = () => {
                         >
                           <View style={styles.tagLabel}>
                             <View style={[styles.tagIcon, { backgroundColor: tag.color }]} />
-                            <Text style={[styles.optionText, { color: colors.foreground }, isSelected && styles.optionTextActive]}>{tag.label}</Text>
+                            <Text style={[styles.optionText, { color: colors.foreground }, isSelected && styles.optionTextActive]}>{t(`sidebar.tags.${tag.key}`)}</Text>
                           </View>
                           <View style={[styles.checkbox, { borderColor: colors.border }, isSelected && { backgroundColor: '#4f46e5', borderColor: '#4f46e5' }]}>
                             {isSelected && <Ionicons name="checkmark" size={12} color="#fff" />}
@@ -607,7 +659,7 @@ const HomeScreen = () => {
                 <View style={[styles.actionSheet, { backgroundColor: colors.card }]}>
                   <View style={styles.sheetHeader}>
                     <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-                      {actionModalType === 'menu' ? 'Tác vụ hội thoại' : 'Phân loại hội thoại'}
+                      {actionModalType === 'menu' ? t('chat.context_menu_title') : t('chat.classify_title')}
                     </Text>
                     <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
                   </View>
@@ -626,7 +678,7 @@ const HomeScreen = () => {
                           />
                         </View>
                         <Text style={[styles.actionListLabel, { color: colors.foreground }]}>
-                          {selectedConv?.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}
+                          {selectedConv?.isPinned ? t('chat.unpin_conv') : t('chat.pin_conv')}
                         </Text>
                       </TouchableOpacity>
 
@@ -637,7 +689,24 @@ const HomeScreen = () => {
                         <View style={[styles.actionListIcon, { backgroundColor: isDark ? colors.surface300 : '#fef3c7' }]}>
                           <MaterialCommunityIcons name="tag-plus-outline" size={24} color="#d97706" />
                         </View>
-                        <Text style={[styles.actionListLabel, { color: colors.foreground }]}>Phân loại</Text>
+                        <Text style={[styles.actionListLabel, { color: colors.foreground }]}>{t('chat.classify')}</Text>
+                      </TouchableOpacity>
+
+                      {/* Ẩn / Bỏ ẩn hội thoại */}
+                      <TouchableOpacity 
+                        style={styles.actionListItem} 
+                        onPress={() => handleToggleHide(selectedConv)}
+                      >
+                        <View style={[styles.actionListIcon, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}>
+                          <MaterialCommunityIcons 
+                            name={hiddenConvIds.includes(selectedConv?.conversationId) ? "eye" : "eye-off"} 
+                            size={24} 
+                            color={colors.textMuted} 
+                          />
+                        </View>
+                        <Text style={[styles.actionListLabel, { color: colors.foreground }]}>
+                          {hiddenConvIds.includes(selectedConv?.conversationId) ? t('chat.unhide_conv') : t('chat.hide_conv')}
+                        </Text>
                       </TouchableOpacity>
 
                       {selectedConv?.type === 'SINGLE' && (() => {
@@ -661,7 +730,7 @@ const HomeScreen = () => {
                               <MaterialIcons name={isBlocked ? "lock-open" : "block"} size={24} color={isBlocked ? "#10b981" : "#ef4444"} />
                             </View>
                             <Text style={[styles.actionListLabel, { color: isBlocked ? "#10b981" : "#ef4444" }]}>
-                              {isBlocked ? `Bỏ chặn người dùng` : `Chặn người dùng`}
+                              {isBlocked ? t('info.unblock_user') : t('chat.block_user')}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -677,7 +746,7 @@ const HomeScreen = () => {
                         <View style={[styles.actionListIcon, { backgroundColor: isDark ? colors.surface300 : '#ffe4e6' }]}>
                           <MaterialIcons name="report" size={24} color="#f43f5e" />
                         </View>
-                        <Text style={[styles.actionListLabel, { color: '#f43f5e' }]}>Báo xấu</Text>
+                        <Text style={[styles.actionListLabel, { color: '#f43f5e' }]}>{t('chat.report')}</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -689,7 +758,7 @@ const HomeScreen = () => {
                         <View style={[styles.actionIcon, { backgroundColor: colors.surface200 }]}>
                           <MaterialCommunityIcons name="tag-off" size={24} color={colors.textMuted} />
                         </View>
-                        <Text style={[styles.actionLabel, { color: colors.textMuted }]}>Bỏ nhãn</Text>
+                        <Text style={[styles.actionLabel, { color: colors.textMuted }]}>{t('sidebar.remove_tag')}</Text>
                       </TouchableOpacity>
 
                       {TAGS.map(tag => (
@@ -701,7 +770,7 @@ const HomeScreen = () => {
                           <View style={[styles.actionIcon, { backgroundColor: tag.color + '20' }]}>
                             <MaterialCommunityIcons name="tag" size={24} color={tag.color} />
                           </View>
-                          <Text style={[styles.actionLabel, { color: colors.textMuted }]}>{tag.label}</Text>
+                          <Text style={[styles.actionLabel, { color: colors.textMuted }]}>{t(`sidebar.tags.${tag.key}`)}</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -790,9 +859,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
+  tabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
   tabItem: {
     paddingBottom: 8,
     position: 'relative',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94a3b8',
   },
   tabTextActive: {
     fontSize: 14,

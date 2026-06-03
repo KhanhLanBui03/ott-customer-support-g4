@@ -504,11 +504,11 @@ const VideoCall = ({
                             onClick={onHangup}
                             className="w-18 h-18 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-400 active:scale-95 transition-all shadow-2xl shadow-red-500/50"
                             style={{ width: 72, height: 72 }}
-                            title="Kết thúc"
+                            title={t('call.end')}
                         >
                             <PhoneOff size={28} className="text-white" />
                         </button>
-                        <span className="text-white/60 text-xs font-medium">Kết thúc</span>
+                        <span className="text-white/60 text-xs font-medium">{t('call.end')}</span>
                     </div>
                 </div>
             )}
