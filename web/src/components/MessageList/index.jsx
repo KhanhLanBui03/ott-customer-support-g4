@@ -518,13 +518,13 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
   const getReactionUserName = (userId) => {
-    if (!userId) return 'Người dùng';
+    if (!userId) return t('common.user');
     const currentUserId = user?.userId || user?.id;
-    if (String(userId) === String(currentUserId)) return 'Bạn';
+    if (String(userId) === String(currentUserId)) return t('common.you');
 
     const members = currentConv?.members || currentConv?.participants || [];
     const found = members.find(member => String(member.userId || member.id || '') === String(userId));
-    return found?.fullName || found?.name || found?.username || 'Người dùng';
+    return found?.fullName || found?.name || found?.username || t('common.user');
   };
 
   const openReactionDetail = (messageId, emoji) => {
@@ -700,7 +700,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
     }
   };
 
-  const FilePreview = ({ url }) => {
+  const FilePreview = ({ url, sender, time }) => {
     const [content, setContent] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -748,8 +748,8 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                 url,
                 ext,
                 name: getFileName(url),
-                sender: 'Người gửi',
-                time: ''
+                sender: sender || t('common.sender'),
+                time: time || ''
               });
             }}
           >
@@ -954,12 +954,12 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
   };
 
   const handleCloseVote = async (messageId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn đóng cuộc bình chọn này?')) return;
+    if (!window.confirm(t('chat.close_vote_confirm'))) return;
     try {
       await chatApi.closeVote(conversationId, messageId);
     } catch (err) {
       console.error('Failed to close vote:', err);
-      alert('Không thể đóng cuộc bình chọn. Vui lòng thử lại.');
+      alert(t('chat.close_vote_error'));
     }
   };
 
@@ -1681,7 +1681,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                   }
                                                   return (
                                                       <div key={idx} className="flex flex-col max-w-full p-2">
-                                                      <FilePreview url={fullUrl} />
+                                                      <FilePreview url={fullUrl} sender={msg.senderName} time={formatMessageTime(msg.createdAt)} />
                                                       <div className="relative group/file">
                                                         <div
                                                           onClick={() => {

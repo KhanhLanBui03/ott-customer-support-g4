@@ -70,7 +70,7 @@ export const translateSystemMessage = (content, t) => {
     return t('system_msg.chat_restriction_disabled', { name });
   }
 
-  // 10. Kiểm duyệt thành viên (Member approval toggle)
+  // 11. Kiểm duyệt thành viên (Member approval toggle)
   if (strContent.endsWith(' đã bật chế độ kiểm duyệt thành viên mới.')) {
     const name = strContent.substring(0, strContent.length - ' đã bật chế độ kiểm duyệt thành viên mới.'.length);
     return t('system_msg.member_approval_enabled', { name });
@@ -78,6 +78,12 @@ export const translateSystemMessage = (content, t) => {
   if (strContent.endsWith(' đã tắt chế độ kiểm duyệt thành viên mới.')) {
     const name = strContent.substring(0, strContent.length - ' đã tắt chế độ kiểm duyệt thành viên mới.'.length);
     return t('system_msg.member_approval_disabled', { name });
+  }
+
+  // 11. Khóa cuộc bình chọn (Close vote)
+  const closeVoteMatch = strContent.match(/^(.+) đã khóa cuộc bình chọn: (.+)$/);
+  if (closeVoteMatch) {
+    return t('system_msg.closed_vote', { name: closeVoteMatch[1], question: closeVoteMatch[2] });
   }
 
   return content;

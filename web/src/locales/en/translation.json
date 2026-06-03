@@ -19,7 +19,8 @@
       "you": "You",
       "today": "Today",
       "yesterday": "Yesterday",
-      "or": "Or"
+      "or": "Or",
+      "sender": "Sender"
     },
     "sidebar": {
       "no_conversations": "No conversations",
@@ -693,7 +694,8 @@
       "chat_restriction_enabled": "{{name}} restricted chat to admins only.",
       "chat_restriction_disabled": "{{name}} allowed everyone to chat.",
       "member_approval_enabled": "{{name}} enabled new member approval.",
-      "member_approval_disabled": "{{name}} disabled new member approval."
+      "member_approval_disabled": "{{name}} disabled new member approval.",
+      "closed_vote": "{{name}} closed the vote: {{question}}"
     }
   }
 }

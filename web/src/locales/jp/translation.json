@@ -18,7 +18,8 @@
       "success": "成功",
       "you": "あなた",
       "today": "今日",
-      "yesterday": "昨日"
+      "yesterday": "昨日",
+      "sender": "送信者"
     },
     "sidebar": {
       "no_conversations": "会話はまだありません",
@@ -374,6 +375,22 @@
       "refresh": "更新",
       "clear_all": "すべて削除",
       "clear_all_confirm": "クラウド上のすべてのデータを削除してもよろしいですか？"
+    },
+    "system_msg": {
+      "created_group": "{{name}} がグループを作成しました。",
+      "joined_group": "{{name}} がグループに参加しました。",
+      "changed_avatar": "{{name}} がグループのアバターを変更しました。",
+      "renamed_group": "{{name}} がグループ名を「{{groupName}}」に変更しました。",
+      "transfer_owner": "グループオーナーが所有権を {{name}} に譲渡しました。",
+      "left_group": "{{name}} がグループを退出しました。",
+      "removed_member": "{{admin}} が {{member}} をグループから削除しました。",
+      "promoted_admin": "{{admin}} が {{member}} を管理者に指名しました。",
+      "demoted_member": "{{admin}} が {{member}} をメンバーに降格しました。",
+      "chat_restriction_enabled": "{{name}} がチャットを管理者のみに制限しました。",
+      "chat_restriction_disabled": "{{name}} が全員のチャットを許可しました。",
+      "member_approval_enabled": "{{name}} が新規メンバーの承認制を有効にしました。",
+      "member_approval_disabled": "{{name}} が新規メンバーの承認制を無効にしました。",
+      "closed_vote": "{{name}} が投票を締め切りました：{{question}}"
     }
   }
 }

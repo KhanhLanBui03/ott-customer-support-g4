@@ -18,7 +18,8 @@
       "success": "Succès",
       "you": "Vous",
       "today": "Aujourd'hui",
-      "yesterday": "Hier"
+      "yesterday": "Hier",
+      "sender": "Expéditeur"
     },
     "sidebar": {
       "no_conversations": "Aucune conversation",
@@ -597,6 +598,22 @@
       "refresh": "Actualiser",
       "clear_all": "Tout supprimer",
       "clear_all_confirm": "Êtes-vous sûr de vouloir supprimer toutes les données du Cloud ?"
+    },
+    "system_msg": {
+      "created_group": "{{name}} a créé le groupe.",
+      "joined_group": "{{name}} a rejoint le groupe.",
+      "changed_avatar": "{{name}} a changé l'avatar du groupe.",
+      "renamed_group": "{{name}} a renommé le groupe en \"{{groupName}}\".",
+      "transfer_owner": "Le propriétaire du groupe a transféré la propriété à {{name}}.",
+      "left_group": "{{name}} a quitté le groupe.",
+      "removed_member": "{{admin}} a retiré {{member}} du groupe.",
+      "promoted_admin": "{{admin}} a nommé {{member}} administrateur.",
+      "demoted_member": "{{admin}} a rétrogradé {{member}} au rang de membre.",
+      "chat_restriction_enabled": "{{name}} a limité le chat aux administrateurs uniquement.",
+      "chat_restriction_disabled": "{{name}} a autorisé tout le monde à chater.",
+      "member_approval_enabled": "{{name}} a activé l'approbation des nouveaux membres.",
+      "member_approval_disabled": "{{name}} a désactivé l'approbation des nouveaux membres.",
+      "closed_vote": "{{name}} a clôturé le vote : {{question}}"
     }
   }
 }

@@ -18,7 +18,8 @@
       "success": "성공",
       "you": "나",
       "today": "오늘",
-      "yesterday": "어제"
+      "yesterday": "어제",
+      "sender": "보낸 사람"
     },
     "sidebar": {
       "no_conversations": "대화 없음",
@@ -598,6 +599,23 @@
       "refresh": "새로 고침",
       "clear_all": "전체 삭제",
       "clear_all_confirm": "클라우드의 모든 데이터를 삭제하시겠습니까?"
+    },
+    "system_msg": {
+      "created_group": "{{name}} 님이 그룹을 생성했습니다.",
+      "joined_group": "{{name}} 님이 그룹에 참여했습니다.",
+      "changed_avatar": "{{name}} 님이 그룹 아바타를 변경했습니다.",
+      "renamed_group": "{{name}} 님이 그룹 이름을 \"{{groupName}}\"(으)로 변경했습니다.",
+      "transfer_owner": "그룹 소유자가 소유권을 {{name}} 님에게 이전했습니다.",
+      "left_group": "{{name}} 님이 그룹을 탈퇴했습니다.",
+      "removed_member": "{{admin}} 님이 {{member}} 님을 그룹에서 내보냈습니다.",
+      "promoted_admin": "{{admin}} 님이 {{member}} 님을 관리자로 임명했습니다.",
+      "demoted_member": "{{admin}} 님이 {{member}} 님을 일반 멤버로 강등했습니다.",
+      "chat_restriction_enabled": "{{name}} 님이 관리자만 채팅할 수 있도록 제한했습니다.",
+      "chat_restriction_disabled": "{{name}} 님이 모든 사람의 채팅을 허용했습니다.",
+      "member_approval_enabled": "{{name}} 님이 새 멤버 승인 제도를 활성화했습니다.",
+      "member_approval_disabled": "{{name}} 님이 새 멤버 승인 제도를 비활성화했습니다.",
+      "closed_vote": "{{name}} 님이 투표를 마감했습니다: {{question}}"
     }
   }
 }
+

@@ -19,7 +19,8 @@
       "you": "Bạn",
       "today": "Hôm nay",
       "yesterday": "Hôm qua",
-      "or": "Hoặc"
+      "or": "Hoặc",
+      "sender": "Người gửi"
     },
     "sidebar": {
       "no_conversations": "Chưa có hội thoại",
@@ -697,7 +698,8 @@
       "chat_restriction_enabled": "{{name}} đã bật chế độ giới hạn người có thể chat.",
       "chat_restriction_disabled": "{{name}} đã tắt chế độ giới hạn người có thể chat.",
       "member_approval_enabled": "{{name}} đã bật chế độ kiểm duyệt thành viên mới.",
-      "member_approval_disabled": "{{name}} đã tắt chế độ kiểm duyệt thành viên mới."
+      "member_approval_disabled": "{{name}} đã tắt chế độ kiểm duyệt thành viên mới.",
+      "closed_vote": "{{name}} đã khóa cuộc bình chọn: {{question}}"
     }
   }
 }

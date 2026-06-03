@@ -18,7 +18,8 @@
       "success": "成功",
       "you": "你",
       "today": "今天",
-      "yesterday": "昨天"
+      "yesterday": "昨天",
+      "sender": "发送者"
     },
     "sidebar": {
       "no_conversations": "暂无会话",
@@ -597,6 +598,22 @@
       "refresh": "刷新",
       "clear_all": "清空全部",
       "clear_all_confirm": "确定要删除云盘上的所有数据吗？"
+    },
+    "system_msg": {
+      "created_group": "{{name}} 创建了群组。",
+      "joined_group": "{{name}} 加入了群组。",
+      "changed_avatar": "{{name}} 更改了群头像。",
+      "renamed_group": "{{name}} 将群组重命名为“{{groupName}}”。",
+      "transfer_owner": "群主已将所有权转让给 {{name}}。",
+      "left_group": "{{name}} 离开了群组。",
+      "removed_member": "{{admin}} 将 {{member}} 从群组中移除。",
+      "promoted_admin": "{{admin}} 任命 {{member}} 为管理员。",
+      "demoted_member": "{{admin}} 将 {{member}} 降级为普通成员。",
+      "chat_restriction_enabled": "{{name}} 开启了仅限管理员发言模式。",
+      "chat_restriction_disabled": "{{name}} 允许所有人发言。",
+      "member_approval_enabled": "{{name}} 开启了新成员审核模式。",
+      "member_approval_disabled": "{{name}} 关闭了新成员审核模式。",
+      "closed_vote": "{{name}} 结束了投票：{{question}}"
     }
   }
 }
