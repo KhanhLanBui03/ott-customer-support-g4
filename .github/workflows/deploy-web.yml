@@ -2,7 +2,7 @@ name: Deploy Frontend Web to AWS S3 & CloudFront
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
     paths:
       - 'web/**'
       - '.github/workflows/deploy-web.yml'
