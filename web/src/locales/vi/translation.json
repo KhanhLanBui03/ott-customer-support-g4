@@ -160,12 +160,9 @@
       "incoming_voice_call": "Cuộc gọi thoại đến",
       "missed_video_call": "Cuộc gọi video nhỡ",
       "missed_voice_call": "Cuộc gọi thoại nhỡ",
-      "join_now": "Tham gia ngay",
       "call_back": "Gọi lại",
       "ai_translating": "AI đang dịch...",
       "ai_translation": "Bản dịch AI",
-      "reload_translation": "Dịch lại",
-      "translation_failed": "Dịch thất bại",
       "reload_translation": "Dịch lại",
       "translation_failed": "Dịch thất bại",
       "sending": "Đang gửi",
@@ -397,15 +394,16 @@
       "user_fallback": "Người dùng"
     },
     "group": {
-      "create_title": "Tạo nhóm mới",
-      "name_label": "Tên nhóm",
+      "create_title": "Tạo nhóm trò chuyện",
+      "name_label": "Tên nhóm của bạn",
       "name_placeholder": "Nhập tên nhóm...",
       "add_members": "Thêm thành viên ({{count}})",
-      "min_members_hint": "Tối thiểu 2 người",
-      "search_placeholder": "Tìm bạn bè để mời...",
-      "no_friends": "Chưa có bạn bè nào trong danh sách",
-      "create_btn": "Tạo nhóm",
-      "add_more": "Chọn thêm {{count}} người"    },
+      "min_members_hint": "Tối thiểu 2 bạn bè",
+      "search_placeholder": "Tìm kiếm bạn bè...",
+      "no_friends": "Chưa có danh sách bạn bè",
+      "add_more": "Thêm ít nhất {{count}} bạn",
+      "create_btn": "Khởi tạo nhóm"
+    },
     "ai": {
       "title": "Trợ lý AI",
       "summary": "Tóm tắt",
@@ -453,17 +451,6 @@
       "is_friend": "Bạn bè",
       "friend_request_notification": "{{name}} đã gửi lời mời kết bạn cho bạn.",
       "sent_request": "Đã gửi lời mời"
-    },
-    "group": {
-      "create_title": "Tạo nhóm trò chuyện",
-      "name_label": "Tên nhóm của bạn",
-      "name_placeholder": "Nhập tên nhóm...",
-      "add_members": "Thêm thành viên ({{count}})",
-      "min_members_hint": "Tối thiểu 2 bạn bè",
-      "search_placeholder": "Tìm kiếm bạn bè...",
-      "no_friends": "Chưa có danh sách bạn bè",
-      "add_more": "Thêm ít nhất {{count}} bạn",
-      "create_btn": "Khởi tạo nhóm"
     },
     "user_info": {
       "no_phone": "Chưa cập nhật số điện thoại",
