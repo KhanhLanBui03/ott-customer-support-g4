@@ -45,9 +45,10 @@ jobs:
         aws s3 sync web/dist/ s3://amzn-s3-ott-n4 --delete
 
     - name: Invalidate CloudFront Distribution Cache
-      env:
-        CLOUDFRONT_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
-      if: ${{ env.CLOUDFRONT_ID != '' }}
       run: |
-        # Xóa cache CloudFront để cập nhật giao diện mới ngay lập tức
-        aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
+        if [ -n "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+          echo "Invalidating CloudFront cache..."
+          aws cloudfront create-invalidation --distribution-id "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" --paths "/*"
+        else
+          echo "No CloudFront Distribution ID configured. Skipping invalidation."
+        fi
