@@ -1109,6 +1109,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
               )}
 
               <View style={{
+                flex: 1,
                 flexDirection: 'row',
                 alignItems: 'flex-end',
                 backgroundColor: colors.input,

@@ -708,9 +708,9 @@ const ChatDetailScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.container, { backgroundColor: colors.background }]}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={0}
       >
         <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <TouchableOpacity
@@ -753,11 +753,15 @@ const ChatDetailScreen = () => {
                 {conversation?.type === 'SINGLE' && !isAI && otherMember?.friendshipStatus && (
                   <View style={[
                     styles.miniTag,
-                    friendshipStatus === 'ACCEPTED' ? styles.friendMiniTag : [styles.strangerMiniTag, isDark && { backgroundColor: colors.surface200, borderColor: colors.border }]
+                    friendshipStatus === 'ACCEPTED'
+                      ? [styles.friendMiniTag, isDark && { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.3)' }]
+                      : [styles.strangerMiniTag, isDark && { backgroundColor: colors.surface200, borderColor: colors.border }]
                   ]}>
                     <Text style={[
                       styles.miniTagText,
-                      friendshipStatus === 'ACCEPTED' ? styles.friendMiniTagText : [styles.strangerMiniTagText, isDark && { color: colors.textSubtle }]
+                      friendshipStatus === 'ACCEPTED'
+                        ? [styles.friendMiniTagText, isDark && { color: '#10b981' }]
+                        : [styles.strangerMiniTagText, isDark && { color: colors.textSubtle }]
                     ]}>
                       {friendshipStatus === 'ACCEPTED' ? t('chat.friend').toUpperCase() : t('chat.stranger_bar.title').toUpperCase()}
                     </Text>
@@ -1032,7 +1036,7 @@ const ChatDetailScreen = () => {
           )}
         </View>
 
-        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.background, paddingHorizontal: 16 }}>
+        <View style={{ paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.background }}>
           {isRestricted ? (
             <View style={[styles.restrictedContainer, { backgroundColor: isDark ? colors.surface100 : '#f8fafc', borderTopColor: colors.border }]}>
               <MaterialIcons name="lock-outline" size={20} color={colors.textMuted} />
@@ -1127,7 +1131,7 @@ const styles = StyleSheet.create({
   headerContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerInfo: { flex: 1 },
   nameContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827', flexShrink: 1 },
   shieldIcon: { marginLeft: 2 },
   headerAvatarContainer: { position: 'relative', width: 40, height: 40 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6' },
@@ -1179,6 +1183,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 16,
     backgroundColor: '#f8fafc',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
@@ -1423,6 +1428,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 12,
     marginVertical: 8,
+    marginHorizontal: 16,
   },
   blockedHeader: {
     flexDirection: 'row',
