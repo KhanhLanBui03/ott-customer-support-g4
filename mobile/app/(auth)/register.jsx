@@ -144,11 +144,11 @@ const RegisterScreen = () => {
     }
 
     try {
-      await verify(formData.email.trim().toLowerCase(), otpCode.trim(), 'REGISTRATION');
+      await verify(formData.email.trim().toLowerCase(), otpCode.trim(), 'REGISTRATION').unwrap();
       setVerifiedEmail(formData.email.trim().toLowerCase());
       setStep('register');
     } catch (err) {
-      setLocalError(err?.response?.data?.message || 'Mã OTP không chính xác');
+      setLocalError(typeof err === 'string' ? err : (err?.response?.data?.message || 'Mã OTP không chính xác'));
     }
   };
 
@@ -200,13 +200,13 @@ const RegisterScreen = () => {
       await register({
         ...formData,
         email: verifiedEmail,
-      });
+      }).unwrap();
 
       Alert.alert('Thành công', 'Tài khoản của bạn đã được tạo thành công!', [
         { text: 'Đăng nhập ngay', onPress: () => router.replace('/login') }
       ]);
     } catch (err) {
-      setLocalError(err?.response?.data?.message || 'Đăng ký thất bại');
+      setLocalError(typeof err === 'string' ? err : (err?.response?.data?.message || 'Đăng ký thất bại'));
     }
   };
 

@@ -18,6 +18,7 @@
     "android": {
       "package": "com.chatapp",
       "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
