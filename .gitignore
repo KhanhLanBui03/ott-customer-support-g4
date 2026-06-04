@@ -19,6 +19,7 @@ yarn-error.log*
 dist/
 build/
 out/
+.gradle/
 
 # Expo / React Native
 .expo/
