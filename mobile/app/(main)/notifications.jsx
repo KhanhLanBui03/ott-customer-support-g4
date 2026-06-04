@@ -21,6 +21,7 @@ import { Alert } from 'react-native';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useRouter } from 'expo-router';
 import { notificationApi } from '../../src/api/userApi';
+import CONFIG from '../../src/config';
 
 
 const formatDate = (date) => {
@@ -202,7 +203,7 @@ const NotificationsScreen = () => {
     );
   };
 
-  const BASE_URL = useSelector(state => state.chat?.BASE_URL) || 'http://192.168.1.98:8080'; // Fallback if needed
+  const BASE_URL = CONFIG.API_URL.split('/api')[0];
 
   const getAvatarUrl = (url, name) => {
     if (!url) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=667eea&color=fff&size=128&bold=true`;

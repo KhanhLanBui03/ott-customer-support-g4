@@ -21,6 +21,8 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
 
+import CONFIG from '../../src/config';
+
 const ContactsScreen = () => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
@@ -28,7 +30,7 @@ const ContactsScreen = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
 
-  const BASE_URL = useSelector(state => state.chat?.BASE_URL) || 'http://192.168.1.98:8080';
+  const BASE_URL = CONFIG.API_URL.split('/api')[0];
   
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
