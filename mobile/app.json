@@ -17,7 +17,6 @@
     "android": {
       "package": "com.chatapp",
       "versionCode": 1,
-      "usesCleartextTraffic": false,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
@@ -33,7 +32,8 @@
       "expo-audio",
       "expo-video",
       "@react-native-community/datetimepicker",
-      "expo-font"
+      "expo-font",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
