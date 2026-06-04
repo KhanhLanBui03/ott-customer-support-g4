@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: chat-app-whisper
+    runtime: docker
+    dockerfilePath: ./whisper/Dockerfile
+    dockerContext: ./whisper
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "10000"

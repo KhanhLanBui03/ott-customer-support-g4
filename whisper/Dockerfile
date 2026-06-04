@@ -6,33 +6,26 @@ FROM python:3.10-slim
 # Đặt thư mục làm việc
 WORKDIR /app
 
-# Cài đặt các thư viện hệ thống cần thiết
-# ffmpeg: bắt buộc cho Whisper xử lý audio
-# build-essential: cần để build một số thư viện Python native
+# Cài đặt ffmpeg (bắt buộc cho Whisper xử lý audio)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy file requirements trước để tận dụng Docker layer cache
+# Copy requirements và cài thư viện Python
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Cài đặt các thư viện Python
-# Dùng torch CPU-only để tiết kiệm dung lượng và RAM
-RUN pip install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]" \
-    python-multipart \
-    faster-whisper \
-    transformers \
-    sentencepiece \
-    torch --index-url https://download.pytorch.org/whl/cpu
+# Cài torch CPU-only (để giảm dung lượng, không cần GPU)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
-# Copy toàn bộ source code vào container
+# Copy source code
 COPY . .
 
-# Expose cổng 8000 (FastAPI mặc định)
-EXPOSE 8000
+# Render sẽ inject biến PORT, mặc định 8000 nếu chạy local
+ENV PORT=8000
 
-# Khởi chạy server uvicorn lắng nghe trên mọi địa chỉ
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Expose cổng
+EXPOSE $PORT
+
+# Khởi chạy uvicorn — đọc PORT từ biến môi trường
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
