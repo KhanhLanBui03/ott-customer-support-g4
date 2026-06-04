@@ -708,9 +708,9 @@ const ChatDetailScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.container, { backgroundColor: colors.background }]}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
       >
         <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <TouchableOpacity
