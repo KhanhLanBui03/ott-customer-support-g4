@@ -18,9 +18,12 @@ import org.springframework.beans.factory.annotation.Value;
 @Service
 public class WhisperService {
 
+    @Value("${app.whisper.url:http://localhost:8000/transcribe}")
+    private String whisperUrl;
+
     public String transcribe(MultipartFile file) {
         try {
-            String url = "http://localhost:8000/transcribe";
+            String url = whisperUrl;
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);

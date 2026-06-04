@@ -13,6 +13,15 @@ services:
     networks:
       - chat-network
 
+  whisper:
+    image: ${DOCKER_HUB_USERNAME}/chat-app-whisper:latest
+    container_name: chat-app-whisper-prod
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - chat-network
+
   backend:
     image: ${DOCKER_HUB_USERNAME}/chat-app-backend:latest
     container_name: chat-app-backend-prod
@@ -31,8 +40,10 @@ services:
       - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER}
       - FIREBASE_CONFIG_PATH=${FIREBASE_CONFIG_PATH}
       - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
+      - APP_WHISPER_URL=http://whisper:8000/transcribe
     depends_on:
       - redis
+      - whisper
     restart: unless-stopped
     networks:
       - chat-network

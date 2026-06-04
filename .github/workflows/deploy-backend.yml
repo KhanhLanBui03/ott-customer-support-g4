@@ -5,6 +5,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'backend/**'
+      - 'whisper/**'
       - '.github/workflows/deploy-backend.yml'
 
 jobs:
@@ -33,11 +34,17 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-    - name: Build and Push Docker Image
+    - name: Build and Push Backend Docker Image
       run: |
         cd backend
         docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-backend:latest .
         docker push ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-backend:latest
+
+    - name: Build and Push Whisper Docker Image
+      run: |
+        cd whisper
+        docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-whisper:latest .
+        docker push ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-whisper:latest
 
     - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@master
@@ -46,15 +53,16 @@ jobs:
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # Pull Docker image mới nhất
+          # Pull Docker image mới nhất cho cả backend và whisper
           docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-backend:latest
-          
+          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-whisper:latest
+
           # Di chuyển vào thư mục chứa docker-compose của dự án trên EC2
           cd /home/${{ secrets.EC2_USERNAME }}/chat-app/backend
-          
+
           # Restart container với image mới
           docker compose -f docker-compose.prod.yml down
-          docker compose -f docker-compose.prod.yml up -d
-          
+          DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }} docker compose -f docker-compose.prod.yml up -d
+
           # Dọn dẹp các Docker image cũ không dùng đến để tránh đầy ổ đĩa
           docker image prune -f

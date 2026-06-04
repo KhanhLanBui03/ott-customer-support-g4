@@ -174,8 +174,10 @@ app:
     message-ttl: 300            # 5 phút - message page gần đây
     conversation-ttl: 60        # 1 phút - metadata conversation
   translation:
-    service-url: http://localhost:8000
+    service-url: ${APP_WHISPER_URL:http://localhost:8000}
     batch-size: 32
+  whisper:
+    url: ${APP_WHISPER_URL:http://localhost:8000/transcribe}
 # Swagger/OpenAPI
 springdoc:
   swagger-ui:
