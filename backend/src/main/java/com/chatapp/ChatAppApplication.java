@@ -70,8 +70,14 @@ public class ChatAppApplication {
                 System.out.println("✅ Loaded environment variables from: " + candidate.toAbsolutePath());
                 String apiKey = System.getProperty("GEMINI_API_KEY");
                 if (apiKey != null && apiKey.length() > 8) {
-                    System.out.println("🔑 Gemini API Key loaded: " + apiKey.substring(0, 4) + "..."
-                            + apiKey.substring(apiKey.length() - 4));
+                    String[] keys = apiKey.split(",");
+                    System.out.println("🔑 Gemini API Keys loaded: " + keys.length + " key(s) detected.");
+                    for (int i = 0; i < keys.length; i++) {
+                        String k = keys[i].trim();
+                        if (k.length() > 8) {
+                            System.out.println("   -> Key [" + (i + 1) + "]: " + k.substring(0, 4) + "..." + k.substring(k.length() - 4));
+                        }
+                    }
                 }
                 return;
             } catch (IOException ex) {
