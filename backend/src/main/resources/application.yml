@@ -177,7 +177,7 @@ app:
     service-url: ${APP_WHISPER_URL:http://localhost:8000}
     batch-size: 32
   whisper:
-    url: ${APP_WHISPER_URL:http://localhost:8000/transcribe}
+    url: ${APP_WHISPER_URL:http://localhost:8000}/transcribe
 # Swagger/OpenAPI
 springdoc:
   swagger-ui:

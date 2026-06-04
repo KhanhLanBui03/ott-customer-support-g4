@@ -42,7 +42,7 @@ services:
       - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER}
       - FIREBASE_CONFIG_PATH=${FIREBASE_CONFIG_PATH}
       - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
-      - APP_WHISPER_URL=http://whisper:8000/transcribe
+      - APP_WHISPER_URL=http://whisper:8000
     depends_on:
       - redis
       - whisper
