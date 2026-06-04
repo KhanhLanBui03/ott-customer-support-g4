@@ -13,34 +13,24 @@ import org.springframework.http.HttpHeaders;
 
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Value;
-
 @Service
 public class WhisperService {
 
-    @Value("${app.whisper.url:http://localhost:8000/transcribe}")
-    private String whisperUrl;
+    private String whisperUrl = "http://whisper:8000/transcribe";
 
     public String transcribe(MultipartFile file) {
         try {
-            String url = whisperUrl;
-
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("file", new MultipartInputStreamFileResource(
                     file.getInputStream(),
-                    file.getOriginalFilename()
-            ));
+                    file.getOriginalFilename()));
 
-            HttpEntity<MultiValueMap<String, Object>> request =
-                    new HttpEntity<>(body, headers);
-
+            HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity<>(body, headers);
             RestTemplate restTemplate = new RestTemplate();
-
-            ResponseEntity<Map> response =
-                    restTemplate.postForEntity(url, request, Map.class);
+            ResponseEntity<Map> response = restTemplate.postForEntity(whisperUrl, request, Map.class);
 
             return response.getBody().get("text").toString();
 
