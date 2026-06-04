@@ -53,8 +53,7 @@ jobs:
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         source: "backend/docker-compose.prod.yml"
-        target: "/home/${{ secrets.EC2_USERNAME }}/chat-app/"
-        strip_components: 1
+        target: "/home/${{ secrets.EC2_USERNAME }}/chat-app"
 
     - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@master
