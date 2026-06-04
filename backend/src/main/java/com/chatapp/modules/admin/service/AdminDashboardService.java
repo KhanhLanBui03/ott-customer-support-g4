@@ -46,15 +46,15 @@ public class AdminDashboardService {
         // Note: For large DBs, scanning messages is slow. But for this simulation, it's ok.
         Map<String, AttributeValue> eavMessage = new HashMap<>();
         eavMessage.put(":startOfToday", new AttributeValue().withN(String.valueOf(startOfToday)));
-        eavMessage.put(":statusSending", new AttributeValue().withS("SENDING"));
         
         DynamoDBScanExpression msgScan = new DynamoDBScanExpression()
-                .withFilterExpression("createdAt >= :startOfToday AND #s <> :statusSending")
-                .withExpressionAttributeNames(Map.of("#s", "status"))
+                .withFilterExpression("createdAt >= :startOfToday")
                 .withExpressionAttributeValues(eavMessage);
                 
         List<Message> messagesToday = dynamoDBMapper.scan(Message.class, msgScan);
-        todayMessages = messagesToday.size();
+        todayMessages = messagesToday.stream()
+                .filter(m -> m.getCreatedAt() != null && !"SENDING".equals(m.getStatus()))
+                .count();
 
         // 3. Scan Conversations for new groups today
         Map<String, AttributeValue> eavConv = new HashMap<>();
@@ -167,11 +167,11 @@ public class AdminDashboardService {
             }
             
             long msgCount = rangeMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
                 .count();
                 
             long uniqueSenders = rangeMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
                 .map(Message::getSenderId)
                 .distinct()
                 .count();
@@ -204,11 +204,11 @@ public class AdminDashboardService {
                     : today.atTime(endHour, 0).atZone(zoneId).toInstant().toEpochMilli();
             
             long msgCount = todayMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
                 .count();
                 
             long uniqueSenders = todayMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
                 .map(Message::getSenderId)
                 .distinct()
                 .count();
