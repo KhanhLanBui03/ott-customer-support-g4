@@ -402,7 +402,10 @@ else if (data.type === 'sync' || data.type === 'sync-count') {
                 mediaCapturePermissionGrantType="grant"
                 onMessage={onMessage}
 
-                onPermissionRequest={(event) => event.grant()}
+                onPermissionRequest={(event) => {
+                  console.log('🌐 [WebView] Requesting permissions for:', event.resources);
+                  event.grant(event.resources);
+                }}
                 onError={(e) => console.error('❌ [WebView] Error:', e.nativeEvent)}
                 onHttpError={(e) => console.error('❌ [WebView] HTTP Error:', e.nativeEvent)}
               />

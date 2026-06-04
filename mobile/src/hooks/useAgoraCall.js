@@ -1,8 +1,9 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { PermissionsAndroid, Platform, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Audio } from 'expo-av';
+import { requestCameraPermissionsAsync, requestMicrophonePermissionsAsync } from 'expo-camera';
 import { onCallSignal, offCallSignal, emitCallSignal } from '../utils/socket';
 import { callApi } from '../api/callApi';
 import { chatApi } from '../api/chatApi';
@@ -157,14 +158,34 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
     };
 
 
-    const getPermissions = async () => {
-
+    const getPermissions = async (type = 'video') => {
         try {
-            const { status: audioStatus } = await Audio.requestPermissionsAsync();
-            if (audioStatus !== 'granted') return false;
-            if (Platform.OS === 'android') await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+            if (Platform.OS === 'android') {
+                const audioGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+                if (audioGranted !== PermissionsAndroid.RESULTS.GRANTED) {
+                    return false;
+                }
+                if (type === 'video') {
+                    const cameraGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+                    return cameraGranted === PermissionsAndroid.RESULTS.GRANTED;
+                }
+                return true;
+            } else if (Platform.OS === 'ios') {
+                const { status: microphoneStatus } = await requestMicrophonePermissionsAsync();
+                if (microphoneStatus !== 'granted') {
+                    return false;
+                }
+                if (type === 'video') {
+                    const { status: cameraStatus } = await requestCameraPermissionsAsync();
+                    return cameraStatus === 'granted';
+                }
+                return true;
+            }
             return true;
-        } catch (e) { return false; }
+        } catch (e) {
+            console.error('❌ [useAgoraCall] getPermissions error:', e);
+            return false;
+        }
     };
 
     useEffect(() => {
@@ -675,7 +696,15 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             isInitiatorRef.current = true;
             logSentRef.current = false;
 
-            await getPermissions();
+            const permissionsGranted = await getPermissions(type);
+            if (!permissionsGranted) {
+                Alert.alert(
+                    t('common.error') || 'Lỗi',
+                    t('chat.no_permission') || 'Ứng dụng cần cấp quyền camera và microphone để thực hiện cuộc gọi.'
+                );
+                joiningRef.current = false;
+                return;
+            }
 
             const isGroupCall = receiverInfo?.isGroup !== undefined
                 ? receiverInfo.isGroup
@@ -757,8 +786,17 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             dispatch(setIsInitiator(false));
             logSentRef.current = false;
 
-            // Yêu cầu quyền truy cập micro/camera trước khi tham gia cuộc gọi
-            await getPermissions();
+            const type = signalData?.callType || signalData?.signal?.callType || callState.callType || 'video';
+            const permissionsGranted = await getPermissions(type);
+            if (!permissionsGranted) {
+                Alert.alert(
+                    t('common.error') || 'Lỗi',
+                    t('chat.no_permission') || 'Ứng dụng cần cấp quyền camera và microphone để nhận cuộc gọi.'
+                );
+                endCallRef.current?.(false, 'REJECTED');
+                joiningRef.current = false;
+                return;
+            }
 
             dispatch(setEndCallReason(null));
 
