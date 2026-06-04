@@ -52,9 +52,7 @@ public class AdminDashboardService {
                 .withExpressionAttributeValues(eavMessage);
                 
         List<Message> messagesToday = dynamoDBMapper.scan(Message.class, msgScan);
-        todayMessages = messagesToday.stream()
-                .filter(m -> m.getCreatedAt() != null && !"SENDING".equals(m.getStatus()))
-                .count();
+        todayMessages = messagesToday.size();
 
         // 3. Scan Conversations for new groups today
         Map<String, AttributeValue> eavConv = new HashMap<>();
@@ -167,11 +165,11 @@ public class AdminDashboardService {
             }
             
             long msgCount = rangeMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
                 .count();
                 
             long uniqueSenders = rangeMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
                 .map(Message::getSenderId)
                 .distinct()
                 .count();
@@ -204,11 +202,11 @@ public class AdminDashboardService {
                     : today.atTime(endHour, 0).atZone(zoneId).toInstant().toEpochMilli();
             
             long msgCount = todayMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
                 .count();
                 
             long uniqueSenders = todayMessages.stream()
-                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs && !"SENDING".equals(m.getStatus()))
+                .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)
                 .map(Message::getSenderId)
                 .distinct()
                 .count();
