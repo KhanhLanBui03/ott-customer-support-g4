@@ -62,7 +62,7 @@ jobs:
 
           # Restart container với image mới
           docker compose -f docker-compose.prod.yml down
-          DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }} docker compose -f docker-compose.prod.yml up -d
+          DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }} GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} docker compose -f docker-compose.prod.yml up -d
 
           # Dọn dẹp các Docker image cũ không dùng đến để tránh đầy ổ đĩa
           docker image prune -f
