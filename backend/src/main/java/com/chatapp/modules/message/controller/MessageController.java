@@ -305,14 +305,24 @@ public class MessageController {
     @PostMapping("/speech-to-text-url")
     public ResponseEntity<ApiResponse<Map<String, String>>> speechToTextFromUrl(@RequestParam("url") String url) {
         try {
-            java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("audio", ".webm");
+            // Detect file extension from URL
+            String ext = ".wav";
+            String contentType = "audio/wav";
+            String lowerUrl = url.toLowerCase();
+            if (lowerUrl.contains(".webm")) { ext = ".webm"; contentType = "audio/webm"; }
+            else if (lowerUrl.contains(".mp3")) { ext = ".mp3"; contentType = "audio/mpeg"; }
+            else if (lowerUrl.contains(".m4a")) { ext = ".m4a"; contentType = "audio/m4a"; }
+            else if (lowerUrl.contains(".ogg")) { ext = ".ogg"; contentType = "audio/ogg"; }
+            else if (lowerUrl.contains(".mp4")) { ext = ".mp4"; contentType = "audio/mp4"; }
+
+            java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("audio", ext);
             try (java.io.InputStream in = new java.net.URL(url).openStream()) {
                 java.nio.file.Files.copy(in, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             MultipartFile multipartFile = new MockMultipartFile(
-                    tempFile.getFileName().toString(),
-                    tempFile.getFileName().toString(),
-                    "audio/webm",
+                    "audio" + ext,
+                    "audio" + ext,
+                    contentType,
                     java.nio.file.Files.readAllBytes(tempFile));
             String transcript = openAIWhisperService.transcribe(multipartFile);
             java.nio.file.Files.deleteIfExists(tempFile);
