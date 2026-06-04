@@ -170,7 +170,7 @@ const AdminDashboard = () => {
       <aside className="w-64 bg-[#1a1f2c] text-white flex flex-col transition-all duration-300">
         <div className="p-6 flex items-center gap-3">
           <MessageSquare className="text-[#00d2a0] fill-[#00d2a0]" size={28} />
-          <span className="text-xl font-bold tracking-wide">ChatApp Admin</span>
+          <span className="text-xl font-bold tracking-wide">F5 Chat</span>
         </div>
 
         <nav className="flex-1 px-4 py-2 space-y-1">

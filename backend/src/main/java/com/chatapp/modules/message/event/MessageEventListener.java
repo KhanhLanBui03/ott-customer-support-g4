@@ -28,6 +28,15 @@ public class MessageEventListener {
     public void handleMessageEvent(MessageEvent event) {
         log.info("Handling message event: {} for conversation: {}", event.getEventType(), event.getConversationId());
 
+        if (event.getEventType() != null && !"USER_TYPING".equals(event.getEventType())) {
+            try {
+                log.info("[STOMP] Broadcasting event type {} to /topic/admin.stats", event.getEventType());
+                messagingTemplate.convertAndSend("/topic/admin.stats", event.getEventType());
+            } catch (Exception ex) {
+                log.error("[STOMP] Failed to send stats update to /topic/admin.stats: {}", ex.getMessage());
+            }
+        }
+
         try {
             // Handle System-wide events (like Force Logout, Friend Requests)
             if ("SYSTEM".equals(event.getConversationId())) {

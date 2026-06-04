@@ -28,7 +28,8 @@ public class AdminDashboardService {
     private final AdminSystemLogRepository logRepository;
 
     public DashboardStatsResponse getDashboardStats(String range) {
-        long startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        ZoneId zoneId = ZoneId.of("Asia/Ho_Chi_Minh");
+        long startOfToday = LocalDate.now(zoneId).atStartOfDay(zoneId).toInstant().toEpochMilli();
         
         long totalUsers = 0;
         long activeUsers = 0;
@@ -75,7 +76,7 @@ public class AdminDashboardService {
             default -> 6; // 7d
         };
         
-        long startOfRange = LocalDate.now().minusDays(daysToScan).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long startOfRange = LocalDate.now(zoneId).minusDays(daysToScan).atStartOfDay(zoneId).toInstant().toEpochMilli();
         Map<String, AttributeValue> eavWeeklyMsg = new HashMap<>();
         eavWeeklyMsg.put(":startOfRange", new AttributeValue().withN(String.valueOf(startOfRange)));
         DynamoDBScanExpression weeklyMsgScan = new DynamoDBScanExpression()
@@ -146,7 +147,8 @@ public class AdminDashboardService {
 
     private List<DashboardStatsResponse.ChartDataPoint> generateRealWeeklyChartData(List<User> allUsers, List<Message> rangeMessages, int daysToScan) {
         List<DashboardStatsResponse.ChartDataPoint> data = new ArrayList<>();
-        LocalDate today = LocalDate.now();
+        ZoneId zoneId = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zoneId);
         
         int step = daysToScan == 29 ? 5 : 1; // Group by 5 days if 30d range to avoid crowded chart
         
@@ -154,8 +156,8 @@ public class AdminDashboardService {
             LocalDate startDate = today.minusDays(i);
             LocalDate endDate = startDate.plusDays(step); // exclusive
             
-            long startMs = startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-            long endMs = endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            long startMs = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli();
+            long endMs = endDate.atStartOfDay(zoneId).toInstant().toEpochMilli();
             
             String label;
             if (daysToScan == 6) {
@@ -187,7 +189,8 @@ public class AdminDashboardService {
     
     private List<DashboardStatsResponse.ChartDataPoint> generateTodayChartData(List<User> allUsers, List<Message> todayMessages) {
         List<DashboardStatsResponse.ChartDataPoint> data = new ArrayList<>();
-        LocalDate today = LocalDate.now();
+        ZoneId zoneId = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zoneId);
         
         int[] hours = {0, 4, 8, 12, 16, 20};
         
@@ -195,10 +198,10 @@ public class AdminDashboardService {
             int startHour = hours[i];
             int endHour = (i == hours.length - 1) ? 24 : hours[i+1];
             
-            long startMs = today.atTime(startHour, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            long startMs = today.atTime(startHour, 0).atZone(zoneId).toInstant().toEpochMilli();
             long endMs = (endHour == 24) 
-                    ? today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                    : today.atTime(endHour, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                    ? today.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+                    : today.atTime(endHour, 0).atZone(zoneId).toInstant().toEpochMilli();
             
             long msgCount = todayMessages.stream()
                 .filter(m -> m.getCreatedAt() != null && m.getCreatedAt() >= startMs && m.getCreatedAt() < endMs)

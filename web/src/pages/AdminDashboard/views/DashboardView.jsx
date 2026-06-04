@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSelector } from 'react-redux';
 import { Users, Activity, MessageSquare, ShieldAlert, CheckCircle, XCircle, PlusCircle, Unlock } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import adminApi from '../../../api/adminApi';
+import { initSocket } from '../../../utils/socket';
 
 // Chuyển milliseconds → chuỗi thời gian thân thiện
 const formatTimeAgo = (createdAtMs) => {
@@ -18,6 +20,7 @@ const formatTimeAgo = (createdAtMs) => {
 };
 
 const DashboardView = () => {
+  const { token } = useSelector(state => state.auth);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -31,80 +34,129 @@ const DashboardView = () => {
   const [timeRange, setTimeRange] = useState('7d');
   const [showAllLogs, setShowAllLogs] = useState(false);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
+  const fetchStats = useCallback(async () => {
+    try {
+      setLoading(true);
 
-        // Fetch dashboard stats & pending reports count song song
-        const [data, reportsData] = await Promise.all([
-          adminApi.getDashboardStats(timeRange),
-          adminApi.getAllReports().catch(() => null),
-        ]);
+      // Fetch dashboard stats & pending reports count song song
+      const [data, reportsData] = await Promise.all([
+        adminApi.getDashboardStats(timeRange),
+        adminApi.getAllReports().catch(() => null),
+      ]);
 
-        const pendingCount = reportsData?.data
-          ? reportsData.data.filter(r => r.status === 'PENDING').length
-          : (Array.isArray(reportsData)
-            ? reportsData.filter(r => r.status === 'PENDING').length
-            : 0);
+      const pendingCount = reportsData?.data
+        ? reportsData.data.filter(r => r.status === 'PENDING').length
+        : (Array.isArray(reportsData)
+          ? reportsData.filter(r => r.status === 'PENDING').length
+          : 0);
 
-        setStats({
-          totalUsers: data.totalUsers || 0,
-          activeUsers: data.activeUsers || 0,
-          todayMessages: data.todayMessages || 0,
-          newGroupsToday: data.newGroupsToday || 0,
-          pendingReports: pendingCount,
+      setStats({
+        totalUsers: data.totalUsers || 0,
+        activeUsers: data.activeUsers || 0,
+        todayMessages: data.todayMessages || 0,
+        newGroupsToday: data.newGroupsToday || 0,
+        pendingReports: pendingCount,
+      });
+      
+      setChartData(data.weeklyChartData || []);
+      
+      if (data.recentLogs && data.recentLogs.length > 0) {
+        const mappedLogs = data.recentLogs.map(log => {
+          let icon = ShieldAlert;
+          let color = 'orange';
+          
+          if (log.actionType === 'USER_LOCKED') {
+            icon = XCircle;
+            color = 'red';
+          } else if (log.actionType === 'GROUP_CREATED') {
+            icon = PlusCircle;
+            color = 'indigo';
+          } else if (log.actionType === 'USER_DELETED') {
+            icon = XCircle;
+            color = 'red';
+          } else if (log.actionType === 'USER_CREATED') {
+            icon = Users;
+            color = 'emerald';
+          } else if (log.actionType === 'USER_UNLOCKED') {
+            icon = Unlock;
+            color = 'blue';
+          } else if (log.actionType === 'REPORT_CREATED') {
+            icon = ShieldAlert;
+            color = 'orange';
+          } else if (log.actionType === 'SYSTEM_START') {
+            icon = CheckCircle;
+            color = 'emerald';
+          }
+          
+          return {
+            id: log.logId,
+            icon: icon,
+            color: color,
+            message: log.description,
+            time: formatTimeAgo(log.createdAt)
+          };
         });
-        
-        setChartData(data.weeklyChartData || []);
-        
-        if (data.recentLogs && data.recentLogs.length > 0) {
-          const mappedLogs = data.recentLogs.map(log => {
-            let icon = ShieldAlert;
-            let color = 'orange';
-            
-            if (log.actionType === 'USER_LOCKED') {
-              icon = XCircle;
-              color = 'red';
-            } else if (log.actionType === 'GROUP_CREATED') {
-              icon = PlusCircle;
-              color = 'indigo';
-            } else if (log.actionType === 'USER_DELETED') {
-              icon = XCircle;
-              color = 'red';
-            } else if (log.actionType === 'USER_CREATED') {
-              icon = Users;
-              color = 'emerald';
-            } else if (log.actionType === 'USER_UNLOCKED') {
-              icon = Unlock;
-              color = 'blue';
-            } else if (log.actionType === 'REPORT_CREATED') {
-              icon = ShieldAlert;
-              color = 'orange';
-            } else if (log.actionType === 'SYSTEM_START') {
-              icon = CheckCircle;
-              color = 'emerald';
-            }
-            
-            return {
-              id: log.logId,
-              icon: icon,
-              color: color,
-              message: log.description,
-              time: formatTimeAgo(log.createdAt)
-            };
-          });
-          setLogs(mappedLogs);
-        }
-      } catch (error) {
-        console.error("Failed to fetch dashboard stats:", error);
-      } finally {
-        setLoading(false);
+        setLogs(mappedLogs);
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [timeRange]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    console.log('[DashboardView] Connecting socket for admin stats...');
+    const client = initSocket(token);
+    let subscription = null;
+    let isSubscribed = false;
+
+    const trySubscribe = () => {
+      if (isSubscribed) return;
+      if (client && client.connected) {
+        console.log('[DashboardView] STOMP connected. Subscribing to /topic/admin.stats...');
+        subscription = client.subscribe('/topic/admin.stats', (message) => {
+          console.log('[DashboardView] 📈 Received stats update signal:', message.body);
+          fetchStats();
+        });
+        isSubscribed = true;
       }
     };
 
-    fetchStats();
-  }, [timeRange]);
+    trySubscribe();
+
+    // Intercept client.onConnect to catch connection event
+    const prevOnConnect = client.onConnect;
+    client.onConnect = (frame) => {
+      if (prevOnConnect) prevOnConnect(frame);
+      trySubscribe();
+    };
+
+    // Recheck subscription periodically in case of reconnects
+    const interval = setInterval(() => {
+      if (client && client.connected && !isSubscribed) {
+        trySubscribe();
+      } else if (client && !client.connected) {
+        isSubscribed = false;
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+      if (client.onConnect === trySubscribe) {
+        client.onConnect = prevOnConnect;
+      }
+    };
+  }, [token, fetchStats]);
 
   if (loading && stats.totalUsers === 0) {
     return <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>;
