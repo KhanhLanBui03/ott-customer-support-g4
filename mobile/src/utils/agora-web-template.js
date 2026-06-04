@@ -366,12 +366,15 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
                         } catch (e) {
                             log("Failed to set audio volume: " + e.message);
                         }
-                        user.audioTrack.play().catch(err => {
-                            log("Audio play error: " + err.message);
-                            if (err.code === 'AUTOPLAY_NOT_ALLOWED') {
-                                document.getElementById('unlock-layer').style.display = 'flex';
-                            }
-                        });
+                        const playPromise = user.audioTrack.play();
+                        if (playPromise && typeof playPromise.catch === 'function') {
+                            playPromise.catch(err => {
+                                log("Audio play error: " + err.message);
+                                if (err.code === 'AUTOPLAY_NOT_ALLOWED') {
+                                    document.getElementById('unlock-layer').style.display = 'flex';
+                                }
+                            });
+                        }
                     }
 
                     window.ReactNativeWebView.postMessage(JSON.stringify({ 
@@ -523,7 +526,12 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
       function unlockAudio() {
         if (client) {
             client.remoteUsers.forEach(user => {
-                if (user.audioTrack) user.audioTrack.play().catch(() => {});
+                if (user.audioTrack) {
+                    const playPromise = user.audioTrack.play();
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch(() => {});
+                    }
+                }
             });
         }
         document.getElementById('unlock-layer').style.display = 'none';
