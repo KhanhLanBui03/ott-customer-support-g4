@@ -46,6 +46,16 @@ jobs:
         docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-whisper:latest .
         docker push ${{ secrets.DOCKER_HUB_USERNAME }}/chat-app-whisper:latest
 
+    - name: Copy docker-compose.prod.yml to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "backend/docker-compose.prod.yml"
+        target: "/home/${{ secrets.EC2_USERNAME }}/chat-app/"
+        strip_components: 1
+
     - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@master
       with:
@@ -60,7 +70,7 @@ jobs:
           # Di chuyển vào thư mục chứa docker-compose của dự án trên EC2
           cd /home/${{ secrets.EC2_USERNAME }}/chat-app/backend
 
-          # Restart container với image mới
+          # Restart container với image mới (dùng docker-compose.prod.yml đã được copy mới)
           docker compose -f docker-compose.prod.yml down
           DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }} GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} docker compose -f docker-compose.prod.yml up -d
 
