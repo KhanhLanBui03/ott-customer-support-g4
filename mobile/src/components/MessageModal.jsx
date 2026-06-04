@@ -21,7 +21,7 @@ const { width, height } = Dimensions.get('window');
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '😡'];
 
 const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isPinned }) => {
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
+  const BASE_URL = CONFIG.BASE_URL;
   if (!message) return null;
 
   const handleAction = (type) => {

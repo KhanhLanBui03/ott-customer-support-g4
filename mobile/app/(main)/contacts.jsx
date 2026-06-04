@@ -30,7 +30,7 @@ const ContactsScreen = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
 
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
+  const BASE_URL = CONFIG.BASE_URL;
   
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);

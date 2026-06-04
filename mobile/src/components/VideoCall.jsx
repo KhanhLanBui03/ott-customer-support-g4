@@ -12,6 +12,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { getAgoraHTML } from '../utils/agora-web-template';
+import CONFIG from '../config';
 
 const { width, height } = Dimensions.get('window');
 
@@ -76,9 +77,7 @@ const CountdownRing = ({ size = 180, duration = 30000, onComplete }) => {
 const formatAvatarUrl = (url) => {
   if (!url) return null;
   if (url.startsWith('http')) return url;
-  const apiBase = process.env.EXPO_PUBLIC_API_URL || '';
-  const serverBase = apiBase.replace('/api/v1', '');
-  return `${serverBase}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${CONFIG.BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
 // Helper to convert Mongo ID to Agora numeric UID

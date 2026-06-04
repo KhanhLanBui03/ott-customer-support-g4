@@ -19,8 +19,8 @@ const SharedFilesScreen = () => {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
-  
+  const BASE_URL = CONFIG.BASE_URL;
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [viewerVisible, setViewerVisible] = useState(false);
   

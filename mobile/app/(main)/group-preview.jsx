@@ -119,7 +119,7 @@ export default function GroupPreviewScreen() {
     if (url) {
       if (url.startsWith('http')) return { uri: url };
       // Resolve base server URL
-      const baseUrl = CONFIG.API_URL.replace('/api/v1', '');
+      const baseUrl = CONFIG.BASE_URL;
       return { uri: `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}` };
     }
     return null;

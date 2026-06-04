@@ -33,7 +33,7 @@ const SearchModal = ({ visible, onClose }) => {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
 
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
+  const BASE_URL = CONFIG.BASE_URL;
 
   // Real-time search effect with debounce
   useEffect(() => {

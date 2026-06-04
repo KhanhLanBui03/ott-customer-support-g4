@@ -203,7 +203,7 @@ const NotificationsScreen = () => {
     );
   };
 
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
+  const BASE_URL = CONFIG.BASE_URL;
 
   const getAvatarUrl = (url, name) => {
     if (!url) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=667eea&color=fff&size=128&bold=true`;

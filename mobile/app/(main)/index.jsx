@@ -87,7 +87,7 @@ const HomeScreen = () => {
   // Refs để quản lý các item đang mở swipe
   const swipeableRefs = useRef(new Map());
 
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
+  const BASE_URL = CONFIG.BASE_URL;
 
   useEffect(() => {
     dispatch(fetchConversations());

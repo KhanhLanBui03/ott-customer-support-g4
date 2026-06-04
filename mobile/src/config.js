@@ -5,7 +5,8 @@
 
 const CONFIG = {
   API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/api/v1',
-  SOCKET_URL: process.env.EXPO_PUBLIC_SOCKET_URL || 'ws://localhost:8080/ws',
+  SOCKET_URL: process.env.EXPO_PUBLIC_SOCKET_URL || 'ws://localhost:8080/ws/mobile',
+  BASE_URL: (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/api/v1').replace(/\/api\/v1\/?$/, '').replace(/\/api\/?$/, ''),
   ENV: process.env.EXPO_PUBLIC_ENV || 'development',
   
   // Feature Flags

@@ -386,7 +386,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
   };
   const isPickingRef = useRef(false);
 
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
+  const BASE_URL = CONFIG.BASE_URL;
 
   useImperativeHandle(ref, () => ({
     insertMention: (user) => {

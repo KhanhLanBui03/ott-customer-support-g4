@@ -32,8 +32,8 @@ const SharedMediaScreen = () => {
   
   const chatState = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
-  const BASE_URL = CONFIG.API_URL.split('/api')[0];
-  
+  const BASE_URL = CONFIG.BASE_URL;
+
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
   const [currentMediaList, setCurrentMediaList] = useState([]);

@@ -47,8 +47,7 @@ export const initializeSocket = (token, userId, globalHandler = null) => {
     stompClient.deactivate();
   }
 
-  const baseUrl = CONFIG.API_URL.split('/api')[0];
-  const socketUrl = baseUrl.replace('http', 'ws') + '/ws/mobile';
+  const socketUrl = CONFIG.SOCKET_URL;
 
   console.log('🔌 Mobile Connecting to:', socketUrl);
 
