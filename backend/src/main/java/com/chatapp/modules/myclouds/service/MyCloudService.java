@@ -30,8 +30,7 @@ import java.util.stream.Collectors;
 public class MyCloudService {
     private final ValidationMyCloud validationMyCloud;
     private final MyCloudRepository myCloudRepository;
-    private final S3Service s3Service;
-    private final AmazonS3 amazonS3;
+    private final SettingUpS3 settingUpS3;
     private final ApplicationEventPublisher eventPublisher;
 
 
@@ -98,7 +97,7 @@ public class MyCloudService {
         log.info("Saved MyCloud item: {}", entity.getId());
 
         // 3. Trả về DTO với presigned URL
-        MyCloudResponse response = toResponse(entity);
+        MyCloudResponse response = this.myCloudMapper.toMyCloudResponse(entity);
 
         // 4. Phát event WebSocket để đồng bộ tức thời cho các client khác (như web/mobile đang mở song song)
         try {
