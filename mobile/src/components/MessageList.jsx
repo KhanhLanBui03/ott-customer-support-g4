@@ -11,6 +11,7 @@ import {
 import ChatBubble from './ChatBubble';
 import { formatMessageDateSeparator } from '../utils/dateUtils';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const MessageList = React.forwardRef(({
 
@@ -33,6 +34,7 @@ const MessageList = React.forwardRef(({
   translationLoading = {},
   onTranslate,
 }, ref) => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -251,8 +253,8 @@ const MessageList = React.forwardRef(({
 
     const firstTypingUser = activeTyping[0];
     const typingText = activeTyping.length > 1
-      ? `${activeTyping.length} người đang soạn tin...`
-      : `${firstTypingUser.name} đang soạn tin...`;
+      ? `${activeTyping.length} ${t('chat.are_typing')}`
+      : `${firstTypingUser.name} ${t('chat.is_typing')}`;
 
     return (
       <View style={styles.typingContainer}>
@@ -274,7 +276,7 @@ const MessageList = React.forwardRef(({
     return (
       <View style={styles.loadingMoreContainer}>
         <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={[styles.loadingMoreText, { color: colors.textSubtle }]}>Đang tải tin nhắn cũ hơn...</Text>
+        <Text style={[styles.loadingMoreText, { color: colors.textSubtle }]}>{t('chat.loading_more')}</Text>
       </View>
     );
 
@@ -284,7 +286,7 @@ const MessageList = React.forwardRef(({
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.primary }]}>Đang tải tin nhắn...</Text>
+        <Text style={[styles.loadingText, { color: colors.primary }]}>{t('chat.loading')}</Text>
       </View>
     );
 

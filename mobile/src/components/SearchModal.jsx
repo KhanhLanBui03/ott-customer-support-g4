@@ -22,10 +22,12 @@ import { friendApi } from '../api/friendApi';
 import { conversationApi } from '../api/chatApi';
 import { useRouter } from 'expo-router';
 import CONFIG from '../config';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
 const SearchModal = ({ visible, onClose }) => {
+  const { t } = useTranslation();
   const router = useRouter();
   const currentUser = useSelector(state => state.auth.user);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -67,11 +69,11 @@ const SearchModal = ({ visible, onClose }) => {
         setSearchResult(response.data);
       } else {
         setSearchResult(null);
-        setError('Không tìm thấy người dùng');
+        setError(t('search.user_not_found', 'Không tìm thấy người dùng'));
       }
     } catch (err) {
       setSearchResult(null);
-      setError('Người dùng không tồn tại');
+      setError(t('search.user_not_exist', 'Người dùng không tồn tại'));
     } finally {
       setSearching(false);
     }
@@ -100,7 +102,7 @@ const SearchModal = ({ visible, onClose }) => {
       }
     } catch (err) {
       console.error('Create conversation error:', err);
-      Alert.alert('Thông báo', 'Không thể bắt đầu cuộc trò chuyện. Vui lòng thử lại.');
+      Alert.alert(t('common.notification', 'Thông báo'), t('chat.start_conversation_error', 'Không thể bắt đầu cuộc trò chuyện. Vui lòng thử lại.'));
     }
   };
 
@@ -110,10 +112,10 @@ const SearchModal = ({ visible, onClose }) => {
       await friendApi.sendFriendRequest(searchResult.userId);
       // Cập nhật trạng thái tại chỗ để UI thay đổi ngay lập tức
       setSearchResult(prev => ({ ...prev, friendshipStatus: 'PENDING' }));
-      Alert.alert('Thành công', `Đã gửi lời mời kết bạn đến ${searchResult.fullName}`);
+      Alert.alert(t('common.success', 'Thành công'), t('friends.send_request_success_msg', 'Đã gửi lời mời kết bạn đến {{name}}', { name: searchResult.fullName }));
     } catch (err) {
-      const msg = err.response?.data?.message || 'Đã có lỗi xảy ra';
-      Alert.alert('Thông báo', msg);
+      const msg = err.response?.data?.message || t('common.error', 'Đã có lỗi xảy ra');
+      Alert.alert(t('common.notification', 'Thông báo'), msg);
     }
   };
 
@@ -139,7 +141,7 @@ const SearchModal = ({ visible, onClose }) => {
             >
               {/* Header */}
               <View style={styles.header}>
-                <Text style={styles.headerTitle}>TÌM KIẾM BẠN BÈ</Text>
+                <Text style={styles.headerTitle}>{t('search.title', 'TÌM KIẾM BẠN BÈ')}</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                   <Ionicons name="close" size={24} color="#64748b" />
                 </TouchableOpacity>
@@ -147,7 +149,7 @@ const SearchModal = ({ visible, onClose }) => {
 
               <View style={styles.content}>
                 <Text style={styles.helpText}>
-                  VUI LÒNG NHẬP SỐ ĐIỆN THOẠI HỢP LỆ ĐỂ TÌM KIẾM BẠN BÈ VÀ BẮT ĐẦU TRÒ CHUYỆN.
+                  {t('search.help_text', 'VUI LÒNG NHẬP SỐ ĐIỆN THOẠI HỢP LỆ ĐỂ TÌM KIẾM BẠN BÈ VÀ BẮT ĐẦU TRÒ CHUYỆN.').toUpperCase()}
                 </Text>
 
                 {/* Search Input Area */}
@@ -156,7 +158,7 @@ const SearchModal = ({ visible, onClose }) => {
                     <MaterialIcons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="Nhập số điện thoại..."
+                      placeholder={t('search.input_placeholder', 'Nhập số điện thoại...')}
                       placeholderTextColor="#cbd5e1"
                       keyboardType="phone-pad"
                       value={phoneNumber}
@@ -166,7 +168,7 @@ const SearchModal = ({ visible, onClose }) => {
                     {searching && <ActivityIndicator size="small" color="#667eea" />}
                   </View>
                   <TouchableOpacity style={styles.searchBtn} onPress={() => performSearch(phoneNumber)}>
-                    <Text style={styles.searchBtnText}>TÌM KIẾM</Text>
+                    <Text style={styles.searchBtnText}>{t('search.submit_button', 'TÌM KIẾM')}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -190,7 +192,7 @@ const SearchModal = ({ visible, onClose }) => {
                       <View style={styles.buttonGroup}>
                         <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
                           <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-                          <Text style={styles.messageBtnText}>NHẮN TIN</Text>
+                          <Text style={styles.messageBtnText}>{t('search.message_button', 'NHẮN TIN')}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity 
@@ -204,17 +206,17 @@ const SearchModal = ({ visible, onClose }) => {
                           {searchResult.friendshipStatus === 'PENDING' ? (
                             <>
                               <Ionicons name="checkmark-done" size={20} color="#10b981" />
-                              <Text style={[styles.addFriendBtnText, { color: '#10b981' }]}>ĐÃ GỬI LỜI MỜI</Text>
+                              <Text style={[styles.addFriendBtnText, { color: '#10b981' }]}>{t('search.friendship.pending', 'ĐÃ GỬI LỜI MỜI')}</Text>
                             </>
                           ) : searchResult.friendshipStatus === 'ACCEPTED' ? (
                             <>
                               <Ionicons name="person-circle" size={22} color="#10b981" />
-                              <Text style={[styles.addFriendBtnText, { color: '#10b981' }]}>BẠN BÈ</Text>
+                              <Text style={[styles.addFriendBtnText, { color: '#10b981' }]}>{t('search.friendship.accepted', 'BẠN BÈ')}</Text>
                             </>
                           ) : (
                             <>
                               <Ionicons name="person-add-outline" size={20} color="#1e293b" />
-                              <Text style={styles.addFriendBtnText}>KẾT BẠN</Text>
+                              <Text style={styles.addFriendBtnText}>{t('search.friendship.none', 'KẾT BẠN')}</Text>
                             </>
                           )}
                         </TouchableOpacity>

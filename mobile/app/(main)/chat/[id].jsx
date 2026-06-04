@@ -237,14 +237,14 @@ const ChatDetailScreen = () => {
 
   const getPinnedPreviewText = (pin) => {
     if (!pin) return '';
-    if (pin.type === 'IMAGE') return '[Hình ảnh]';
-    if (pin.type === 'VIDEO') return '[Video]';
-    if (pin.type === 'AUDIO' || pin.type === 'VOICE') return '[Ghi âm]';
+    if (pin.type === 'IMAGE') return t('chat.image_bracket', '[Hình ảnh]');
+    if (pin.type === 'VIDEO') return t('chat.video_bracket', '[Video]');
+    if (pin.type === 'AUDIO' || pin.type === 'VOICE') return t('chat.voice_bracket', '[Tin nhắn thoại]');
     if (pin.type === 'FILE') {
       // Thường content của FILE message là tên file
-      return pin.content || '[Tệp tin]';
+      return pin.content || t('chat.file_bracket', '[Tệp tin]');
     }
-    return pin.content || 'Tin nhắn';
+    return pin.content || t('chat.message', 'Tin nhắn');
   };
 
   const flatListRef = useRef(null);
@@ -274,10 +274,10 @@ const ChatDetailScreen = () => {
   };
 
   const handleUnpinAll = () => {
-    Alert.alert('Bỏ ghim tất cả', 'Bạn có chắc chắn muốn bỏ ghim tất cả tin nhắn trong cuộc hội thoại này?', [
-      { text: 'Hủy', style: 'cancel' },
+    Alert.alert(t('chat.unpin_all_title'), t('chat.unpin_all_confirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Bỏ ghim hết',
+        text: t('chat.unpin_all_btn'),
         style: 'destructive',
         onPress: async () => {
           for (const pin of conversation.pinnedMessages) {
@@ -289,10 +289,10 @@ const ChatDetailScreen = () => {
   };
 
   const handleUnpinSingle = (messageId) => {
-    Alert.alert('Bỏ ghim', 'Bỏ ghim tin nhắn này?', [
-      { text: 'Hủy', style: 'cancel' },
+    Alert.alert(t('chat.unpin'), t('chat.unpin_confirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Bỏ ghim',
+        text: t('chat.unpin'),
         style: 'destructive',
         onPress: () => dispatch(unpinMessage({ messageId, conversationId: realId }))
       }
@@ -1057,7 +1057,7 @@ const ChatDetailScreen = () => {
                 <View style={styles.blockedTextGroup}>
                   <Text style={[styles.blockedTitle, { color: colors.foreground }]}>{t('chat.cannot_send_message')}</Text>
                   <Text style={[styles.blockedSubtitle, { color: colors.textMuted }]}>
-                    {t('chat.block_user_confirm', { name: displayName }).replace('Bạn có chắc chắn muốn chặn ', 'Bạn đã chặn ').replace('?', '.') + ' ' + t('info.unblock_user').replace('Bỏ chặn người này', 'Hãy bỏ chặn để tiếp tục trò chuyện.')}
+                    {t('chat.blocked_desc_prompt', { name: displayName })}
                   </Text>
                 </View>
               </View>

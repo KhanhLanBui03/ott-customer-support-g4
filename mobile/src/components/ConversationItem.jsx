@@ -61,7 +61,7 @@ const ConversationItem = ({ conversation, onPress, isActive }) => {
         </View>
 
         <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={1}>
-          {getPreviewText(conversation.lastMessage)}
+          {getPreviewText(conversation.lastMessage, conversation.lastMessageSenderId || conversation.lastSenderId)}
         </Text>
       </View>
     </TouchableOpacity>

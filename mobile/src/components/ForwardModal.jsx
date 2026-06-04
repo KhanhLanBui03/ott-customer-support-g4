@@ -17,30 +17,32 @@ import { sendMessage } from '../store/chatSlice';
 import * as FileSystem from 'expo-file-system/legacy';
 import myCloudApi from '../api/myCloudApi';
 import axiosClient from '../api/axiosClient';
+import { useTranslation } from 'react-i18next';
 
 
 const ForwardModal = ({ visible, onClose, messageToForward }) => {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const { conversations } = useSelector((state) => state.chat);
   const { user } = useSelector((state) => state.auth);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('Gần đây'); // Gần đây, Nhóm, Bạn bè
+  const [activeTab, setActiveTab] = useState('recent'); // recent, group, friend, cloud
   const [selectedConvs, setSelectedConvs] = useState([]);
   const [extraMessage, setExtraMessage] = useState('');
   const [sending, setSending] = useState(false);
 
   const filteredConversations = useMemo(() => {
-    if (activeTab === 'My Cloud') return [];
+    if (activeTab === 'cloud') return [];
     let list = [...conversations];
     
     // Sort by last message date (recent first) - assuming conversations are already sorted in store
     // but just in case:
     list.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
-    if (activeTab === 'Nhóm') {
+    if (activeTab === 'group') {
       list = list.filter(c => c.type === 'GROUP');
-    } else if (activeTab === 'Bạn bè') {
+    } else if (activeTab === 'friend') {
       list = list.filter(c => c.type === 'SINGLE');
     }
 
@@ -56,7 +58,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
   }, [conversations, activeTab, searchTerm]);
 
   const toggleSelect = (convId) => {
-    if (activeTab === 'My Cloud') {
+    if (activeTab === 'cloud') {
       setSelectedConvs(prev => prev.includes('MY_CLOUD') ? [] : ['MY_CLOUD']);
     } else {
       setSelectedConvs(prev => 
@@ -240,7 +242,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
         const forwardedFrom = {
           messageId: messageToForward.messageId || messageToForward.id,
           conversationId: messageToForward.conversationId,
-          senderName: messageToForward.senderName || 'Người dùng'
+          senderName: messageToForward.senderName || t('chat.user_fallback', 'Người dùng')
         };
 
         for (const convId of otherConvs) {
@@ -276,10 +278,10 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
   };
 
   const getConvName = (conv) => {
-    if (conv.type === 'GROUP') return conv.name || 'Nhóm không tên';
+    if (conv.type === 'GROUP') return conv.name || t('chat.unnamed_group', 'Nhóm không tên');
     const currentUserId = String(user?.userId || user?.id || '');
     const otherMember = conv.members?.find(m => String(m.userId || m.id) !== currentUserId);
-    return otherMember?.fullName || otherMember?.name || conv.name || 'Người dùng';
+    return otherMember?.fullName || otherMember?.name || conv.name || t('chat.user_fallback', 'Người dùng');
   };
 
   const renderConvItem = ({ item }) => {
@@ -318,7 +320,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.convName} numberOfLines={1}>My Cloud</Text>
-          <Text style={{ fontSize: 12, color: '#9ca3af' }}>Lưu trữ cá nhân</Text>
+          <Text style={{ fontSize: 12, color: '#9ca3af' }}>{t('forward.cloud_storage', 'Lưu trữ cá nhân')}</Text>
         </View>
         <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
           {isSelected && <MaterialIcons name="check" size={16} color="#fff" />}
@@ -326,6 +328,13 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
       </TouchableOpacity>
     );
   };
+
+  const tabs = [
+    { id: 'recent', label: t('forward.tabs.recent', 'Gần đây') },
+    { id: 'group', label: t('forward.tabs.groups', 'Nhóm') },
+    { id: 'friend', label: t('forward.tabs.friends', 'Bạn bè') },
+    { id: 'cloud', label: 'My Cloud' }
+  ];
 
   return (
     <Modal
@@ -340,7 +349,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
           style={styles.container}
         >
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Chia sẻ</Text>
+            <Text style={styles.headerTitle}>{t('forward.title', 'Chia sẻ')}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#1f2937" />
             </TouchableOpacity>
@@ -352,7 +361,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
               <Feather name="search" size={18} color="#9ca3af" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Tìm kiếm cuộc trò chuyện..."
+                placeholder={t('forward.search_placeholder', 'Tìm kiếm cuộc trò chuyện...')}
                 value={searchTerm}
                 onChangeText={setSearchTerm}
               />
@@ -365,27 +374,27 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
 
             {/* Tabs */}
             <View style={styles.tabs}>
-              {['Gần đây', 'Nhóm', 'Bạn bè', 'My Cloud'].map(tab => (
+              {tabs.map(tab => (
                 <TouchableOpacity 
-                  key={tab} 
-                  style={[styles.tab, activeTab === tab && styles.tabActive]}
-                  onPress={() => setActiveTab(tab)}
+                  key={tab.id} 
+                  style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+                  onPress={() => setActiveTab(tab.id)}
                 >
-                  <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+                  <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>{tab.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             {/* Conversation List */}
             <FlatList
-              data={activeTab === 'My Cloud' ? [{ conversationId: 'MY_CLOUD', isMyCloud: true }] : filteredConversations}
-              renderItem={activeTab === 'My Cloud' ? renderMyCloudItem : renderConvItem}
+              data={activeTab === 'cloud' ? [{ conversationId: 'MY_CLOUD', isMyCloud: true }] : filteredConversations}
+              renderItem={activeTab === 'cloud' ? renderMyCloudItem : renderConvItem}
               keyExtractor={item => item.conversationId}
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
-                activeTab === 'My Cloud' ? null : (
+                activeTab === 'cloud' ? null : (
                   <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>Không tìm thấy cuộc trò chuyện nào</Text>
+                    <Text style={styles.emptyText}>{t('forward.no_conversations', 'Không tìm thấy cuộc trò chuyện nào')}</Text>
                   </View>
                 )
               }
@@ -395,17 +404,23 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
             {/* Preview & Extra Message */}
             <View style={styles.footer}>
               <View style={styles.previewContainer}>
-                <Text style={styles.previewLabel}>Tin nhắn được chọn:</Text>
+                <Text style={styles.previewLabel}>{t('forward.selected_message', 'Tin nhắn được chọn:')}</Text>
                 <View style={styles.previewBox}>
                   <Text style={styles.previewText} numberOfLines={1}>
-                    {messageToForward?.content || (messageToForward?.type === 'IMAGE' ? '[Hình ảnh]' : messageToForward?.type === 'VIDEO' ? '[Video]' : messageToForward?.type === 'FILE' ? '[Tệp tin]' : messageToForward?.type === 'VOICE' ? '[Tin nhắn thoại]' : '[Tin nhắn]')}
+                    {messageToForward?.content || (
+                      messageToForward?.type === 'IMAGE' ? t('chat.image_bracket', '[Hình ảnh]') :
+                      messageToForward?.type === 'VIDEO' ? t('chat.video_bracket', '[Video]') :
+                      messageToForward?.type === 'FILE' ? t('chat.file_bracket', '[Tệp tin]') :
+                      messageToForward?.type === 'VOICE' ? t('chat.voice_bracket', '[Tin nhắn thoại]') :
+                      t('chat.message_bracket', '[Tin nhắn]')
+                    )}
                   </Text>
                 </View>
               </View>
 
               <TextInput
                 style={styles.extraInput}
-                placeholder="Nhập thêm lời nhắn (không bắt buộc)..."
+                placeholder={t('forward.extra_message_placeholder', 'Nhập thêm lời nhắn (không bắt buộc)...')}
                 value={extraMessage}
                 onChangeText={setExtraMessage}
                 multiline
@@ -421,7 +436,9 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
                 ) : (
                   <>
                     <MaterialIcons name="send" size={20} color="#fff" style={{ marginRight: 8 }} />
-                    <Text style={styles.sendButtonText}>Gửi ({selectedConvs.length})</Text>
+                    <Text style={styles.sendButtonText}>
+                      {t('forward.send_count', 'Gửi ({{count}})', { count: selectedConvs.length })}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -431,6 +448,7 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
       </View>
     </Modal>
   );
+
 };
 
 const styles = StyleSheet.create({

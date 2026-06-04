@@ -8,18 +8,38 @@ import { restoreState, sessionExpired } from '../src/store/authSlice';
 import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import InAppNotification from '../src/components/common/InAppNotification';
+import { useTranslation } from 'react-i18next';
 import '../src/locales/i18n';
 
 // Keep splash screen visible while we fetch auth state
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
+  const { i18n } = useTranslation();
   const [isReady, setIsReady] = useState(false);
   const dispatch = useDispatch();
   const router = useRouter();
   const segments = useSegments();
 
-  const { accessToken, loading: authLoading } = useSelector((state) => state.auth);
+  const { accessToken, loading: authLoading, user } = useSelector((state) => state.auth);
+
+  // Sync translation language with user's preferred language
+  useEffect(() => {
+    if (user?.preferredLanguage) {
+      const LANGUAGE_MAP = {
+        'vie_Latn': 'vi',
+        'eng_Latn': 'en',
+        'zho_Hans': 'zh',
+        'jpn_Jpan': 'ja',
+        'kor_Hang': 'ko',
+        'fra_Latn': 'fr',
+      };
+      const i18nCode = LANGUAGE_MAP[user.preferredLanguage];
+      if (i18nCode && i18n.language !== i18nCode) {
+        i18n.changeLanguage(i18nCode);
+      }
+    }
+  }, [user?.preferredLanguage]);
 
   // 1. Restore State on mount
   useEffect(() => {

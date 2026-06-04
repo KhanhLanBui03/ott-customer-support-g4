@@ -91,7 +91,7 @@ const ConversationList = ({
             </Text>
           </View>
           <Text style={[styles.previewText, { color: colors.textMuted }]} numberOfLines={1}>
-            {getPreviewText(item.lastMessage)}
+            {getPreviewText(item.lastMessage, item.lastMessageSenderId || item.lastSenderId)}
           </Text>
         </View>
 

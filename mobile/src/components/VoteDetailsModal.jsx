@@ -11,11 +11,13 @@ import {
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import CONFIG from '../config';
 
 const { width, height } = Dimensions.get('window');
 
 const VoteDetailsModal = ({ visible, onClose, vote }) => {
+  const { t } = useTranslation();
   const conversations = useSelector(state => state.chat.conversations);
   const BASE_URL = CONFIG.BASE_URL;
   
@@ -32,7 +34,7 @@ const VoteDetailsModal = ({ visible, onClose, vote }) => {
       const found = members.find(m => String(m.userId || m.id || '') === id);
       if (found) return found;
     }
-    return { fullName: 'Người dùng', avatarUrl: null };
+    return { fullName: t('common.user'), avatarUrl: null };
   };
 
   const getAvatarUrl = (url, name) => {
@@ -52,8 +54,8 @@ const VoteDetailsModal = ({ visible, onClose, vote }) => {
                 <Ionicons name="stats-chart" size={20} color="#fff" />
               </View>
               <View>
-                <Text style={styles.headerTitle}>Kết quả bình chọn</Text>
-                <Text style={styles.headerSubtitle}>{totalParticipants} NGƯỜI ĐÃ THAM GIA</Text>
+                <Text style={styles.headerTitle}>{t('chat.poll_results')}</Text>
+                <Text style={styles.headerSubtitle}>{t('chat.voters_count', { count: totalParticipants }).toUpperCase()}</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -77,7 +79,7 @@ const VoteDetailsModal = ({ visible, onClose, vote }) => {
                       <Text style={styles.optionName}>{option.text.toUpperCase()}</Text>
                     </View>
                     <View style={styles.voterBadge}>
-                      <Text style={styles.voterBadgeText}>{voters.length} LƯỢT BẦU</Text>
+                      <Text style={styles.voterBadgeText}>{t('chat.voted_count', { count: voters.length }).toUpperCase()}</Text>
                     </View>
                   </View>
 
@@ -96,7 +98,7 @@ const VoteDetailsModal = ({ visible, onClose, vote }) => {
                         );
                       })
                     ) : (
-                      <Text style={styles.emptyText}>Chưa có ai bầu phương án này</Text>
+                      <Text style={styles.emptyText}>{t('chat.no_voters')}</Text>
                     )}
                   </View>
                 </View>
@@ -106,7 +108,7 @@ const VoteDetailsModal = ({ visible, onClose, vote }) => {
 
           <View style={styles.footer}>
             <TouchableOpacity style={styles.closeActionBtn} onPress={onClose}>
-              <Text style={styles.closeActionText}>Đóng cửa sổ</Text>
+              <Text style={styles.closeActionText}>{t('common.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>

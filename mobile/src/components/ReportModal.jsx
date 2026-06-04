@@ -16,24 +16,26 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import adminApi from '../api/adminApi';
-
-const REPORT_REASONS = [
-  { key: 'spam', label: 'Spam / Tin nhắn rác' },
-  { key: 'harassment', label: 'Quấy rối / Đe dọa' },
-  { key: 'scam', label: 'Lừa đảo / Giả mạo' },
-  { key: 'inappropriate', label: 'Nội dung phản cảm / Độc hại' },
-  { key: 'other', label: 'Lý do khác' },
-];
+import { useTranslation } from 'react-i18next';
 
 const ReportModal = ({ visible, onClose, targetId, targetType, onSubmitSuccess }) => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const [loading, setLoading] = useState(false);
   const [reason, setReason] = useState('spam');
   const [details, setDetails] = useState('');
 
+  const REPORT_REASONS = [
+    { key: 'spam', label: t('report.reasons.spam', 'Spam / Tin nhắn rác') },
+    { key: 'harassment', label: t('report.reasons.harassment', 'Quấy rối / Đe dọa') },
+    { key: 'scam', label: t('report.reasons.scam', 'Lừa đảo / Giả mạo') },
+    { key: 'inappropriate', label: t('report.reasons.inappropriate', 'Nội dung phản cảm / Độc hại') },
+    { key: 'other', label: t('report.reasons.other', 'Lý do khác') },
+  ];
+
   const handleSubmit = async () => {
     if (!targetId) {
-      Alert.alert('Lỗi', 'Không xác định được đối tượng báo cáo.');
+      Alert.alert(t('common.error', 'Lỗi'), t('report.unknown_target', 'Không xác định được đối tượng báo cáo.'));
       return;
     }
 
@@ -41,15 +43,18 @@ const ReportModal = ({ visible, onClose, targetId, targetType, onSubmitSuccess }
     try {
       await adminApi.submitReport(targetId, targetType, reason, details);
       Alert.alert(
-        'Thành công',
-        'Gửi báo cáo thành công! Đội ngũ kiểm duyệt sẽ xem xét trong vòng 24h.'
+        t('common.success', 'Thành công'),
+        t('report.submit_success_msg', 'Gửi báo cáo thành công! Đội ngũ kiểm duyệt sẽ xem xét trong vòng 24h.')
       );
       if (onSubmitSuccess) onSubmitSuccess();
       setDetails('');
       onClose();
     } catch (err) {
       console.error('Submit report error:', err);
-      Alert.alert('Thất bại', 'Không thể gửi báo cáo vào lúc này. Vui lòng thử lại sau.');
+      Alert.alert(
+        t('common.failed', 'Thất bại'),
+        t('report.submit_failed_msg', 'Không thể gửi báo cáo vào lúc này. Vui lòng thử lại sau.')
+      );
     } finally {
       setLoading(false);
     }
@@ -68,7 +73,7 @@ const ReportModal = ({ visible, onClose, targetId, targetType, onSubmitSuccess }
                 <View style={[styles.header, { borderBottomColor: colors.border }]}>
                   <View style={styles.headerLeft}>
                     <MaterialCommunityIcons name="alert-decagram" size={24} color="#f43f5e" />
-                    <Text style={[styles.headerTitle, { color: colors.foreground }]}>BÁO CÁO VI PHẠM</Text>
+                    <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('report.title', 'BÁO CÁO VI PHẠM')}</Text>
                   </View>
                   <TouchableOpacity onPress={onClose} disabled={loading}>
                     <MaterialCommunityIcons name="close" size={24} color={colors.textMuted} />
@@ -77,10 +82,10 @@ const ReportModal = ({ visible, onClose, targetId, targetType, onSubmitSuccess }
 
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                   <Text style={[styles.descText, { color: colors.textSubtle }]}>
-                    Vui lòng chọn lý do phản ánh cuộc trò chuyện này. Ý kiến của bạn giúp cộng đồng an toàn hơn.
+                    {t('report.description', 'Vui lòng chọn lý do phản ánh cuộc trò chuyện này. Ý kiến của bạn giúp cộng đồng an toàn hơn.')}
                   </Text>
 
-                  <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LÝ DO BÁO CÁO</Text>
+                  <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{t('report.reason_label', 'LÝ DO BÁO CÁO')}</Text>
                   <View style={styles.optionsList}>
                     {REPORT_REASONS.map((item) => {
                       const isSelected = reason === item.key;
@@ -123,7 +128,7 @@ const ReportModal = ({ visible, onClose, targetId, targetType, onSubmitSuccess }
                   </View>
 
                   <Text style={[styles.sectionLabel, { color: colors.textMuted, marginTop: 16 }]}>
-                    CHI TIẾT PHẢN ÁNH (TÙY CHỌN)
+                    {t('report.details_label', 'CHI TIẾT PHẢN ÁNH (TÙY CHỌN)')}
                   </Text>
                   <TextInput
                     style={[
@@ -134,7 +139,7 @@ const ReportModal = ({ visible, onClose, targetId, targetType, onSubmitSuccess }
                         borderColor: colors.border,
                       },
                     ]}
-                    placeholder="Nhập thêm chi tiết phản ánh..."
+                    placeholder={t('report.details_placeholder', 'Nhập thêm chi tiết phản ánh...')}
                     placeholderTextColor={colors.textMuted}
                     multiline
                     numberOfLines={4}
@@ -144,14 +149,14 @@ const ReportModal = ({ visible, onClose, targetId, targetType, onSubmitSuccess }
 
                   <View style={styles.buttonGroup}>
                     <TouchableOpacity style={[styles.cancelButton, { borderColor: colors.border }]} onPress={onClose} disabled={loading}>
-                      <Text style={[styles.cancelButtonText, { color: colors.textSubtle }]}>HỦY</Text>
+                      <Text style={[styles.cancelButtonText, { color: colors.textSubtle }]}>{t('common.cancel', 'Hủy')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.confirmButton} onPress={handleSubmit} disabled={loading}>
                       {loading ? (
                         <ActivityIndicator color="#fff" size="small" />
                       ) : (
-                        <Text style={styles.confirmButtonText}>GỬI BÁO CÁO</Text>
+                        <Text style={styles.confirmButtonText}>{t('report.submit_button', 'GỬI BÁO CÁO')}</Text>
                       )}
                     </TouchableOpacity>
                   </View>

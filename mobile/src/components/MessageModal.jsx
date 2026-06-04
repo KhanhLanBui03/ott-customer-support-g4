@@ -11,6 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { MaterialIcons, Ionicons, FontAwesome5, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 import { useSelector } from 'react-redux';
 import CONFIG from '../config';
@@ -21,6 +22,7 @@ const { width, height } = Dimensions.get('window');
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '😡'];
 
 const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isPinned }) => {
+  const { t } = useTranslation();
   const BASE_URL = CONFIG.BASE_URL;
   if (!message) return null;
 
@@ -143,31 +145,31 @@ const MessageModal = ({ visible, message, onClose, onAction, onReact, isOwn, isP
               {/* Menu Grid */}
               <View style={styles.menuGrid}>
                 {/* Row 1: Content Interaction */}
-                <MenuButton icon="reply" label="Trả lời" type="reply" color="#6366f1" />
+                <MenuButton icon="reply" label={t('chat.reply')} type="reply" color="#6366f1" />
                 {message.type !== 'VOTE' && message.type !== 'CALL_LOG' && message.type !== 'SYSTEM' && (
-                  <MenuButton icon="arrow-forward" label="Chuyển tiếp" type="forward" color="#3b82f6" />
+                  <MenuButton icon="arrow-forward" label={t('chat.forward')} type="forward" color="#3b82f6" />
                 )}
-                <MenuButton icon="content-copy" label="Sao chép" type="copy" color="#64748b" />
-                <MenuButton icon="g-translate" label="Dịch" type="translate" color="#10b981" />
+                <MenuButton icon="content-copy" label={t('common.copy', 'Sao chép')} type="copy" color="#64748b" />
+                <MenuButton icon="g-translate" label={t('chat.translate_btn')} type="translate" color="#10b981" />
 
                 {/* Row 2: Management & Tools */}
                 <MenuButton
                   icon={isPinned ? "pin-off" : "pin"}
-                  label={isPinned ? "Bỏ ghim" : "Ghim"}
+                  label={isPinned ? t('chat.unpin_message') : t('chat.pin_message')}
                   type={isPinned ? "unpin" : "pin"}
                   color="#f59e0b"
                   iconType="material-community"
                 />
-                <MenuButton icon="folder-open" label="Lưu tin" type="save" color="#0d9488" />
-                <MenuButton icon="notifications" label="Nhắc hẹn" type="remind" color="#ec4899" />
-                <MenuButton icon="check-box" label="Chọn nhiều" type="select" color="#8b5cf6" />
+                <MenuButton icon="folder-open" label={t('chat.save_message', 'Lưu tin')} type="save" color="#0d9488" />
+                <MenuButton icon="notifications" label={t('chat.remind', 'Nhắc hẹn')} type="remind" color="#ec4899" />
+                <MenuButton icon="check-box" label={t('chat.select_multiple', 'Chọn nhiều')} type="select" color="#8b5cf6" />
 
                 {/* Row 3: Info & Destructive */}
-                <MenuButton icon="info" label="Chi tiết" type="info" color="#94a3b8" />
+                <MenuButton icon="info" label={t('chat.details', 'Chi tiết')} type="info" color="#94a3b8" />
                 {isOwn && (
-                  <MenuButton icon="history" label="Thu hồi" type="recall" color="#ef4444" />
+                  <MenuButton icon="history" label={t('chat.recall')} type="recall" color="#ef4444" />
                 )}
-                <MenuButton icon="delete" label="Xóa ở tôi" type="delete" color="#f43f5e" />
+                <MenuButton icon="delete" label={t('chat.delete_for_me')} type="delete" color="#f43f5e" />
               </View>
             </View>
           </TouchableWithoutFeedback>

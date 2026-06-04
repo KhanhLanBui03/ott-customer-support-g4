@@ -3,10 +3,18 @@ import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import en from './en/translation.json';
 import vi from './vi/translation.json';
+import zh from './zh/translation.json';
+import ja from './ja/translation.json';
+import ko from './ko/translation.json';
+import fr from './fr/translation.json';
 
 const resources = {
   en: { translation: en },
   vi: { translation: vi },
+  zh: { translation: zh },
+  ja: { translation: ja },
+  ko: { translation: ko },
+  fr: { translation: fr },
 };
 
 // Get device language

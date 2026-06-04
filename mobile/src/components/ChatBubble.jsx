@@ -28,6 +28,7 @@ import VoteMessage from './VoteMessage';
 import VoteDetailsModal from './VoteDetailsModal';
 import { useTheme } from '../context/ThemeContext';
 import UserActionModal from './common/UserActionModal';
+import { translateSystemMessage } from '../utils/systemMessageTranslator';
 
 
 const ChatBubble = ({
@@ -122,12 +123,12 @@ const ChatBubble = ({
 
   const getReactionUserName = (userId) => {
     const id = String(userId || '');
-    if (!id) return 'Người dùng';
-    if (id === currentUserIdStr) return 'Bạn';
+    if (!id) return t('common.user');
+    if (id === currentUserIdStr) return t('common.you');
     const found = conversations
       .flatMap(conv => conv.members || conv.participants || [])
       .find(member => String(member.userId || member.id || '') === id);
-    return found?.fullName || found?.name || found?.username || 'Người dùng';
+    return found?.fullName || found?.name || found?.username || t('common.user');
   };
 
   const translateX = useRef(new Animated.Value(0)).current;
@@ -289,7 +290,7 @@ const ChatBubble = ({
       return id && id !== currentUserIdStr;
     });
     if (hasReadByOther) return null;
-    const statusText = !isOnline ? 'Đã gửi' : 'Đã nhận';
+    const statusText = !isOnline ? t('chat.sent') : t('chat.received');
     const iconName = !isOnline ? 'check' : 'check-circle';
     const iconColor = !isOnline ? colors.textMuted : colors.primary;
     return (
@@ -441,11 +442,10 @@ const ChatBubble = ({
       <View style={styles.systemMessageContainer}>
         <View style={[styles.systemMessageWrapper, { backgroundColor: isDark ? colors.surface200 : 'rgba(0, 0, 0, 0.05)' }]}>
           <View style={[styles.systemDot, { backgroundColor: colors.primary }]} />
-          <Text style={[styles.systemMessageText, { color: colors.textMuted }]}>{message.content?.toUpperCase() || 'THÔNG BÁO HỆ THỐNG'}</Text>
+          <Text style={[styles.systemMessageText, { color: colors.textMuted }]}>{translateSystemMessage(message.content, t)?.toUpperCase() || 'THÔNG BÁO HỆ THỐNG'}</Text>
           <View style={[styles.systemDot, { backgroundColor: colors.primary }]} />
         </View>
       </View>
-
     );
   }
 
@@ -514,7 +514,7 @@ const ChatBubble = ({
                 {message.forwardedFrom && (
                   <View style={[styles.forwardedIndicator, isOwn ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
                     <MaterialIcons name="forward" size={14} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.primary} />
-                    <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.primary }]}>Chuyển tiếp</Text>
+                    <Text style={[styles.forwardedText, isOwn ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.primary }]}>{t('chat.forwarded')}</Text>
                   </View>
                 )}
                 {message.replyTo && (() => {
@@ -550,15 +550,15 @@ const ChatBubble = ({
                     return { color: '#6366f1', icon: 'file-document-outline' };
                   };
                   const thumbUrl = (isImageReply || isVideoReply) && mediaUrls[0] ? (mediaUrls[0].startsWith('http') ? mediaUrls[0] : `${BASE_URL}${mediaUrls[0].startsWith('/') ? '' : '/'}${mediaUrls[0]}`) : null;
-                  let typeLabel = '[Tin nhắn]';
-                  if (isVoiceReply) typeLabel = 'Tin nhắn thoại';
-                  else if (isImageReply) typeLabel = '[Hình ảnh]';
-                  else if (isVideoReply) typeLabel = '[Video]';
+                  let typeLabel = t('chat.message_bracket');
+                  if (isVoiceReply) typeLabel = t('chat.voice_message');
+                  else if (isImageReply) typeLabel = t('chat.image_bracket');
+                  else if (isVideoReply) typeLabel = `[${t('chat.video_preview')}]`;
                   else if (isFileReply) {
                     const fileName = mediaUrls[0]?.split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '');
-                    typeLabel = fileName ? decodeURIComponent(fileName) : '[Tệp tin]';
+                    typeLabel = fileName ? decodeURIComponent(fileName) : t('chat.file_bracket');
                   }
-                  const displayReplyText = isVoiceReply ? 'Tin nhắn thoại' : (content.trim() || typeLabel);
+                  const displayReplyText = isVoiceReply ? t('chat.voice_message') : (content.trim() || typeLabel);
                   return (
                     <TouchableOpacity
                       activeOpacity={0.7}
@@ -584,13 +584,13 @@ const ChatBubble = ({
                         <Text style={[styles.replySender, { color: isOwn ? '#fff' : colors.primary }]} numberOfLines={1}>
                           {(() => {
                             const currentMeId = String(user?.userId || user?.id || '');
-                            if (String(senderId) === currentMeId) return 'Bạn';
+                            if (String(senderId) === currentMeId) return t('common.you');
                             let name = r.senderName || r.sender_name;
                             for (const conv of conversations) {
                               const found = (conv.members || []).find(m => String(m.userId || m.id || '') === String(senderId));
                               if (found) { name = found.fullName || found.name; break; }
                             }
-                            return name || 'Người dùng';
+                            return name || t('common.user');
                           })()}
                         </Text>
                         <Text style={[styles.replyText, { color: isOwn ? 'rgba(255, 255, 255, 0.8)' : (isDark ? '#cbd5e1' : '#64748b') }]} numberOfLines={1}>{displayReplyText}</Text>
@@ -664,7 +664,7 @@ const ChatBubble = ({
                 {message.isRecalled ? (
                   <View style={styles.recalledContent}>
                     <MaterialIcons name="history" size={16} color={isOwn ? 'rgba(255,255,255,0.7)' : colors.textSubtle} style={{ marginRight: 4 }} />
-                    <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : [styles.otherRecalledText, { color: colors.textSubtle }]]}>Tin nhắn đã bị thu hồi</Text>
+                    <Text style={[styles.text, styles.recalledText, isOwn ? styles.ownRecalledText : [styles.otherRecalledText, { color: colors.textSubtle }]]}>{t('chat.message_recalled')}</Text>
 
                   </View>
                 ) : (
@@ -689,12 +689,12 @@ const ChatBubble = ({
                         let isOngoing = status === 'ONGOING';
 
                         if (isOngoing) {
-                          title = cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
+                          title = cType === 'video' ? t('chat.video_call_ongoing') : t('chat.voice_call_ongoing');
                           iconName = cType === 'video' ? 'video' : 'phone-in-talk';
-                          subtitle = 'Nhấn để tham gia';
+                          subtitle = t('chat.join_call_hint');
                           iconColor = isOwn ? '#fff' : colors.primary;
                         } else if (isOwn) {
-                          title = cType === 'video' ? 'Cuộc gọi video đi' : 'Cuộc gọi thoại đi';
+                          title = cType === 'video' ? t('chat.outgoing_video_call') : t('chat.outgoing_voice_call');
                           iconName = 'phone-outgoing';
                           if (status === 'SUCCESS') {
                             const mins = Math.floor(duration / 60);
@@ -702,21 +702,21 @@ const ChatBubble = ({
                             subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                             iconColor = isOwn ? '#fff' : '#10b981';
                           } else {
-                            subtitle = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
+                            subtitle = status === 'REJECTED' ? t('chat.rejected') : t('chat.no_answer');
                             iconColor = isOwn ? 'rgba(255,255,255,0.8)' : colors.error;
                           }
                         } else {
                           if (status === 'SUCCESS') {
-                            title = cType === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến';
+                            title = cType === 'video' ? t('chat.incoming_video_call') : t('chat.incoming_voice_call');
                             iconName = 'phone-incoming';
                             const mins = Math.floor(duration / 60);
                             const secs = duration % 60;
                             subtitle = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                             iconColor = '#10b981';
                           } else {
-                            title = cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+                            title = cType === 'video' ? t('chat.missed_video_call') : t('chat.missed_voice_call');
                             iconName = 'phone-missed';
-                            subtitle = status === 'REJECTED' ? 'Cuộc gọi bị từ chối' : 'Cuộc gọi nhỡ';
+                            subtitle = status === 'REJECTED' ? t('chat.rejected') : t('chat.missed_call');
                             iconColor = colors.error;
                           }
                         }
@@ -762,7 +762,7 @@ const ChatBubble = ({
                                 })}
                               >
                                 <Text style={[styles.callBackText, { color: isOwn ? '#fff' : colors.primary }]}>
-                                  {isOngoing ? 'Tham gia ngay' : 'Gọi lại'}
+                                  {isOngoing ? t('chat.join_now') : t('chat.call_back')}
                                 </Text>
 
                               </TouchableOpacity>
@@ -870,7 +870,7 @@ const ChatBubble = ({
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
             <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Chi tiết cảm xúc</Text>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>{t('chat.reaction_details')}</Text>
               <TouchableOpacity onPress={closeReactionDetail} style={styles.closeButton}><Ionicons name="close" size={22} color={colors.foreground} /></TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
@@ -883,14 +883,14 @@ const ChatBubble = ({
                 ))}
               </View>
               <View style={styles.modalUserColumn}>
-                <Text style={[styles.modalSectionLabel, { color: colors.textSubtle }]}>Người đã chọn</Text>
+                <Text style={[styles.modalSectionLabel, { color: colors.textSubtle }]}>{t('chat.people_reacted')}</Text>
                 <ScrollView contentContainerStyle={styles.modalUserList}>
                   {(reactionUserNamesFor(selectedReactionEmoji) || []).length > 0 ? (
                     reactionUserNamesFor(selectedReactionEmoji).map((name, index) => (
                       <View key={`${selectedReactionEmoji}-${index}`} style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>{name}</Text></View>
                     ))
                   ) : (
-                    <View style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>Chưa có ai phản ứng</Text></View>
+                    <View style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>{t('chat.no_reactions')}</Text></View>
                   )}
                 </ScrollView>
               </View>

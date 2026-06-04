@@ -7,6 +7,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -19,6 +20,7 @@ const VoteMessage = ({
   isAdmin,
   isMe 
 }) => {
+  const { t } = useTranslation();
   const vote = message.vote;
   if (!vote) return null;
 
@@ -39,7 +41,7 @@ const VoteMessage = ({
           <View style={styles.iconBg}>
             <MaterialCommunityIcons name="poll" size={16} color="#6366f1" />
           </View>
-          <Text style={styles.headerLabel}>BIỂU QUYẾT</Text>
+          <Text style={styles.headerLabel}>{t('chat.poll').toUpperCase()}</Text>
         </View>
         <Text style={styles.question}>{vote.question}</Text>
       </View>
@@ -85,7 +87,7 @@ const VoteMessage = ({
           style={styles.detailsBtn}
           onPress={() => onViewDetails(vote)}
         >
-          <Text style={styles.detailsBtnText}>Xem chi tiết</Text>
+          <Text style={styles.detailsBtnText}>{t('chat.view_details')}</Text>
           <MaterialIcons name="chevron-right" size={18} color="#6366f1" />
         </TouchableOpacity>
 
@@ -94,11 +96,11 @@ const VoteMessage = ({
             style={styles.closeBtn}
             onPress={() => onCloseVote(message.messageId)}
           >
-            <Text style={styles.closeBtnText}>KẾT THÚC</Text>
+            <Text style={styles.closeBtnText}>{t('chat.end').toUpperCase()}</Text>
           </TouchableOpacity>
         ) : vote.isClosed ? (
           <View style={styles.closedBadge}>
-            <Text style={styles.closedText}>ĐÃ ĐÓNG</Text>
+            <Text style={styles.closedText}>{t('chat.closed').toUpperCase()}</Text>
           </View>
         ) : null}
       </View>

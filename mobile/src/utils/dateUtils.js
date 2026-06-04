@@ -1,3 +1,5 @@
+import i18n from '../locales/i18n';
+
 /**
  * Formats the last seen time relative to now, similar to the web version.
  * @param {string} status - 'ONLINE' or other
@@ -5,42 +7,43 @@
  * @returns {string} - Formatted status string
  */
 export const formatLastSeen = (status, lastSeenAt) => {
-  if (String(status).toUpperCase() === 'ONLINE') return 'Đang hoạt động';
+  if (String(status).toUpperCase() === 'ONLINE') return i18n.t('chat.active_now');
   
-  if (!lastSeenAt) return 'Ngoại tuyến';
+  if (!lastSeenAt) return i18n.t('chat.offline');
   
   try {
     const lastSeenDate = new Date(lastSeenAt);
     const lastSeenTime = lastSeenDate.getTime();
     
-    if (isNaN(lastSeenTime)) return 'Ngoại tuyến';
+    if (isNaN(lastSeenTime)) return i18n.t('chat.offline');
     
     const now = Date.now();
     const diff = Math.floor((now - lastSeenTime) / 1000); // seconds
     
-    if (diff < 60) return 'Vừa mới truy cập';
+    if (diff < 60) return i18n.t('chat.just_now');
     
     if (diff < 3600) {
       const mins = Math.floor(diff / 60);
-      return `Hoạt động ${mins} phút trước`;
+      return i18n.t('chat.minutes_ago', { count: mins });
     }
     
     if (diff < 86400) {
       const hours = Math.floor(diff / 3600);
-      return `Hoạt động ${hours} giờ trước`;
+      return i18n.t('chat.hours_ago', { count: hours });
     }
     
     const days = Math.floor(diff / 86400);
     if (days < 7) {
-      return `Hoạt động ${days} ngày trước`;
+      return i18n.t('chat.days_ago', { count: days });
     }
     
     // For more than a week, show the date
-    return `Hoạt động từ ${lastSeenDate.toLocaleDateString()}`;
+    return i18n.t('chat.active_since', { date: lastSeenDate.toLocaleDateString() });
   } catch (e) {
-    return 'Ngoại tuyến';
+    return i18n.t('chat.offline');
   }
 };
+
 /**
  * Formats the date for the message list separators.
  * @param {number|string|Date} timestamp
@@ -60,9 +63,9 @@ export const formatMessageDateSeparator = (timestamp) => {
     const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     
     if (msgDate.getTime() === today.getTime()) {
-      return 'HÔM NAY';
+      return i18n.t('common.today').toUpperCase();
     } else if (msgDate.getTime() === yesterday.getTime()) {
-      return 'HÔM QUA';
+      return i18n.t('common.yesterday').toUpperCase();
     } else {
       const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
       return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
@@ -71,3 +74,4 @@ export const formatMessageDateSeparator = (timestamp) => {
     return '';
   }
 };
+

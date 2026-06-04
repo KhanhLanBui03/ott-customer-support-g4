@@ -22,6 +22,8 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { useRouter } from 'expo-router';
 import { notificationApi } from '../../src/api/userApi';
 import CONFIG from '../../src/config';
+import { useTranslation } from 'react-i18next';
+import { translateNotificationMessage, translateNotificationTitle } from '../../src/utils/notificationMessageTranslator';
 
 
 const formatDate = (date) => {
@@ -42,6 +44,7 @@ const formatFullDate = (date) => {
 };
 
 const NotificationsScreen = () => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const dispatch = useDispatch();
 
@@ -110,12 +113,12 @@ const NotificationsScreen = () => {
   const handleDeleteSelected = () => {
     if (selectedIds.length === 0) return;
     Alert.alert(
-      'Xóa thông báo',
-      `Bạn có chắc chắn muốn xóa ${selectedIds.length} thông báo đã chọn?`,
+      t('notifications.delete_title'),
+      t('notifications.delete_confirm_desc', { count: selectedIds.length }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Xóa', 
+          text: t('common.delete'), 
           style: 'destructive',
           onPress: async () => {
             try {
@@ -132,12 +135,12 @@ const NotificationsScreen = () => {
                 dispatch(removeNotification(id));
               }
 
-              Alert.alert('Thành công', 'Đã xóa các thông báo đã chọn.');
+              Alert.alert(t('common.success'), t('notifications.delete_success'));
               onRefresh();
               handleCancelSelection();
             } catch (err) {
               console.warn(err);
-              Alert.alert('Lỗi', 'Không thể xóa các thông báo lúc này.');
+              Alert.alert(t('common.error'), t('notifications.delete_failed'));
             }
           }
         }
@@ -147,12 +150,12 @@ const NotificationsScreen = () => {
 
   const handleDeleteAll = () => {
     Alert.alert(
-      'Xóa tất cả thông báo',
-      'Bạn có chắc chắn muốn xóa TOÀN BỘ thông báo?',
+      t('notifications.delete_all_title'),
+      t('notifications.delete_all_desc'),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Xóa tất cả', 
+          text: t('notifications.opt_delete_all'), 
           style: 'destructive',
           onPress: async () => {
             try {
@@ -163,13 +166,13 @@ const NotificationsScreen = () => {
                 notifications.forEach(n => {
                   dispatch(removeNotification(n.id || n.notificationId));
                 });
-                Alert.alert('Thành công', 'Đã xóa toàn bộ thông báo.');
+                Alert.alert(t('common.success'), t('notifications.delete_all_success'));
                 onRefresh();
                 handleCancelSelection();
               }
             } catch (err) {
               console.warn(err);
-              Alert.alert('Lỗi', 'Không thể xóa thông báo lúc này.');
+              Alert.alert(t('common.error'), t('notifications.delete_failed'));
             }
           }
         }
@@ -183,7 +186,7 @@ const NotificationsScreen = () => {
       if (myId) {
         await notificationApi.markAllAsRead(myId);
         dispatch(fetchNotifications(myId));
-        Alert.alert('Thành công', 'Đã đánh dấu đọc tất cả thông báo.');
+        Alert.alert(t('common.success'), t('notifications.mark_all_read_success'));
       }
     } catch (e) {
       console.warn(e);
@@ -192,13 +195,13 @@ const NotificationsScreen = () => {
 
   const showThreeDotMenu = () => {
     Alert.alert(
-      'Tùy chọn thông báo',
-      'Chọn hành động bạn muốn thực hiện:',
+      t('notifications.options_title'),
+      t('notifications.options_desc'),
       [
-        { text: 'Chọn nhiều để xóa', onPress: () => setIsSelectionMode(true) },
-        { text: 'Đánh dấu đọc tất cả', onPress: handleMarkAllAsRead },
-        { text: 'Xóa toàn bộ thông báo', style: 'destructive', onPress: handleDeleteAll },
-        { text: 'Đóng', style: 'cancel' }
+        { text: t('notifications.opt_select_multiple'), onPress: () => setIsSelectionMode(true) },
+        { text: t('notifications.opt_mark_all_read'), onPress: handleMarkAllAsRead },
+        { text: t('notifications.opt_delete_all'), style: 'destructive', onPress: handleDeleteAll },
+        { text: t('notifications.opt_close'), style: 'cancel' }
       ]
     );
   };
@@ -215,32 +218,32 @@ const NotificationsScreen = () => {
   const handleAcceptFriendRequest = async (senderId, notificationId) => {
     try {
       await friendApi.acceptFriendRequest(senderId);
-      Alert.alert('Thành công', 'Bạn và người ấy đã trở thành bạn bè!');
+      Alert.alert(t('common.success'), t('notifications.friend_accept_success'));
       dispatch(markAsRead(notificationId));
       onRefresh(); 
       DeviceEventEmitter.emit('friendship_changed');
     } catch (err) {
-      Alert.alert('Lỗi', 'Không thể chấp nhận lời mời lúc này.');
+      Alert.alert(t('common.error'), t('notifications.accept_friend_failed'));
     }
   };
 
   const handleRejectFriendRequest = async (senderId, notificationId, senderName) => {
     Alert.alert(
-      'Xác nhận',
-      `Bạn có chắc chắn muốn từ chối lời mời kết bạn từ ${senderName || 'người này'}?`,
+      t('notifications.confirm_title'),
+      t('notifications.friend_reject_confirm', { name: senderName || t('notifications.someone') }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { 
-          text: 'Từ chối', 
+          text: t('notifications.decline_group'), 
           style: 'destructive',
           onPress: async () => {
             try {
               await friendApi.rejectFriendRequest(senderId);
-              Alert.alert('Thông báo', `Bạn đã từ chối lời mời kết bạn từ ${senderName || 'người này'}.`, [
+              Alert.alert(t('notifications.title'), t('notifications.friend_reject_notif', { name: senderName || t('notifications.someone') }), [
                 { text: 'OK', onPress: () => dispatch(removeNotification(notificationId)) }
               ]);
             } catch (err) {
-              Alert.alert('Lỗi', 'Không thể từ chối lời mời lúc này.');
+              Alert.alert(t('common.error'), t('notifications.reject_friend_failed'));
             }
           }
         }
@@ -251,17 +254,17 @@ const NotificationsScreen = () => {
   const handleAcceptGroupInvite = async (invitationId, notificationId) => {
     try {
       await conversationApi.acceptInvitation(invitationId);
-      Alert.alert('Thành công', 'Bạn đã tham gia nhóm!');
+      Alert.alert(t('common.success'), t('notifications.group_accept_success'));
       dispatch(markAsRead(notificationId));
       onRefresh();
     } catch (err) {
       const errorMessage = err.response?.data?.message || '';
       if (errorMessage === 'Bạn đã là thành viên của nhóm này') {
-        Alert.alert('Thông báo', 'Bạn đã tham gia vào nhóm rồi.', [
+        Alert.alert(t('notifications.title'), t('notifications.group_already_joined'), [
           { text: 'OK', onPress: () => dispatch(removeNotification(notificationId)) }
         ]);
       } else {
-        Alert.alert('Lỗi', 'Không thể tham gia nhóm lúc này.');
+        Alert.alert(t('common.error'), t('notifications.join_group_failed'));
       }
     }
   };
@@ -269,11 +272,11 @@ const NotificationsScreen = () => {
   const handleRejectGroupInvite = async (invitationId, notificationId) => {
     try {
       await conversationApi.rejectInvitation(invitationId);
-      Alert.alert('Thông báo', 'Đã từ chối lời mời vào nhóm.');
+      Alert.alert(t('notifications.title'), t('notifications.group_reject_success'));
       dispatch(removeNotification(notificationId));
       onRefresh();
     } catch (err) {
-      Alert.alert('Lỗi', 'Không thể từ chối lời mời lúc này.');
+      Alert.alert(t('common.error'), t('notifications.reject_friend_failed'));
     }
   };
 
@@ -324,12 +327,12 @@ const NotificationsScreen = () => {
 
           <View style={styles.contentContainer}>
             <View style={styles.headerRow}>
-              <Text style={[styles.title, { color: colors.textMuted }, isUnread && [styles.unreadText, { color: colors.foreground }]]}>{item.title || 'Thông báo'}</Text>
+              <Text style={[styles.title, { color: colors.textMuted }, isUnread && [styles.unreadText, { color: colors.foreground }]]}>{translateNotificationTitle(item.title, t) || t('notifications.title')}</Text>
               <Text style={[styles.time, { color: colors.textSubtle }]}>{formatDate(date)}</Text>
             </View>
 
             <Text style={[styles.message, { color: colors.textMuted }]}>
-              <Text style={[styles.boldText, { color: colors.foreground }]}>{item.message}</Text>
+              <Text style={[styles.boldText, { color: colors.foreground }]}>{translateNotificationMessage(item.message, t)}</Text>
               {item.subMessage ? ` ${item.subMessage}` : ''}
             </Text>
             
@@ -341,13 +344,13 @@ const NotificationsScreen = () => {
                   style={[styles.acceptButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
                   onPress={() => handleAcceptFriendRequest(item.senderId, itemId)}
                 >
-                  <Text style={styles.acceptButtonText}>CHẤP NHẬN</Text>
+                  <Text style={styles.acceptButtonText}>{t('notifications.accept')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.rejectButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => handleRejectFriendRequest(item.senderId, itemId, item.fullName)}
                 >
-                  <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>HỦY</Text>
+                  <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>{t('notifications.decline')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -358,13 +361,13 @@ const NotificationsScreen = () => {
                   style={[styles.acceptButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
                   onPress={() => handleAcceptGroupInvite(item.invitationId || item.id, itemId)}
                 >
-                  <Text style={styles.acceptButtonText}>THAM GIA</Text>
+                  <Text style={styles.acceptButtonText}>{t('notifications.join')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.rejectButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => handleRejectGroupInvite(item.invitationId || item.id, itemId)}
                 >
-                  <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>TỪ CHỐI</Text>
+                  <Text style={[styles.rejectButtonText, { color: colors.textMuted }]}>{t('notifications.decline_group')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -402,7 +405,7 @@ const NotificationsScreen = () => {
                 <MaterialIcons name="close" size={24} color={colors.foreground} />
               </TouchableOpacity>
               <Text style={[styles.headerTitle, { fontSize: 20, color: colors.foreground }]}>
-                Đã chọn {selectedIds.length}
+                {t('notifications.selected_count', { count: selectedIds.length })}
               </Text>
             </View>
             <TouchableOpacity 
@@ -415,7 +418,7 @@ const NotificationsScreen = () => {
           </>
         ) : (
           <>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Thông báo</Text>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('notifications.title')}</Text>
             <TouchableOpacity style={{ padding: 5 }} onPress={showThreeDotMenu}>
               <MaterialIcons name="more-vert" size={24} color={colors.foreground} />
             </TouchableOpacity>
@@ -441,7 +444,7 @@ const NotificationsScreen = () => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <MaterialIcons name="notifications-none" size={64} color="#cbd5e1" />
-              <Text style={styles.emptyText}>Chưa có thông báo nào</Text>
+              <Text style={styles.emptyText}>{t('notifications.no_notifications')}</Text>
             </View>
           }
         />

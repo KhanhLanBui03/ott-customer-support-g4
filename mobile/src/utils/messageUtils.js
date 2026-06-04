@@ -1,3 +1,6 @@
+import i18n from '../locales/i18n';
+import { translateSystemMessage } from './systemMessageTranslator';
+
 export const isVoiceMessage = (message) => {
   if (!message) return false;
   if (message.type === 'VOICE') return true;
@@ -8,20 +11,27 @@ export const isVoiceMessage = (message) => {
          content.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i);
 };
 
-export const getPreviewText = (lastMessage) => {
+export const getPreviewText = (lastMessage, senderId = null) => {
   const raw = String(typeof lastMessage === 'string' ? lastMessage : (lastMessage?.content || '')).trim();
-  if (!raw) return 'Chưa có tin nhắn';
+  if (!raw) return i18n.t('sidebar.start_conversation');
+
+  const actualSenderId = senderId || lastMessage?.senderId || lastMessage?.sender || lastMessage?.lastMessageSenderId;
+
+  // Handle system messages
+  if (actualSenderId === 'SYSTEM') {
+    return translateSystemMessage(raw, i18n.t);
+  }
 
   // Handle recalled messages
-  if (raw === '[Tin nhắn đã bị thu hồi]') return raw;
+  if (raw === '[Tin nhắn đã bị thu hồi]') return i18n.t('sidebar.recalled');
 
-  if (isVoiceMessage(lastMessage)) return 'Tin nhắn thoại';
+  if (isVoiceMessage(lastMessage)) return i18n.t('sidebar.voice_message');
 
   // Handle call JSON
   if (raw.startsWith('{') && raw.includes('callType')) {
     try {
       const data = JSON.parse(raw);
-      return data.callType === 'video' ? '[Cuộc gọi video]' : '[Cuộc gọi thoại]';
+      return data.callType === 'video' ? i18n.t('sidebar.video_call') : i18n.t('sidebar.voice_call');
     } catch (e) {
       // Fallback to raw if parsing fails
     }
@@ -31,22 +41,29 @@ export const getPreviewText = (lastMessage) => {
 
   // Handle URLs
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    if (isVoiceMessage(raw)) return 'Tin nhắn thoại';
+    if (isVoiceMessage(raw)) return i18n.t('sidebar.voice_message');
     const lowerRaw = raw.toLowerCase();
     if (type === 'STICKER' || lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com')) {
-      return '[Sticker]';
+      return i18n.t('sidebar.sticker');
     }
     if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
-      return '[GIF]';
+      return i18n.t('sidebar.gif');
     }
     return `🔗 ${raw}`;
   }
 
-  if (type === 'STICKER') return '[Sticker]';
+  if (type === 'STICKER') return i18n.t('sidebar.sticker');
 
   // Handle explicit tags
   const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại', 'sticker', 'gif', 'hình ảnh'];
   if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
+    const lower = raw.toLowerCase();
+    if (lower.includes('thoại')) return i18n.t('sidebar.voice_message');
+    if (lower.includes('video')) return i18n.t('sidebar.video_call');
+    if (lower.includes('đính kèm') || lower.includes('file') || lower.includes('attachment')) return i18n.t('sidebar.attachment');
+    if (lower.includes('sticker') || lower.includes('nhãn dán')) return i18n.t('sidebar.sticker');
+    if (lower.includes('gif')) return i18n.t('sidebar.gif');
+    if (lower.includes('hình ảnh') || lower.includes('image')) return i18n.t('chat.image_bracket');
     return raw;
   }
 
@@ -66,24 +83,36 @@ export const getCallLogText = (messageContent, isOwn) => {
     const durationStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
     if (isOngoing) {
-      return cType === 'video' ? 'Cuộc gọi video đang diễn ra' : 'Cuộc gọi thoại đang diễn ra';
+      return cType === 'video' 
+        ? i18n.t('chat.video_call_ongoing') 
+        : i18n.t('chat.voice_call_ongoing');
     }
 
     if (isOwn) {
       if (status === 'SUCCESS') {
-        return cType === 'video' ? `Cuộc gọi video đi (${durationStr})` : `Cuộc gọi thoại đi (${durationStr})`;
+        return cType === 'video' 
+          ? `${i18n.t('chat.outgoing_video_call')} (${durationStr})` 
+          : `${i18n.t('chat.outgoing_voice_call')} (${durationStr})`;
       } else {
-        const statusText = status === 'REJECTED' ? 'Bị từ chối' : 'Không trả lời';
-        return cType === 'video' ? `Cuộc gọi video đi (${statusText})` : `Cuộc gọi thoại đi (${statusText})`;
+        const statusKey = status === 'REJECTED' ? 'chat.rejected' : 'chat.no_answer';
+        const statusText = i18n.t(statusKey);
+        return cType === 'video' 
+          ? `${i18n.t('chat.outgoing_video_call')} (${statusText})` 
+          : `${i18n.t('chat.outgoing_voice_call')} (${statusText})`;
       }
     } else {
       if (status === 'SUCCESS') {
-        return cType === 'video' ? `Cuộc gọi video đến (${durationStr})` : `Cuộc gọi thoại đến (${durationStr})`;
+        return cType === 'video' 
+          ? `${i18n.t('chat.incoming_video_call')} (${durationStr})` 
+          : `${i18n.t('chat.incoming_voice_call')} (${durationStr})`;
       } else {
-        return cType === 'video' ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ';
+        return cType === 'video' 
+          ? i18n.t('chat.missed_video_call') 
+          : i18n.t('chat.missed_voice_call');
       }
     }
   } catch (e) {
-    return 'Cuộc gọi';
+    return i18n.t('chat.video_call_ongoing');
   }
 };
+

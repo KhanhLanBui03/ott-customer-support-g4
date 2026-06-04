@@ -29,6 +29,7 @@ import CONFIG from '../config';
 import { Audio } from 'expo-av';
 import PermissionModal from './common/PermissionModal';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 
 
@@ -55,9 +56,7 @@ const stickerSets = [
 ];
 
 const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingChange, conversationType, onOpenPoll, members = [] }, ref) => {
-
-
-
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const [message, setMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -269,10 +268,10 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             style={[styles.emojiSearchInput, { color: colors.foreground }]}
             placeholder={
               activeTab === 'emoji'
-                ? "Tìm kiếm emoji..."
+                ? t('chat.search_emoji_placeholder')
                 : activeTab === 'sticker'
-                  ? "Tìm kiếm sticker..."
-                  : "Tìm kiếm GIF từ Tenor..."
+                  ? t('chat.search_placeholder', { type: 'sticker' })
+                  : t('chat.search_placeholder', { type: 'GIF' })
             }
             placeholderTextColor={colors.textSubtle}
             value={emojiSearchTerm}
@@ -311,7 +310,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             ) : stickers.length === 0 ? (
               <View style={styles.panelLoadingContainer}>
                 <Text style={{ color: colors.textSubtle, fontSize: 13 }}>
-                  {stickersLoading ? 'Đang tìm kiếm...' : 'Không tìm thấy sticker nào'}
+                  {stickersLoading ? t('chat.searching') : t('chat.no_stickers_found')}
                 </Text>
               </View>
             ) : (
@@ -337,7 +336,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             ) : gifs.length === 0 ? (
               <View style={styles.panelLoadingContainer}>
                 <Text style={{ color: colors.textSubtle, fontSize: 13 }}>
-                  {gifsLoading ? 'Đang tìm kiếm...' : 'Không tìm thấy GIF nào'}
+                  {gifsLoading ? t('chat.searching') : t('chat.no_gifs_found')}
                 </Text>
               </View>
             ) : (
@@ -632,7 +631,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
       if (status === 'granted') return true;
 
       if (status === 'denied' && !canAskAgain) {
-        Alert.alert('Quyền bị từ chối', 'Bạn đã từ chối quyền này trước đó. Vui lòng vào Cài đặt để cấp quyền thủ công.');
+        Alert.alert(t('chat.permission_denied_title'), t('chat.permission_denied_desc'));
         return false;
       }
     }
@@ -701,7 +700,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
           }
         } catch (uploadErr) {
           console.error('[Camera] Upload failed', uploadErr);
-          Alert.alert('Lỗi', 'Không thể tải ảnh từ camera lên. Vui lòng thử lại.');
+          Alert.alert(t('common.error'), t('chat.camera_upload_error'));
         }
       } else {
         console.log('[Camera] Operation cancelled by user');
@@ -795,17 +794,17 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
           dispatch(clearReplyingTo());
 
           if (failCount > 0) {
-            Alert.alert('Thông báo', `Đã gửi ${uploadedUrls.length} ảnh. Có ${failCount} ảnh bị lỗi không gửi được.`);
+            Alert.alert(t('notifications.title'), t('chat.image_send_status', { successCount: uploadedUrls.length, failCount }));
           }
         } else if (failCount > 0) {
-          Alert.alert('Lỗi', 'Không thể tải ảnh lên. Vui lòng kiểm tra kết nối mạng.');
+          Alert.alert(t('common.error'), t('chat.image_upload_error'));
         }
       } else {
         console.log('[Gallery] Operation cancelled by user');
       }
     } catch (error) {
       console.error('[Gallery] pickMedia error:', error);
-      Alert.alert('Lỗi', 'Không thể chọn hình ảnh. Vui lòng thử lại.');
+      Alert.alert(t('common.error'), t('chat.image_pick_error'));
     } finally {
       console.log('[Gallery] Resetting states in finally');
       setIsUploading(false);
@@ -898,17 +897,17 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
           onSendMessage('', replyingTo?.messageId, 'FILE', uploadedUrls);
           dispatch(clearReplyingTo());
           if (failCount > 0) {
-            Alert.alert('Thông báo', `Đã gửi ${uploadedUrls.length} tệp. Có ${failCount} tệp bị lỗi.`);
+            Alert.alert(t('notifications.title'), t('chat.file_send_status', { successCount: uploadedUrls.length, failCount }));
           }
         } else if (failCount > 0) {
-          Alert.alert('Lỗi', 'Không thể tải tệp lên. Vui lòng thử lại.');
+          Alert.alert(t('common.error'), t('chat.file_upload_error'));
         }
       } else {
         console.log('[File] Operation cancelled by user');
       }
     } catch (error) {
       console.error('[File] pickDocument error:', error);
-      Alert.alert('Lỗi', 'Không thể chọn tài liệu. Vui lòng thử lại.');
+      Alert.alert(t('common.error'), t('chat.file_pick_error'));
     } finally {
       console.log('[File] Resetting states in finally');
       setIsUploading(false);
@@ -962,15 +961,15 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
     const isVoiceMsg = isVoice || (displayText && (displayText.includes('chat-media/') || displayText.match(/\.(webm|m4a|mp3|wav|ogg|opus)(\?|$)/i)));
 
     if (isVoiceMsg) {
-      displayText = 'Tin nhắn thoại';
+      displayText = t('chat.voice_message_title');
     } else if (!displayText) {
-      if (isImage) displayText = '[Hình ảnh]';
+      if (isImage) displayText = t('chat.image_bracket');
       else if (isVideo) displayText = '[Video]';
-      else if (isVoice) displayText = '[Tin nhắn thoại]';
+      else if (isVoice) displayText = t('chat.voice_bracket');
       else if (isFile) {
         const fileName = replyingTo.mediaUrls?.[0]?.split('/').pop().split('?')[0].replace(/^[0-9a-f-]{36}_/, '');
-        displayText = fileName ? decodeURIComponent(fileName) : '[Tệp tin]';
-      } else displayText = '[Tin nhắn]';
+        displayText = fileName ? decodeURIComponent(fileName) : t('chat.file_bracket');
+      } else displayText = t('chat.message_bracket');
     }
 
     return (
@@ -979,8 +978,8 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         <View style={styles.replyPreviewContent}>
           <Text style={[styles.replyPreviewSender, { color: colors.foreground }]}>
 
-            Trả lời {String(replyingTo.senderId) === String(user?.userId) || String(replyingTo.senderId) === String(user?.id)
-              ? 'chính mình'
+            {t('chat.reply_to_prefix')} {String(replyingTo.senderId) === String(user?.userId) || String(replyingTo.senderId) === String(user?.id)
+              ? t('chat.reply_to_self')
               : replyingTo.senderName}
           </Text>
           <Text style={[styles.replyPreviewText, { color: colors.textMuted }]} numberOfLines={1}>
@@ -1065,12 +1064,12 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                 <View style={[styles.mentionList, { backgroundColor: colors.surface100, borderColor: colors.border, left: isExpanded ? -10 : -110 }]}>
 
                   <View style={[styles.mentionHeader, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.mentionHeaderText, { color: colors.textMuted }]}>NHẮC TÊN THÀNH VIÊN</Text>
+                    <Text style={[styles.mentionHeaderText, { color: colors.textMuted }]}>{t('chat.mention_members_header')}</Text>
                   </View>
 
                   <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="always">
                     {/* Option @All - Báo cho cả nhóm */}
-                    {(mentionQuery === '' || 'tất cả'.includes(mentionQuery) || 'all'.includes(mentionQuery)) && (
+                    {(mentionQuery === '' || 'tất cả'.includes(mentionQuery) || 'all'.includes(mentionQuery) || t('chat.mention_all').toLowerCase().includes(mentionQuery.toLowerCase())) && (
                       <TouchableOpacity
                         style={[styles.mentionItem, styles.mentionItemAll, { borderBottomColor: colors.border, backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)' }]}
                         onPress={() => handleSelectMention({ fullName: 'All' })}
@@ -1081,7 +1080,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                           </View>
                         </View>
                         <View style={styles.mentionTextContent}>
-                          <Text style={[styles.mentionName, { color: colors.foreground }]}>Báo cho cả nhóm</Text>
+                          <Text style={[styles.mentionName, { color: colors.foreground }]}>{t('chat.mention_all')}</Text>
                           <Text style={[styles.mentionSubName, { color: colors.primary }]}>@All</Text>
                         </View>
                       </TouchableOpacity>
@@ -1118,7 +1117,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
               }}>
                 <TextInput
                   style={[styles.input, { backgroundColor: 'transparent', color: colors.foreground, flex: 1 }]}
-                  placeholder="Type a message..."
+                  placeholder={t('chat.input_placeholder', { name: '' })}
                   placeholderTextColor={colors.textSubtle}
                   onChangeText={handleChange}
                   onSelectionChange={(event) => setCursorPosition(event.nativeEvent.selection.start)}
@@ -1209,7 +1208,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             </View>
             <View style={styles.recordingActions}>
               <TouchableOpacity style={styles.cancelVoiceBtn} onPress={cancelRecording}>
-                <Text style={styles.cancelVoiceText}>Hủy</Text>
+                <Text style={styles.cancelVoiceText}>{t('chat.cancel_voice')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.sendVoiceBtn, { backgroundColor: colors.primary }]} onPress={stopRecording}>
                 <MaterialIcons name="send" size={20} color="#fff" />
@@ -1238,7 +1237,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             onPress={() => setShowAttachMenu(false)}
           >
             <View style={[styles.menuContainer, { backgroundColor: isDark ? colors.surface200 : '#fff' }]}>
-              <Text style={[styles.menuTitle, { color: colors.foreground }]}>Gửi phương tiện</Text>
+              <Text style={[styles.menuTitle, { color: colors.foreground }]}>{t('chat.send_media_title')}</Text>
               <View style={styles.menuOptions}>
                 <TouchableOpacity
                   style={styles.menuOption}
@@ -1250,7 +1249,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   <View style={[styles.menuIconBg, { backgroundColor: isDark ? colors.surface300 : '#e0e7ff' }]}>
                     <MaterialIcons name="image" size={28} color="#4f46e5" />
                   </View>
-                  <Text style={[styles.menuOptionText, { color: colors.foreground }]}>Hình ảnh</Text>
+                  <Text style={[styles.menuOptionText, { color: colors.foreground }]}>{t('chat.send_image')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1263,7 +1262,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   <View style={[styles.menuIconBg, { backgroundColor: isDark ? colors.surface300 : '#fef3c7' }]}>
                     <MaterialIcons name="description" size={28} color="#d97706" />
                   </View>
-                  <Text style={[styles.menuOptionText, { color: colors.foreground }]}>Tài liệu</Text>
+                  <Text style={[styles.menuOptionText, { color: colors.foreground }]}>{t('chat.send_document')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -340,8 +340,9 @@ const HomeScreen = () => {
     const isUnread = item.isUnread === true;
     const unreadCount = item.unreadCount || 0;
     const unreadText = unreadCount > 9 ? '9+' : String(unreadCount);
-    const isOwnLastMessage = String(item.lastMessageSenderId || item.lastSenderId || '') === currentUserId;
-    const lastMessagePreview = getPreviewText(item.lastMessage);
+    const lastSenderId = String(item.lastMessageSenderId || item.lastSenderId || '');
+    const isOwnLastMessage = lastSenderId === currentUserId;
+    const lastMessagePreview = getPreviewText(item.lastMessage, lastSenderId);
     
     // Kiểm tra mention
     const myName = currentUser?.fullName || currentUser?.name || '';
@@ -351,7 +352,6 @@ const HomeScreen = () => {
     );
 
     // Lấy tên người gửi thực tế từ danh sách thành viên
-    const lastSenderId = String(item.lastMessageSenderId || item.lastSenderId || '');
     const lastSender = members.find(m => String(m.userId || m.id) === lastSenderId);
     
     let senderName = t('chat.member');
@@ -361,9 +361,14 @@ const HomeScreen = () => {
       senderName = item.lastMessageSenderName || item.lastSenderName;
     }
 
-    const previewText = isMentioned 
-      ? `${senderName}: ${lastMessagePreview}`
-      : (isOwnLastMessage ? `${t('chat.you')} ${lastMessagePreview}` : (item.type === 'GROUP' ? `${senderName}: ${lastMessagePreview}` : lastMessagePreview));
+    const isSystemMessage = lastSenderId === 'SYSTEM';
+
+    const previewText = isSystemMessage 
+      ? lastMessagePreview
+      : (isMentioned 
+          ? `${senderName}: ${lastMessagePreview}`
+          : (isOwnLastMessage ? `${t('chat.you')} ${lastMessagePreview}` : (item.type === 'GROUP' ? `${senderName}: ${lastMessagePreview}` : lastMessagePreview)));
+
 
 
 

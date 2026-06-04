@@ -17,9 +17,11 @@ import { userApi } from '../../api/userApi';
 import { conversationApi } from '../../api/chatApi';
 import { Alert } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 
 const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds = [] }) => {
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -91,10 +93,10 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
     try {
       setInvitingIds(prev => new Set(prev).add(userId));
       await conversationApi.inviteMember(conversationId, userId);
-      Alert.alert('Thành công', `Đã gửi lời mời đến ${user.fullName || 'người này'}.`);
+      Alert.alert(t('common.success', 'Thành công'), t('chat.invite_success_msg', 'Đã gửi lời mời đến {{name}}.', { name: user.fullName || t('chat.user_fallback', 'Người dùng') }));
     } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể gửi lời mời lúc này.';
-      Alert.alert('Lỗi', msg);
+      const msg = err.response?.data?.message || t('chat.invite_failed_msg', 'Không thể gửi lời mời lúc này.');
+      Alert.alert(t('common.error', 'Lỗi'), msg);
     } finally {
       // Keep it in inviting state to prevent double clicks, but maybe clear after some time
       // or just leave it until modal closes
@@ -120,7 +122,7 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
           onPress={() => handleInvite(item)}
           disabled={isInviting}
         >
-          <Text style={[styles.inviteButtonText, isInviting && { color: colors.textMuted }]}>{isInviting ? 'Đã mời' : 'Mời'}</Text>
+          <Text style={[styles.inviteButtonText, isInviting && { color: colors.textMuted }]}>{isInviting ? t('chat.invited', 'Đã mời') : t('chat.invite', 'Mời')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -140,7 +142,7 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
         <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>MỜI BẠN BÈ</Text>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('chat.invite_friends', 'MỜI BẠN BÈ')}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
@@ -153,7 +155,7 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
               <MaterialIcons name="search" size={20} color={colors.textSubtle} style={styles.searchIcon} />
               <TextInput
                 style={[styles.searchInput, { color: colors.foreground }]}
-                placeholder="Tìm theo SĐT..."
+                placeholder={t('chat.search_by_phone', 'Tìm theo SĐT...')}
                 placeholderTextColor={colors.textSubtle}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -185,8 +187,8 @@ const InviteMemberModal = ({ visible, onClose, conversationId, existingMemberIds
                   <MaterialIcons name="person-search" size={48} color={colors.textSubtle} />
                   <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                     {searchQuery.length > 0
-                      ? 'Không tìm thấy người dùng này'
-                      : 'Bạn chưa có bạn bè nào để mời'}
+                      ? t('chat.user_not_found', 'Không tìm thấy người dùng này')
+                      : t('chat.no_friends_to_invite', 'Bạn chưa có bạn bè nào để mời')}
                   </Text>
                 </View>
 

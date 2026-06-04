@@ -14,19 +14,19 @@ import { updateUser } from '../../src/store/authSlice';
 const LANGUAGES = [
   { code: "vie_Latn", label: "Tiếng Việt", flag: "🇻🇳", i18nCode: 'vi' },
   { code: "eng_Latn", label: "English", flag: "🇬🇧", i18nCode: 'en' },
-  { code: "zho_Hans", label: "中文", flag: "🇨🇳", i18nCode: 'en' }, // Fallback to en for now if no translation
-  { code: "jpn_Jpan", label: "日本語", flag: "🇯🇵", i18nCode: 'en' },
-  { code: "kor_Hang", label: "한국어", flag: "🇰🇷", i18nCode: 'en' },
-  { code: "fra_Latn", label: "Français", flag: "🇫🇷", i18nCode: 'en' },
+  { code: "zho_Hans", label: "中文", flag: "🇨🇳", i18nCode: 'zh' },
+  { code: "jpn_Jpan", label: "日本語", flag: "🇯🇵", i18nCode: 'ja' },
+  { code: "kor_Hang", label: "한국어", flag: "🇰🇷", i18nCode: 'ko' },
+  { code: "fra_Latn", label: "Français", flag: "🇫🇷", i18nCode: 'fr' },
 ];
 
 const LANGUAGE_MAP = {
   'vie_Latn': 'vi',
   'eng_Latn': 'en',
-  'zho_Hans': 'en',
-  'jpn_Jpan': 'en',
-  'kor_Hang': 'en',
-  'fra_Latn': 'en',
+  'zho_Hans': 'zh',
+  'jpn_Jpan': 'ja',
+  'kor_Hang': 'ko',
+  'fra_Latn': 'fr',
 };
 
 const LanguageSettingsScreen = () => {
