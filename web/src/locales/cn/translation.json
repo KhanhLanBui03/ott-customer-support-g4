@@ -654,6 +654,20 @@
       "member_approval_enabled": "{{name}} 开启了新成员审核模式。",
       "member_approval_disabled": "{{name}} 关闭了新成员审核模式。",
       "closed_vote": "{{name}} 结束了投票：{{question}}"
+    },
+    "welcome": {
+      "title_prefix": "欢迎，",
+      "default_user": "朋友",
+      "title_suffix": " 来到 ChatApp！",
+      "subtitle": "为您量身定制，探索精彩功能",
+      "create_group": "创建新群组",
+      "add_friend": "添加好友",
+      "slide1_title": "无缝体验",
+      "slide1_desc": "与家人和朋友建立联系并进行聊天，专为您的电脑优化。",
+      "slide2_title": "发送大文件？",
+      "slide2_desc": "探索支持工作和无限分享大文件的实用工具。",
+      "slide3_title": "安全与隐私",
+      "slide3_desc": "先进的加密和安全系统始终保护着您的消息安全。"
     }
   }
 }

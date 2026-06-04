@@ -1,39 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Users, UserPlus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import welcome1 from '../../assets/welcome_v2_1.png';
 import welcome2 from '../../assets/welcome_v2_2.png';
 import welcome3 from '../../assets/welcome_v2_3.png';
 
-const slides = [
-  {
-    id: 1,
-    title: "Trải nghiệm xuyên suốt",
-    description: "Kết nối và trò chuyện cùng người thân, bạn bè được tối ưu hóa cho máy tính của bạn.",
-    image: welcome1,
-    accent: "from-indigo-600/30 to-blue-600/30",
-    glow: "bg-indigo-500/20"
-  },
-  {
-    id: 2,
-    title: "Gửi File nặng?",
-    description: "Khám phá những tiện ích hỗ trợ làm việc và chia sẻ file dung lượng lớn không giới hạn.",
-    image: welcome2,
-    accent: "from-blue-600/30 to-cyan-600/30",
-    glow: "bg-blue-500/20"
-  },
-  {
-    id: 3,
-    title: "Bảo mật & Riêng tư",
-    description: "Tin nhắn của bạn luôn được bảo vệ an toàn với hệ thống mã hóa và bảo mật tiên tiến.",
-    image: welcome3,
-    accent: "from-purple-600/30 to-pink-600/30",
-    glow: "bg-purple-500/20"
-  }
-];
-
 const WelcomeCarousel = ({ user, onAction }) => {
+  const { t } = useTranslation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const slides = [
+    {
+      id: 1,
+      title: t('welcome.slide1_title'),
+      description: t('welcome.slide1_desc'),
+      image: welcome1,
+      accent: "from-indigo-600/30 to-blue-600/30",
+      glow: "bg-indigo-500/20"
+    },
+    {
+      id: 2,
+      title: t('welcome.slide2_title'),
+      description: t('welcome.slide2_desc'),
+      image: welcome2,
+      accent: "from-blue-600/30 to-cyan-600/30",
+      glow: "bg-blue-500/20"
+    },
+    {
+      id: 3,
+      title: t('welcome.slide3_title'),
+      description: t('welcome.slide3_desc'),
+      image: welcome3,
+      accent: "from-purple-600/30 to-pink-600/30",
+      glow: "bg-purple-500/20"
+    }
+  ];
 
   const nextSlide = () => {
     if (isTransitioning) return;
@@ -64,9 +66,9 @@ const WelcomeCarousel = ({ user, onAction }) => {
         {/* Header */}
         <div className="mb-6 md:mb-10 animate-slide-up">
           <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
-            Chào mừng, <span className="text-blue-600">{user?.fullName || 'bạn'}</span> đến với ChatApp!
+            {t('welcome.title_prefix')}<span className="text-blue-600">{user?.fullName || t('welcome.default_user')}</span>{t('welcome.title_suffix')}
           </h1>
-          <p className="text-foreground/40 mt-1 md:mt-2 font-medium text-sm md:text-base">Khám phá những tiện ích tuyệt vời dành riêng cho bạn</p>
+          <p className="text-foreground/40 mt-1 md:mt-2 font-medium text-sm md:text-base">{t('welcome.subtitle')}</p>
         </div>
 
         {/* Carousel Content */}
@@ -143,14 +145,14 @@ const WelcomeCarousel = ({ user, onAction }) => {
             className="flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/20 hover:-translate-y-0.5 transition-all active:scale-95 text-sm md:text-base font-bold"
           >
             <Users size={18} />
-            <span>Tạo nhóm mới</span>
+            <span>{t('welcome.create_group')}</span>
           </button>
           <button
             onClick={() => onAction('addFriend')}
             className="flex items-center space-x-2 px-4 md:px-6 py-2.5 md:py-3 bg-surface-200 border border-border rounded-xl text-foreground hover:-translate-y-0.5 transition-all active:scale-95 text-sm md:text-base font-bold"
           >
             <UserPlus size={18} />
-            <span>Thêm bạn bè</span>
+            <span>{t('welcome.add_friend')}</span>
           </button>
         </div>
       </div>

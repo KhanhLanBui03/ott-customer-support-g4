@@ -705,6 +705,20 @@
       "member_approval_enabled": "{{name}} enabled new member approval.",
       "member_approval_disabled": "{{name}} disabled new member approval.",
       "closed_vote": "{{name}} closed the vote: {{question}}"
+    },
+    "welcome": {
+      "title_prefix": "Welcome, ",
+      "default_user": "friend",
+      "title_suffix": " to ChatApp!",
+      "subtitle": "Explore great utilities customized for you",
+      "create_group": "Create new group",
+      "add_friend": "Add friends",
+      "slide1_title": "Seamless Experience",
+      "slide1_desc": "Connect and chat with family and friends, optimized for your computer.",
+      "slide2_title": "Send large files?",
+      "slide2_desc": "Explore utilities that support work and unlimited sharing of large files.",
+      "slide3_title": "Security & Privacy",
+      "slide3_desc": "Your messages are always protected with advanced encryption and security systems."
     }
   }
 }

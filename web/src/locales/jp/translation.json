@@ -430,6 +430,20 @@
       "member_approval_enabled": "{{name}} が新規メンバーの承認制を有効にしました。",
       "member_approval_disabled": "{{name}} が新規メンバーの承認制を無効にしました。",
       "closed_vote": "{{name}} が投票を締め切りました：{{question}}"
+    },
+    "welcome": {
+      "title_prefix": "ようこそ、",
+      "default_user": "友だち",
+      "title_suffix": " へ！",
+      "subtitle": "あなた向けにカスタマイズされた素晴らしい機能をご覧ください",
+      "create_group": "新規グループ作成",
+      "add_friend": "友だち追加",
+      "slide1_title": "シームレスな体験",
+      "slide1_desc": "家族や友人とつながり、チャットを楽しみましょう。パソコン向けに最適化されています。",
+      "slide2_title": "大容量ファイルの送信？",
+      "slide2_desc": "仕事や無制限の大容量ファイル共有をサポートする便利な機能をご紹介します。",
+      "slide3_title": "セキュリティ＆プライバシー",
+      "slide3_desc": "高度な暗ung化とセキュリティシステムにより、メッセージは常に安全に保護されます。"
     }
   }
 }

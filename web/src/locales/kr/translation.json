@@ -654,6 +654,20 @@
       "member_approval_enabled": "{{name}} 님이 새 멤버 승인 제도를 활성화했습니다.",
       "member_approval_disabled": "{{name}} 님이 새 멤버 승인 제도를 비활성화했습니다.",
       "closed_vote": "{{name}} 님이 투표를 마감했습니다: {{question}}"
+    },
+    "welcome": {
+      "title_prefix": "",
+      "default_user": "사용자",
+      "title_suffix": "님, ChatApp에 오신 것을 환영합니다!",
+      "subtitle": "당신만을 위한 놀라운 기능들을 만나보세요",
+      "create_group": "새 그룹 만들기",
+      "add_friend": "친구 추가",
+      "slide1_title": "원활한 경험",
+      "slide1_desc": "컴퓨터에 최적화된 환경에서 가족, 친구들과 연결되어 대화해 보세요.",
+      "slide2_title": "대용량 파일 전송?",
+      "slide2_desc": "업무 지원 및 대용량 파일의 무제한 공유를 지원하는 유틸리티를 살펴보세요.",
+      "slide3_title": "보안 및 개인 정보 보호",
+      "slide3_desc": "첨단 암호화 및 보안 시스템으로 귀하의 메시지는 항상 안전하게 보호됩니다."
     }
   }
 }

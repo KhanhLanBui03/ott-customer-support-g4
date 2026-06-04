@@ -711,6 +711,20 @@
       "member_approval_enabled": "{{name}} đã bật chế độ kiểm duyệt thành viên mới.",
       "member_approval_disabled": "{{name}} đã tắt chế độ kiểm duyệt thành viên mới.",
       "closed_vote": "{{name}} đã khóa cuộc bình chọn: {{question}}"
+    },
+    "welcome": {
+      "title_prefix": "Chào mừng, ",
+      "default_user": "bạn",
+      "title_suffix": " đến với ChatApp!",
+      "subtitle": "Khám phá những tiện ích tuyệt vời dành riêng cho bạn",
+      "create_group": "Tạo nhóm mới",
+      "add_friend": "Thêm bạn bè",
+      "slide1_title": "Trải nghiệm xuyên suốt",
+      "slide1_desc": "Kết nối và trò chuyện cùng người thân, bạn bè được tối ưu hóa cho máy tính của bạn.",
+      "slide2_title": "Gửi File nặng?",
+      "slide2_desc": "Khám phá những tiện ích hỗ trợ làm việc và chia sẻ file dung lượng lớn không giới hạn.",
+      "slide3_title": "Bảo mật & Riêng tư",
+      "slide3_desc": "Tin nhắn của bạn luôn được bảo vệ an toàn với hệ thống mã hóa và bảo mật tiên tiến."
     }
   }
 }

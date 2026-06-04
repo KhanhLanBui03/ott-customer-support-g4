@@ -654,6 +654,20 @@
       "member_approval_enabled": "{{name}} a activé l'approbation des nouveaux membres.",
       "member_approval_disabled": "{{name}} a désactivé l'approbation des nouveaux membres.",
       "closed_vote": "{{name}} a clôturé le vote : {{question}}"
+    },
+    "welcome": {
+      "title_prefix": "Bienvenue, ",
+      "default_user": "ami",
+      "title_suffix": " sur ChatApp!",
+      "subtitle": "Découvrez de superbes utilitaires personnalisés pour vous",
+      "create_group": "Créer un groupe",
+      "add_friend": "Ajouter des amis",
+      "slide1_title": "Expérience fluide",
+      "slide1_desc": "Connectez-vous et discutez avec votre famille et vos amis, optimisé pour votre ordinateur.",
+      "slide2_title": "Envoyer de gros fichiers?",
+      "slide2_desc": "Découvrez des utilitaires pour travailler et partager des fichiers volumineux sans limite.",
+      "slide3_title": "Sécurité & Confidentialité",
+      "slide3_desc": "Vos messages sont toujours protégés par des systèmes avancés de cryptage et de sécurité."
     }
   }
 }
