@@ -308,7 +308,7 @@ export const getAgoraHTML = (config, callType, isCaller, isGroup, initialMemberM
       };
 
       async function doJoin() {
-
+        log("doJoin started. callType: ${callType}, channel: ${config.channel}, uid: " + numericUid);
         if (window.isAgoraStarted) return;
         window.isAgoraStarted = true;
         

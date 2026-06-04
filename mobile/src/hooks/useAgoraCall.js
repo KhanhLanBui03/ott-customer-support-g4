@@ -70,6 +70,36 @@ async function calibrateServerTime() {
     }
 }
 
+const getPermissions = async (type = 'video') => {
+    try {
+        if (Platform.OS === 'android') {
+            const audioGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+            if (audioGranted !== PermissionsAndroid.RESULTS.GRANTED) {
+                return false;
+            }
+            if (type === 'video') {
+                const cameraGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+                return cameraGranted === PermissionsAndroid.RESULTS.GRANTED;
+            }
+            return true;
+        } else if (Platform.OS === 'ios') {
+            const { status: microphoneStatus } = await requestMicrophonePermissionsAsync();
+            if (microphoneStatus !== 'granted') {
+                return false;
+            }
+            if (type === 'video') {
+                const { status: cameraStatus } = await requestCameraPermissionsAsync();
+                return cameraStatus === 'granted';
+            }
+            return true;
+        }
+        return true;
+    } catch (e) {
+        console.error('❌ [useAgoraCall] getPermissions error:', e);
+        return false;
+    }
+};
+
 export const useAgoraCall = (activeConversationId = null, activeConversation = null, isListener = true) => {
     const { t } = useTranslation();
     const user = useSelector(state => state.auth.user);
@@ -157,37 +187,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
         }
     };
 
-
-    const getPermissions = async (type = 'video') => {
-        try {
-            if (Platform.OS === 'android') {
-                const audioGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-                if (audioGranted !== PermissionsAndroid.RESULTS.GRANTED) {
-                    return false;
-                }
-                if (type === 'video') {
-                    const cameraGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
-                    return cameraGranted === PermissionsAndroid.RESULTS.GRANTED;
-                }
-                return true;
-            } else if (Platform.OS === 'ios') {
-                const { status: microphoneStatus } = await requestMicrophonePermissionsAsync();
-                if (microphoneStatus !== 'granted') {
-                    return false;
-                }
-                if (type === 'video') {
-                    const { status: cameraStatus } = await requestCameraPermissionsAsync();
-                    return cameraStatus === 'granted';
-                }
-                return true;
-            }
-            return true;
-        } catch (e) {
-            console.error('❌ [useAgoraCall] getPermissions error:', e);
-            return false;
-        }
-    };
-
+    // getPermissions is now defined outside the hook to remain static
     useEffect(() => {
         callStatusRef.current = callStatus;
     }, [callStatus]);
@@ -799,6 +799,9 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             }
 
             dispatch(setEndCallReason(null));
+            dispatch(setCallType(type));
+            dispatch(setCamOn(type === 'video'));
+            dispatch(setMicOn(true));
 
             const cid = signalData?.conversationId || activeConversationId;
             const isGroupCall = signalData?.conversationType === 'GROUP' || callState.isGroup || String(cid).includes('GROUP');
@@ -823,7 +826,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             console.error('❌ [useAgoraCall] acceptCall ERROR:', e);
             endCallRef.current?.(false);
         } finally { joiningRef.current = false; }
-    }, [activeConversationId, user, callState.isGroup]);
+    }, [activeConversationId, user, callState.isGroup, callState.callType, incomingSignal, dispatch, myFullName, t]);
 
     return {
         callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,

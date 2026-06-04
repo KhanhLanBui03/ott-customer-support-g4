@@ -403,8 +403,13 @@ else if (data.type === 'sync' || data.type === 'sync-count') {
                 onMessage={onMessage}
 
                 onPermissionRequest={(event) => {
-                  console.log('🌐 [WebView] Requesting permissions for:', event.resources);
-                  event.grant(event.resources);
+                  const resources = event.nativeEvent?.resources || event.resources;
+                  console.log('🌐 [WebView] Requesting permissions for:', resources);
+                  if (typeof event.grant === 'function') {
+                    event.grant(resources || []);
+                  } else {
+                    console.warn('⚠️ [WebView] event.grant is not a function');
+                  }
                 }}
                 onError={(e) => console.error('❌ [WebView] Error:', e.nativeEvent)}
                 onHttpError={(e) => console.error('❌ [WebView] HTTP Error:', e.nativeEvent)}
