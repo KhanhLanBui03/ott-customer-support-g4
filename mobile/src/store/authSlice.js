@@ -159,6 +159,7 @@ const initialState = {
   user: null,
   accessToken: null,
   refreshToken: null,
+  sessionId: null,
   isAuthenticated: false,
   loading: false,
   error: null,
@@ -178,16 +179,20 @@ const authSlice = createSlice({
       state.otpSent = true;
     },
     restoreState: (state, action) => {
-      const { user, accessToken, refreshToken } = action.payload;
+      const { user, accessToken, refreshToken, sessionId } = action.payload;
       state.user = user;
       state.accessToken = accessToken;
       state.refreshToken = refreshToken;
+      if (sessionId !== undefined) {
+        state.sessionId = sessionId;
+      }
       state.isAuthenticated = !!accessToken;
     },
     sessionExpired: (state) => {
       state.user = null;
       state.accessToken = null;
       state.refreshToken = null;
+      state.sessionId = null;
       state.isAuthenticated = false;
       state.error = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
     },
@@ -213,10 +218,11 @@ const authSlice = createSlice({
         // Backend bọc dữ liệu trong ApiResponse: { success, message, data: { userId, ... } }
         const responseData = action.payload.data || action.payload;
 
-        const { userId, phoneNumber, firstName, lastName, avatarUrl, accessToken, refreshToken } = responseData;
+        const { userId, phoneNumber, firstName, lastName, avatarUrl, accessToken, refreshToken, sessionId } = responseData;
         state.user = { userId, phoneNumber, firstName, lastName, avatarUrl };
         state.accessToken = accessToken;
         state.refreshToken = refreshToken;
+        state.sessionId = sessionId || null;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -255,6 +261,7 @@ const authSlice = createSlice({
           state.isAuthenticated = true;
           state.accessToken = action.payload.accessToken;
           state.refreshToken = action.payload.refreshToken;
+          state.sessionId = action.payload.sessionId || null;
           
           if (action.payload.user) {
             state.user = action.payload.user;
@@ -293,6 +300,7 @@ const authSlice = createSlice({
         state.user = null;
         state.accessToken = null;
         state.refreshToken = null;
+        state.sessionId = null;
         state.isAuthenticated = false;
         state.error = null;
       })

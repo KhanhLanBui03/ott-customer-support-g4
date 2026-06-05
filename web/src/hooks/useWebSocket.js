@@ -21,31 +21,31 @@ import { addPendingFriend, addPendingGroup, addActivity } from '../store/notific
 import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
 import { logout as logoutAction } from '../store/authSlice';
 
-// Shared state between hook instances
+// Shared state between hook instances to avoid stale closures
 let _globalSubscriptions = [];
 let _presenceSubscription = null;
 let _activeConvId = null; // Lưu trữ ID hội thoại đang mở toàn cục để các callback cũ cũng nhận được
 let _isSubscribed = false;
+let _currentSessionId = null;
+let _currentUser = null;
+let _globalConversations = [];
 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
     const { token, user, sessionId } = useSelector(state => state.auth);
     const { conversations, activeConversationId } = useSelector(state => state.chat);
-    const conversationsRef = useRef(conversations);
-    const userRef = useRef(user);
-    const sessionIdRef = useRef(sessionId);
 
     useEffect(() => {
-        conversationsRef.current = conversations;
+        _globalConversations = conversations;
     }, [conversations]);
 
     useEffect(() => {
-        userRef.current = user;
+        _currentUser = user;
         _activeConvId = activeConversationId;
     }, [user, activeConversationId]);
 
     useEffect(() => {
-        sessionIdRef.current = sessionId;
+        _currentSessionId = sessionId;
     }, [sessionId]);
 
     const handleIncomingMessage = useCallback((message) => {
@@ -53,20 +53,20 @@ export const useWebSocket = () => {
             const event = JSON.parse(message.body);
             console.log(`[STOMP] 📥 Web received: ${event.eventType}`, event);
 
-            const currentUser = userRef.current;
+            const currentUser = _currentUser;
             const currentUserId = currentUser?.userId || currentUser?.id;
 
             if (event.eventType === 'MESSAGE_SEND' || event.eventType === 'MESSAGE_NEW') {
                 const msg = event.payload;
 
                 // If we receive a message for a conversation we don't have yet (e.g. new group), fetch all
-                const existing = (conversationsRef.current || []).find(c => c.conversationId === event.conversationId);
+                const existing = (_globalConversations || []).find(c => c.conversationId === event.conversationId);
                 if (!existing) {
                     console.log(`[STOMP] Received message for unknown conversation ${event.conversationId}, fetching...`);
                     dispatch(fetchConversations());
                 }
 
-                try { console.debug('[useWebSocket] incoming MESSAGE_SEND payload', event.conversationId, msg); } catch(e){}
+                try { console.debug('[useWebSocket] incoming MESSAGE_SEND payload', event.conversationId, msg); } catch (e) { }
                 dispatch(addMessage({
                     conversationId: event.conversationId,
                     message: msg,
@@ -114,7 +114,7 @@ export const useWebSocket = () => {
                 dispatch(addPendingGroup(data));
             } else if (event.eventType === 'FRIEND_REQUEST' || event.eventType === 'FRIEND_ACCEPT' || event.eventType === 'FRIEND_DELETE' || event.eventType === 'FRIEND_BLOCK' || event.eventType === 'FRIEND_UNBLOCK' || event.eventType === 'FRIEND_REQUEST_REJECTED' || event.eventType === 'FRIEND_REQUEST_CANCELLED') {
                 const data = event.payload?.data || event.payload;
-                
+
                 // Always update friends list for any friendship event
                 if (data && data.userId) {
                     dispatch(updateFriendStatus(data));
@@ -188,7 +188,7 @@ export const useWebSocket = () => {
             } else if (event.eventType === 'CONVERSATION_UPDATE') {
                 const payload = event.payload || {};
                 const conversationId = event.conversationId || payload.conversationId || payload.id;
-                
+
                 if (conversationId) {
                     const existing = (conversationsRef.current || []).find(c => c.conversationId === conversationId);
                     if (existing) {
@@ -229,11 +229,11 @@ export const useWebSocket = () => {
             } else if (event.eventType === 'FORCE_LOGOUT') {
                 const payload = event.payload || {};
                 const newSessionId = payload.newSessionId;
-                const currentSessionId = sessionIdRef.current;
+                const currentSessionId = _currentSessionId;
                 if (newSessionId && currentSessionId && newSessionId !== currentSessionId) {
                     console.log(`[STOMP] Force logging out. Current: ${currentSessionId}, New: ${newSessionId}`);
                     dispatch(logoutAction());
-                    alert("Tài khoản của bạn hiện đang được đăng nhập ở một thiết bị/trình duyệt khác. Trình duyệt này sẽ tự động đăng xuất.");
+                    alert("Tài khoản của bạn hiện đang được đăng nhập ở một thiết bị/trình duyệt khác. Tài khoản này sẽ tự động đăng xuất.");
                     window.location.href = '/login';
                 }
             }
@@ -282,7 +282,7 @@ export const useWebSocket = () => {
             const conversationsSub = client.subscribe('/user/queue/conversations', handleIncomingMessage);
 
             // ✅ FIX: Subscribe call signals để callee nhận được cuộc gọi đến
-            const currentUser = userRef.current;
+            const currentUser = _currentUser;
             const userId = currentUser?.userId || currentUser?.id;
             if (userId) {
                 subscribeToCalls(userId);
@@ -320,7 +320,7 @@ export const useWebSocket = () => {
     const sendMessage = useCallback(async (conversationId, content, type = 'TEXT', mediaUrls = [], replyToMessageId = null, forwardedFrom = null) => {
         // Use preferred language from local storage or config
         const userLanguage = localStorage.getItem('preferredLanguage') || 'eng_Latn';
-        
+
         const payload = {
             conversationId,
             content: content ?? '',

@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Alert } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import { logoutUser } from '../store/authSlice';
 import {
   addMessage,
   fetchConversations,
@@ -44,10 +45,15 @@ import {
   emitTypingStop,
   emitReadReceipt,
   emitRecallMessage,
+  onGlobalEvent,
+  offGlobalEvent,
 } from '../utils/socket';
 
+// Shared state between hook instances to avoid stale closures
+let _currentSessionId = null;
+
 export const useWebSocket = () => {
-  const { accessToken, user } = useSelector((state) => state.auth);
+  const { accessToken, user, sessionId } = useSelector((state) => state.auth);
   const currentConversationId = useSelector((state) => state.chat.currentConversationId);
   const conversations = useSelector((state) => state.chat.conversations || []);
   const dispatch = useDispatch();
@@ -69,6 +75,35 @@ export const useWebSocket = () => {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    _currentSessionId = sessionId;
+  }, [sessionId]);
+
+  // Lắng nghe sự kiện FORCE_LOGOUT từ server để đá phiên đăng nhập cũ
+  useEffect(() => {
+    const handleGlobalEvent = (event) => {
+      if (event.eventType === 'FORCE_LOGOUT') {
+        const payload = event.payload || {};
+        const newSessionId = payload.newSessionId;
+        const currentSessionId = _currentSessionId;
+        console.log('[WS] FORCE_LOGOUT event received. Current:', currentSessionId, 'New:', newSessionId);
+        
+        if (newSessionId && currentSessionId && newSessionId !== currentSessionId) {
+          console.log('[WS] Mobile Force Logging out. Current:', currentSessionId, 'New:', newSessionId);
+          dispatch(logoutUser());
+          Alert.alert(
+            "Đăng xuất",
+            "Tài khoản của bạn hiện đang được đăng nhập ở một thiết bị khác. Tài khoản này sẽ tự động đăng xuất.",
+            [{ text: "OK" }]
+          );
+        }
+      }
+    };
+
+    onGlobalEvent(handleGlobalEvent);
+    return () => offGlobalEvent(handleGlobalEvent);
+  }, [dispatch]);
 
   const conversationsRef = useRef(conversations);
   useEffect(() => {
