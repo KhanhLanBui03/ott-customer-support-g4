@@ -783,7 +783,8 @@
     "no_preview_link": "无可用预览链接。",
     "unsupported_preview_title": "不支持直接预览此类型文件",
     "unsupported_preview_desc": "您仍可以下载并使用外部应用程序打开。",
-    "delete_group": "删除此文件组"
+    "delete_group": "删除此文件组",
+    "replying_to_file": "正在回复文件："
   },
   "delete_account": {
     "title": "删除账号",

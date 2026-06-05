@@ -49,15 +49,25 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
       return `🔗 ${raw}`;
     }
 
-    // Handle explicit tags
-    const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại', 'nhãn dán', 'gif', 'hình ảnh'];
-    if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
-      if (raw.toLowerCase().includes('thoại')) return t('sidebar.voice_message');
-      if (raw.toLowerCase().includes('video')) return t('sidebar.video_call');
-      if (raw.toLowerCase().includes('đính kèm') || raw.toLowerCase().includes('file')) return t('sidebar.attachment');
-      if (raw.toLowerCase().includes('nhãn dán')) return t('sidebar.sticker');
-      if (raw.toLowerCase().includes('gif')) return t('sidebar.gif');
-      return raw;
+    // Handle explicit tags and fallback phrases
+    const lowerRaw = raw.toLowerCase();
+    if (lowerRaw === '[tin nhắn thoại]' || lowerRaw === 'tin nhắn thoại' || lowerRaw.includes('tin nhắn thoại')) {
+      return t('sidebar.voice_message');
+    }
+    if (lowerRaw === '[cuộc gọi video]' || lowerRaw === 'cuộc gọi video' || lowerRaw.includes('cuộc gọi video')) {
+      return t('sidebar.video_call');
+    }
+    if (lowerRaw === '[cuộc gọi thoại]' || lowerRaw === 'cuộc gọi thoại' || lowerRaw.includes('cuộc gọi thoại')) {
+      return t('sidebar.voice_call');
+    }
+    if (lowerRaw === '[nhãn dán]' || lowerRaw === 'nhãn dán' || lowerRaw.includes('nhãn dán')) {
+      return t('sidebar.sticker');
+    }
+    if (lowerRaw === '[gif]' || lowerRaw === 'gif' || lowerRaw.includes('gif')) {
+      return t('sidebar.gif');
+    }
+    if (lowerRaw === '[đính kèm]' || lowerRaw === 'đính kèm' || lowerRaw === '[file]' || lowerRaw === 'file' || lowerRaw.includes('đính kèm') || lowerRaw.includes('attachment')) {
+      return t('sidebar.attachment');
     }
 
     return raw;
@@ -74,7 +84,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
 
   const formatLastSeen = (status, lastSeenAt) => {
     if (status === 'ONLINE') return t('sidebar.online');
-    if (!lastSeenAt) return 'Offline';
+    if (!lastSeenAt) return t('sidebar.offline') || 'Offline';
 
     const now = Date.now();
     const diff = Math.floor((now - lastSeenAt) / 1000);

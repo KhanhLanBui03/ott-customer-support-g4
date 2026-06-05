@@ -54,17 +54,28 @@ export const getPreviewText = (lastMessage, senderId = null) => {
 
   if (type === 'STICKER') return i18n.t('sidebar.sticker');
 
-  // Handle explicit tags
-  const tags = ['attachment', 'đính kèm', 'file', 'tin nhắn thoại', 'cuộc gọi video', 'cuộc gọi thoại', 'sticker', 'gif', 'hình ảnh'];
-  if (tags.some(tag => raw.toLowerCase() === `[${tag}]`)) {
-    const lower = raw.toLowerCase();
-    if (lower.includes('thoại')) return i18n.t('sidebar.voice_message');
-    if (lower.includes('video')) return i18n.t('sidebar.video_call');
-    if (lower.includes('đính kèm') || lower.includes('file') || lower.includes('attachment')) return i18n.t('sidebar.attachment');
-    if (lower.includes('sticker') || lower.includes('nhãn dán')) return i18n.t('sidebar.sticker');
-    if (lower.includes('gif')) return i18n.t('sidebar.gif');
-    if (lower.includes('hình ảnh') || lower.includes('image')) return i18n.t('chat.image_bracket');
-    return raw;
+  // Handle explicit tags and fallback phrases
+  const lowerRaw = raw.toLowerCase();
+  if (lowerRaw === '[tin nhắn thoại]' || lowerRaw === 'tin nhắn thoại' || lowerRaw.includes('tin nhắn thoại')) {
+    return i18n.t('sidebar.voice_message');
+  }
+  if (lowerRaw === '[cuộc gọi video]' || lowerRaw === 'cuộc gọi video' || lowerRaw.includes('cuộc gọi video')) {
+    return i18n.t('sidebar.video_call');
+  }
+  if (lowerRaw === '[cuộc gọi thoại]' || lowerRaw === 'cuộc gọi thoại' || lowerRaw.includes('cuộc gọi thoại')) {
+    return i18n.t('sidebar.voice_call');
+  }
+  if (lowerRaw === '[sticker]' || lowerRaw === 'sticker' || lowerRaw === '[nhãn dán]' || lowerRaw === 'nhãn dán' || lowerRaw.includes('nhãn dán')) {
+    return i18n.t('sidebar.sticker');
+  }
+  if (lowerRaw === '[gif]' || lowerRaw === 'gif' || lowerRaw.includes('gif')) {
+    return i18n.t('sidebar.gif');
+  }
+  if (lowerRaw === '[đính kèm]' || lowerRaw === 'đính kèm' || lowerRaw === '[file]' || lowerRaw === 'file' || lowerRaw === '[attachment]' || lowerRaw === 'attachment' || lowerRaw.includes('đính kèm')) {
+    return i18n.t('sidebar.attachment');
+  }
+  if (lowerRaw === '[hình ảnh]' || lowerRaw === 'hình ảnh' || lowerRaw.includes('hình ảnh')) {
+    return i18n.t('chat.image_bracket');
   }
 
   return raw;

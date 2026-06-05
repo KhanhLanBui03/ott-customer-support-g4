@@ -862,7 +862,17 @@
     "files": "tệp tin",
     "refresh": "Làm mới",
     "clear_all": "Xóa tất cả",
-    "clear_all_confirm": "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trên Cloud?"
+    "clear_all_confirm": "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trên Cloud?",
+    "input_placeholder": "Nhập tin nhắn gửi tới Cloud...",
+    "send_file": "Gửi tệp",
+    "replying_to_self": "Đang trả lời chính mình",
+    "replying_to_user": "Đang trả lời {{name}}",
+    "replying_to_file": "Đang trả lời tệp:",
+    "preview_file_title": "Xem trước tệp trong Cloud",
+    "no_preview_link": "Không có link xem trước.",
+    "unsupported_preview_title": "Không hỗ trợ xem trực tiếp loại file này",
+    "unsupported_preview_desc": "Bạn vẫn có thể tải về để mở bằng ứng dụng ngoài.",
+    "delete_group": "Xóa nhóm file này"
   },
   "report": {
     "reasons": {

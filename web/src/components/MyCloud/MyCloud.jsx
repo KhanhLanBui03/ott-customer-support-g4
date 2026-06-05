@@ -394,7 +394,7 @@ const MyCloud = ({ isDark }) => {
           <div className="flex h-full min-h-[280px] items-center justify-center opacity-40">
             <div className="flex flex-col items-center space-y-4">
               <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-              <p className="text-xs font-black uppercase tracking-widest">Đang tải tệp...</p>
+              <p className="text-xs font-black uppercase tracking-widest">{t('cloud.loading')}</p>
             </div>
           </div>
         ) : filteredFiles.length === 0 ? (
@@ -403,23 +403,23 @@ const MyCloud = ({ isDark }) => {
               <File size={30} className={isDark ? 'text-white/20' : 'text-slate-300'} />
             </div>
             <div>
-              <h3 className="text-lg font-bold">Chưa có tin nhắn nào</h3>
+              <h3 className="text-lg font-bold">{t('chat.no_messages')}</h3>
               <p className={`text-sm mt-1 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                Gửi một tệp để bắt đầu cuộc hội thoại với Cloud.
+                {t('cloud.no_files_desc')}
               </p>
             </div>
             <button
               onClick={() => fileInputRef.current.click()}
               className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20"
             >
-              Gửi tệp đầu tiên
+              {t('cloud.first_upload')}
             </button>
           </div>
         ) : (
           <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex justify-center">
               <div className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.28em] ${isDark ? 'bg-white/5 text-white/45' : 'bg-white text-slate-400 shadow-sm border border-slate-100'}`}>
-                Hôm nay
+                {t('common.today')}
               </div>
             </div>
 
@@ -662,7 +662,7 @@ const MyCloud = ({ isDark }) => {
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isDark ? 'bg-indigo-500/20 text-indigo-300 group-hover/avatar:bg-indigo-500 group-hover/avatar:text-white' : 'bg-indigo-50 text-indigo-600'} border border-indigo-500/30 overflow-hidden shadow-sm`}>
                             <HardDrive size={16} />
                           </div>
-                          <span className="text-[9px] font-black mt-1.5 opacity-40 uppercase tracking-tighter">Bạn</span>
+                          <span className="text-[9px] font-black mt-1.5 opacity-40 uppercase tracking-tighter">{t('common.you')}</span>
                         </div>
                       )}
                     </div>
@@ -854,14 +854,14 @@ const MyCloud = ({ isDark }) => {
                                   className={`w-full flex items-center space-x-3 px-4 py-3.5 text-[13px] font-bold rounded-2xl transition-all ${isDark ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
                                 >
                                   <Trash2 size={18} />
-                                  <span>Xóa phía tôi</span>
+                                  <span>{t('chat.delete_for_me')}</span>
                                 </button>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleDelete(file.id); setActiveMenuId(null); }}
                                   className={`w-full flex items-center space-x-3 px-4 py-3.5 text-[13px] font-bold rounded-2xl transition-all ${isDark ? 'hover:bg-red-500/10 text-red-500' : 'hover:bg-red-50 text-red-600'}`}
                                 >
                                   <Trash2 size={18} />
-                                  <span>Thu hồi</span>
+                                  <span>{t('chat.recall')}</span>
                                 </button>
                               </div>
                             </div>

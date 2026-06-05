@@ -5,8 +5,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { clearInAppNotification } from '../../store/notificationSlice';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const InAppNotification = () => {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -74,10 +76,23 @@ const InAppNotification = () => {
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.title} numberOfLines={1}>
-            {inAppNotification.title || "Tin nhắn mới"}
+            {inAppNotification.title || t('chat.title', 'Tin nhắn mới')}
           </Text>
           <Text style={styles.message} numberOfLines={1}>
-            {inAppNotification.message || "Bạn có một tin nhắn mới"}
+            {(() => {
+              const msg = inAppNotification.message || '';
+              if (!msg) return t('components.common.new_message_notif', 'Bạn có một tin nhắn mới');
+              const lower = msg.toLowerCase();
+              if (lower === 'tin nhắn thoại' || lower === '[tin nhắn thoại]') return t('chat.voice_bracket', '[Tin nhắn thoại]');
+              if (lower === '[sticker]' || lower === '[nhãn dán]') return t('sidebar.sticker', '[Sticker]');
+              if (lower === '[gif]') return t('sidebar.gif', '[GIF]');
+              if (lower === '[hình ảnh]' || lower === '[image]') return t('chat.image_bracket', '[Hình ảnh]');
+              if (lower === '[video]') return t('chat.video_preview', '[Video]');
+              if (lower === '[tệp tin]' || lower === '[file]') return t('chat.file_bracket', '[Tệp tin]');
+              if (lower === '[bình chọn]') return t('chat.poll', '[Bình chọn]');
+              if (lower === 'đã gửi một tệp đính kèm') return t('chat.attachment', 'Đã gửi một tệp đính kèm');
+              return msg;
+            })()}
           </Text>
         </View>
         <Pressable onPress={hideNotification} style={styles.closeButton}>

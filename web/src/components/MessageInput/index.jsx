@@ -685,10 +685,10 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                 </div>
                 <div className="flex flex-col text-left">
                   <p className="text-[14px] font-black text-slate-800 dark:text-slate-200 tracking-tight leading-tight">
-                    Không thể gửi tin nhắn
+                    {t('chat.cannot_send_message_title')}
                   </p>
                   <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
-                    Bạn đã chặn tài khoản này. Hãy bỏ chặn để tiếp tục trò chuyện.
+                    {t('chat.blocked_user_warning')}
                   </p>
                 </div>
               </div>
@@ -697,7 +697,7 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
                 onClick={() => handleUnblock(otherMember?.userId || otherMember?.id)}
                 className="px-6 py-3.5 bg-red-600 hover:bg-red-700 hover:scale-[1.03] active:scale-95 text-white text-[11px] font-black uppercase tracking-[0.15em] rounded-[18px] transition-all shadow-lg shadow-red-600/25 shrink-0 ml-4"
               >
-                Bỏ chặn
+                {t('chat.unblock')}
               </button>
             </div>
           );

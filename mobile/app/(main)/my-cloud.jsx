@@ -21,6 +21,7 @@ import {
 import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSelector, useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -36,6 +37,7 @@ import { onGlobalEvent, offGlobalEvent } from '../../src/utils/socket';
 
 const MyCloudScreen = () => {
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const router = useRouter();
   const user = useSelector((state) => state.auth.user);
 
@@ -106,7 +108,7 @@ const MyCloudScreen = () => {
       setNextKey(data.nextKey || null);
     } catch (err) {
       console.error('Failed to fetch My Cloud files:', err);
-      Alert.alert('Lỗi', 'Không thể tải danh sách tệp.');
+      Alert.alert(t('common.error', 'Lỗi'), t('cloud.load_failed', 'Không thể tải danh sách tệp.'));
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -173,7 +175,7 @@ const MyCloudScreen = () => {
         messageId: item.replyToMessageId,
         content: item.replyToContent || item.replyToFileName || '',
         typeFile: item.replyToTypeFile || 'document',
-        senderName: item.replyToSenderName || 'Bạn',
+        senderName: item.replyToSenderName || t('common.you', 'Bạn'),
         fileUrl: item.replyToFileUrl || '',
       };
     }
@@ -305,7 +307,7 @@ const MyCloudScreen = () => {
           formData.append('replyToContent', getDisplayMessageText(replyingTo) || replyingTo.fileName || '');
           formData.append('replyToTypeFile', replyingTo.typeFile || 'document');
           formData.append('replyToFileName', replyingTo.fileName || '');
-          formData.append('replyToSenderName', replyingTo.replyToSenderName || 'Bạn');
+          formData.append('replyToSenderName', replyingTo.replyToSenderName || t('common.you', 'Bạn'));
         }
 
         try {
@@ -330,8 +332,8 @@ const MyCloudScreen = () => {
 
       if (failCount > 0) {
         Alert.alert(
-          'Tải lên hoàn tất',
-          `Đã tải lên thành công ${successCount} tệp. Thất bại ${failCount} tệp.`
+          t('cloud.upload_complete_title', 'Tải lên hoàn tất'),
+          t('cloud.upload_complete_desc', 'Đã tải lên thành công {{success}} tệp. Thất bại {{fail}} tệp.', { success: successCount, fail: failCount })
         );
       }
     } catch (err) {
@@ -346,7 +348,7 @@ const MyCloudScreen = () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền truy cập thư viện ảnh để gửi hình/video.');
+        Alert.alert(t('common.permission_title', 'Quyền truy cập'), t('common.media_permission_desc', 'Vui lòng cấp quyền truy cập thư viện ảnh để gửi hình/video.'));
         return;
       }
 
@@ -384,7 +386,7 @@ const MyCloudScreen = () => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Hủy', 'Chọn hình ảnh / video', 'Chọn tài liệu / tệp'],
+          options: [t('common.cancel', 'Hủy'), t('cloud.choose_media', 'Chọn hình ảnh / video'), t('cloud.choose_document', 'Chọn tài liệu / tệp')],
           cancelButtonIndex: 0,
         },
         (buttonIndex) => {
@@ -394,12 +396,12 @@ const MyCloudScreen = () => {
       );
     } else {
       Alert.alert(
-        'Đính kèm phương tiện',
-        'Chọn phương thức tải lên',
+        t('cloud.attach_media', 'Đính kèm phương tiện'),
+        t('cloud.choose_upload_method', 'Chọn phương thức tải lên'),
         [
-          { text: 'Chọn hình ảnh / video', onPress: pickImageOrVideo },
-          { text: 'Chọn tài liệu / tệp', onPress: pickDocumentFile },
-          { text: 'Hủy', style: 'cancel' },
+          { text: t('cloud.choose_media', 'Chọn hình ảnh / video'), onPress: pickImageOrVideo },
+          { text: t('cloud.choose_document', 'Chọn tài liệu / tệp'), onPress: pickDocumentFile },
+          { text: t('common.cancel', 'Hủy'), style: 'cancel' },
         ],
         { cancelable: true }
       );
@@ -429,7 +431,7 @@ const MyCloudScreen = () => {
         formData.append('replyToContent', getDisplayMessageText(replyingTo) || replyingTo.fileName || '');
         formData.append('replyToTypeFile', replyingTo.typeFile || 'document');
         formData.append('replyToFileName', replyingTo.fileName || '');
-        formData.append('replyToSenderName', replyingTo.replyToSenderName || 'Bạn');
+        formData.append('replyToSenderName', replyingTo.replyToSenderName || t('common.you', 'Bạn'));
       }
 
       const response = await myCloudApi.uploadFile(formData);
@@ -446,7 +448,7 @@ const MyCloudScreen = () => {
       }
     } catch (err) {
       console.error('Send text message failed:', err);
-      Alert.alert('Lỗi', 'Không thể lưu tin nhắn.');
+      Alert.alert(t('common.error', 'Lỗi'), t('cloud.save_message_failed', 'Không thể lưu tin nhắn.'));
     } finally {
       setUploading(false);
       if (tempUri) {
@@ -459,12 +461,12 @@ const MyCloudScreen = () => {
   const handleDeleteFile = (fileIdOrIds) => {
     const isArray = Array.isArray(fileIdOrIds);
     Alert.alert(
-      isArray ? 'Xóa nhóm tệp' : 'Xóa tệp',
-      isArray ? 'Bạn có chắc chắn muốn xóa nhóm tệp này khỏi Cloud của tôi?' : 'Bạn có chắc chắn muốn xóa tệp này khỏi Cloud của tôi?',
+      isArray ? t('cloud.delete_group', 'Xóa nhóm tệp') : t('cloud.delete_file', 'Xóa tệp'),
+      isArray ? t('cloud.delete_group_confirm', 'Bạn có chắc chắn muốn xóa nhóm tệp này khỏi Cloud của tôi?') : t('cloud.delete_file_confirm', 'Bạn có chắc chắn muốn xóa tệp này khỏi Cloud của tôi?'),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel', 'Hủy'), style: 'cancel' },
         {
-          text: 'Xóa',
+          text: t('common.delete', 'Xóa'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -475,7 +477,7 @@ const MyCloudScreen = () => {
               setFiles((prev) => prev.filter((f) => !ids.includes(f.id)));
             } catch (err) {
               console.error('Failed to delete file(s):', err);
-              Alert.alert('Lỗi', 'Không thể xóa tệp.');
+              Alert.alert(t('common.error', 'Lỗi'), t('cloud.delete_failed', 'Không thể xóa tệp.'));
             }
           },
         },
@@ -489,7 +491,7 @@ const MyCloudScreen = () => {
     setSelectedMessage({
       messageId: file.id,
       conversationId: 'my-cloud',
-      senderName: 'Bạn',
+      senderName: t('common.you', 'Bạn'),
       content: isMsg ? getDisplayMessageText(file) : (file.fileName || ''),
       type: isMsg ? 'TEXT' : (file.typeFile === 'image' ? 'IMAGE' : file.typeFile === 'video' ? 'VIDEO' : 'FILE'),
       mediaUrls: isMsg ? [] : [file.fileUrl],
@@ -502,25 +504,25 @@ const MyCloudScreen = () => {
     if (isMsg) return;
 
     // Actions for files
-    const options = ['Hủy', 'Tải về / Mở tệp', 'Xem trước', 'Trả lời', 'Chuyển tiếp', 'Xóa'];
+    const options = [t('common.cancel', 'Hủy'), t('cloud.download_open', 'Tải về / Mở tệp'), t('cloud.preview', 'Xem trước'), t('chat.reply', 'Trả lời'), t('chat.forward', 'Chuyển tiếp'), t('common.delete', 'Xóa')];
     const isImage = file.typeFile === 'image';
     const isVideo = file.typeFile === 'video';
     
     // Clean up options if not image/video
-    const availableOptions = (isImage || isVideo) ? options : options.filter(o => o !== 'Xem trước');
+    const availableOptions = (isImage || isVideo) ? options : options.filter(o => o !== t('cloud.preview', 'Xem trước'));
 
     const handleAction = (choice) => {
-      if (choice === 'Tải về / Mở tệp') {
+      if (choice === t('cloud.download_open', 'Tải về / Mở tệp')) {
         if (file.fileUrl) Linking.openURL(file.fileUrl);
-      } else if (choice === 'Xem trước') {
+      } else if (choice === t('cloud.preview', 'Xem trước')) {
         setMediaViewerList([{ url: file.fileUrl, type: isVideo ? 'VIDEO' : 'IMAGE' }]);
         setSelectedMediaIndex(0);
         setMediaViewerVisible(true);
-      } else if (choice === 'Trả lời') {
+      } else if (choice === t('chat.reply', 'Trả lời')) {
         setReplyingTo(file);
-      } else if (choice === 'Chuyển tiếp') {
+      } else if (choice === t('chat.forward', 'Chuyển tiếp')) {
         handleOpenForward(file);
-      } else if (choice === 'Xóa') {
+      } else if (choice === t('common.delete', 'Xóa')) {
         handleDeleteFile(file.id);
       }
     };
@@ -530,7 +532,7 @@ const MyCloudScreen = () => {
         {
           options: availableOptions,
           cancelButtonIndex: 0,
-          destructiveButtonIndex: availableOptions.indexOf('Xóa'),
+          destructiveButtonIndex: availableOptions.indexOf(t('common.delete', 'Xóa')),
         },
         (index) => {
           if (index === 0) return;
@@ -540,10 +542,10 @@ const MyCloudScreen = () => {
     } else {
       Alert.alert(
         file.fileName,
-        'Chọn hành động',
+        t('cloud.choose_action', 'Chọn hành động'),
         availableOptions.map((opt) => {
-          if (opt === 'Hủy') return { text: opt, style: 'cancel' };
-          if (opt === 'Xóa') return { text: opt, style: 'destructive', onPress: () => handleAction(opt) };
+          if (opt === t('common.cancel', 'Hủy')) return { text: opt, style: 'cancel' };
+          if (opt === t('common.delete', 'Xóa')) return { text: opt, style: 'destructive', onPress: () => handleAction(opt) };
           return { text: opt, onPress: () => handleAction(opt) };
         }),
         { cancelable: true }
@@ -636,7 +638,7 @@ const MyCloudScreen = () => {
         break;
       case 'pin':
         // Pin logic - UI level highlighting if needed, or just Alert for now
-        Alert.alert('Ghim tệp', 'Tính năng ghim đang được phát triển.');
+        Alert.alert(t('chat.pin_message', 'Ghim tệp'), t('chat.feature_developing', 'Tính năng đang được phát triển.'));
         break;
       default:
         if (file.fileUrl) {
@@ -670,12 +672,12 @@ const MyCloudScreen = () => {
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
     Alert.alert(
-      'Xóa nhiều tệp',
-      `Bạn có chắc chắn muốn xóa ${selectedIds.length} mục đã chọn khỏi Cloud?`,
+      t('cloud.delete_multiple', 'Xóa nhiều tệp'),
+      t('cloud.delete_multiple_confirm', 'Bạn có chắc chắn muốn xóa {{count}} mục đã chọn khỏi Cloud?', { count: selectedIds.length }),
       [
-        { text: 'Hủy', style: 'cancel' },
+        { text: t('common.cancel', 'Hủy'), style: 'cancel' },
         {
-          text: 'Xóa',
+          text: t('common.delete', 'Xóa'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -689,7 +691,7 @@ const MyCloudScreen = () => {
               setSelectionMode(false);
             } catch (err) {
               console.error('Failed to delete files:', err);
-              Alert.alert('Lỗi', 'Không thể xóa một số tệp.');
+              Alert.alert(t('common.error', 'Lỗi'), t('cloud.delete_failed', 'Không thể xóa một số tệp.'));
             }
           },
         },
@@ -1295,7 +1297,7 @@ const MyCloudScreen = () => {
               <View style={styles.replyIconLabelRow}>
                 <Ionicons name="arrow-undo" size={10} color={colors.primary} />
                 <Text style={[styles.replySenderName, { color: colors.primary }]}>
-                  {replyData.senderName === 'Bạn' ? 'Trả lời chính mình' : replyData.senderName}
+                  {replyData.senderName === t('common.you', 'Bạn') ? t('cloud.replying_to_self', 'Trả lời chính mình') : replyData.senderName}
                 </Text>
               </View>
               <Text style={[styles.replyTextSummary, { color: colors.textMuted }]} numberOfLines={1}>
@@ -1484,7 +1486,7 @@ const MyCloudScreen = () => {
               <Ionicons name="close" size={24} color={colors.foreground} />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
-              <Text style={[styles.title, { color: colors.foreground }]}>Đã chọn {selectedIds.length}</Text>
+              <Text style={[styles.title, { color: colors.foreground }]}>{t('cloud.selected_count', 'Đã chọn {{count}}', { count: selectedIds.length })}</Text>
             </View>
             <View style={styles.headerActions}>
               <TouchableOpacity style={styles.actionIcon} onPress={handleBulkDelete}>
@@ -1501,7 +1503,7 @@ const MyCloudScreen = () => {
             {searchOpen ? (
               <TextInput
                 style={[styles.searchInput, { color: colors.foreground, backgroundColor: colors.input }]}
-                placeholder="Tìm kiếm tệp..."
+                placeholder={t('cloud.search', 'Tìm kiếm tệp...')}
                 placeholderTextColor={colors.textSubtle}
                 value={searchTerm}
                 onChangeText={setSearchTerm}
@@ -1509,8 +1511,8 @@ const MyCloudScreen = () => {
               />
             ) : (
               <View style={styles.titleContainer}>
-                <Text style={[styles.title, { color: colors.foreground }]}>Cloud của tôi</Text>
-                <Text style={[styles.subtitle, { color: colors.textMuted }]}>Thư mục cá nhân</Text>
+                <Text style={[styles.title, { color: colors.foreground }]}>{t('cloud.title', 'Cloud của tôi')}</Text>
+                <Text style={[styles.subtitle, { color: colors.textMuted }]}>{t('cloud.subtitle', 'Thư mục cá nhân')}</Text>
               </View>
             )}
 
@@ -1530,12 +1532,12 @@ const MyCloudScreen = () => {
       <View style={[styles.tabsWrapper, { borderBottomColor: colors.border }]}>
         <FlatList
           data={[
-            { id: 'all', label: 'Tất cả' },
-            { id: 'image', label: 'Ảnh' },
-            { id: 'video', label: 'Video' },
-            { id: 'audio', label: 'Nhạc' },
-            { id: 'document', label: 'Tài liệu' },
-            { id: 'link', label: 'Link' },
+            { id: 'all', label: t('cloud.types.all', 'Tất cả') },
+            { id: 'image', label: t('cloud.types.image', 'Ảnh') },
+            { id: 'video', label: t('cloud.types.video', 'Video') },
+            { id: 'audio', label: t('cloud.types.audio', 'Nhạc') },
+            { id: 'document', label: t('cloud.types.document', 'Tài liệu') },
+            { id: 'link', label: t('cloud.types.other', 'Link') },
           ]}
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1566,14 +1568,14 @@ const MyCloudScreen = () => {
         {loading && files.length === 0 ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textMuted }]}>Đang tải tệp tin...</Text>
+            <Text style={[styles.loadingText, { color: colors.textMuted }]}>{t('cloud.loading', 'Đang tải tệp tin...')}</Text>
           </View>
         ) : groupedFiles.length === 0 ? (
           <View style={styles.center}>
             <Ionicons name="cloud-offline-outline" size={48} color={colors.textSubtle} />
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Chưa có tài liệu hay tin nhắn nào</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('cloud.no_files', 'Chưa có tài liệu hay tin nhắn nào')}</Text>
             <TouchableOpacity style={[styles.uploadBtn, { backgroundColor: colors.primary }]} onPress={showAttachmentOptions}>
-              <Text style={styles.uploadBtnText}>Tải tệp đầu tiên</Text>
+              <Text style={styles.uploadBtnText}>{t('cloud.first_upload', 'Tải tệp đầu tiên')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -1598,10 +1600,10 @@ const MyCloudScreen = () => {
       {replyingTo && (
         <View style={[styles.replyBanner, { backgroundColor: isDark ? colors.surface200 : '#f8fafc', borderTopColor: colors.border }]}>
           <View style={[styles.replyLine, { backgroundColor: colors.primary }]} />
-          <View style={styles.replyDetails}>
-            <Text style={[styles.replyTitle, { color: colors.primary }]} numberOfLines={1}>
-              Đang trả lời tệp:
-            </Text>
+            <View style={styles.replyDetails}>
+              <Text style={[styles.replyTitle, { color: colors.primary }]} numberOfLines={1}>
+                {t('cloud.replying_to_file', 'Đang trả lời tệp:')}
+              </Text>
             <Text style={[styles.replyBody, { color: colors.foreground }]} numberOfLines={1}>
               {getDisplayMessageText(replyingTo) || replyingTo.fileName}
             </Text>
@@ -1624,7 +1626,7 @@ const MyCloudScreen = () => {
 
           <TextInput
             style={[styles.input, { color: colors.foreground, backgroundColor: colors.input }]}
-            placeholder="Gửi tin nhắn hoặc ghi chú..."
+            placeholder={t('cloud.input_placeholder', 'Nhập tin nhắn gửi tới Cloud...')}
             placeholderTextColor={colors.textSubtle}
             value={messageText}
             onChangeText={setMessageText}
