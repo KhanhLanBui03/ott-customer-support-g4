@@ -19,6 +19,7 @@ import {
 import { chatApi } from '../api/chatApi';
 import { addPendingFriend, addPendingGroup, addActivity } from '../store/notificationSlice';
 import { initSocket, getStompClient, subscribeToCalls } from '../utils/socket';
+import { logout as logoutAction } from '../store/authSlice';
 
 // Shared state between hook instances
 let _globalSubscriptions = [];
@@ -28,10 +29,11 @@ let _isSubscribed = false;
 
 export const useWebSocket = () => {
     const dispatch = useDispatch();
-    const { token, user } = useSelector(state => state.auth);
+    const { token, user, sessionId } = useSelector(state => state.auth);
     const { conversations, activeConversationId } = useSelector(state => state.chat);
     const conversationsRef = useRef(conversations);
     const userRef = useRef(user);
+    const sessionIdRef = useRef(sessionId);
 
     useEffect(() => {
         conversationsRef.current = conversations;
@@ -41,6 +43,10 @@ export const useWebSocket = () => {
         userRef.current = user;
         _activeConvId = activeConversationId;
     }, [user, activeConversationId]);
+
+    useEffect(() => {
+        sessionIdRef.current = sessionId;
+    }, [sessionId]);
 
     const handleIncomingMessage = useCallback((message) => {
         try {
@@ -220,6 +226,16 @@ export const useWebSocket = () => {
                 window.dispatchEvent(new CustomEvent('my-cloud-update', {
                     detail: event.payload
                 }));
+            } else if (event.eventType === 'FORCE_LOGOUT') {
+                const payload = event.payload || {};
+                const newSessionId = payload.newSessionId;
+                const currentSessionId = sessionIdRef.current;
+                if (newSessionId && currentSessionId && newSessionId !== currentSessionId) {
+                    console.log(`[STOMP] Force logging out. Current: ${currentSessionId}, New: ${newSessionId}`);
+                    dispatch(logoutAction());
+                    alert("Tài khoản của bạn hiện đang được đăng nhập ở một thiết bị/trình duyệt khác. Trình duyệt này sẽ tự động đăng xuất.");
+                    window.location.href = '/login';
+                }
             }
         } catch (err) {
             console.error('[STOMP] Error in message handler:', err);
