@@ -71,7 +71,7 @@ export const getPreviewText = (lastMessage, senderId = null) => {
   if (lowerRaw === '[gif]' || lowerRaw === 'gif' || lowerRaw.includes('gif')) {
     return i18n.t('sidebar.gif');
   }
-  if (lowerRaw === '[đính kèm]' || lowerRaw === 'đính kèm' || lowerRaw === '[file]' || lowerRaw === 'file' || lowerRaw === '[attachment]' || lowerRaw === 'attachment' || lowerRaw.includes('đính kèm')) {
+  if (lowerRaw === '[đính kèm]' || lowerRaw === 'đính kèm' || lowerRaw === '[file]' || lowerRaw === 'file' || lowerRaw === '[attachment]' || lowerRaw === 'attachment' || lowerRaw === '[tệp tin]' || lowerRaw === 'tệp tin' || lowerRaw.includes('đính kèm') || lowerRaw.includes('tệp tin')) {
     return i18n.t('sidebar.attachment');
   }
   if (lowerRaw === '[hình ảnh]' || lowerRaw === 'hình ảnh' || lowerRaw.includes('hình ảnh')) {

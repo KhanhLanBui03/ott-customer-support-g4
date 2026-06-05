@@ -283,6 +283,7 @@
     "file_pick_error": "无法选择文档，请重试。",
     "voice_message_title": "语音消息",
     "image_bracket": "[图片]",
+    "video_bracket": "[视频]",
     "voice_bracket": "[语音消息]",
     "file_bracket": "[文件]",
     "message_bracket": "[消息]",

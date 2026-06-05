@@ -84,6 +84,7 @@
       "recalled": "消息已撤回",
       "voice_message": "语音消息",
       "attachment": "附件",
+      "file": "文件",
       "video_call": "视频通话",
       "voice_call": "语音通话",
       "create_vote_error": "无法创建投票，请重试。",

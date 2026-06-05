@@ -66,7 +66,7 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
     if (lowerRaw === '[gif]' || lowerRaw === 'gif' || lowerRaw.includes('gif')) {
       return t('sidebar.gif');
     }
-    if (lowerRaw === '[đính kèm]' || lowerRaw === 'đính kèm' || lowerRaw === '[file]' || lowerRaw === 'file' || lowerRaw.includes('đính kèm') || lowerRaw.includes('attachment')) {
+    if (lowerRaw === '[đính kèm]' || lowerRaw === 'đính kèm' || lowerRaw === '[file]' || lowerRaw === 'file' || lowerRaw === '[tệp tin]' || lowerRaw === 'tệp tin' || lowerRaw.includes('đính kèm') || lowerRaw.includes('attachment') || lowerRaw.includes('tệp tin')) {
       return t('sidebar.attachment');
     }
 

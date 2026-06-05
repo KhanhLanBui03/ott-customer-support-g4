@@ -282,6 +282,7 @@
     "file_pick_error": "Failed to select document. Please try again.",
     "voice_message_title": "Voice message",
     "image_bracket": "[Image]",
+    "video_bracket": "[Video]",
     "voice_bracket": "[Voice message]",
     "file_bracket": "[File]",
     "message_bracket": "[Message]",

@@ -283,6 +283,7 @@
     "file_pick_error": "ドキュメントを選択できませんでした。もう一度お試しください。",
     "voice_message_title": "音声メッセージ",
     "image_bracket": "[画像]",
+    "video_bracket": "[動画]",
     "voice_bracket": "[音声メッセージ]",
     "file_bracket": "[ファイル]",
     "message_bracket": "[メッセージ]",

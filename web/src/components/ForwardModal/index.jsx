@@ -316,8 +316,10 @@ const ForwardModal = ({ isOpen, onClose, messageToForward }) => {
               <div className="p-3 bg-background/50 rounded-xl border border-border">
                  <p className="text-[13px] text-foreground/80 truncate italic">
                       {messageToForward.type === 'FILE'
-                       ? (messageToForward.fileName || '[Attachment]')
-                       : (messageToForward.content || '[Attachment]')}
+                       ? (messageToForward.fileName || t('sidebar.attachment'))
+                       : (messageToForward.content === '[Tệp tin]' || messageToForward.content === 'Tệp tin' || messageToForward.content === '[Đính kèm]' || messageToForward.content === 'Đính kèm'
+                           ? t('sidebar.attachment')
+                           : (messageToForward.content || t('sidebar.attachment')))}
                  </p>
               </div>
            </div>

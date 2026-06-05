@@ -84,6 +84,7 @@
       "recalled": "メッセージは取り消されました",
       "voice_message": "ボイスメッセージ",
       "attachment": "添付ファイル",
+      "file": "ファイル",
       "video_call": "ビデオ通話",
       "voice_call": "音声通話",
       "create_vote_error": "投票を作成できませんでした。もう一度お試しください。",

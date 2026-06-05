@@ -283,6 +283,7 @@
     "file_pick_error": "Échec de la sélection du document. Veuillez réessayer.",
     "voice_message_title": "Message vocal",
     "image_bracket": "[Image]",
+    "video_bracket": "[Vidéo]",
     "voice_bracket": "[Message vocal]",
     "file_bracket": "[Fichier]",
     "message_bracket": "[Message]",

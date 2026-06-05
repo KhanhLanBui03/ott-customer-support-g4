@@ -283,6 +283,7 @@
     "file_pick_error": "문서를 선택하지 못했습니다. 다시 시도해 주세요.",
     "voice_message_title": "음성 메시지",
     "image_bracket": "[이미지]",
+    "video_bracket": "[동영상]",
     "voice_bracket": "[음성 메시지]",
     "file_bracket": "[파일]",
     "message_bracket": "[메시지]",

@@ -84,6 +84,7 @@
       "recalled": "Message rappelé",
       "voice_message": "Message vocal",
       "attachment": "Pièce jointe",
+      "file": "Fichier",
       "video_call": "Appel vidéo",
       "voice_call": "Appel vocal",
       "create_vote_error": "Impossible de créer le sondage. Veuillez réessayer.",

@@ -173,9 +173,27 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
     return t('chat.days_ago', { count: Math.floor(diff / 86400) });
   };
 
+  const getPinnedPreviewText = (pin) => {
+    if (!pin) return '';
+    const type = pin.type;
+    const content = pin.content || '';
+    const lower = content.trim().toLowerCase();
 
+    if (type === 'IMAGE' || lower === '[hình ảnh]') return `[${t('chat.image_preview', 'Hình ảnh')}]`;
+    if (type === 'VIDEO' || lower === '[video]') return `[${t('chat.video_preview', 'Video')}]`;
+    if (type === 'VOICE' || type === 'AUDIO' || lower === 'tin nhắn thoại' || lower === '[tin nhắn thoại]') return `[${t('chat.voice_message_preview', 'Tin nhắn thoại')}]`;
+    if (type === 'STICKER' || lower === '[nhãn dán]' || lower === '[sticker]') return `[${t('chat.sticker_preview', 'Nhãn dán')}]`;
+    if (lower === '[gif]') return '[GIF]';
 
+    if (type === 'FILE' || lower === '[tệp tin]' || lower === 'tệp tin' || lower === '[đính kèm]' || lower === 'đính kèm' || lower === '[file]' || lower === 'file' || lower === '[attachment]' || lower === 'attachment') {
+      if (lower === '[tệp tin]' || lower === 'tệp tin' || lower === '[đính kèm]' || lower === 'đính kèm' || lower === '[file]' || lower === 'file' || lower === '[attachment]' || lower === 'attachment') {
+        return t('chat.attachment_pin', '[Tệp đính kèm]');
+      }
+      return content || t('chat.attachment_pin', '[Tệp đính kèm]');
+    }
 
+    return content || t('chat.message', 'Tin nhắn');
+  };
 
   const lastCallMsgRaw = (messages[conversationId] || [])?.filter(m => m.type === 'CALL_LOG').pop();
   let lastCallMsg = null;
@@ -514,7 +532,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                       const sender = lastPin.senderName || t('chat.member');
                       return (
                         <>
-                          <span className="font-bold">{sender}:</span> {lastPin.content || t('chat.attachment_pin')}
+                          <span className="font-bold">{sender}:</span> {getPinnedPreviewText(lastPin)}
                         </>
                       );
                     })()}
@@ -572,7 +590,7 @@ const ChatWindow = ({ conversation, onStartCall, isCallActive, callStatus, onTog
                       <div className="flex flex-col min-w-0">
                         <span className={`text-[10px] font-bold uppercase leading-none mb-0.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{t('chat.message')}</span>
                         <p className={`text-[13px] font-medium truncate leading-tight ${isDark ? 'text-white/90' : 'text-slate-800'}`}>
-                          <span className="font-bold">{pin.senderName}:</span> {pin.content || t('chat.attachment_pin')}
+                          <span className="font-bold">{pin.senderName}:</span> {getPinnedPreviewText(pin)}
                         </p>
                       </div>
                     </div>

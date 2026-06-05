@@ -242,7 +242,11 @@ const ChatDetailScreen = () => {
     if (pin.type === 'AUDIO' || pin.type === 'VOICE') return t('chat.voice_bracket', '[Tin nhắn thoại]');
     if (pin.type === 'FILE') {
       // Thường content của FILE message là tên file
-      return pin.content || t('chat.file_bracket', '[Tệp tin]');
+      const lower = (pin.content || '').trim().toLowerCase();
+      if (lower === '[tệp tin]' || lower === 'tệp tin' || lower === '[đính kèm]' || lower === 'đính kèm' || lower === '[file]' || lower === 'file' || lower === '[attachment]' || lower === 'attachment') {
+        return t('chat.file_bracket', '[File]');
+      }
+      return pin.content || t('chat.file_bracket', '[File]');
     }
     return pin.content || t('chat.message', 'Tin nhắn');
   };

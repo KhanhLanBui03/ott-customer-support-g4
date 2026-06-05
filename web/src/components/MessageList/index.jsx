@@ -1259,7 +1259,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                             
                                             if (originalMsg?.type === 'FILE' || r.type === 'FILE') {
                                               const fileName = originalMsg?.forwardedFrom?.fileName || 
-                                                             (content && !content.startsWith('http') ? content : null) ||
+                                                             (content && !content.startsWith('http') && content !== '[Tệp tin]' && content !== 'Tệp tin' && content !== '[Đính kèm]' && content !== 'Đính kèm' ? content : null) ||
                                                              getFileName(mediaUrls[0] || content);
                                               return `[${t('chat.file')}] ${fileName}`;
                                             }
@@ -1685,7 +1685,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                       <div className="relative group/file">
                                                         <div
                                                           onClick={() => {
-                                                            const fileName = (msg.type === 'FILE' && msg.content && !msg.content.startsWith('http')) 
+                                                            const fileName = (msg.type === 'FILE' && msg.content && !msg.content.startsWith('http') && msg.content !== '[Tệp tin]' && msg.content !== 'Tệp tin' && msg.content !== '[Đính kèm]' && msg.content !== 'Đính kèm') 
                                                               ? msg.content 
                                                               : (msg.forwardedFrom?.fileName || getFileName(url));
                                                             setSelectedFile({ url, ext: url.split('.').pop().split('?')[0].toLowerCase(), name: fileName, sender: msg.senderName, time: formatMessageTime(msg.createdAt) });
@@ -1695,7 +1695,7 @@ const MessageList = ({ messages, loading, conversationId, onRefresh, conversatio
                                                           {getFileIcon(url)}
                                                           <div className="flex-1 min-w-0 pt-0.5">
                                                             <p className={`text-[14px] font-bold truncate mb-1 ${isMe ? 'text-white' : 'text-foreground'}`}>
-                                                              {(msg.type === 'FILE' && msg.content && !msg.content.startsWith('http')) 
+                                                              {(msg.type === 'FILE' && msg.content && !msg.content.startsWith('http') && msg.content !== '[Tệp tin]' && msg.content !== 'Tệp tin' && msg.content !== '[Đính kèm]' && msg.content !== 'Đính kèm') 
                                                                 ? msg.content 
                                                                 : (msg.forwardedFrom?.fileName || getFileName(url))}
                                                             </p>

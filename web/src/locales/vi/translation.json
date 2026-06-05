@@ -88,6 +88,7 @@
       "recalled": "Tin nhắn đã bị thu hồi",
       "voice_message": "Tin nhắn thoại",
       "attachment": "Đính kèm",
+      "file": "Tệp",
       "video_call": "Cuộc gọi video",
       "voice_call": "Cuộc gọi thoại",
       "create_vote_error": "Không thể tạo cuộc bình chọn. Vui lòng thử lại.",

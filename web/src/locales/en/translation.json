@@ -88,6 +88,7 @@
       "recalled": "Message recalled",
       "voice_message": "Voice message",
       "attachment": "Attachment",
+      "file": "File",
       "video_call": "Video call",
       "voice_call": "Voice call",
       "create_vote_error": "Cannot create poll. Please try again.",
