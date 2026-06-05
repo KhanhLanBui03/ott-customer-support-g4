@@ -139,6 +139,7 @@
     "gif": "GIF",
     "search_emoji_placeholder": "Search emoji...",
     "cannot_send_message": "Cannot send message",
+    "unblock": "Unblock",
     "only_admin_can_send": "Only administrators have the right to send messages",
     "group": "Group",
     "default_group_name": "Join group",

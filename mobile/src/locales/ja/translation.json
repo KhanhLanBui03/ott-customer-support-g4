@@ -140,6 +140,7 @@
     "gif": "GIF",
     "search_emoji_placeholder": "絵文字を検索...",
     "cannot_send_message": "メッセージを送信できません",
+    "unblock": "ブロック解除",
     "only_admin_can_send": "管理者のみメッセージを送信できます",
     "group": "グループ",
     "default_group_name": "グループチャット",

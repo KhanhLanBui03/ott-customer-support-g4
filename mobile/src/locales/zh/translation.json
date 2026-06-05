@@ -140,6 +140,7 @@
     "gif": "GIF",
     "search_emoji_placeholder": "搜索表情...",
     "cannot_send_message": "无法发送消息",
+    "unblock": "解除屏蔽",
     "only_admin_can_send": "仅管理员可发送消息",
     "group": "群组",
     "default_group_name": "群聊",

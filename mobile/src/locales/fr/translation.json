@@ -140,6 +140,7 @@
     "gif": "GIF",
     "search_emoji_placeholder": "Rechercher un emoji...",
     "cannot_send_message": "Impossible d'envoyer le message",
+    "unblock": "Débloquer",
     "only_admin_can_send": "Seuls les administrateurs peuvent envoyer des messages",
     "group": "Groupe",
     "default_group_name": "Groupe de discussion",

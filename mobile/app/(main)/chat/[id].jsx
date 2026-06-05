@@ -1065,7 +1065,7 @@ const ChatDetailScreen = () => {
                 style={styles.unblockButton}
                 onPress={handleUnblock}
               >
-                <Text style={styles.unblockButtonText}>{t('info.unblock_user').replace('Bỏ chặn người này', 'BỎ CHẶN')}</Text>
+                <Text style={styles.unblockButtonText}>{t('chat.unblock').toUpperCase()}</Text>
               </TouchableOpacity>
             </View>
           ) : (
