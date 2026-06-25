@@ -97,6 +97,9 @@ npx expo start
 # Press 'w' for web, 'i' for iOS, 'a' for Android
 ```
 
+**📲 Tải xuống ứng dụng (Android):**
+* Bạn có thể tải trực tiếp file cài đặt APK đã đóng gói sẵn tại đây: **[F5chat.apk](./F5chat.apk)**
+
 ---
 
 ## 📡 Core API Endpoints

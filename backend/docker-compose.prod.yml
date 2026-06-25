@@ -12,7 +12,6 @@ services:
     restart: unless-stopped
     networks:
       - chat-network
-
   whisper:
     image: ${DOCKER_HUB_USERNAME}/chat-app-whisper:latest
     container_name: chat-app-whisper-prod
@@ -23,7 +22,6 @@ services:
     restart: unless-stopped
     networks:
       - chat-network
-
   backend:
     image: ${DOCKER_HUB_USERNAME}/chat-app-backend:latest
     container_name: chat-app-backend-prod

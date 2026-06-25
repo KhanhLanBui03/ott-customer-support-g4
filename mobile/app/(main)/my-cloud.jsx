@@ -8,7 +8,7 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Alert,
   Image,
@@ -38,6 +38,25 @@ import { onGlobalEvent, offGlobalEvent } from '../../src/utils/socket';
 const MyCloudScreen = () => {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSubscription = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
   const router = useRouter();
   const user = useSelector((state) => state.auth.user);
 
@@ -1614,11 +1633,7 @@ const MyCloudScreen = () => {
         </View>
       )}
 
-      {/* Keyboard Input Wrapper */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
+      <View style={{ paddingBottom: keyboardHeight }}>
         <View style={[styles.inputBar, { backgroundColor: isDark ? colors.surface100 : '#ffffff', borderTopColor: colors.border }]}>
           <TouchableOpacity style={styles.attachBtn} onPress={showAttachmentOptions}>
             <Ionicons name="add" size={26} color={colors.primary} />
@@ -1655,7 +1670,7 @@ const MyCloudScreen = () => {
             </TouchableOpacity>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       {/* Media Viewer Modal */}
       <MediaViewer

@@ -41,3 +41,7 @@ target/
 *.iml
 .DS_Store
 Thumbs.db
+
+# APK
+F5chat.apk
+*.apk

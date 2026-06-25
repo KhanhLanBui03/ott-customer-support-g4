@@ -126,17 +126,17 @@ export default function MainLayout() {
       <Tabs.Screen name="notifications" options={{ title: t('notifications.title'), icon: 'notifications' }} />
       <Tabs.Screen name="profile" options={{ title: t('profile.title'), icon: 'person' }} />
 
-      <Tabs.Screen name="edit-profile" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="change-password" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="chat/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="chat-info/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="shared-links/[id]" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="group-preview" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="my-cloud" options={{ href: null, tabBarStyle: { display: 'none' } }} />
-      <Tabs.Screen name="settings" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+      <Tabs.Screen name="edit-profile" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="change-password" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="chat/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="chat-info/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="shared-links/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="group-preview" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="my-cloud" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="settings" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
       </Tabs>
 
       <VideoCall

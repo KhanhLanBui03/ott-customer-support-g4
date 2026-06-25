@@ -1022,7 +1022,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   onPress={() => setShowAttachMenu(true)}
                   disabled={isLoading || isUploading}
                 >
-                  <MaterialIcons name="add-circle-outline" size={28} color={colors.primary} />
+                  <MaterialIcons name="add-circle" size={26} color={colors.primary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1031,6 +1031,22 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   disabled={isLoading || isUploading}
                 >
                   <MaterialIcons name="photo-camera" size={24} color={colors.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={pickMedia}
+                  disabled={isLoading || isUploading}
+                >
+                  <MaterialIcons name="image" size={24} color={colors.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={startRecording}
+                  disabled={isLoading || isUploading}
+                >
+                  <MaterialIcons name="mic" size={24} color={colors.primary} />
                 </TouchableOpacity>
 
                 {conversationType === 'GROUP' && (
@@ -1051,10 +1067,9 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                 onPress={() => {
                   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   setIsExpanded(false);
-                  Keyboard.dismiss();
                 }}
               >
-                <MaterialIcons name="chevron-right" size={32} color={colors.textSubtle} />
+                <MaterialIcons name="chevron-right" size={32} color={colors.primary} />
               </TouchableOpacity>
             )}
 
@@ -1110,13 +1125,14 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
               <View style={{
                 flex: 1,
                 flexDirection: 'row',
-                alignItems: 'flex-end',
+                alignItems: 'center',
                 backgroundColor: colors.input,
-                borderRadius: 20,
+                borderRadius: 22,
                 paddingRight: 4
               }}>
                 <TextInput
                   style={[styles.input, { backgroundColor: 'transparent', color: colors.foreground, flex: 1 }]}
+                  value={message}
                   placeholder={t('chat.input_placeholder', { name: '' })}
                   placeholderTextColor={colors.textSubtle}
                   onChangeText={handleChange}
@@ -1134,15 +1150,15 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                     if (!message) return null;
 
                     // Chỉ highlight nếu là GROUP chat
-                    if (conversationType !== 'GROUP') return <Text>{message}</Text>;
+                    if (conversationType !== 'GROUP') return null;
 
                     // Tạo danh sách tên để regex
-
                     const memberNames = members
                       .map(m => (m.fullName || m.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
                       .filter(Boolean);
 
-                    if (memberNames.length === 0 && !message.includes('@All')) return <Text>{message}</Text>;
+                    const hasMention = memberNames.some(name => new RegExp(`@${name}`).test(message)) || message.includes('@All');
+                    if (!hasMention) return null;
 
                     const allNames = [...memberNames, 'All'].join('|');
                     const regex = new RegExp(`(@(?:${allNames}))`, 'g');
@@ -1162,42 +1178,44 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                 </TextInput>
 
                 <TouchableOpacity
-                  style={{ padding: 8, justifyContent: 'center', alignItems: 'center' }}
+                  style={{ padding: 6, justifyContent: 'center', alignItems: 'center' }}
                   onPress={handleToggleEmojis}
                 >
-                  <MaterialIcons
-                    name={showEmojis ? "keyboard" : "sentiment-satisfied-alt"}
+                  <MaterialCommunityIcons
+                    name={showEmojis ? "keyboard-outline" : "emoticon-happy"}
                     size={24}
-                    color={showEmojis ? colors.primary : colors.textSubtle}
+                    color={colors.primary}
                   />
                 </TouchableOpacity>
               </View>
 
             </View>
 
-
-
             {message.trim() ? (
               <TouchableOpacity
-                style={[styles.sendButton, (!message.trim() || isUploading) && styles.sendButtonDisabled]}
+                style={styles.sendButton}
                 onPress={handleSendMessage}
-                disabled={!message.trim() || isLoading || isUploading}
+                disabled={isLoading || isUploading}
               >
                 {isLoading ? (
-                  <ActivityIndicator color="#667eea" size="small" />
+                  <ActivityIndicator color={colors.primary} size="small" />
                 ) : (
-                  <MaterialIcons name="send" size={20} color="#667eea" />
+                  <MaterialIcons name="send" size={24} color={colors.primary} />
                 )}
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                style={styles.actionButton}
-                onPress={startRecording}
+                style={styles.sendButton}
+                onPress={() => {
+                  onSendMessage('👍', replyingTo?.messageId);
+                  if (replyingTo) {
+                    dispatch(clearReplyingTo());
+                  }
+                }}
                 disabled={isLoading || isUploading}
               >
-                <MaterialIcons name="mic" size={24} color={colors.primary} />
+                <MaterialCommunityIcons name="thumb-up" size={24} color={colors.primary} />
               </TouchableOpacity>
-
             )}
           </>
         ) : (
@@ -1319,29 +1337,29 @@ const styles = StyleSheet.create({
   },
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-    minHeight: 60,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 4,
+    minHeight: 48,
   },
   actionButton: {
-    padding: 8,
+    padding: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
   input: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     backgroundColor: '#f3f4f6',
     borderRadius: 20,
-    fontSize: 14,
+    fontSize: 15,
     maxHeight: 100,
-    minHeight: 40,
+    minHeight: 36,
   },
   sendButton: {
-    padding: 8,
+    padding: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },

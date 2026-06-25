@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Alert, ImageBackground, DeviceEventEmitter } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Keyboard, Platform, Image, ActivityIndicator, Alert, ImageBackground, DeviceEventEmitter } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -26,6 +26,25 @@ const ChatDetailScreen = () => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSubscription = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const dispatch = useDispatch();
   const router = useRouter();
@@ -710,12 +729,7 @@ const ChatDetailScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.container, { backgroundColor: colors.background }]}
-        keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
-      >
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: keyboardHeight }]}>
         <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <TouchableOpacity
             onPress={() => {
@@ -1118,9 +1132,7 @@ const ChatDetailScreen = () => {
           callType={callType}
           onCancel={cancelCountdown}
         />
-      </KeyboardAvoidingView>
-
-    </SafeAreaView>
+      </View>
   );
 };
 
