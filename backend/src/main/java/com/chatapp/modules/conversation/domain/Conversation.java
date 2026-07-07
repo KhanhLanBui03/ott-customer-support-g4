@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -30,13 +30,13 @@ public class Conversation {
     private Long lastMessageTime;
     private Long createdAt;
     private Long updatedAt;
-    private Set<String> memberIds;
-    private Set<String> pinnedMessageIds;
+    private List<String> memberIds;
+    private List<String> pinnedMessageIds;
     private Boolean onlyAdminsCanChat;
     private Boolean memberApprovalRequired;
     private Integer violationCount;
 
-    public static Conversation create(String type, String name, String creatorId, Set<String> memberIds) {
+    public static Conversation create(String type, String name, String creatorId, List<String> memberIds) {
         Long now = System.currentTimeMillis();
         return Conversation.builder()
                 .conversationId(UUID.randomUUID().toString())
