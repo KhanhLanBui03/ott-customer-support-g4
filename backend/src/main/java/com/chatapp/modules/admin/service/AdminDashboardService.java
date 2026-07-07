@@ -1,14 +1,13 @@
 package com.chatapp.modules.admin.service;
 
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.chatapp.modules.admin.domain.AdminSystemLog;
 import com.chatapp.modules.admin.dto.DashboardStatsResponse;
 import com.chatapp.modules.admin.repository.AdminSystemLogRepository;
 import com.chatapp.modules.auth.domain.User;
 import com.chatapp.modules.conversation.domain.Conversation;
 import com.chatapp.modules.message.domain.Message;
+import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.QuerySnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,7 +23,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminDashboardService {
 
-    private final DynamoDBMapper dynamoDBMapper;
+    private final Firestore firestore;
     private final AdminSystemLogRepository logRepository;
 
     public DashboardStatsResponse getDashboardStats(String range) {
@@ -36,111 +35,107 @@ public class AdminDashboardService {
         long todayMessages = 0;
         long newGroupsToday = 0;
 
-        // 1. Scan Users
-        DynamoDBScanExpression userScan = new DynamoDBScanExpression();
-        List<User> users = dynamoDBMapper.scan(User.class, userScan);
-        totalUsers = users.size();
-        activeUsers = users.stream().filter(u -> "ONLINE".equals(u.getStatus())).count();
+        try {
+            // 1. Fetch Users
+            QuerySnapshot userSnap = firestore.collection("users").get().get();
+            List<User> users = userSnap.toObjects(User.class);
+            totalUsers = users.size();
+            activeUsers = users.stream().filter(u -> "ONLINE".equals(u.getStatus())).count();
 
-        // 2. Scan Messages for today
-        // Note: For large DBs, scanning messages is slow. But for this simulation, it's ok.
-        Map<String, AttributeValue> eavMessage = new HashMap<>();
-        eavMessage.put(":startOfToday", new AttributeValue().withN(String.valueOf(startOfToday)));
-        
-        DynamoDBScanExpression msgScan = new DynamoDBScanExpression()
-                .withFilterExpression("createdAt >= :startOfToday")
-                .withExpressionAttributeValues(eavMessage);
-                
-        List<Message> messagesToday = dynamoDBMapper.scan(Message.class, msgScan);
-        todayMessages = messagesToday.size();
+            // 2. Query Messages for today across all subcollections (Collection Group Query)
+            QuerySnapshot msgSnap = firestore.collectionGroup("messages")
+                    .whereGreaterThanOrEqualTo("createdAt", startOfToday)
+                    .get()
+                    .get();
+            List<Message> messagesToday = msgSnap.toObjects(Message.class);
+            todayMessages = messagesToday.size();
 
-        // 3. Scan Conversations for new groups today
-        Map<String, AttributeValue> eavConv = new HashMap<>();
-        eavConv.put(":startOfToday", new AttributeValue().withN(String.valueOf(startOfToday)));
-        eavConv.put(":type", new AttributeValue().withS("GROUP"));
-        
-        DynamoDBScanExpression convScan = new DynamoDBScanExpression()
-                .withFilterExpression("createdAt >= :startOfToday AND #t = :type")
-                .withExpressionAttributeNames(Map.of("#t", "type"))
-                .withExpressionAttributeValues(eavConv);
-                
-        List<Conversation> groupsToday = dynamoDBMapper.scan(Conversation.class, convScan);
-        newGroupsToday = groupsToday.size();
+            // 3. Query new groups today
+            QuerySnapshot convSnap = firestore.collection("conversations")
+                    .whereEqualTo("type", "GROUP")
+                    .whereGreaterThanOrEqualTo("createdAt", startOfToday)
+                    .get()
+                    .get();
+            List<Conversation> groupsToday = convSnap.toObjects(Conversation.class);
+            newGroupsToday = groupsToday.size();
 
-        // 4. Generate Chart Data based on range
-        int daysToScan = switch (range) {
-            case "today" -> 0; // We'll handle today differently, showing hours
-            case "30d" -> 29;
-            default -> 6; // 7d
-        };
-        
-        long startOfRange = LocalDate.now(zoneId).minusDays(daysToScan).atStartOfDay(zoneId).toInstant().toEpochMilli();
-        Map<String, AttributeValue> eavWeeklyMsg = new HashMap<>();
-        eavWeeklyMsg.put(":startOfRange", new AttributeValue().withN(String.valueOf(startOfRange)));
-        DynamoDBScanExpression weeklyMsgScan = new DynamoDBScanExpression()
-                .withFilterExpression("createdAt >= :startOfRange")
-                .withExpressionAttributeValues(eavWeeklyMsg);
-        List<Message> weeklyMessages = dynamoDBMapper.scan(Message.class, weeklyMsgScan);
-        
-        List<DashboardStatsResponse.ChartDataPoint> weeklyChartData = new ArrayList<>();
-        if ("today".equals(range)) {
-            weeklyChartData = generateTodayChartData(users, weeklyMessages);
-        } else {
-            weeklyChartData = generateRealWeeklyChartData(users, weeklyMessages, daysToScan);
-        }
-
-        // 5. Get recent logs
-        List<AdminSystemLog> recentLogs = new ArrayList<>(logRepository.findRecentLogs(10));
-        
-        // Add recent group creations to logs directly from Conversations table
-        // Get up to 10 latest groups
-        DynamoDBScanExpression recentGroupsScan = new DynamoDBScanExpression()
-            .withFilterExpression("#t = :type")
-            .withExpressionAttributeNames(Map.of("#t", "type"))
-            .withExpressionAttributeValues(Map.of(":type", new AttributeValue().withS("GROUP")));
-        List<Conversation> allGroups = dynamoDBMapper.scan(Conversation.class, recentGroupsScan);
-        List<AdminSystemLog> groupLogs = allGroups.stream()
-            .sorted((a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()))
-            .limit(10)
-            .map(g -> AdminSystemLog.builder()
-                .logId("GRP-" + g.getConversationId())
-                .actionType("GROUP_CREATED")
-                .description("Nhóm \"" + (g.getName() != null ? g.getName() : "Không tên") + "\" vừa được tạo")
-                .createdAt(g.getCreatedAt())
-                .build())
-            .collect(Collectors.toList());
+            // 4. Generate Chart Data based on range
+            int daysToScan = switch (range) {
+                case "today" -> 0;
+                case "30d" -> 29;
+                default -> 6; // 7d
+            };
             
-        recentLogs.addAll(groupLogs);
-        
-        // Add recent user creations to logs
-        List<AdminSystemLog> userCreationLogs = users.stream()
-            .filter(u -> u.getCreatedAt() != null && !"ADMIN".equals(u.getRole()))
-            .sorted((a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()))
-            .limit(10)
-            .map(u -> AdminSystemLog.builder()
-                .logId("USR-REG-" + u.getUserId())
-                .actionType("USER_CREATED")
-                .description("Người dùng \"" + u.getFullName() + "\" vừa tạo tài khoản.")
-                .createdAt(u.getCreatedAt())
-                .build())
-            .collect(Collectors.toList());
+            long startOfRange = LocalDate.now(zoneId).minusDays(daysToScan).atStartOfDay(zoneId).toInstant().toEpochMilli();
+            QuerySnapshot weeklyMsgSnap = firestore.collectionGroup("messages")
+                    .whereGreaterThanOrEqualTo("createdAt", startOfRange)
+                    .get()
+                    .get();
+            List<Message> weeklyMessages = weeklyMsgSnap.toObjects(Message.class);
             
-        recentLogs.addAll(userCreationLogs);
-        
-        // Sort combined logs and take top 10
-        recentLogs.sort((a, b) -> Long.compare(b.getCreatedAt() != null ? b.getCreatedAt() : 0, a.getCreatedAt() != null ? a.getCreatedAt() : 0));
-        if (recentLogs.size() > 10) {
-            recentLogs = recentLogs.subList(0, 10);
-        }
+            List<DashboardStatsResponse.ChartDataPoint> weeklyChartData = new ArrayList<>();
+            if ("today".equals(range)) {
+                weeklyChartData = generateTodayChartData(users, weeklyMessages);
+            } else {
+                weeklyChartData = generateRealWeeklyChartData(users, weeklyMessages, daysToScan);
+            }
 
-        return DashboardStatsResponse.builder()
-                .totalUsers(totalUsers)
-                .activeUsers(activeUsers)
-                .todayMessages(todayMessages)
-                .newGroupsToday(newGroupsToday)
-                .weeklyChartData(weeklyChartData)
-                .recentLogs(recentLogs)
-                .build();
+            // 5. Get recent logs
+            List<AdminSystemLog> recentLogs = new ArrayList<>(logRepository.findRecentLogs(10));
+            
+            // Add recent group creations directly from Conversations collection
+            QuerySnapshot recentGroupsSnap = firestore.collection("conversations")
+                    .whereEqualTo("type", "GROUP")
+                    .get()
+                    .get();
+            List<Conversation> allGroups = recentGroupsSnap.toObjects(Conversation.class);
+            List<AdminSystemLog> groupLogs = allGroups.stream()
+                    .sorted((a, b) -> Long.compare(b.getCreatedAt() != null ? b.getCreatedAt() : 0, a.getCreatedAt() != null ? a.getCreatedAt() : 0))
+                    .limit(10)
+                    .map(g -> AdminSystemLog.builder()
+                            .logId("GRP-" + g.getConversationId())
+                            .actionType("GROUP_CREATED")
+                            .description("Nhóm \"" + (g.getName() != null ? g.getName() : "Không tên") + "\" vừa được tạo")
+                            .createdAt(g.getCreatedAt())
+                            .build())
+                    .collect(Collectors.toList());
+                
+            recentLogs.addAll(groupLogs);
+            
+            // Add recent user creations
+            List<AdminSystemLog> userCreationLogs = users.stream()
+                    .filter(u -> u.getCreatedAt() != null && !"ADMIN".equals(u.getRole()))
+                    .sorted((a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()))
+                    .limit(10)
+                    .map(u -> AdminSystemLog.builder()
+                            .logId("USR-REG-" + u.getUserId())
+                            .actionType("USER_CREATED")
+                            .description("Người dùng \"" + u.getFullName() + "\" vừa tạo tài khoản.")
+                            .createdAt(u.getCreatedAt())
+                            .build())
+                    .collect(Collectors.toList());
+                
+            recentLogs.addAll(userCreationLogs);
+            
+            // Sort combined logs and take top 10
+            recentLogs.sort((a, b) -> Long.compare(b.getCreatedAt() != null ? b.getCreatedAt() : 0, a.getCreatedAt() != null ? a.getCreatedAt() : 0));
+            if (recentLogs.size() > 10) {
+                recentLogs = recentLogs.subList(0, 10);
+            }
+
+            return DashboardStatsResponse.builder()
+                    .totalUsers(totalUsers)
+                    .activeUsers(activeUsers)
+                    .todayMessages(todayMessages)
+                    .newGroupsToday(newGroupsToday)
+                    .weeklyChartData(weeklyChartData)
+                    .recentLogs(recentLogs)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to compile dashboard stats: {}", e.getMessage(), e);
+            throw new RuntimeException("GCP Dashboard Stats calculation failed", e);
+        }
     }
 
     private List<DashboardStatsResponse.ChartDataPoint> generateRealWeeklyChartData(List<User> allUsers, List<Message> rangeMessages, int daysToScan) {

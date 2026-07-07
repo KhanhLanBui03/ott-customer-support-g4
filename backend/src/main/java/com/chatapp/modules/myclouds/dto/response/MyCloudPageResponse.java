@@ -1,7 +1,6 @@
 package com.chatapp.modules.myclouds.dto.response;
 
 
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Data;

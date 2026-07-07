@@ -12,8 +12,11 @@ services:
     restart: unless-stopped
     networks:
       - chat-network
+
   whisper:
-    image: ${DOCKER_HUB_USERNAME}/chat-app-whisper:latest
+    build:
+      context: ../whisper
+      dockerfile: Dockerfile
     container_name: chat-app-whisper-prod
     ports:
       - "8000:8000"
@@ -22,8 +25,11 @@ services:
     restart: unless-stopped
     networks:
       - chat-network
+
   backend:
-    image: ${DOCKER_HUB_USERNAME}/chat-app-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: chat-app-backend-prod
     ports:
       - "8080:8080"
@@ -31,16 +37,14 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
       - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER}
-      - FIREBASE_CONFIG_PATH=${FIREBASE_CONFIG_PATH}
       - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
       - APP_WHISPER_URL=http://whisper:8000
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME}
     depends_on:
       - redis
       - whisper

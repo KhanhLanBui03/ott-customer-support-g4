@@ -1,10 +1,8 @@
 package com.chatapp.modules.admin.controller;
 
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.chatapp.common.dto.ApiResponse;
 import com.chatapp.modules.conversation.domain.Conversation;
+import com.chatapp.modules.conversation.repository.ConversationRepository;
 import com.chatapp.modules.auth.domain.User;
 import com.chatapp.modules.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,20 +19,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminConversationController {
 
-    private final DynamoDBMapper dynamoDBMapper;
+    private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllGroups() {
-        Map<String, AttributeValue> eav = new HashMap<>();
-        eav.put(":type", new AttributeValue().withS("GROUP"));
-
-        DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
-                .withFilterExpression("#t = :type")
-                .withExpressionAttributeNames(Map.of("#t", "type"))
-                .withExpressionAttributeValues(eav);
-
-        List<Conversation> conversations = dynamoDBMapper.scan(Conversation.class, scanExpression);
+        List<Conversation> conversations = conversationRepository.findAllGroups();
 
         List<Map<String, Object>> result = conversations.stream().map(c -> {
             Map<String, Object> map = new HashMap<>();

@@ -1,6 +1,5 @@
 package com.chatapp.modules.admin.controller;
 
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
 import com.chatapp.common.dto.ApiResponse;
 import com.chatapp.common.util.JwtUtil;
 import com.chatapp.modules.admin.domain.Report;
@@ -10,6 +9,7 @@ import com.chatapp.modules.auth.repository.UserRepository;
 import com.chatapp.modules.auth.service.EmailService;
 import com.chatapp.modules.auth.service.SessionService;
 import com.chatapp.modules.conversation.domain.Conversation;
+import com.chatapp.modules.conversation.repository.ConversationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +29,7 @@ public class AdminReportController {
 
     private final ReportRepository reportRepository;
     private final UserRepository userRepository;
-    private final DynamoDBMapper dynamoDBMapper;
+    private final ConversationRepository conversationRepository;
     private final EmailService emailService;
     private final JwtUtil jwtUtil;
     private final SessionService sessionService;
@@ -65,7 +65,7 @@ public class AdminReportController {
                 targetName = targetUser.getFullName();
             }
         } else if ("GROUP".equalsIgnoreCase(targetType)) {
-            Conversation targetGroup = dynamoDBMapper.load(Conversation.class, targetId);
+            Conversation targetGroup = conversationRepository.findById(targetId).orElse(null);
             if (targetGroup != null) {
                 targetName = targetGroup.getName();
             }
@@ -117,7 +117,7 @@ public class AdminReportController {
                     violationCount = targetUser.getViolationCount();
                 }
             } else if ("GROUP".equalsIgnoreCase(r.getTargetType())) {
-                Conversation targetGroup = dynamoDBMapper.load(Conversation.class, r.getTargetId());
+                Conversation targetGroup = conversationRepository.findById(r.getTargetId()).orElse(null);
                 if (targetGroup != null && targetGroup.getViolationCount() != null) {
                     violationCount = targetGroup.getViolationCount();
                 }
@@ -164,12 +164,12 @@ public class AdminReportController {
                     }
                 }
             } else if ("GROUP".equalsIgnoreCase(report.getTargetType())) {
-                Conversation targetGroup = dynamoDBMapper.load(Conversation.class, report.getTargetId());
+                Conversation targetGroup = conversationRepository.findById(report.getTargetId()).orElse(null);
                 if (targetGroup != null) {
                     int currentCount = targetGroup.getViolationCount() != null ? targetGroup.getViolationCount() : 0;
                     newViolationCount = currentCount + 1;
                     targetGroup.setViolationCount(newViolationCount);
-                    dynamoDBMapper.save(targetGroup);
+                    conversationRepository.save(targetGroup);
 
                     // Send email to group owner (creatorId)
                     if (targetGroup.getCreatorId() != null) {
@@ -239,9 +239,9 @@ public class AdminReportController {
             }
         } else if ("DISBAND".equalsIgnoreCase(action)) {
             report.setActionTaken("DISBANDED");
-            Conversation targetGroup = dynamoDBMapper.load(Conversation.class, report.getTargetId());
+            Conversation targetGroup = conversationRepository.findById(report.getTargetId()).orElse(null);
             if (targetGroup != null) {
-                dynamoDBMapper.delete(targetGroup);
+                conversationRepository.delete(targetGroup);
                 
                 // Send disband notice email to group owner
                 if (targetGroup.getCreatorId() != null) {

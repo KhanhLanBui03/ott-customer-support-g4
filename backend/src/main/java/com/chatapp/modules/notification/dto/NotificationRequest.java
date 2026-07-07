@@ -1,6 +1,5 @@
 package com.chatapp.modules.notification.dto;
 
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBAttribute;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.*;
