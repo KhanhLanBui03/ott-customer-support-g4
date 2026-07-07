@@ -34,6 +34,9 @@ public class FirebaseConfig {
     @Value("${google.cloud.storage.bucket}")
     private String bucketName;
 
+    @Value("${google.cloud.firestore.database-id:default}")
+    private String databaseId;
+
     /**
      * Initialize Firebase App (used for FCM push notifications)
      */
@@ -61,8 +64,8 @@ public class FirebaseConfig {
      */
     @Bean
     public Firestore firestore(FirebaseApp firebaseApp) {
-        Firestore firestore = FirestoreClient.getFirestore(firebaseApp);
-        log.info("Firestore client initialized for project: {}", projectId);
+        Firestore firestore = FirestoreClient.getFirestore(firebaseApp, databaseId);
+        log.info("Firestore client initialized for project: {}, database: {}", projectId, databaseId);
         return firestore;
     }
 
