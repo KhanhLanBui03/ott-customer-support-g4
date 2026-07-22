@@ -105,14 +105,13 @@ public class SecurityConfig {
                                 "http://172.*:*",
                                 "http://192.*:*",
                                 "http://10.*:*",
-                                "*")); // Cho phép tất cả trong môi trường dev
+                                "https://*.f5chat.online",
+                                "https://f5chat.online",
+                                "https://*.pages.dev",
+                                "https://f5chat-app.pages.dev"));
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
                 configuration.setAllowedHeaders(Arrays.asList(
-                                "Content-Type",
-                                "Authorization",
-                                "X-Session-Id",
-                                "X-User-Id",
-                                "X-Device-Id"));
+                                "*"));
                 configuration.setExposedHeaders(Arrays.asList(
                                 "Content-Length",
                                 "X-Session-Id",
