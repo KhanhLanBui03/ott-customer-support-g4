@@ -54,10 +54,15 @@ public class UserConversationRepository {
         try {
             QuerySnapshot querySnapshot = firestore.collection(COLLECTION_NAME)
                     .whereEqualTo("userId", userId)
-                    .orderBy("updatedAt", Direction.DESCENDING)
                     .get()
                     .get();
-            return querySnapshot.toObjects(UserConversation.class);
+            List<UserConversation> list = new ArrayList<>(querySnapshot.toObjects(UserConversation.class));
+            list.sort((a, b) -> {
+                Long t1 = a.getUpdatedAt() != null ? a.getUpdatedAt() : 0L;
+                Long t2 = b.getUpdatedAt() != null ? b.getUpdatedAt() : 0L;
+                return t2.compareTo(t1);
+            });
+            return list;
         } catch (InterruptedException | ExecutionException e) {
             log.error("Failed to find user conversations for user {}: {}", userId, e.getMessage(), e);
             return List.of();

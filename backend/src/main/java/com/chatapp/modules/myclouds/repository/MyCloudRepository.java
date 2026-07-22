@@ -8,6 +8,7 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -22,31 +23,35 @@ public class MyCloudRepository {
     @Value
     public static class PageResult<T> {
         List<T> results;
-        String lastEvaluatedKey; // This will hold the last item's document ID or null
+        String lastEvaluatedKey;
     }
 
-    public MyCloud save(MyCloud myCloud) {
+    private boolean snapshotExists(DocumentSnapshot snapshot) {
+        return snapshot != null && snapshot.exists();
+    }
+
+    public MyCloud save(MyCloud entity) {
         try {
-            if (myCloud.getId() == null || myCloud.getId().isEmpty()) {
-                myCloud.setId(firestore.collection(COLLECTION_NAME).document().getId());
+            if (entity.getId() == null || entity.getId().isEmpty()) {
+                entity.setId(firestore.collection(COLLECTION_NAME).document().getId());
             }
-            firestore.collection(COLLECTION_NAME).document(myCloud.getId()).set(myCloud).get();
-            return myCloud;
+            firestore.collection(COLLECTION_NAME).document(entity.getId()).set(entity).get();
+            return entity;
         } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to save MyCloud file: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to save MyCloud file in Firestore", e);
+            log.error("Failed to save MyCloud entity: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to save MyCloud in Firestore", e);
         }
     }
 
-    public MyCloud findById(String fileId) {
+    public MyCloud findById(String id) {
         try {
-            DocumentSnapshot snapshot = firestore.collection(COLLECTION_NAME).document(fileId).get().get();
-            if (snapshot.exists()) {
+            DocumentSnapshot snapshot = firestore.collection(COLLECTION_NAME).document(id).get().get();
+            if (snapshotExists(snapshot)) {
                 return snapshot.toObject(MyCloud.class);
             }
             return null;
         } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find MyCloud by ID {}: {}", fileId, e.getMessage(), e);
+            log.error("Failed to find MyCloud by id {}: {}", id, e.getMessage(), e);
             return null;
         }
     }
@@ -57,9 +62,7 @@ public class MyCloudRepository {
             Query query = firestore.collection(COLLECTION_NAME)
                     .whereEqualTo("userId", userId)
                     .whereEqualTo("typeFile", fileType)
-                    .whereEqualTo("deleted", false)
-                    .orderBy("uploadedAt", Direction.DESCENDING)
-                    .limit(pageSize);
+                    .whereEqualTo("deleted", false);
 
             if (nextKey != null && !nextKey.isEmpty()) {
                 DocumentSnapshot cursorDoc = firestore.collection(COLLECTION_NAME).document(nextKey).get().get();
@@ -69,7 +72,15 @@ public class MyCloudRepository {
             }
 
             QuerySnapshot querySnapshot = query.get().get();
-            List<MyCloud> results = querySnapshot.toObjects(MyCloud.class);
+            List<MyCloud> results = new ArrayList<>(querySnapshot.toObjects(MyCloud.class));
+            results.sort((a, b) -> {
+                String t1 = a.getUploadedAt() != null ? a.getUploadedAt() : "";
+                String t2 = b.getUploadedAt() != null ? b.getUploadedAt() : "";
+                return t2.compareTo(t1);
+            });
+            if (results.size() > pageSize) {
+                results = results.subList(0, pageSize);
+            }
             String lastKey = (results.size() == pageSize) ? results.get(results.size() - 1).getId() : null;
 
             return new PageResult<>(results, lastKey);
@@ -84,9 +95,7 @@ public class MyCloudRepository {
             int pageSize = limit > 0 ? limit : DEFAULT_PAGE_SIZE;
             Query query = firestore.collection(COLLECTION_NAME)
                     .whereEqualTo("userId", userId)
-                    .whereEqualTo("deleted", false)
-                    .orderBy("uploadedAt", Direction.DESCENDING)
-                    .limit(pageSize);
+                    .whereEqualTo("deleted", false);
 
             if (nextKey != null && !nextKey.isEmpty()) {
                 DocumentSnapshot cursorDoc = firestore.collection(COLLECTION_NAME).document(nextKey).get().get();
@@ -96,7 +105,15 @@ public class MyCloudRepository {
             }
 
             QuerySnapshot querySnapshot = query.get().get();
-            List<MyCloud> results = querySnapshot.toObjects(MyCloud.class);
+            List<MyCloud> results = new ArrayList<>(querySnapshot.toObjects(MyCloud.class));
+            results.sort((a, b) -> {
+                String t1 = a.getUploadedAt() != null ? a.getUploadedAt() : "";
+                String t2 = b.getUploadedAt() != null ? b.getUploadedAt() : "";
+                return t2.compareTo(t1);
+            });
+            if (results.size() > pageSize) {
+                results = results.subList(0, pageSize);
+            }
             String lastKey = (results.size() == pageSize) ? results.get(results.size() - 1).getId() : null;
 
             return new PageResult<>(results, lastKey);
@@ -109,9 +126,5 @@ public class MyCloudRepository {
     public void delete(MyCloud entity) {
         entity.setDeleted(true);
         save(entity);
-    }
-
-    private boolean snapshotExists(DocumentSnapshot snapshot) {
-        return snapshot != null && snapshot.exists();
     }
 }
