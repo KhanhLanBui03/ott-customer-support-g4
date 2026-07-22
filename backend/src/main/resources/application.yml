@@ -104,6 +104,8 @@ cors:
     - "http://172.*.*.*:*"
     - "http://10.*.*.*:*"
     - "http://*.local:*"
+    - "https://*.f5chat.online"
+    - "https://f5chat.online"
   allowed-methods:
     - GET
     - POST
