@@ -1,27 +1,47 @@
 package com.chatapp.modules.myclouds.NextKeyUtils;
 
-import lombok.experimental.UtilityClass;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.Data;
+import lombok.experimental.UtilityClass;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.mapper.Mapper;
+
+import java.io.IOException;
+import java.util.Base64;
+import java.util.Map;
+
+@Slf4j
 @UtilityClass
 public class NextKeyUtils {
-    
-    public String encode(String documentId) {
-        if (documentId == null || documentId.isEmpty()) {
-            return null;
-        }
-        return Base64.getEncoder().encodeToString(documentId.getBytes(StandardCharsets.UTF_8));
-    }
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    public String decode(String encoded) {
-        if (encoded == null || encoded.isEmpty()) {
+    public String encode(Map<String, AttributeValue> key){
+        if(key == null || key.isEmpty()){
             return null;
         }
         try {
-            byte[] decoded = Base64.getDecoder().decode(encoded);
-            return new String(decoded, StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
+            byte[] json = MAPPER.writeValueAsBytes(key);
+            return Base64.getEncoder().encodeToString(json);
+        } catch (JsonProcessingException e) {
+            log.warn("Không thể encode nextKey", e);
+            return null;
+        }
+
+    }
+
+    public Map<String, AttributeValue> decode(String encoded){
+        if(encoded == null || encoded.isEmpty()){
+            return null;
+        }
+        byte[] json = Base64.getDecoder().decode(encoded);
+        try {
+            return MAPPER.readValue(json, new TypeReference<>() {});
+        } catch (IOException e) {
+            log.warn("nextKey không hợp lệ: {}", encoded);
             return null;
         }
     }

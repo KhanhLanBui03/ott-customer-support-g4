@@ -27,12 +27,13 @@ public class AdminUserController {
                                 + (rawUsers == null ? "null" : rawUsers.size()) + " records");
                 if (rawUsers != null) {
                         for (User u : rawUsers) {
-                                System.out.println("DEBUG USER: userId=" + u.getUserId()
+                                System.out.println("DEBUG USER: userId=" + u.getUserId() + ", sk=" + u.getSk()
                                                 + ", role=" + u.getRole() + ", name=" + u.getFullName());
                         }
                 }
                 List<User> users = rawUsers.stream()
-                                .filter(u -> u != null)
+                                .filter(u -> u != null && !"profile".equals(u.getUserId())) // Filter out dummy keys if
+                                                                                            // any
                                 .collect(Collectors.toList());
                 System.out.println("DEBUG ADMIN GETALLUSERS: after filtering, returning " + users.size() + " users");
                 return ResponseEntity.ok(ApiResponse.success(users, "Users fetched successfully"));

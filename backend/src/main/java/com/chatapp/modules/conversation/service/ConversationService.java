@@ -312,7 +312,7 @@ public class ConversationService {
                 .type(isGroup ? "GROUP" : "SINGLE")
                 .name(isGroup ? request.getName() : null)
                 .creatorId(currentUserId)
-                .memberIds(new ArrayList<>(allMemberIds))
+                .memberIds(allMemberIds)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
@@ -607,12 +607,10 @@ public class ConversationService {
             throw new ValidationException("Not authorized");
         }
         if (conv.getPinnedMessageIds() == null) {
-            conv.setPinnedMessageIds(new ArrayList<>());
+            conv.setPinnedMessageIds(new HashSet<>());
         }
-        List<String> pins = new ArrayList<>(conv.getPinnedMessageIds());
-        if (!pins.contains(messageId)) {
-            pins.add(messageId);
-        }
+        Set<String> pins = new HashSet<>(conv.getPinnedMessageIds());
+        pins.add(messageId);
         conv.setPinnedMessageIds(pins);
         conversationRepository.save(conv);
         log.info("Message {} pinned successfully in conversation {}", messageId, conversationId);
@@ -630,7 +628,7 @@ public class ConversationService {
             throw new ValidationException("Not authorized");
         }
         if (conv.getPinnedMessageIds() != null) {
-            List<String> pins = new ArrayList<>(conv.getPinnedMessageIds());
+            Set<String> pins = new HashSet<>(conv.getPinnedMessageIds());
             boolean removed = pins.remove(messageId);
             log.info("After removal, pins size: {}", pins.size());
             if (removed) {

@@ -1,55 +1,106 @@
 package com.chatapp.modules.auth.domain;
 
-import com.google.cloud.firestore.annotation.DocumentId;
+import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * User domain entity — stored in Firestore collection "users"
+ * User domain entity
+ * Primary table in DynamoDB
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@DynamoDBTable(tableName = "chat_users")
 public class User {
 
-    @DocumentId
+    @DynamoDBHashKey(attributeName = "userId")
     private String userId;
 
+    @DynamoDBRangeKey(attributeName = "sk")
+    @DynamoDBIndexRangeKey(globalSecondaryIndexName = "phoneNumber-index")
+    private String sk;
+
+    @DynamoDBAttribute(attributeName = "phoneNumber")
+    @DynamoDBIndexHashKey(globalSecondaryIndexName = "phoneNumber-index")
     private String phoneNumber;
+
+    @DynamoDBAttribute(attributeName = "passwordHash")
     private String passwordHash;
+
+    @DynamoDBAttribute(attributeName = "firstName")
     private String firstName;
+
+    @DynamoDBAttribute(attributeName = "lastName")
     private String lastName;
+
+    @DynamoDBAttribute(attributeName = "email")
+    @DynamoDBIndexHashKey(globalSecondaryIndexName = "email-index")
     private String email;
+
+    @DynamoDBAttribute(attributeName = "avatarUrl")
     private String avatarUrl;
+
+    @DynamoDBAttribute(attributeName = "bio")
     private String bio;
+
+    @DynamoDBAttribute(attributeName = "status")
     private String status; // ONLINE, OFFLINE, LOCKED
+
+    @DynamoDBAttribute(attributeName = "lastSeenAt")
     private Long lastSeenAt;
+
+    @DynamoDBAttribute(attributeName = "isVerified")
     private Boolean isVerified;
+
+    @DynamoDBAttribute(attributeName = "isActive")
     private Boolean isActive;
+
+    @DynamoDBAttribute(attributeName = "createdAt")
     private Long createdAt;
+
+    @DynamoDBAttribute(attributeName = "updatedAt")
     private Long updatedAt;
+
+    @DynamoDBAttribute(attributeName = "deletionDate")
     private Long deletionDate;
+
+    @DynamoDBAttribute(attributeName = "publicKeyRSA")
     private String publicKeyRSA; // For E2E encryption
+
+    @DynamoDBAttribute(attributeName = "deviceIds")
     private List<String> deviceIds; // Active device list
+
+    @DynamoDBAttribute(attributeName = "preferredLanguage")
     private String preferredLanguage; // "vie_Latn", "eng_Latn", null = tắt dịch
+
+    @DynamoDBAttribute(attributeName = "role")
     private String role; // "USER", "ADMIN"
+
+    @DynamoDBAttribute(attributeName = "violationCount")
     private Integer violationCount;
+
+    @DynamoDBAttribute(attributeName = "lockCount")
     private Integer lockCount;
+
+    @DynamoDBAttribute(attributeName = "lockUntil")
     private Long lockUntil;
 
-    // Not persisted in Firestore — stored in Redis
-    private transient Integer loginFailCount;
+    @DynamoDBIgnore
+    private Integer loginFailCount; // This will be in Redis
 
     public static User create(String userId, String phoneNumber, String passwordHash,
             String firstName, String lastName) {
         Long now = System.currentTimeMillis();
         return User.builder()
                 .userId(userId)
+                .sk("profile")
                 .phoneNumber(phoneNumber)
                 .passwordHash(passwordHash)
                 .firstName(firstName)
@@ -83,6 +134,7 @@ public class User {
         this.updatedAt = System.currentTimeMillis();
     }
 
+    @DynamoDBIgnore
     public String getFullName() {
         String f = firstName != null ? firstName.trim() : "";
         String l = lastName != null ? lastName.trim() : "";
@@ -90,6 +142,7 @@ public class User {
         return full.isEmpty() ? "Unknown" : full;
     }
 
+    @DynamoDBIgnore
     public Integer getLoginFailCount() {
         return loginFailCount;
     }

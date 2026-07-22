@@ -1,6 +1,9 @@
 package com.chatapp.modules.myclouds.service;
 
-import com.chatapp.modules.myclouds.extraFunctions.SettingUpGCS;
+import com.amazonaws.services.dynamodbv2.datamodeling.QueryResultPage;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.chatapp.modules.myclouds.extraFunctions.SettingUpS3;
 import com.chatapp.modules.myclouds.extraFunctions.ValidationMyCloud;
 import com.chatapp.modules.myclouds.NextKeyUtils.NextKeyUtils;
 import com.chatapp.modules.myclouds.domain.MyCloud;
@@ -19,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,10 +30,11 @@ import java.util.*;
 public class MyCloudService {
     private final ValidationMyCloud validationMyCloud;
     private final MyCloudRepository myCloudRepository;
-    private final SettingUpGCS settingUpGCS;
+    private final SettingUpS3 settingUpS3;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Value("${google.cloud.storage.bucket}")
+
+    @Value("${aws.s3.bucket}")
     private String bucketName;
     private final MyCloudMapper myCloudMapper;
 
@@ -41,14 +46,17 @@ public class MyCloudService {
                                          String replyToSenderName) throws IOException {
         this.validationMyCloud.validateFile(multipartFile);
 
-        String gcsKey = this.settingUpGCS.buildGcsKey(userId, Objects.requireNonNull(multipartFile.getOriginalFilename()));
+        String s3Key = this.settingUpS3.buildS3Key(userId, Objects.requireNonNull(multipartFile.getOriginalFilename()));
         String mimeType = multipartFile.getContentType();
 
-        // 1. Upload to GCS
-        this.settingUpGCS.putObject(bucketName, gcsKey, multipartFile.getInputStream(), mimeType);
-        log.info("Uploaded to GCS: {}", gcsKey);
+        // 1. Upload lên S3
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setContentType(mimeType);
+        metadata.setContentLength(multipartFile.getSize());
+        this.settingUpS3.putObject(bucketName, s3Key, multipartFile.getInputStream(), metadata);
+        log.info("Uploaded to S3: {}", s3Key);
 
-        // 2. Save metadata to Firestore
+        // 2. Lưu metadata vào DynamoDB
         String now = Instant.now().toString();
         String messageText = validationMyCloud.readMessageText(multipartFile, mimeType);
 
@@ -69,7 +77,7 @@ public class MyCloudService {
         MyCloud entity = MyCloud.builder()
                 .userId(userId)
                 .fileName(multipartFile.getOriginalFilename())
-                .s3Key(gcsKey) // Stored GCS key here
+                .s3Key(s3Key)
                 .mimeType(mimeType)
                 .typeFile(validationMyCloud.resolveFileType(mimeType, multipartFile.getOriginalFilename()))
                 .fileSize(multipartFile.getSize())
@@ -81,17 +89,17 @@ public class MyCloudService {
                 .replyToTypeFile(replyToTypeFile)
                 .replyToFileName(replyToFileName)
                 .replyToSenderName(replyToSenderName)
-                .replyToFileUrl(repliedFile == null ? null : this.settingUpGCS.generatePresignedUrl(repliedFile.getS3Key()))
+                .replyToFileUrl(repliedFile == null ? null : this.settingUpS3.generatePresignedUrl(repliedFile.getS3Key()))
                 .deleted(false)
                 .build();
 
         myCloudRepository.save(entity);
         log.info("Saved MyCloud item: {}", entity.getId());
 
-        // 3. Return DTO with GCS Signed URL
+        // 3. Trả về DTO với presigned URL
         MyCloudResponse response = this.myCloudMapper.toMyCloudResponse(entity);
 
-        // 4. Publish WS update event
+        // 4. Phát event WebSocket để đồng bộ tức thời cho các client khác (như web/mobile đang mở song song)
         try {
             eventPublisher.publishEvent(MessageEvent.of("MY_CLOUD_UPDATE", "SYSTEM", Map.of(
                     "userId", userId,
@@ -106,6 +114,8 @@ public class MyCloudService {
         return response;
     }
 
+    // ─── Read ────────────────────────────────────────────────────────────────
+
     public MyCloudResponse getById(String userId, String fileId) {
         MyCloud entity = myCloudRepository.findById(fileId);
         if (entity == null) {
@@ -118,21 +128,25 @@ public class MyCloudService {
         return this.myCloudMapper.toMyCloudResponse(entity);
     }
 
+    /**
+     * Phân trang cursor-based.
+     * @param lastKey  null = trang đầu, hoặc truyền giá trị từ response trước
+     */
     public MyCloudPageResponse listFiles(
             String userId,
             String fileType,
             int limit,
-            String nextKey) {
+            Map<String, AttributeValue> lastKey) {
 
-        MyCloudRepository.PageResult<MyCloud> page = (fileType != null && !fileType.isBlank())
-                ? myCloudRepository.findByUserIdAndType(userId, fileType, limit, nextKey)
-                : myCloudRepository.findByUserId(userId, limit, nextKey);
+        QueryResultPage<MyCloud> page = (fileType != null && !fileType.isBlank())
+                ? myCloudRepository.findByUserIdAndType(userId, fileType, limit, lastKey)
+                : myCloudRepository.findByUserId(userId, limit, lastKey);
 
         List<MyCloudResponse> items = this.myCloudMapper.toResponses(page.getResults());
 
         return MyCloudPageResponse.builder()
                 .myCloudResponses(items)
-                .nextKey(NextKeyUtils.encode(page.getLastEvaluatedKey())) // Encodes docId base64 string
+                .nextKey(NextKeyUtils.encode(page.getLastEvaluatedKey())) // null nếu là trang cuối
                 .build();
     }
 
@@ -142,6 +156,8 @@ public class MyCloudService {
             throw new NoSuchElementException("File không tồn tại");
         }
 
+        // Soft-delete trên DynamoDB — không xoá S3 object ngay
+        // (có thể dùng S3 lifecycle policy để dọn sau)
         myCloudRepository.delete(entity);
         log.info("Soft-deleted file: {}", fileId);
 
@@ -156,4 +172,5 @@ public class MyCloudService {
             log.error("Failed to publish MY_CLOUD_UPDATE delete event: {}", ex.getMessage());
         }
     }
+
 }

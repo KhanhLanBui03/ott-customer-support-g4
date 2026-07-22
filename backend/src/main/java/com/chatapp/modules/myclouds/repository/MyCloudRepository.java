@@ -1,130 +1,78 @@
 package com.chatapp.modules.myclouds.repository;
 
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
+import com.amazonaws.services.dynamodbv2.datamodeling.QueryResultPage;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.chatapp.modules.myclouds.domain.MyCloud;
-import com.google.cloud.firestore.*;
-import com.google.cloud.firestore.Query.Direction;
+import com.chatapp.modules.myclouds.dto.response.MyCloudResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
+import java.util.HashMap;
+import java.util.Map;
+
 
 @Repository
 @RequiredArgsConstructor
-@Slf4j
+@FieldDefaults(makeFinal = true, level = lombok.AccessLevel.PRIVATE)
 public class MyCloudRepository {
-    private final Firestore firestore;
-    private static final String COLLECTION_NAME = "myclouds";
+    DynamoDBMapper dynamoDBMapper;
+
+    private static final String GSI_NAME = "userId-uploadedAt-index";
     private static final int DEFAULT_PAGE_SIZE = 20;
 
-    @Value
-    public static class PageResult<T> {
-        List<T> results;
-        String lastEvaluatedKey;
+    public MyCloud save(MyCloud myCloud){
+        dynamoDBMapper.save(myCloud);
+        return myCloud;
     }
 
-    private boolean snapshotExists(DocumentSnapshot snapshot) {
-        return snapshot != null && snapshot.exists();
+
+    public MyCloud findById(String fileId) {
+        return dynamoDBMapper.load(MyCloud.class, fileId);
     }
 
-    public MyCloud save(MyCloud entity) {
-        try {
-            if (entity.getId() == null || entity.getId().isEmpty()) {
-                entity.setId(firestore.collection(COLLECTION_NAME).document().getId());
-            }
-            firestore.collection(COLLECTION_NAME).document(entity.getId()).set(entity).get();
-            return entity;
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to save MyCloud entity: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to save MyCloud in Firestore", e);
-        }
+    public QueryResultPage<MyCloud> findByUserIdAndType(String userId, String fileType, int limit, Map<String, AttributeValue> lastKey) {
+        Map<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":userId", new AttributeValue().withS(userId));
+        eav.put(":fileType", new AttributeValue().withS(fileType));
+        eav.put(":notDeleted", new AttributeValue().withN("0"));
+
+        DynamoDBQueryExpression<MyCloud> query = new DynamoDBQueryExpression<MyCloud>()
+                .withIndexName(GSI_NAME)
+                .withConsistentRead(false)
+                .withKeyConditionExpression("user_id = :userId")
+                .withFilterExpression("type_file = :fileType AND is_deleted = :notDeleted")
+                .withExpressionAttributeValues(eav)
+                .withScanIndexForward(false)
+                .withLimit(limit > 0 ? limit : DEFAULT_PAGE_SIZE)
+                .withExclusiveStartKey(lastKey);
+
+        return dynamoDBMapper.queryPage(MyCloud.class, query);
+
     }
 
-    public MyCloud findById(String id) {
-        try {
-            DocumentSnapshot snapshot = firestore.collection(COLLECTION_NAME).document(id).get().get();
-            if (snapshotExists(snapshot)) {
-                return snapshot.toObject(MyCloud.class);
-            }
-            return null;
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find MyCloud by id {}: {}", id, e.getMessage(), e);
-            return null;
-        }
-    }
+    public QueryResultPage<MyCloud> findByUserId(String userId, int limit, Map<String, AttributeValue> lastKey) {
+        Map<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":userId", new AttributeValue().withS(userId));
+        eav.put(":notDeleted", new AttributeValue().withN("0")); // match with is_deleted = false
 
-    public PageResult<MyCloud> findByUserIdAndType(String userId, String fileType, int limit, String nextKey) {
-        try {
-            int pageSize = limit > 0 ? limit : DEFAULT_PAGE_SIZE;
-            Query query = firestore.collection(COLLECTION_NAME)
-                    .whereEqualTo("userId", userId)
-                    .whereEqualTo("typeFile", fileType)
-                    .whereEqualTo("deleted", false);
+        DynamoDBQueryExpression<MyCloud> query = new DynamoDBQueryExpression<MyCloud>()
+                .withIndexName(GSI_NAME)
+                .withConsistentRead(false)
+                .withKeyConditionExpression("user_id = :userId")
+                .withFilterExpression("is_deleted = :notDeleted")
+                .withExpressionAttributeValues(eav)
+                .withScanIndexForward(false) // DESC — mới nhất lên đầu
+                .withLimit(limit > 0 ? limit : DEFAULT_PAGE_SIZE)
+                .withExclusiveStartKey(lastKey);
 
-            if (nextKey != null && !nextKey.isEmpty()) {
-                DocumentSnapshot cursorDoc = firestore.collection(COLLECTION_NAME).document(nextKey).get().get();
-                if (snapshotExists(cursorDoc)) {
-                    query = query.startAfter(cursorDoc);
-                }
-            }
-
-            QuerySnapshot querySnapshot = query.get().get();
-            List<MyCloud> results = new ArrayList<>(querySnapshot.toObjects(MyCloud.class));
-            results.sort((a, b) -> {
-                String t1 = a.getUploadedAt() != null ? a.getUploadedAt() : "";
-                String t2 = b.getUploadedAt() != null ? b.getUploadedAt() : "";
-                return t2.compareTo(t1);
-            });
-            if (results.size() > pageSize) {
-                results = results.subList(0, pageSize);
-            }
-            String lastKey = (results.size() == pageSize) ? results.get(results.size() - 1).getId() : null;
-
-            return new PageResult<>(results, lastKey);
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to query MyCloud by user {} and type {}: {}", userId, fileType, e.getMessage(), e);
-            return new PageResult<>(List.of(), null);
-        }
-    }
-
-    public PageResult<MyCloud> findByUserId(String userId, int limit, String nextKey) {
-        try {
-            int pageSize = limit > 0 ? limit : DEFAULT_PAGE_SIZE;
-            Query query = firestore.collection(COLLECTION_NAME)
-                    .whereEqualTo("userId", userId)
-                    .whereEqualTo("deleted", false);
-
-            if (nextKey != null && !nextKey.isEmpty()) {
-                DocumentSnapshot cursorDoc = firestore.collection(COLLECTION_NAME).document(nextKey).get().get();
-                if (snapshotExists(cursorDoc)) {
-                    query = query.startAfter(cursorDoc);
-                }
-            }
-
-            QuerySnapshot querySnapshot = query.get().get();
-            List<MyCloud> results = new ArrayList<>(querySnapshot.toObjects(MyCloud.class));
-            results.sort((a, b) -> {
-                String t1 = a.getUploadedAt() != null ? a.getUploadedAt() : "";
-                String t2 = b.getUploadedAt() != null ? b.getUploadedAt() : "";
-                return t2.compareTo(t1);
-            });
-            if (results.size() > pageSize) {
-                results = results.subList(0, pageSize);
-            }
-            String lastKey = (results.size() == pageSize) ? results.get(results.size() - 1).getId() : null;
-
-            return new PageResult<>(results, lastKey);
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to query MyCloud by user {}: {}", userId, e.getMessage(), e);
-            return new PageResult<>(List.of(), null);
-        }
+        return dynamoDBMapper.queryPage(MyCloud.class, query);
     }
 
     public void delete(MyCloud entity) {
         entity.setDeleted(true);
-        save(entity);
+        dynamoDBMapper.save(entity);
     }
 }

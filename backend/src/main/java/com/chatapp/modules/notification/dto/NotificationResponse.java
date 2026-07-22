@@ -1,5 +1,6 @@
 package com.chatapp.modules.notification.dto;
 
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBAttribute;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

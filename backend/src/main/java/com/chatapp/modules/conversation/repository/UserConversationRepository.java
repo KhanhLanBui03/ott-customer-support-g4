@@ -1,102 +1,104 @@
 package com.chatapp.modules.conversation.repository;
 
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.chatapp.modules.conversation.domain.UserConversation;
-import com.google.cloud.firestore.DocumentReference;
-import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.Query.Direction;
-import com.google.cloud.firestore.QuerySnapshot;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
-@Slf4j
 public class UserConversationRepository {
 
-    private final Firestore firestore;
-    private static final String COLLECTION_NAME = "userConversations";
+    private final DynamoDBMapper dynamoDBMapper;
 
     public UserConversation save(UserConversation userConversation) {
-        try {
-            String docId = UserConversation.buildId(userConversation.getUserId(), userConversation.getConversationId());
-            userConversation.setId(docId);
-            firestore.collection(COLLECTION_NAME).document(docId).set(userConversation).get();
-            return userConversation;
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to save UserConversation: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to save UserConversation in Firestore", e);
-        }
+        dynamoDBMapper.save(userConversation);
+        return userConversation;
     }
 
     public Optional<UserConversation> findById(String userId, String conversationId) {
-        try {
-            String docId = UserConversation.buildId(userId, conversationId);
-            DocumentSnapshot snapshot = firestore.collection(COLLECTION_NAME).document(docId).get().get();
-            if (snapshot.exists()) {
-                return Optional.ofNullable(snapshot.toObject(UserConversation.class));
-            }
-            return Optional.empty();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find UserConversation for user {} and conversation {}: {}", userId, conversationId, e.getMessage(), e);
-            return Optional.empty();
-        }
+        com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapperConfig config = com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapperConfig.builder()
+                .withConsistentReads(com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapperConfig.ConsistentReads.CONSISTENT)
+                .build();
+        UserConversation userConversation = dynamoDBMapper.load(UserConversation.class, userId, conversationId, config);
+        return Optional.ofNullable(userConversation);
     }
 
     public List<UserConversation> findByUserIdOrderByUpdatedAtDesc(String userId) {
-        try {
-            QuerySnapshot querySnapshot = firestore.collection(COLLECTION_NAME)
-                    .whereEqualTo("userId", userId)
-                    .get()
-                    .get();
-            List<UserConversation> list = new ArrayList<>(querySnapshot.toObjects(UserConversation.class));
-            list.sort((a, b) -> {
-                Long t1 = a.getUpdatedAt() != null ? a.getUpdatedAt() : 0L;
-                Long t2 = b.getUpdatedAt() != null ? b.getUpdatedAt() : 0L;
-                return t2.compareTo(t1);
-            });
-            return list;
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find user conversations for user {}: {}", userId, e.getMessage(), e);
-            return List.of();
+        Map<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":val1", new AttributeValue().withS(userId));
+
+        DynamoDBQueryExpression<UserConversation> queryExpression = new DynamoDBQueryExpression<UserConversation>()
+                .withIndexName("user-conversations-updated-index")
+                .withConsistentRead(false)
+                .withKeyConditionExpression("userId = :val1")
+                .withExpressionAttributeValues(eav)
+                .withScanIndexForward(false);
+
+        List<UserConversation> results = dynamoDBMapper.query(UserConversation.class, queryExpression);
+        
+        // RELOAD FULL RECORDS FROM BASE TABLE
+        // This is necessary because the GSI may not project the 'isPinned' attribute if it were added after index creation
+        if (results.isEmpty()) return results;
+        
+        List<Object> toLoad = new java.util.ArrayList<>();
+        for (UserConversation uc : results) {
+            UserConversation key = new UserConversation();
+            key.setUserId(userId);
+            key.setConversationId(uc.getConversationId());
+            toLoad.add(key);
         }
+        
+        Map<String, List<Object>> batchResults = dynamoDBMapper.batchLoad(toLoad);
+        List<UserConversation> fullRecords = new java.util.ArrayList<>();
+        for (List<Object> list : batchResults.values()) {
+            for (Object obj : list) {
+                fullRecords.add((UserConversation) obj);
+            }
+        }
+        
+        // Re-sort by updatedAt since batchLoad doesn't guarantee order
+        fullRecords.sort((a, b) -> Long.compare(b.getUpdatedAt() != null ? b.getUpdatedAt() : 0, 
+                                               a.getUpdatedAt() != null ? a.getUpdatedAt() : 0));
+        
+        return fullRecords;
     }
 
     public List<UserConversation> findAllByIds(Iterable<String> userIds, String conversationId) {
-        if (userIds == null || !userIds.iterator().hasNext()) {
-            return new ArrayList<>();
+        if (userIds == null || !userIds.iterator().hasNext()) return new java.util.ArrayList<>();
+        
+        List<Object> toLoad = new java.util.ArrayList<>();
+        for (String userId : userIds) {
+            UserConversation key = new UserConversation();
+            key.setUserId(userId);
+            key.setConversationId(conversationId);
+            toLoad.add(key);
         }
-        try {
-            List<DocumentReference> refs = new ArrayList<>();
-            for (String userId : userIds) {
-                String docId = UserConversation.buildId(userId, conversationId);
-                refs.add(firestore.collection(COLLECTION_NAME).document(docId));
+        
+        Map<String, List<Object>> batchResults = dynamoDBMapper.batchLoad(toLoad);
+        List<UserConversation> results = new java.util.ArrayList<>();
+        if (batchResults != null) {
+            for (List<Object> list : batchResults.values()) {
+                if (list != null) {
+                    for (Object obj : list) {
+                        if (obj instanceof UserConversation) {
+                            results.add((UserConversation) obj);
+                        }
+                    }
+                }
             }
-            List<DocumentSnapshot> snapshots = firestore.getAll(refs.toArray(new DocumentReference[0])).get();
-            return snapshots.stream()
-                    .filter(DocumentSnapshot::exists)
-                    .map(snap -> snap.toObject(UserConversation.class))
-                    .collect(Collectors.toList());
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to batch get UserConversations: {}", e.getMessage(), e);
-            return List.of();
         }
+        return results;
     }
 
     public void delete(UserConversation userConversation) {
-        try {
-            String docId = UserConversation.buildId(userConversation.getUserId(), userConversation.getConversationId());
-            firestore.collection(COLLECTION_NAME).document(docId).delete().get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to delete UserConversation: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to delete UserConversation from Firestore", e);
-        }
+        dynamoDBMapper.delete(userConversation);
     }
 }

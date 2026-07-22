@@ -1,79 +1,70 @@
 package com.chatapp.modules.conversation.repository;
 
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.chatapp.modules.conversation.domain.GroupJoinRequest;
-import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.QuerySnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
 @Slf4j
 public class GroupJoinRequestRepository {
-    private final Firestore firestore;
-    private static final String COLLECTION_NAME = "groupJoinRequests";
+    private final DynamoDBMapper dynamoDBMapper;
 
     public void save(GroupJoinRequest request) {
-        try {
-            if (request.getRequestId() == null || request.getRequestId().isEmpty()) {
-                request.setRequestId(UUID.randomUUID().toString());
-            }
-            firestore.collection(COLLECTION_NAME).document(request.getRequestId()).set(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to save GroupJoinRequest: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to save GroupJoinRequest in Firestore", e);
-        }
+        dynamoDBMapper.save(request);
     }
 
     public Optional<GroupJoinRequest> findById(String id) {
-        try {
-            DocumentSnapshot snapshot = firestore.collection(COLLECTION_NAME).document(id).get().get();
-            if (snapshot.exists()) {
-                return Optional.ofNullable(snapshot.toObject(GroupJoinRequest.class));
-            }
-            return Optional.empty();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find GroupJoinRequest by ID {}: {}", id, e.getMessage(), e);
-            return Optional.empty();
-        }
+        return Optional.ofNullable(dynamoDBMapper.load(GroupJoinRequest.class, id));
     }
 
     public List<GroupJoinRequest> findByConversationId(String conversationId) {
         try {
-            QuerySnapshot snapshot = firestore.collection(COLLECTION_NAME)
-                    .whereEqualTo("conversationId", conversationId)
-                    .get()
-                    .get();
-            return snapshot.toObjects(GroupJoinRequest.class);
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find GroupJoinRequests for conversation {}: {}", conversationId, e.getMessage(), e);
-            return List.of();
+            GroupJoinRequest hashKeyValues = new GroupJoinRequest();
+            hashKeyValues.setConversationId(conversationId);
+
+            DynamoDBQueryExpression<GroupJoinRequest> queryExpression = new DynamoDBQueryExpression<GroupJoinRequest>()
+                    .withHashKeyValues(hashKeyValues)
+                    .withIndexName("conversation-index")
+                    .withConsistentRead(false);
+
+            List<GroupJoinRequest> gsiResults = dynamoDBMapper.query(GroupJoinRequest.class, queryExpression);
+            
+            // GSI may only project key attributes. Reload full items from main table.
+            return gsiResults.stream()
+                    .map(r -> dynamoDBMapper.load(GroupJoinRequest.class, r.getRequestId()))
+                    .filter(r -> r != null)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Failed to query group join requests by conversationId GSI: {}", e.getMessage());
+            
+            // Fallback to scan if GSI query fails
+            Map<String, AttributeValue> eav = new HashMap<>();
+            eav.put(":conversationId", new AttributeValue().withS(conversationId));
+
+            DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+                    .withFilterExpression("conversationId = :conversationId")
+                    .withExpressionAttributeValues(eav);
+
+            return dynamoDBMapper.scan(GroupJoinRequest.class, scanExpression);
         }
     }
 
     public Optional<GroupJoinRequest> findPendingByUserIdAndConversationId(String userId, String conversationId) {
-        try {
-            QuerySnapshot snapshot = firestore.collection(COLLECTION_NAME)
-                    .whereEqualTo("conversationId", conversationId)
-                    .whereEqualTo("userId", userId)
-                    .whereEqualTo("status", "PENDING")
-                    .limit(1)
-                    .get()
-                    .get();
-            if (!snapshot.isEmpty()) {
-                return Optional.ofNullable(snapshot.getDocuments().get(0).toObject(GroupJoinRequest.class));
-            }
-            return Optional.empty();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find pending GroupJoinRequest for user {} in conversation {}: {}", userId, conversationId, e.getMessage(), e);
-            return Optional.empty();
-        }
+        List<GroupJoinRequest> allForConv = findByConversationId(conversationId);
+        return allForConv.stream()
+                .filter(req -> userId.equals(req.getUserId()) && "PENDING".equals(req.getStatus()))
+                .findFirst();
     }
 }

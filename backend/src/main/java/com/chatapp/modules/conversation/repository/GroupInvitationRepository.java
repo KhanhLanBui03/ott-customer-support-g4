@@ -1,60 +1,64 @@
 package com.chatapp.modules.conversation.repository;
 
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBQueryExpression;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.chatapp.modules.conversation.domain.GroupInvitation;
-import com.google.cloud.firestore.DocumentSnapshot;
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.QuerySnapshot;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
 @Repository
 @RequiredArgsConstructor
-@Slf4j
+@lombok.extern.slf4j.Slf4j
 public class GroupInvitationRepository {
-    private final Firestore firestore;
-    private static final String COLLECTION_NAME = "groupInvitations";
+    private final DynamoDBMapper dynamoDBMapper;
 
     public void save(GroupInvitation invitation) {
-        try {
-            if (invitation.getInvitationId() == null || invitation.getInvitationId().isEmpty()) {
-                invitation.setInvitationId(UUID.randomUUID().toString());
-            }
-            firestore.collection(COLLECTION_NAME).document(invitation.getInvitationId()).set(invitation).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to save GroupInvitation: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to save GroupInvitation in Firestore", e);
-        }
+        dynamoDBMapper.save(invitation);
     }
 
     public Optional<GroupInvitation> findById(String id) {
-        try {
-            DocumentSnapshot snapshot = firestore.collection(COLLECTION_NAME).document(id).get().get();
-            if (snapshot.exists()) {
-                return Optional.ofNullable(snapshot.toObject(GroupInvitation.class));
-            }
-            return Optional.empty();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find GroupInvitation by ID {}: {}", id, e.getMessage(), e);
-            return Optional.empty();
-        }
+        return Optional.ofNullable(dynamoDBMapper.load(GroupInvitation.class, id));
     }
 
     public List<GroupInvitation> findByInviteeId(String inviteeId) {
+        // Try GSI first
         try {
-            QuerySnapshot snapshot = firestore.collection(COLLECTION_NAME)
-                    .whereEqualTo("inviteeId", inviteeId)
-                    .get()
-                    .get();
-            return snapshot.toObjects(GroupInvitation.class);
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Failed to find GroupInvitations for invitee {}: {}", inviteeId, e.getMessage(), e);
-            return List.of();
+            GroupInvitation hashKeyValues = new GroupInvitation();
+            hashKeyValues.setInviteeId(inviteeId);
+
+            DynamoDBQueryExpression<GroupInvitation> queryExpression = new DynamoDBQueryExpression<GroupInvitation>()
+                    .withHashKeyValues(hashKeyValues)
+                    .withIndexName("invitee-index")
+                    .withConsistentRead(false);
+
+            List<GroupInvitation> results = dynamoDBMapper.query(GroupInvitation.class, queryExpression);
+            log.info("[GSI] findByInviteeId({}) returned {} results", inviteeId, results.size());
+            
+            if (!results.isEmpty()) {
+                return results;
+            }
+        } catch (Exception e) {
+            log.error("[GSI] Query failed for invitee-index: {}", e.getMessage());
         }
+        
+        // Fallback: scan with filter
+        log.info("[SCAN] Falling back to scan for inviteeId: {}", inviteeId);
+        Map<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":inviteeId", new AttributeValue().withS(inviteeId));
+        
+        com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression scanExpression = 
+            new com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBScanExpression()
+                .withFilterExpression("inviteeId = :inviteeId")
+                .withExpressionAttributeValues(eav);
+        
+        List<GroupInvitation> scanResults = dynamoDBMapper.scan(GroupInvitation.class, scanExpression);
+        log.info("[SCAN] Found {} results for inviteeId: {}", scanResults.size(), inviteeId);
+        return scanResults;
     }
 }
