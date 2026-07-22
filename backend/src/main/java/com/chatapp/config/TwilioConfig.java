@@ -27,7 +27,12 @@ public class TwilioConfig {
 
     @PostConstruct
     public void initTwilio() {
-        log.info("Initializing Twilio with Account SID: {}", accountSid.substring(0, 4) + "****");
+        if (accountSid == null || accountSid.isBlank() || "dummy_sid".equalsIgnoreCase(accountSid)) {
+            log.warn("Twilio Account SID is not configured or set to dummy. Skipping Twilio initialization.");
+            return;
+        }
+        String maskedSid = accountSid.length() >= 4 ? accountSid.substring(0, 4) + "****" : "****";
+        log.info("Initializing Twilio with Account SID: {}", maskedSid);
         try {
             Twilio.init(accountSid, authToken);
             log.info("Twilio successfully initialized");
