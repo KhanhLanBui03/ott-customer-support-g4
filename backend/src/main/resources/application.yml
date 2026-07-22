@@ -199,3 +199,5 @@ agora:
   app-id: ${AGORA_APP_ID:71fffdd590e54202bc1ea70e751324ce}
   app-certificate: ${AGORA_APP_CERTIFICATE:}
   token-expiry-seconds: ${AGORA_TOKEN_EXPIRY_SECONDS:3600}
+
+# Trigger AWS EC2 Deployment
