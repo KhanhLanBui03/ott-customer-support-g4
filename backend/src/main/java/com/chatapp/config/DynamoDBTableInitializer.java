@@ -68,6 +68,17 @@ public class DynamoDBTableInitializer implements ApplicationListener<Application
             // Set billing mode
             request.setBillingMode(billingMode);
             
+            // Ensure all GSIs use ProjectionType.ALL so query results include full item attributes
+            if (request.getGlobalSecondaryIndexes() != null) {
+                for (GlobalSecondaryIndex gsi : request.getGlobalSecondaryIndexes()) {
+                    if (gsi.getProjection() == null
+                            || gsi.getProjection().getProjectionType() == null
+                            || ProjectionType.KEYS_ONLY.toString().equals(gsi.getProjection().getProjectionType())) {
+                        gsi.setProjection(new Projection().withProjectionType(ProjectionType.ALL));
+                    }
+                }
+            }
+
             // If PAY_PER_REQUEST, remove ProvisionedThroughput since it's not applicable
             if (BillingMode.PAY_PER_REQUEST.toString().equals(billingMode)) {
                 request.setProvisionedThroughput(null);

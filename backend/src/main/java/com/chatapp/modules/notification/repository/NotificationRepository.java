@@ -8,7 +8,10 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Repository
 @RequiredArgsConstructor
@@ -38,7 +41,8 @@ public class NotificationRepository{
                         .withHashKeyValues(notification)
                         .withConsistentRead(false);
 
-        return dynamoDBMapper.query(Notification.class, queryExpression);
+        List<Notification> results = new ArrayList<>(dynamoDBMapper.query(Notification.class, queryExpression));
+        return hydrateNotificationsIfKeysOnly(results);
     }
 
     public boolean updateIsRead(String id, boolean isRead) {
@@ -70,6 +74,47 @@ public class NotificationRepository{
                         .withHashKeyValues(notification)
                         .withConsistentRead(false);
 
-        return dynamoDBMapper.query(Notification.class, queryExpression);
+        List<Notification> results = new ArrayList<>(dynamoDBMapper.query(Notification.class, queryExpression));
+        return hydrateNotificationsIfKeysOnly(results);
+    }
+
+    // Existing DynamoDB GSIs on the Notification table were created with KEYS_ONLY projection.
+    // Batch-load full items by primary key when non-key attributes are missing.
+    private List<Notification> hydrateNotificationsIfKeysOnly(List<Notification> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        boolean hasPartialItem = items.stream()
+                .anyMatch(n -> n.getType() == null && n.getMessage() == null && n.getCreatedAt() == null);
+        if (!hasPartialItem) {
+            return items;
+        }
+
+        List<Notification> keysToLoad = new ArrayList<>();
+        for (Notification item : items) {
+            if (item.getId() != null) {
+                Notification key = new Notification();
+                key.setId(item.getId());
+                keysToLoad.add(key);
+            }
+        }
+        if (keysToLoad.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, List<Object>> loaded = dynamoDBMapper.batchLoad(keysToLoad);
+        List<Notification> hydrated = new ArrayList<>();
+        for (List<Object> batch : loaded.values()) {
+            for (Object obj : batch) {
+                if (obj instanceof Notification n) {
+                    hydrated.add(n);
+                }
+            }
+        }
+        hydrated.sort((a, b) -> Long.compare(
+                b.getCreatedAt() != null ? b.getCreatedAt() : 0L,
+                a.getCreatedAt() != null ? a.getCreatedAt() : 0L
+        ));
+        return hydrated;
     }
 }

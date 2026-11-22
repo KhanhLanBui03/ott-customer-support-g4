@@ -97,14 +97,22 @@ export const contactApi = {
 export const notificationApi = {
   // Register device token for push notifications
   registerDeviceToken: (data) => {
-    // Expected: { token, platform, osVersion }
+    // Expected: { token, platform, osVersion, deviceName, notificationsEnabled, soundEnabled }
     // platform: ANDROID, IOS, WEB
     return axiosClient.post('/notifications/device-token', data);
   },
 
-  // Unregister device token
+  // Update push notification preferences for this user/device
+  updateDevicePreferences: (data) => {
+    // Expected: { token?, notificationsEnabled?, soundEnabled? }
+    return axiosClient.put('/notifications/device-token/preferences', data);
+  },
+
+  // Unregister device token (use query param so brackets in ExponentPushToken[...] never break URL path matching)
   unregisterDeviceToken: (token) => {
-    return axiosClient.delete(`/notifications/device-token/${token}`);
+    return axiosClient.delete('/notifications/device-token', {
+      params: { token },
+    });
   },
 
   // Get notifications by receiver ID

@@ -6,6 +6,7 @@ import { clearInAppNotification } from '../../store/notificationSlice';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { translateNotificationMessage, translateNotificationTitle } from '../../utils/notificationMessageTranslator';
 
 const InAppNotification = () => {
   const { t } = useTranslation();
@@ -51,13 +52,41 @@ const InAppNotification = () => {
   };
 
   const handlePress = () => {
-    if (inAppNotification?.conversationId) {
-      router.push(`/chat/${encodeURIComponent(inAppNotification.conversationId)}`);
+    const notif = inAppNotification;
+    if (!notif) return;
+    if (notif.type === 'FRIEND_REQUEST' || notif.type === 'GROUP_INVITE' || notif.type === 'FRIEND_ACCEPT' || notif.type === 'FRIEND_ACCEPTED' || notif.type === 'JOIN_REQUEST' || notif.type === 'OTHER') {
+      router.push('/(main)/notifications');
       hideNotification();
+      return;
     }
+    if (notif.conversationId) {
+      router.push(`/chat/${encodeURIComponent(notif.conversationId)}`);
+      hideNotification();
+      return;
+    }
+    router.push('/(main)/notifications');
+    hideNotification();
   };
 
   if (!inAppNotification) return null;
+
+  const displayTitle = translateNotificationTitle(inAppNotification.title, t) || t('chat.title', 'Tin nhắn mới');
+  const rawMessage = (() => {
+    const msg = inAppNotification.message || '';
+    const sub = inAppNotification.subMessage || '';
+    if (!msg && !sub) return t('components.common.new_message_notif', 'Bạn có một tin nhắn mới');
+    const lower = msg.toLowerCase();
+    if (lower === 'tin nhắn thoại' || lower === '[tin nhắn thoại]') return t('chat.voice_bracket', '[Tin nhắn thoại]');
+    if (lower === '[sticker]' || lower === '[nhãn dán]') return t('sidebar.sticker', '[Sticker]');
+    if (lower === '[gif]') return t('sidebar.gif', '[GIF]');
+    if (lower === '[hình ảnh]' || lower === '[image]') return t('chat.image_bracket', '[Hình ảnh]');
+    if (lower === '[video]') return t('chat.video_preview', '[Video]');
+    if (lower === '[tệp tin]' || lower === '[file]') return t('chat.file_bracket', '[Tệp tin]');
+    if (lower === '[bình chọn]') return t('chat.poll', '[Bình chọn]');
+    if (lower === 'đã gửi một tệp đính kèm') return t('chat.attachment', 'Đã gửi một tệp đính kèm');
+    const translated = translateNotificationMessage(msg, t);
+    return sub ? `${translated} ${sub}` : translated;
+  })();
 
   return (
     <Animated.View 
@@ -76,23 +105,10 @@ const InAppNotification = () => {
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.title} numberOfLines={1}>
-            {inAppNotification.title || t('chat.title', 'Tin nhắn mới')}
+            {displayTitle}
           </Text>
           <Text style={styles.message} numberOfLines={1}>
-            {(() => {
-              const msg = inAppNotification.message || '';
-              if (!msg) return t('components.common.new_message_notif', 'Bạn có một tin nhắn mới');
-              const lower = msg.toLowerCase();
-              if (lower === 'tin nhắn thoại' || lower === '[tin nhắn thoại]') return t('chat.voice_bracket', '[Tin nhắn thoại]');
-              if (lower === '[sticker]' || lower === '[nhãn dán]') return t('sidebar.sticker', '[Sticker]');
-              if (lower === '[gif]') return t('sidebar.gif', '[GIF]');
-              if (lower === '[hình ảnh]' || lower === '[image]') return t('chat.image_bracket', '[Hình ảnh]');
-              if (lower === '[video]') return t('chat.video_preview', '[Video]');
-              if (lower === '[tệp tin]' || lower === '[file]') return t('chat.file_bracket', '[Tệp tin]');
-              if (lower === '[bình chọn]') return t('chat.poll', '[Bình chọn]');
-              if (lower === 'đã gửi một tệp đính kèm') return t('chat.attachment', 'Đã gửi một tệp đính kèm');
-              return msg;
-            })()}
+            {rawMessage}
           </Text>
         </View>
         <Pressable onPress={hideNotification} style={styles.closeButton}>
@@ -106,10 +122,11 @@ const InAppNotification = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
+    top: 0,
     left: 16,
     right: 16,
     zIndex: 9999,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     borderRadius: 16,
     ...Platform.select({
       ios: {
@@ -119,7 +136,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
       },
       android: {
-        elevation: 8,
+        elevation: 12,
       },
     }),
     borderWidth: 1,

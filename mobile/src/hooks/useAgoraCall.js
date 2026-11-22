@@ -6,6 +6,7 @@ import { createAudioPlayer, setAudioModeAsync, requestRecordingPermissionsAsync 
 import { Camera } from 'expo-camera';
 import { onCallSignal, offCallSignal, emitCallSignal } from '../utils/socket';
 import { isNativeAgoraAvailable } from '../utils/agoraNativeLoader';
+import { getSelectedRingtoneSourceAsync } from '../utils/soundService';
 import { callApi } from '../api/callApi';
 import { chatApi } from '../api/chatApi';
 import { addMessage } from '../store/chatSlice';
@@ -280,8 +281,11 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                 await stopSound();
                 try {
                     let file;
-                    if (callStatus === 'incoming') file = require('../../assets/sounds/ringtone.wav');
-                    else if (callStatus === 'outgoing') file = require('../../assets/sounds/outgoing_ring.wav');
+                    if (callStatus === 'incoming') {
+                        file = await getSelectedRingtoneSourceAsync();
+                    } else if (callStatus === 'outgoing') {
+                        file = require('../../assets/sounds/outgoing_ring.wav');
+                    }
 
                     if (!file) return;
 

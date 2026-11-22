@@ -39,6 +39,7 @@ public class ConversationService {
     private final com.chatapp.modules.conversation.repository.GroupInvitationRepository groupInvitationRepository;
     private final com.chatapp.modules.conversation.repository.GroupJoinRequestRepository groupJoinRequestRepository;
     private final com.chatapp.modules.notification.service.NotificationService notificationService;
+    private final com.chatapp.modules.notification.service.PushNotificationService pushNotificationService;
 
     /**
      * Update denormalized last message fields across all user conversations
@@ -708,6 +709,17 @@ public class ConversationService {
             log.info("Direct-Broadcasting group invite to user: {} from {} with invitationId: {}", inviteeId, inviterName, invitation.getInvitationId());
             messagingTemplate.convertAndSendToUser(inviteeId, "/queue/messages", event);
             log.info("WebSocket send completed for GROUP_INVITE to user: {}", inviteeId);
+
+            pushNotificationService.sendToUser(
+                    inviteeId,
+                    "Lời mời vào nhóm",
+                    inviterName + " đã mời bạn tham gia nhóm " + (conv.getName() != null ? conv.getName() : ""),
+                    Map.of(
+                            "type", "GROUP_INVITE",
+                            "conversationId", conversationId,
+                            "invitationId", invitation.getInvitationId()
+                    )
+            );
         } catch (Exception e) {
             log.error("Failed to notify invitee via WebSocket: {}", e.getMessage(), e);
         }
@@ -1651,6 +1663,12 @@ public class ConversationService {
                     "/queue/messages",
                     MessageEvent.of("GROUP_JOIN_APPROVED", req.getConversationId(), Map.of("conversationId", req.getConversationId()))
             );
+            pushNotificationService.sendToUser(
+                    req.getUserId(),
+                    "Yêu cầu vào nhóm đã được duyệt",
+                    "Bạn đã được duyệt vào nhóm " + (conv.getName() != null ? conv.getName() : ""),
+                    Map.of("type", "GROUP_JOIN_APPROVED", "conversationId", req.getConversationId())
+            );
         } catch (Exception e) {
             log.error("Failed to notify user of join request approval: {}", e.getMessage());
         }
@@ -1700,6 +1718,12 @@ public class ConversationService {
                     req.getUserId(),
                     "/queue/messages",
                     MessageEvent.of("GROUP_JOIN_REJECTED", req.getConversationId(), Map.of("conversationId", req.getConversationId()))
+            );
+            pushNotificationService.sendToUser(
+                    req.getUserId(),
+                    "Thông báo nhóm",
+                    "Bạn đã bị từ chối vào nhóm " + (conv.getName() != null ? conv.getName() : ""),
+                    Map.of("type", "GROUP_JOIN_REJECTED", "conversationId", req.getConversationId())
             );
         } catch (Exception e) {
             log.error("Failed to notify user of join request rejection: {}", e.getMessage());
