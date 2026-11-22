@@ -10,6 +10,14 @@ import { useChat } from '../../hooks/useChat';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import { addOptimisticMessage } from '../../store/chatSlice';
 import { useTheme } from '../../hooks/useTheme';
+import {
+  EMOJI_CATEGORIES,
+  STICKER_SETS,
+  GIF_CATEGORIES,
+  filterEmojis,
+  fetchStickersData,
+  fetchGifsData,
+} from '../../utils/mediaPickerData';
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -157,113 +165,76 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     return options;
   }, [currentConv, user, text, t]);
 
-  const emojiCategories = [
-    { id: 'smileys', label: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'] },
-    { id: 'gestures', label: '👋', emojis: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦿', '🦶', '👂', '🦻', '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄'] },
-    { id: 'animals', label: '🐶', emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦢', '🦉', '🦩', '🦚', '🦜', '🐸', '🐊', '🐢', '🦎', '🐍', '🐲', '🐉', '🦕', '🦖', '🐳', '🐋', '🐬', '🐟', '🐠', '🐡', '🦈', '🐙', '🐚', '🦀', '🦞', '🦐', '🦑'] },
-    { id: 'food', label: '🍏', emojis: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌽', '🥕', '👝', '🍟', '🍔', '🍕', '🌭', '🥪', '🌮', '🌯', '🥗', '🥘', '🍲', '🍱', '🥣', '🍛', '🍜', '🍜', '🍝', '🍠', '🍤', '🍣', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🍼', '☕', '🍵', '🍶', '🍷', '🍸', '🍹', '🍺', '🍻', '🥂', '🥃'] },
-    { id: 'activities', label: '⚽', emojis: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '⛸️', '🎿', '🛷', '🥌', '🎯', '🪀', '🎮', '🕹️', '🎰', '🎲', '🧩', '🧸', '♠️', '♥️', '♦️', '♣️', '♟️', '🃏', '🀄', '🎴', '🎭', '🎨', '🧵', '🧶'] },
-    { id: 'objects', label: '💡', emojis: ['⌚', '📱', '📲', '💻', '⌨️', '🖱️', '🖲️', '🕹️', '🗜️', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽️', '🎞️', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙️', '🎚️', '🎛️', '🧭', '⏱️', '⏲️', '⏰', '🕰️', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯️', '🪔', '🧯', '🛢️', '💸', '💵', '💴', '💶', '💷', '💰', '💳', '💎', '⚖️', '🧰', '🔧', '🔨', '⚒️', '🛠️', '⛏️', '🔩', '⚙️', '🧱', '⛓️', '🧲', '🔫', '💣', '🧨', '🪓', '🔪', '🗡️', '⚔️', '🛡️', '🚬', '⚰️', '⚱️', '🏺', '🔮', '📿', '🧿', '💈', '⚗️', '🔭', '🔬', '🕳️', '🩺', '💊', '💉', '🩸', '🧬', '🦠', '🧼', '🧽', '🪒', '🧺', '🧹', '🌡️', '🏷️', '🔖'] },
-    { id: 'symbols', label: '❤️', emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️', '🆘', '❌', '⭕', '🛑', '⛔', '📛', '🚫', '💯', '💢', '♨️', '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗', '❕', '❓', '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️', '🔰', '♻️', '✅', '🈯', '💹', '❇️', '✳️', '❎', '🌐', '💠', 'Ⓜ️', '🌀', '💤'] }
-  ];
-
   const [activeCategory, setActiveCategory] = useState('smileys');
   const [activeTab, setActiveTab] = useState('emoji');
   const [searchTerm, setSearchTerm] = useState('');
-
-  const stickerSets = [
-    { id: 'trending', label: '🔥' },
-    { id: 'cute', label: '🐱' },
-    { id: 'funny', label: '🤣' },
-    { id: 'love', label: '❤️' },
-    { id: 'cry', label: '😢' },
-    { id: 'angry', label: '😡' },
-    { id: 'pepe', label: '🐸' }
-  ];
 
   const [gifs, setGifs] = useState([]);
   const [gifsLoading, setGifsLoading] = useState(false);
   const [stickers, setStickers] = useState([]);
   const [stickersLoading, setStickersLoading] = useState(false);
 
-  // Fetch Stickers from Tenor API
+  // Fetch Stickers (Giphy API with Noto Animated Emoji fallback)
   React.useEffect(() => {
-    if (activeTab !== 'sticker') return;
-    
+    if (!showEmojis || activeTab !== 'sticker') return;
+
     let isMounted = true;
-    const fetchStickers = async () => {
+    const loadStickers = async () => {
       setStickersLoading(true);
       try {
-        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&searchfilter=sticker';
-        const query = searchTerm.trim() || activeCategory;
-        if (query && query !== 'trending') {
-          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=LIVDSRZULELA&limit=20&searchfilter=sticker`;
-        }
-        const res = await fetch(url);
-        const data = await res.json();
-        if (isMounted && data.results) {
-          const formatted = data.results.map(item => ({
-            id: item.id,
-            url: item.media[0]?.gif?.url || item.url,
-            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
-            title: item.title || item.content_description || 'Sticker'
-          }));
-          setStickers(formatted);
-        }
+        const formatted = await fetchStickersData({
+          category: activeCategory,
+          searchTerm,
+          limit: 24,
+        });
+        if (isMounted) setStickers(formatted);
       } catch (err) {
-        console.error('Failed to fetch Tenor stickers on web:', err);
+        console.error('Failed to fetch stickers on web:', err);
       } finally {
         if (isMounted) setStickersLoading(false);
       }
     };
 
-    const timer = setTimeout(fetchStickers, searchTerm.trim() ? 500 : 0);
+    const timer = setTimeout(loadStickers, searchTerm.trim() ? 350 : 0);
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [activeTab, searchTerm, activeCategory]);
+  }, [showEmojis, activeTab, searchTerm, activeCategory]);
 
+  // Fetch GIFs (Giphy API with curated GIF fallback)
   React.useEffect(() => {
-    if (activeTab !== 'gif') return;
-    
+    if (!showEmojis || activeTab !== 'gif') return;
+
     let isMounted = true;
-    const fetchGifs = async () => {
+    const loadGifs = async () => {
       setGifsLoading(true);
       try {
-        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20';
-        if (searchTerm.trim()) {
-          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm.trim())}&key=LIVDSRZULELA&limit=20`;
-        }
-        const res = await fetch(url);
-        const data = await res.json();
-        if (isMounted && data.results) {
-          const formatted = data.results.map(item => ({
-            id: item.id,
-            url: item.media[0]?.gif?.url || item.url,
-            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
-            title: item.title || item.content_description || 'GIF'
-          }));
-          setGifs(formatted);
-        }
+        const formatted = await fetchGifsData({
+          category: activeCategory,
+          searchTerm,
+          limit: 24,
+        });
+        if (isMounted) setGifs(formatted);
       } catch (err) {
-        console.error('Failed to fetch Tenor GIFs:', err);
+        console.error('Failed to fetch GIFs on web:', err);
       } finally {
         if (isMounted) setGifsLoading(false);
       }
     };
 
-    const timer = setTimeout(fetchGifs, searchTerm.trim() ? 500 : 0);
+    const timer = setTimeout(loadGifs, searchTerm.trim() ? 350 : 0);
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [activeTab, searchTerm]);
+  }, [showEmojis, activeTab, searchTerm, activeCategory]);
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
+    setSearchTerm('');
     if (tabId === 'emoji') setActiveCategory('smileys');
-    else if (tabId === 'sticker') setActiveCategory('trending');
+    else setActiveCategory('trending');
   };
 
   const handleEmojiClick = (e, emoji) => {
@@ -487,13 +458,17 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
     if (mention.id === 'GIF') {
       setShowEmojis(true);
       setActiveTab('gif');
+      setActiveCategory('trending');
+      setSearchTerm('');
       // Remove the @GIF from text after triggering
-      setText(textBefore + textAfter);
+      setText(beforeAt + afterAt);
     } else if (mention.id === 'STICKER') {
       setShowEmojis(true);
       setActiveTab('sticker');
+      setActiveCategory('trending');
+      setSearchTerm('');
       // Remove the @STICKER from text after triggering
-      setText(textBefore + textAfter);
+      setText(beforeAt + afterAt);
     }
 
     setTimeout(() => {
@@ -951,15 +926,20 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
           </div>
 
           <div className="overflow-y-auto no-scrollbar bg-white/5 dark:bg-black/10 min-h-[300px]">
-            {activeTab === 'emoji' && (
-              <div className="p-4 grid grid-cols-7 sm:grid-cols-9 gap-1">
-                {(emojiCategories.find(c => c.id === activeCategory) || emojiCategories[0]).emojis
-                  .filter(e => searchTerm === '' || e.includes(searchTerm))
-                  .map((emoji, i) => (
+            {activeTab === 'emoji' && (() => {
+              const filteredEmojis = filterEmojis(activeCategory, searchTerm);
+              return filteredEmojis.length === 0 ? (
+                <div className="flex items-center justify-center py-12 text-slate-400 text-xs font-bold">
+                  Không tìm thấy biểu tượng nào
+                </div>
+              ) : (
+                <div className="p-4 grid grid-cols-7 sm:grid-cols-9 gap-1">
+                  {filteredEmojis.map((emoji, i) => (
                     <button key={`${emoji}-${i}`} type="button" onClick={(e) => handleEmojiClick(e, emoji)} className="text-2xl hover:bg-white/20 p-2 rounded-2xl transition-all hover:scale-125 active:scale-90">{emoji}</button>
                   ))}
-              </div>
-            )}
+                </div>
+              );
+            })()}
 
             {activeTab === 'sticker' && (
               <div className="p-4 relative">
@@ -1022,14 +1002,14 @@ const MessageInput = ({ conversationId, replyingTo, onCancelReply, onOpenVoteMod
             )}
           </div>
 
-          <div className="p-2 bg-white/10 dark:bg-black/30 border-t border-white/5 flex items-center justify-center space-x-1">
-            {(activeTab === 'emoji' || activeTab === 'sticker') && (activeTab === 'emoji' ? emojiCategories : stickerSets).map(cat => (
-              <button key={cat.id} type="button" onClick={() => setActiveCategory(cat.id)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${activeCategory === cat.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}>
+          <div className="p-2 bg-white/10 dark:bg-black/30 border-t border-white/5 flex items-center justify-center space-x-1 overflow-x-auto no-scrollbar">
+            {(activeTab === 'emoji' ? EMOJI_CATEGORIES : activeTab === 'sticker' ? STICKER_SETS : GIF_CATEGORIES).map(cat => (
+              <button key={cat.id} type="button" onClick={() => setActiveCategory(cat.id)} className={`w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-xl transition-all ${activeCategory === cat.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}>
                 <span className="text-lg">{cat.label}</span>
               </button>
             ))}
             <div className="flex-1" />
-            <button onClick={() => setShowEmojis(false)} type="button" className="p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={18} /></button>
+            <button onClick={() => setShowEmojis(false)} type="button" className="p-2 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"><X size={18} /></button>
           </div>
         </div>
       )}

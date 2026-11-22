@@ -242,11 +242,14 @@ public class MessageService {
                     } catch (Exception e) {
                         lastMessageText = "[Cuộc gọi]";
                     }
+                } else if ("STICKER".equals(savedMessage.getType())) {
+                    lastMessageText = "[Nhãn dán]";
                 } else if (lastMessageText == null || lastMessageText.isBlank()) {
                     if ("IMAGE".equals(savedMessage.getType()) && savedMessage.getMediaUrls() != null) {
                         boolean isGif = savedMessage.getMediaUrls().stream()
                                 .anyMatch(url -> url != null && (
                                         url.toLowerCase().contains("tenor.com") ||
+                                                url.toLowerCase().contains("giphy.com") ||
                                                 url.toLowerCase().endsWith(".gif") ||
                                                 url.toLowerCase().contains(".gif?")));
                         lastMessageText = isGif ? "[GIF]" : "[Hình ảnh]";

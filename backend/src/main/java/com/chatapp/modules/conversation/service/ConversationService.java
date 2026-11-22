@@ -190,7 +190,7 @@ public class ConversationService {
                 } else if (lastMessageText == null || lastMessageText.isBlank()) {
                     if ("IMAGE".equals(last.getType() != null ? last.getType() : "TEXT") && last.getMediaUrls() != null) {
                         boolean isGif = last.getMediaUrls().stream()
-                                .anyMatch(url -> url != null && (url.toLowerCase().contains("tenor.com") || url.toLowerCase().endsWith(".gif") || url.toLowerCase().contains(".gif?")));
+                                .anyMatch(url -> url != null && (url.toLowerCase().contains("tenor.com") || url.toLowerCase().contains("giphy.com") || url.toLowerCase().endsWith(".gif") || url.toLowerCase().contains(".gif?")));
                         if (isGif) {
                             lastMessageText = "[GIF]";
                         } else {

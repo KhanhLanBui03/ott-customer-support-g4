@@ -92,7 +92,9 @@ async function calibrateServerTime() {
             console.log('⏰ [TimeSync-Mobile] Calibrated offset:', serverTimeOffset, 'ms (latency:', latency, 'ms)');
         }
     } catch (e) {
-        console.warn('⏰ [TimeSync-Mobile] Calibration failed:', e);
+        if (!e?.isSessionExpired && e?.response?.status !== 401) {
+            console.warn('⏰ [TimeSync-Mobile] Calibration failed:', e);
+        }
     } finally {
         isCalibratingTime = false;
     }

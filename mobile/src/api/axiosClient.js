@@ -1,8 +1,24 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 
 // Sử dụng biến môi trường từ Expo
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+const PUBLIC_AUTH_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/verify-otp',
+  '/auth/resend-otp',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/send-otp',
+  '/auth/check',
+  '/auth/refresh-token',
+];
+
+const isPublicAuthRequest = (url = '') =>
+  PUBLIC_AUTH_PATHS.some((path) => String(url).includes(path));
 
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,
@@ -20,7 +36,7 @@ axiosClient.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
-      
+
       const sessionId = await SecureStore.getItemAsync('sessionId');
       if (sessionId) {
         config.headers['X-Session-Id'] = sessionId;
@@ -46,8 +62,6 @@ axiosClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-import { Alert } from 'react-native';
-
 let store;
 
 export const injectStore = (_store) => {
@@ -55,81 +69,98 @@ export const injectStore = (_store) => {
 };
 
 let isUnauthorizedAlertShowing = false;
+let refreshPromise = null;
 
-// Interceptor cho Response: Xử lý bóc tách dữ liệu và lỗi 401
+const clearAuthAndExpireSession = async () => {
+  await Promise.allSettled([
+    SecureStore.deleteItemAsync('accessToken'),
+    SecureStore.deleteItemAsync('refreshToken'),
+    SecureStore.deleteItemAsync('sessionId'),
+    SecureStore.deleteItemAsync('user'),
+  ]);
+
+  if (store && !isUnauthorizedAlertShowing) {
+    isUnauthorizedAlertShowing = true;
+    store.dispatch({ type: 'auth/sessionExpired' });
+    Alert.alert(
+      'Phiên đăng nhập hết hạn',
+      'Vui lòng đăng nhập lại để tiếp tục.',
+      [{
+        text: 'OK',
+        onPress: () => { isUnauthorizedAlertShowing = false; },
+      }]
+    );
+  }
+};
+
+const performSingleFlightRefresh = () => {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = await SecureStore.getItemAsync('refreshToken');
+      if (!refreshToken) {
+        throw new Error('No refresh token');
+      }
+
+      const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+        refreshToken,
+        deviceId: 'mobile-device',
+      });
+
+      const data = res.data?.data || res.data || {};
+      const { accessToken, refreshToken: newRefreshToken, sessionId: newSessionId } = data;
+      if (!accessToken) {
+        throw new Error('Refresh response missing accessToken');
+      }
+
+      await SecureStore.setItemAsync('accessToken', accessToken);
+      if (newRefreshToken) {
+        await SecureStore.setItemAsync('refreshToken', newRefreshToken);
+      }
+      if (newSessionId) {
+        await SecureStore.setItemAsync('sessionId', newSessionId);
+      }
+
+      return { accessToken, refreshToken: newRefreshToken, sessionId: newSessionId };
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
+// Interceptor cho Response: Xử lý bóc tách dữ liệu và lỗi 401 (gom 1 request refresh duy nhất)
 axiosClient.interceptors.response.use(
   (response) => {
-    // Trả về response.data (chính là object ApiResponse { success, message, data })
     return response.data;
   },
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
 
-    // Nếu lỗi 401 và chưa thử retry
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    if (status === 401 && originalRequest && !isPublicAuthRequest(originalRequest.url)) {
+      if (!originalRequest._retry) {
+        originalRequest._retry = true;
 
-      try {
-        const refreshToken = await SecureStore.getItemAsync('refreshToken');
-        if (!refreshToken) throw new Error('No refresh token');
-
-        // Gọi API refresh token (sử dụng instance axios sạch để tránh loop)
-        const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, { refreshToken });
-
-        // Giả sử data trả về có dạng { accessToken, refreshToken } hoặc { data: { accessToken, ... } }
-        const data = res.data.data || res.data;
-        const { accessToken, refreshToken: newRefreshToken } = data;
-
-        if (accessToken) {
-          await SecureStore.setItemAsync('accessToken', accessToken);
-          if (newRefreshToken) await SecureStore.setItemAsync('refreshToken', newRefreshToken);
-
+        try {
+          const { accessToken, sessionId } = await performSingleFlightRefresh();
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return axios(originalRequest);
+          if (sessionId) {
+            originalRequest.headers['X-Session-Id'] = sessionId;
+          }
+          return axiosClient(originalRequest);
+        } catch (refreshError) {
+          await clearAuthAndExpireSession();
+          const expiredError = new Error('Session expired');
+          expiredError.isSessionExpired = true;
+          expiredError.status = 401;
+          expiredError.cause = refreshError;
+          return Promise.reject(expiredError);
         }
-      } catch (refreshError) {
-        // Nếu refresh thất bại -> Logout
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await SecureStore.deleteItemAsync('sessionId');
-        await SecureStore.deleteItemAsync('user');
-        
-        if (store && !isUnauthorizedAlertShowing) {
-          isUnauthorizedAlertShowing = true;
-          store.dispatch({ type: 'auth/sessionExpired' });
-          Alert.alert(
-            'Phiên đăng nhập hết hạn',
-            'Vui lòng đăng nhập lại để tiếp tục.',
-            [{ 
-              text: 'OK', 
-              onPress: () => { isUnauthorizedAlertShowing = false; } 
-            }]
-          );
-        }
-        
-        return Promise.reject(refreshError);
       }
-    }
 
-    // Nếu lỗi 401 ngay cả khi đã retry hoặc không thể retry
-    if (error.response?.status === 401) {
-       await SecureStore.deleteItemAsync('accessToken');
-       await SecureStore.deleteItemAsync('refreshToken');
-       await SecureStore.deleteItemAsync('sessionId');
-       await SecureStore.deleteItemAsync('user');
-       
-       if (store && !isUnauthorizedAlertShowing) {
-         isUnauthorizedAlertShowing = true;
-         store.dispatch({ type: 'auth/sessionExpired' });
-         Alert.alert(
-           'Phiên đăng nhập hết hạn',
-           'Vui lòng đăng nhập lại để tiếp tục.',
-           [{ 
-             text: 'OK', 
-             onPress: () => { isUnauthorizedAlertShowing = false; } 
-           }]
-         );
-       }
+      await clearAuthAndExpireSession();
+      error.isSessionExpired = true;
     }
 
     return Promise.reject(error);

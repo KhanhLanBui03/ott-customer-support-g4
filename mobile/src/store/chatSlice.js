@@ -362,8 +362,22 @@ const chatSlice = createSlice({
           let preview = message.content;
           const url = (message.content || '').toLowerCase();
           const firstMediaUrl = (message.mediaUrls && message.mediaUrls[0] || '').toLowerCase();
-          const isStickerUrl = url.includes('searchfilter=sticker') || url.includes('dicebear.com') || firstMediaUrl.includes('searchfilter=sticker') || firstMediaUrl.includes('dicebear.com');
-          const isGifUrl = url.includes('.gif') || url.includes('tenor.com') || firstMediaUrl.includes('.gif') || firstMediaUrl.includes('tenor.com');
+          const isStickerUrl =
+            url.includes('searchfilter=sticker') ||
+            url.includes('dicebear.com') ||
+            url.includes('notoemoji') ||
+            url.includes('stickers_') ||
+            firstMediaUrl.includes('searchfilter=sticker') ||
+            firstMediaUrl.includes('dicebear.com') ||
+            firstMediaUrl.includes('notoemoji') ||
+            firstMediaUrl.includes('stickers_');
+          const isGifUrl =
+            url.includes('.gif') ||
+            url.includes('tenor.com') ||
+            url.includes('giphy.com') ||
+            firstMediaUrl.includes('.gif') ||
+            firstMediaUrl.includes('tenor.com') ||
+            firstMediaUrl.includes('giphy.com');
 
           if (message.isRecalled) {
             preview = "[Tin nhắn đã bị thu hồi]";
@@ -538,9 +552,9 @@ const chatSlice = createSlice({
             lastMessage = "Tin nhắn thoại";
           } else if (lastMessage && (lastMessage.startsWith('http://') || lastMessage.startsWith('https://'))) {
             const lowerLast = lastMessage.toLowerCase();
-            if (lowerLast.includes('searchfilter=sticker') || lowerLast.includes('dicebear.com')) {
+            if (lowerLast.includes('searchfilter=sticker') || lowerLast.includes('dicebear.com') || lowerLast.includes('notoemoji') || lowerLast.includes('stickers_')) {
               lastMessage = "[Sticker]";
-            } else if (lowerLast.includes('.gif') || lowerLast.includes('tenor.com')) {
+            } else if (lowerLast.includes('.gif') || lowerLast.includes('tenor.com') || lowerLast.includes('giphy.com')) {
               lastMessage = "[GIF]";
             }
           }

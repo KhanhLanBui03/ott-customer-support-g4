@@ -191,8 +191,8 @@ public class MessageEventListener {
 
         if (Boolean.TRUE.equals(msg.getIsRecalled())) return "Tin nhắn đã bị thu hồi";
         if ("VOICE".equals(type) || lower.contains("voice-messages/")) return "Tin nhắn thoại";
-        if ("STICKER".equals(type) || lower.contains("searchfilter=sticker") || lower.contains("dicebear.com")) return "[Sticker]";
-        if (lower.contains(".gif") || lower.contains("tenor.com")) return "[GIF]";
+        if ("STICKER".equals(type) || lower.contains("searchfilter=sticker") || lower.contains("dicebear.com") || lower.contains("notoemoji") || lower.contains("stickers_")) return "[Sticker]";
+        if (lower.contains(".gif") || lower.contains("tenor.com") || lower.contains("giphy.com")) return "[GIF]";
         if ("IMAGE".equals(type)) return "[Hình ảnh]";
         if ("VIDEO".equals(type)) return "[Video]";
         if ("FILE".equals(type)) return "[Tệp tin]";

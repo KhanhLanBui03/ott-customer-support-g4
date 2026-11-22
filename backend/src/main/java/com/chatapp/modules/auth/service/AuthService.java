@@ -3,6 +3,7 @@ package com.chatapp.modules.auth.service;
 import com.chatapp.common.constants.AppConstants;
 import com.chatapp.common.constants.MessageConstants;
 import com.chatapp.common.exception.ConflictException;
+import com.chatapp.common.exception.UnauthorizedException;
 import com.chatapp.common.exception.ValidationException;
 import com.chatapp.common.util.HashUtil;
 import com.chatapp.common.util.JwtUtil;
@@ -177,17 +178,24 @@ public class AuthService {
         log.info("Refreshing token");
 
         // Validate refresh token
-        if (!jwtUtil.validateToken(request.getRefreshToken())) {
-            throw new ValidationException(MessageConstants.Error.INVALID_TOKEN);
+        if (request == null || request.getRefreshToken() == null || !jwtUtil.validateToken(request.getRefreshToken())) {
+            throw new UnauthorizedException(MessageConstants.Error.INVALID_TOKEN);
         }
 
         String userId = jwtUtil.extractUserId(request.getRefreshToken());
+        if (userId == null) {
+            throw new UnauthorizedException(MessageConstants.Error.INVALID_TOKEN);
+        }
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ValidationException(MessageConstants.Error.USER_NOT_FOUND));
+                .orElseThrow(() -> new UnauthorizedException(MessageConstants.Error.USER_NOT_FOUND));
+
+        String deviceId = request.getDeviceId() != null ? request.getDeviceId() : "unknown";
+        String deviceType = (deviceId.toLowerCase().contains("device") || deviceId.toLowerCase().contains("mobile"))
+                ? "mobile"
+                : "web";
 
         // Generate new access token
-        String sessionId = sessionService.createSession(userId);
-        String deviceId = request.getDeviceId() != null ? request.getDeviceId() : "unknown";
+        String sessionId = sessionService.createSession(userId, deviceType);
 
         String newAccessToken = jwtUtil.generateToken(userId, user.getPhoneNumber(), sessionId, deviceId);
         String newRefreshToken = jwtUtil.generateRefreshToken(userId);

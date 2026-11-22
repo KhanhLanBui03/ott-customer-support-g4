@@ -40,10 +40,10 @@ const Sidebar = ({ conversations, onSelect, activeId, onContextMenu, onTogglePin
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
       if (isAudioUrl(raw)) return t('sidebar.voice_message');
       const lowerRaw = raw.toLowerCase();
-      if (lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com')) {
+      if (lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com') || lowerRaw.includes('notoemoji') || lowerRaw.includes('stickers_')) {
         return t('sidebar.sticker');
       }
-      if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
+      if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com') || lowerRaw.includes('giphy.com')) {
         return t('sidebar.gif');
       }
       return `🔗 ${raw}`;

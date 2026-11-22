@@ -43,10 +43,10 @@ export const getPreviewText = (lastMessage, senderId = null) => {
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
     if (isVoiceMessage(raw)) return i18n.t('sidebar.voice_message');
     const lowerRaw = raw.toLowerCase();
-    if (type === 'STICKER' || lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com')) {
+    if (type === 'STICKER' || lowerRaw.includes('searchfilter=sticker') || lowerRaw.includes('dicebear.com') || lowerRaw.includes('notoemoji') || lowerRaw.includes('stickers_')) {
       return i18n.t('sidebar.sticker');
     }
-    if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com')) {
+    if (lowerRaw.includes('.gif') || lowerRaw.includes('tenor.com') || lowerRaw.includes('giphy.com')) {
       return i18n.t('sidebar.gif');
     }
     return `🔗 ${raw}`;
