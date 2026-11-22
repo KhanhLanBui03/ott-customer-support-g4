@@ -8,15 +8,17 @@ server:
     min-response-size: 1024
 
 spring:
+  application:
+    name: chat-app
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   servlet:
     multipart:
       max-file-size: 100MB
       max-request-size: 100MB
-  application:
-    name: chat-app
-  profiles:
-    active: dev
 
+  # AI Gemini
   ai:
     google:
       genai:
@@ -24,10 +26,13 @@ spring:
         chat:
           options:
             model: gemini-2.5-flash
+
+  # Redis Cache & Session
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       timeout: 2000ms
       lettuce:
         pool:
@@ -35,13 +40,14 @@ spring:
           max-idle: 4
           min-idle: 1
           max-wait: 1000ms
-  # Security
+
+  # Security Default Basic Auth
   security:
     user:
-      name: admin
-      password: admin123
+      name: ${SECURITY_USER_NAME:admin}
+      password: ${SECURITY_USER_PASSWORD:}
 
-  # Jackson
+  # Jackson JSON
   jackson:
     serialization:
       write-dates-as-timestamps: true
@@ -50,51 +56,48 @@ spring:
 
   # Mail / SMTP
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: 20102004hinh@gmail.com
-    password: ekvsgwrigrwecsgp
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USER:${MAIL_USERNAME:}}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
           auth: true
+          ssl:
+            enable: ${MAIL_SECURE:true}
           starttls:
-            enable: true
+            enable: false
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
 
 # JWT Configuration
 jwt:
-  secret: c8e09fddda9e192d16c485affabc61c9f4bca77a60c19d448f3a6e8475b9f0a4e0d1f69bca8d21f1123b8f0f8a0b8d12
-  expiration: 86400000  # 24 hours in milliseconds
-  refresh-expiration: 604800000  # 7 days
+  secret: ${JWT_SECRET:}
+  expiration: 86400000        # 24 hours
+  refresh-expiration: 604800000 # 7 days
 
-# AWS Configuration
+# ===================================================================
+# AWS Configuration (DynamoDB & S3)
+# ===================================================================
 aws:
   region: ${AWS_REGION:ap-southeast-1}
-  accessKey: ${AWS_ACCESS_KEY_ID:dummy}
-  secretKey: ${AWS_SECRET_ACCESS_KEY:dummy}
+  accessKey: ${AWS_ACCESS_KEY_ID:}
+  secretKey: ${AWS_SECRET_ACCESS_KEY:}
 
-# DynamoDB Configuration
-aws.dynamodb:
-  endpoint: ${DYNAMODB_ENDPOINT:}
-  tables:
-    users: chat_users
-    conversations: chat_conversations
-    messages: chat_messages
-    otp: chat_otp
-    sessions: chat_sessions
-    stories: chat_stories
-    contacts: chat_contacts
-    devices: chat_devices
-    invitations: chat_group_invitations
+  dynamodb:
+    # Để trống nếu dùng AWS Cloud; Điền http://localhost:8000 nếu dùng DynamoDB Local
+    endpoint: ${DYNAMODB_ENDPOINT:}
+    # Tự động tạo bảng nếu chưa tồn tại trên AWS DynamoDB khi app khởi động
+    auto-create-tables: ${DYNAMODB_AUTO_CREATE_TABLES:true}
+    # PAY_PER_REQUEST (On-Demand) hoặc PROVISIONED
+    billing-mode: ${DYNAMODB_BILLING_MODE:PAY_PER_REQUEST}
 
-# S3 Configuration
-aws.s3:
-  bucket: ${AWS_S3_BUCKET:amzn-s3-ott-n4}
-  region: ${AWS_REGION:ap-southeast-1}
-  max-file-size: 104857600  # 100MB
+  s3:
+    bucket: ${AWS_S3_BUCKET:ott-chat-storage-2026}
+    region: ${AWS_REGION:ap-southeast-1}
+    max-file-size: 104857600  # 100MB
 
 # CORS Configuration
 cors:
@@ -172,14 +175,15 @@ app:
       - doc
       - docx
   cache:
-    translation-ttl: 86400      # 24h - bản dịch ít thay đổi
-    message-ttl: 300            # 5 phút - message page gần đây
-    conversation-ttl: 60        # 1 phút - metadata conversation
+    translation-ttl: 86400      # 24h
+    message-ttl: 300            # 5 phút
+    conversation-ttl: 60        # 1 phút
   translation:
     service-url: ${APP_WHISPER_URL:http://localhost:8000}
     batch-size: 32
   whisper:
     url: ${APP_WHISPER_URL:http://localhost:8000}/transcribe
+
 # Swagger/OpenAPI
 springdoc:
   swagger-ui:
@@ -201,5 +205,3 @@ agora:
   app-id: ${AGORA_APP_ID:71fffdd590e54202bc1ea70e751324ce}
   app-certificate: ${AGORA_APP_CERTIFICATE:}
   token-expiry-seconds: ${AGORA_TOKEN_EXPIRY_SECONDS:3600}
-
-# Trigger AWS EC2 Deployment
