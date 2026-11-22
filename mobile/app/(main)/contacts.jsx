@@ -18,6 +18,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { friendApi } from '../../src/api/friendApi';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import { useTranslation } from 'react-i18next';
 
 
@@ -26,6 +27,7 @@ import CONFIG from '../../src/config';
 const ContactsScreen = () => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const { isWideLayout, contentMaxWidth } = useResponsive();
   const router = useRouter();
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
@@ -160,6 +162,7 @@ const ContactsScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[{ flex: 1, width: '100%' }, isWideLayout && { maxWidth: Math.min(contentMaxWidth, 820), alignSelf: 'center' }]}>
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('friends.title_list')}</Text>
@@ -172,7 +175,7 @@ const ContactsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.searchContainer, { backgroundColor: colors.input }]}>
+        <View style={[styles.searchContainer, { backgroundColor: colors.surface100, borderWidth: 1, borderColor: colors.border }]}>
           <MaterialIcons name="search" size={20} color={colors.textSubtle} style={styles.searchIcon} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
@@ -202,18 +205,19 @@ const ContactsScreen = () => {
           keyExtractor={(item) => (item.userId || item.id || Math.random().toString())}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#667eea" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <MaterialIcons name="people-outline" size={64} color="#cbd5e1" />
-              <Text style={styles.emptyText}>
+              <MaterialIcons name="people-outline" size={64} color={colors.textSubtle} />
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                 {searchQuery ? t('friends.no_friends') : t('friends.search_user_hint')}
               </Text>
             </View>
           }
         />
       )}
+      </View>
     </SafeAreaView>
   );
 };

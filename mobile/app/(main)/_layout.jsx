@@ -394,7 +394,7 @@ const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, 
           >
             <View style={[styles.leftFill, { width: tabBarWidth }]} />
             <Svg width={actualTabWidth} height={70} viewBox={`0 0 ${actualTabWidth} 70`}>
-              <Path d={pathData} fill="#111827" />
+              <Path d={pathData} fill="#0D0E13" />
             </Svg>
             <View style={[styles.rightFill, { width: tabBarWidth * 2 }]} />
           </Animated.View>
@@ -450,6 +450,7 @@ const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, 
                 title={options.title}
                 badge={route.name === 'notifications' ? badge : null}
                 tabWidth={actualTabWidth}
+                isAI={route.name === 'shop-expert-ai'}
               />
             </TouchableOpacity>
           );
@@ -460,7 +461,7 @@ const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, 
   );
 };
 
-const TabIcon = ({ name, focused, title, badge, tabWidth }) => {
+const TabIcon = ({ name, focused, title, badge, tabWidth, isAI = false }) => {
   const translateY = useRef(new Animated.Value(0)).current;
   const iconScale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -484,6 +485,9 @@ const TabIcon = ({ name, focused, title, badge, tabWidth }) => {
     ]).start();
   }, [focused]);
 
+  const activeCircleColor = isAI ? '#818CF8' : '#3B82F6';
+  const idleIconColor = isAI ? '#818CF8' : '#8B949E';
+
   return (
     <View style={[styles.iconWrapper, tabWidth ? { width: tabWidth } : null]}>
       <Animated.View style={[
@@ -496,14 +500,15 @@ const TabIcon = ({ name, focused, title, badge, tabWidth }) => {
             })
           }],
           opacity: opacity,
-          backgroundColor: '#6366f1' // Vòng tròn màu Indigo từ web
+          backgroundColor: activeCircleColor,
+          shadowColor: activeCircleColor,
         }
       ]} />
       <Animated.View style={{ transform: [{ translateY }, { scale: iconScale }], alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons
           name={focused ? `${name}` : `${name}-outline`}
           size={24}
-          color={focused ? '#ffffff' : '#94a3b8'} // Trắng khi chọn, Xám khi không
+          color={focused ? '#ffffff' : idleIconColor}
         />
         {badge && (
           <View style={styles.tabBadge}>
@@ -548,6 +553,8 @@ const styles = {
     borderRadius: 35,
     overflow: 'hidden',
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#2E2C2E',
   },
   slidingBackground: {
     flexDirection: 'row',
@@ -556,11 +563,11 @@ const styles = {
   },
   leftFill: {
     height: 70,
-    backgroundColor: '#111827',
+    backgroundColor: '#0D0E13',
   },
   rightFill: {
     height: 70,
-    backgroundColor: '#111827',
+    backgroundColor: '#0D0E13',
   },
   itemsContainer: {
     flexDirection: 'row',
@@ -582,18 +589,18 @@ const styles = {
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#6366f1',
+    backgroundColor: '#3B82F6',
     top: 10,
-    shadowColor: '#6366f1',
+    shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
     elevation: 6,
   },
   tabTitle: {
     fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '700',
+    color: '#F2F2F2',
     position: 'absolute',
     bottom: 8,
   },
@@ -601,14 +608,14 @@ const styles = {
     position: 'absolute',
     top: -4,
     right: -8,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#FB565B',
     minWidth: 16,
     height: 16,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#fff',
+    borderColor: '#0D0E13',
     zIndex: 10,
   },
   tabBadgeText: {

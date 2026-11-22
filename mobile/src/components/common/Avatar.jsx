@@ -32,7 +32,7 @@ const Avatar = ({
       >
         {uri ? <TamaguiAvatar.Image accessibilityLabel={name} src={uri} source={{ uri }} /> : null}
         <TamaguiAvatar.Fallback
-          backgroundColor="#6366f1"
+          backgroundColor="#3B82F6"
           alignItems="center"
           justifyContent="center"
         >
