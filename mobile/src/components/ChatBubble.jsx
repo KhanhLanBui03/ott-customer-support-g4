@@ -11,6 +11,7 @@ import {
   PanResponder,
   Linking,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSelector, useDispatch } from 'react-redux';
@@ -76,9 +77,17 @@ const ChatBubble = ({
     }
   }, [isHighlighted]);
 
+  const isAIMessage = message.senderId === 'shop-expert-ai-bot';
+  const MONO_FONT = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+
   const highlightBorder = highlightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', colors.primary],
+    outputRange: [
+      isAIMessage
+        ? (colors.aiBorder || 'rgba(129, 140, 248, 0.38)')
+        : (isOwn ? (colors.ownBubbleBorder || colors.primary) : (colors.otherBubbleBorder || colors.border)),
+      colors.primaryBright || colors.primary,
+    ],
   });
 
   const currentUserIdStr = String(user?.userId || user?.id || '');
@@ -478,28 +487,42 @@ const ChatBubble = ({
     <Animated.View {...panResponder.panHandlers} style={[styles.container, isOwn ? styles.ownContainer : styles.otherContainer, { transform: [{ translateX }] }]}>
       {!isOwn && (
         <TouchableOpacity style={styles.avatarContainer} onPress={handleAvatarPress}>
-          {message.senderId === 'shop-expert-ai-bot' ? (
-            <View style={[styles.avatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
-              <Ionicons name="sparkles" size={14} color="#6366f1" />
+          {isAIMessage ? (
+            <View style={[styles.avatar, { borderRadius: 12, backgroundColor: colors.aiSurface, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.aiAccent }]}>
+              <Ionicons name="sparkles" size={14} color={colors.aiAccent} />
             </View>
           ) : (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            <Image source={{ uri: avatarUrl }} style={[styles.avatar, { borderWidth: 1, borderColor: colors.border }]} />
           )}
         </TouchableOpacity>
       )}
 
       <TouchableOpacity activeOpacity={message.isRecalled ? 1 : 0.8} onPress={() => !message.isRecalled && onPressMessage?.(message)} onLongPress={() => !message.isRecalled && onLongPress?.()} style={[styles.messageWrapper, isOwn ? styles.ownWrapper : styles.otherWrapper]}>
-        {!isOwn && <Text style={[styles.senderName, { color: colors.textMuted }]}>{senderInfo?.fullName || senderInfo?.name || message.senderName || 'User'}</Text>}
+        {!isOwn && <Text style={[styles.senderName, { color: isAIMessage ? colors.aiAccent : colors.textMuted }]}>{senderInfo?.fullName || senderInfo?.name || message.senderName || 'User'}</Text>}
 
         <View style={[styles.bubbleContainer, isOwn ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
           <Animated.View style={[
             styles.bubble,
             message.type === 'STICKER'
               ? { backgroundColor: 'transparent', paddingVertical: 0, paddingHorizontal: 0 }
-              : (isOwn ? [styles.ownBubble, { backgroundColor: colors.primary }] : [styles.otherBubble, { backgroundColor: colors.surface200 }]),
+              : isAIMessage
+                ? [styles.otherBubble, { backgroundColor: isDark ? '#121224' : '#EEF2FF' }]
+                : (isOwn
+                    ? [styles.ownBubble, { backgroundColor: colors.ownBubbleBg || colors.primary }]
+                    : [styles.otherBubble, { backgroundColor: colors.otherBubbleBg || colors.surface200 }]),
             isVoice && { paddingVertical: 6, paddingHorizontal: 10 },
-            { borderColor: highlightBorder, borderWidth: 2 }
+            message.type === 'STICKER'
+              ? { borderWidth: 0 }
+              : { borderColor: highlightBorder, borderWidth: isHighlighted ? 2 : 1 }
           ]}>
+            {isAIMessage && message.type !== 'STICKER' && (
+              <View style={[styles.aiHeaderChip, { borderBottomColor: colors.aiBorder }]}>
+                <Ionicons name="sparkles" size={11} color={colors.aiAccent} />
+                <Text style={[styles.aiHeaderChipText, { color: colors.aiAccent, fontFamily: MONO_FONT }]}>
+                  SHOPEXPERT AI · NEURAL
+                </Text>
+              </View>
+            )}
 
             {message.type === 'STICKER' ? (
               (() => {
@@ -960,23 +983,36 @@ const styles = StyleSheet.create({
   otherWrapper: { alignItems: 'flex-start' },
   senderName: { fontSize: 11, color: '#6b7280', marginBottom: 2, marginLeft: 4 },
   bubbleContainer: { position: 'relative', zIndex: 1, paddingBottom: 0 },
-  bubble: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20 },
-  ownBubble: { backgroundColor: '#667eea', borderBottomRightRadius: 4 },
-  otherBubble: { backgroundColor: '#f3f4f6', borderBottomLeftRadius: 4 },
-  text: { fontSize: 15, lineHeight: 20 },
-  ownText: { color: '#fff' },
+  bubble: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 18 },
+  ownBubble: { backgroundColor: '#0D2240', borderBottomRightRadius: 4 },
+  otherBubble: { backgroundColor: '#141418', borderBottomLeftRadius: 4 },
+  aiHeaderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingBottom: 6,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+  },
+  aiHeaderChipText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+  },
+  text: { fontSize: 15, lineHeight: 22 },
+  ownText: { color: '#F2F2F2' },
   otherText: { color: '#1f2937' },
   mentionText: {
     fontWeight: '900',
     textDecorationLine: 'none',
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    backgroundColor: 'rgba(59, 130, 246, 0.14)',
   },
 
 
   forwardedIndicator: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 4, opacity: 0.8 },
 
   forwardedText: { fontSize: 11, fontStyle: 'italic', fontWeight: '600' },
-  timeInside: { fontSize: 10, marginTop: 2, alignSelf: 'flex-end', minWidth: 45, textAlign: 'right' },
+  timeInside: { fontSize: 10, marginTop: 3, alignSelf: 'flex-end', minWidth: 45, textAlign: 'right', fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) },
   ownTime: { color: 'rgba(255, 255, 255, 0.7)' },
   otherTime: { color: '#9ca3af' },
   statusContainer: { marginTop: 6, minHeight: 22, zIndex: 1 },

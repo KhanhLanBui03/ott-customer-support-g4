@@ -187,19 +187,22 @@ const AIAssistantPanel = ({ conversationId }) => {
     });
   };
 
-  const ActionCard = ({ icon, label, bgColor }) => (
+  const MONO_FONT = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+
+  const ActionCard = ({ code, icon, label, bgColor, accentColor }) => (
     <Card
       press={{ scale: 0.97, opacity: 0.85 }}
-      backgroundColor={isDark ? 'rgba(255, 255, 255, 0.05)' : colors.surface100}
+      backgroundColor={isDark ? '#101013' : colors.surface100}
       borderWidth={1}
       borderColor={colors.border}
-      borderRadius={18}
+      borderRadius={16}
       width={isWideLayout ? '23.5%' : '48%'}
-      paddingVertical={16}
+      paddingVertical={14}
       paddingHorizontal={12}
-      alignItems="center"
-      justifyContent="center"
+      alignItems="flex-start"
+      justifyContent="space-between"
       marginBottom={12}
+      gap={10}
       onPress={() => {
         const actionMap = {
           'TÓM TẮT': 'summary',
@@ -210,10 +213,15 @@ const AIAssistantPanel = ({ conversationId }) => {
         handleAction(actionMap[label]);
       }}
     >
-      <View style={[styles.actionIconContainer, { backgroundColor: bgColor }]}>
-        {icon}
-      </View>
-      <TText fontSize={11} fontWeight="800" letterSpacing={1} color={colors.textSubtle}>
+      <XStack width="100%" justifyContent="space-between" alignItems="center">
+        <View style={[styles.actionIconContainer, { backgroundColor: bgColor, marginBottom: 0 }]}>
+          {icon}
+        </View>
+        <TText fontSize={10} fontWeight="700" color={accentColor} style={{ fontFamily: MONO_FONT }}>
+          {code}
+        </TText>
+      </XStack>
+      <TText fontSize={11} fontWeight="800" letterSpacing={1} color={colors.foreground}>
         {label}
       </TText>
     </Card>
@@ -280,24 +288,32 @@ const AIAssistantPanel = ({ conversationId }) => {
       {/* Action Grid */}
       <View style={styles.grid}>
         <ActionCard 
-          icon={<MaterialIcons name="chat-bubble-outline" size={22} color="#818cf8" />} 
+          code="01"
+          accentColor="#818CF8"
+          icon={<MaterialIcons name="chat-bubble-outline" size={20} color="#818CF8" />} 
           label="TÓM TẮT" 
-          bgColor="rgba(99, 102, 241, 0.2)"
+          bgColor="rgba(129, 140, 248, 0.16)"
         />
         <ActionCard 
-          icon={<MaterialIcons name="bar-chart" size={22} color="#34d399" />} 
+          code="02"
+          accentColor="#3B82F6"
+          icon={<MaterialIcons name="bar-chart" size={20} color="#60A5FA" />} 
           label="THỐNG KÊ" 
-          bgColor="rgba(52, 211, 153, 0.2)"
+          bgColor="rgba(59, 130, 246, 0.16)"
         />
         <ActionCard 
-          icon={<MaterialIcons name="event" size={22} color="#fb923c" />} 
+          code="03"
+          accentColor="#FFBA00"
+          icon={<MaterialIcons name="event" size={20} color="#FFBA00" />} 
           label="LỊCH HẸN" 
-          bgColor="rgba(251, 146, 60, 0.2)"
+          bgColor="rgba(255, 186, 0, 0.16)"
         />
         <ActionCard 
-          icon={<MaterialIcons name="description" size={22} color="#f43f5e" />} 
+          code="04"
+          accentColor="#FB565B"
+          icon={<MaterialIcons name="description" size={20} color="#FB565B" />} 
           label="BIÊN BẢN" 
-          bgColor="rgba(244, 63, 94, 0.2)"
+          bgColor="rgba(251, 86, 91, 0.16)"
         />
       </View>
 

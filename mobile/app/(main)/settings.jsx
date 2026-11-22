@@ -120,9 +120,9 @@ const SettingsScreen = () => {
               </View>
               <Switch
                 value={isDark} onValueChange={toggleTheme}
-                trackColor={{ false: '#d1d5db', true: '#818cf8' }}
-                thumbColor={isDark ? '#6366f1' : '#f9fafb'}
-                ios_backgroundColor="#d1d5db"
+                trackColor={{ false: '#64748B', true: '#60A5FA' }}
+                thumbColor={isDark ? '#3B82F6' : '#f9fafb'}
+                ios_backgroundColor="#64748B"
               />
             </View>
 
@@ -156,9 +156,9 @@ const SettingsScreen = () => {
               <Switch
                 value={messageNotifications}
                 onValueChange={handleToggleMessageNotifications}
-                trackColor={{ false: '#d1d5db', true: '#818cf8' }}
-                thumbColor={messageNotifications ? '#6366f1' : '#f9fafb'}
-                ios_backgroundColor="#d1d5db"
+                trackColor={{ false: '#64748B', true: '#60A5FA' }}
+                thumbColor={messageNotifications ? '#3B82F6' : '#f9fafb'}
+                ios_backgroundColor="#64748B"
               />
             </View>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
@@ -170,9 +170,9 @@ const SettingsScreen = () => {
               <Switch
                 value={soundEnabled}
                 onValueChange={handleToggleSound}
-                trackColor={{ false: '#d1d5db', true: '#818cf8' }}
-                thumbColor={soundEnabled ? '#6366f1' : '#f9fafb'}
-                ios_backgroundColor="#d1d5db"
+                trackColor={{ false: '#64748B', true: '#60A5FA' }}
+                thumbColor={soundEnabled ? '#3B82F6' : '#f9fafb'}
+                ios_backgroundColor="#64748B"
               />
             </View>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
@@ -181,7 +181,7 @@ const SettingsScreen = () => {
               onPress={() => setPickerType('notification')}
             >
               <View style={styles.menuItemLeft}>
-                <Ionicons name="notifications-outline" size={20} color="#6366f1" />
+                <Ionicons name="notifications-outline" size={20} color={colors.primary} />
                 <Text style={[styles.menuItemText, { color: colors.foreground }]}>
                   {t('settings.notification_sound', 'Âm thanh thông báo')}
                 </Text>
@@ -312,7 +312,7 @@ const SettingsScreen = () => {
                     <TouchableOpacity
                       style={[
                         styles.optionRow,
-                        isSelected && { backgroundColor: isDark ? 'rgba(99,102,241,0.16)' : '#eef2ff' },
+                        isSelected && { backgroundColor: isDark ? 'rgba(59,130,246,0.16)' : '#EFF6FF' },
                       ]}
                       onPress={() => handleSelectOption(opt)}
                       activeOpacity={0.7}
@@ -323,7 +323,7 @@ const SettingsScreen = () => {
                             styles.optionIconCircle,
                             {
                               backgroundColor: isSelected
-                                ? '#6366f1'
+                                ? colors.primary
                                 : (isDark ? colors.surface300 : '#f1f5f9'),
                             },
                           ]}
@@ -338,7 +338,7 @@ const SettingsScreen = () => {
                           style={[
                             styles.optionLabel,
                             { color: colors.foreground },
-                            isSelected && { fontWeight: '700', color: isDark ? '#a5b4fc' : '#4f46e5' },
+                            isSelected && { fontWeight: '700', color: isDark ? '#60A5FA' : '#2563EB' },
                           ]}
                         >
                           {t(opt.labelKey, opt.fallbackLabel)}
@@ -346,7 +346,7 @@ const SettingsScreen = () => {
                       </View>
 
                       {isSelected ? (
-                        <Ionicons name="checkmark-circle" size={22} color="#6366f1" />
+                        <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
                       ) : (
                         <Ionicons name="radio-button-off" size={20} color={colors.textSubtle} />
                       )}

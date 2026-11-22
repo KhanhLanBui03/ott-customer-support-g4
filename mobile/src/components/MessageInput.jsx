@@ -1115,6 +1115,8 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                 alignItems: 'center',
                 backgroundColor: colors.input,
                 borderRadius: 22,
+                borderWidth: 1,
+                borderColor: isExpanded ? colors.primary : colors.border,
                 paddingRight: 4
               }}>
                 <TextInput

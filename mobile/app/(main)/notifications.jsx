@@ -19,6 +19,7 @@ import { friendApi } from '../../src/api/friendApi';
 import { conversationApi } from '../../src/api/chatApi';
 import { Alert } from 'react-native';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { notificationApi } from '../../src/api/userApi';
 import CONFIG from '../../src/config';
@@ -46,6 +47,7 @@ const formatFullDate = (date) => {
 const NotificationsScreen = () => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const { isWideLayout, contentMaxWidth } = useResponsive();
   const dispatch = useDispatch();
 
   const currentUser = useSelector((state) => state.auth.user);
@@ -396,15 +398,16 @@ const NotificationsScreen = () => {
 
   const getIconColor = (type) => {
     switch (type) {
-      case 'MESSAGE': return '#667eea';
-      case 'FRIEND_REQUEST': return '#10b981';
-      case 'SYSTEM': return '#f59e0b';
-      default: return '#64748b';
+      case 'MESSAGE': return '#3B82F6';
+      case 'FRIEND_REQUEST': return '#10B981';
+      case 'SYSTEM': return '#818CF8';
+      default: return '#64748B';
     }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[{ flex: 1, width: '100%' }, isWideLayout && { maxWidth: Math.min(contentMaxWidth, 820), alignSelf: 'center' }]}>
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         {isSelectionMode ? (
           <>
@@ -421,7 +424,7 @@ const NotificationsScreen = () => {
               disabled={selectedIds.length === 0} 
               style={{ padding: 5, opacity: selectedIds.length === 0 ? 0.4 : 1 }}
             >
-              <MaterialIcons name="delete" size={24} color="#ef4444" />
+              <MaterialIcons name="delete" size={24} color={colors.error} />
             </TouchableOpacity>
           </>
         ) : (
@@ -447,16 +450,17 @@ const NotificationsScreen = () => {
           keyExtractor={(item) => (item.id || item.notificationId || Math.random().toString())}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#667eea" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <MaterialIcons name="notifications-none" size={64} color="#cbd5e1" />
-              <Text style={styles.emptyText}>{t('notifications.no_notifications')}</Text>
+              <MaterialIcons name="notifications-none" size={64} color={colors.textSubtle} />
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('notifications.no_notifications')}</Text>
             </View>
           }
         />
       )}
+      </View>
     </SafeAreaView>
   );
 };

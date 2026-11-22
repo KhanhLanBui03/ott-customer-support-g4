@@ -707,12 +707,13 @@ const ChatDetailScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: keyboardHeight }]}>
-        <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <View style={[styles.messagesHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <TouchableOpacity
             onPress={() => {
               router.replace('/(main)');
             }}
             style={styles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="chevron-back" size={28} color={colors.primary} />
           </TouchableOpacity>
@@ -730,28 +731,33 @@ const ChatDetailScreen = () => {
           >
             <View style={styles.headerAvatarContainer}>
               {isAI ? (
-                <View style={[styles.headerAvatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
-                  <Ionicons name="sparkles" size={20} color="#6366f1" />
+                <View style={[styles.headerAvatar, { borderRadius: 14, backgroundColor: colors.aiSurface, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.aiAccent }]}>
+                  <Ionicons name="sparkles" size={20} color={colors.aiAccent} />
                 </View>
               ) : (
-                <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200 }]} />
+                <Image source={{ uri: headerAvatarUrl }} style={[styles.headerAvatar, { backgroundColor: colors.surface200, borderWidth: 1, borderColor: colors.border }]} />
               )}
-              {(isOnline || isAI) && <View style={[styles.headerOnlineBadge, { borderColor: colors.background }]} />}
+              {(isOnline || isAI) && <View style={[styles.headerOnlineBadge, { backgroundColor: isAI ? colors.aiAccent : colors.online, borderColor: colors.card }]} />}
             </View>
             <View style={styles.headerInfo}>
               <View style={styles.nameRow}>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
+                {isAI && (
+                  <View style={[styles.miniTag, { backgroundColor: colors.aiSurface, borderColor: colors.aiBorder }]}>
+                    <Text style={[styles.miniTagText, { color: colors.aiAccent }]}>AI ENGINE</Text>
+                  </View>
+                )}
                 {conversation?.type === 'SINGLE' && !isAI && otherMember?.friendshipStatus && (
                   <View style={[
                     styles.miniTag,
                     friendshipStatus === 'ACCEPTED'
-                      ? [styles.friendMiniTag, isDark && { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.3)' }]
+                      ? [styles.friendMiniTag, isDark && { backgroundColor: 'rgba(59, 130, 246, 0.16)', borderColor: 'rgba(59, 130, 246, 0.38)' }]
                       : [styles.strangerMiniTag, isDark && { backgroundColor: colors.surface200, borderColor: colors.border }]
                   ]}>
                     <Text style={[
                       styles.miniTagText,
                       friendshipStatus === 'ACCEPTED'
-                        ? [styles.friendMiniTagText, isDark && { color: '#10b981' }]
+                        ? [styles.friendMiniTagText, isDark && { color: colors.primaryBright }]
                         : [styles.strangerMiniTagText, isDark && { color: colors.textSubtle }]
                     ]}>
                       {friendshipStatus === 'ACCEPTED' ? t('chat.friend').toUpperCase() : t('chat.stranger_bar.title').toUpperCase()}

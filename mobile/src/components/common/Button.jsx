@@ -3,10 +3,16 @@ import { Button as TamaguiButton, Spinner, Text } from 'tamagui';
 
 const VARIANT_STYLES = {
   primary: {
-    backgroundColor: '#6366f1',
-    color: '#ffffff',
-    borderColor: 'transparent',
-    pressBg: '#4f46e5',
+    backgroundColor: '#3B82F6',
+    color: '#FFFFFF',
+    borderColor: '#60A5FA',
+    pressBg: '#2563EB',
+  },
+  ai: {
+    backgroundColor: '#6366F1',
+    color: '#FFFFFF',
+    borderColor: '#818CF8',
+    pressBg: '#4F46E5',
   },
   secondary: {
     backgroundColor: '$surface200',
@@ -15,16 +21,16 @@ const VARIANT_STYLES = {
     pressBg: '$surface300',
   },
   danger: {
-    backgroundColor: '#ef4444',
-    color: '#ffffff',
+    backgroundColor: '#FB565B',
+    color: '#FFFFFF',
     borderColor: 'transparent',
-    pressBg: '#dc2626',
+    pressBg: '#DC2626',
   },
   ghost: {
     backgroundColor: 'transparent',
-    color: '#6366f1',
+    color: '#60A5FA',
     borderColor: 'transparent',
-    pressBg: 'rgba(99, 102, 241, 0.1)',
+    pressBg: 'rgba(59, 130, 246, 0.14)',
   },
 };
 

@@ -150,36 +150,36 @@ const LoginScreen = () => {
               <YStack
                 width={isTablet ? 92 : 80}
                 height={isTablet ? 92 : 80}
-                backgroundColor="rgba(99, 102, 241, 0.14)"
+                backgroundColor="rgba(59, 130, 246, 0.14)"
                 borderRadius={26}
                 justifyContent="center"
                 alignItems="center"
                 marginBottom={16}
-                borderWidth={1}
-                borderColor="rgba(99, 102, 241, 0.35)"
+                borderWidth={1.5}
+                borderColor="rgba(59, 130, 246, 0.45)"
               >
-                <MaterialCommunityIcons name="flash" size={isTablet ? 48 : 42} color="#818cf8" />
+                <MaterialCommunityIcons name="flash" size={isTablet ? 48 : 42} color="#60A5FA" />
               </YStack>
               <TText
                 fontSize={isTablet ? 38 : 32}
                 fontWeight="900"
-                color="#ffffff"
+                color="#F2F2F2"
                 marginBottom={8}
-                letterSpacing={-0.5}
+                letterSpacing={-0.6}
               >
-                <TText color="#6366f1" fontSize={isTablet ? 38 : 32} fontWeight="900">
+                <TText color="#3B82F6" fontSize={isTablet ? 38 : 32} fontWeight="900">
                   F5
                 </TText>{' '}
                 Chat
               </TText>
               <TText
                 fontSize={14}
-                color="#94a3b8"
+                color="#B8B3B0"
                 textAlign={isWideLayout ? 'left' : 'center'}
                 fontWeight="500"
                 lineHeight={21}
               >
-                Kết nối tức thì, Bảo mật tuyệt đối
+                Kết nối tức thì · Trợ lý AI thông minh · Bảo mật tuyệt đối
               </TText>
             </YStack>
 
@@ -187,12 +187,11 @@ const LoginScreen = () => {
             <YStack width="100%" maxWidth={440} flex={isWideLayout ? 1.15 : undefined} gap={18}>
               <Card
                 bordered
-                backgroundColor="rgba(255, 255, 255, 0.03)"
-                borderColor="rgba(255, 255, 255, 0.08)"
-                borderRadius={28}
+                backgroundColor="#101013"
+                borderColor="#2E2C2E"
+                borderRadius={24}
                 padding={24}
                 gap={18}
-                elevate
               >
                 <Input
                   darkSurface
@@ -212,7 +211,7 @@ const LoginScreen = () => {
                     <MaterialCommunityIcons
                       name="email-outline"
                       size={20}
-                      color={focusedInput === 'email' ? '#6366f1' : '#64748b'}
+                      color={focusedInput === 'email' ? '#3B82F6' : '#8B949E'}
                     />
                   }
                 />
@@ -234,7 +233,7 @@ const LoginScreen = () => {
                     <MaterialCommunityIcons
                       name="lock-outline"
                       size={20}
-                      color={focusedInput === 'password' ? '#6366f1' : '#64748b'}
+                      color={focusedInput === 'password' ? '#3B82F6' : '#8B949E'}
                     />
                   }
                   rightElement={
@@ -246,7 +245,7 @@ const LoginScreen = () => {
                       <MaterialCommunityIcons
                         name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                         size={20}
-                        color="#94a3b8"
+                        color="#8B949E"
                       />
                     </TouchableOpacity>
                   }
@@ -255,16 +254,16 @@ const LoginScreen = () => {
                 {localError ? (
                   <XStack
                     alignItems="center"
-                    backgroundColor="rgba(239, 68, 68, 0.12)"
-                    borderColor="rgba(239, 68, 68, 0.3)"
+                    backgroundColor="rgba(251, 86, 91, 0.12)"
+                    borderColor="rgba(251, 86, 91, 0.35)"
                     borderWidth={1}
                     borderRadius={14}
                     paddingHorizontal={12}
                     paddingVertical={10}
                     gap={8}
                   >
-                    <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#ef4444" />
-                    <TText color="#fca5a5" fontSize={13} flex={1} fontWeight="500">
+                    <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#FB565B" />
+                    <TText color="#FCA5A5" fontSize={13} flex={1} fontWeight="500">
                       {localError}
                     </TText>
                   </XStack>
@@ -283,7 +282,7 @@ const LoginScreen = () => {
                   onPress={() => router.push('/forgot-password')}
                   activeOpacity={0.7}
                 >
-                  <TText color="#818cf8" fontSize={14} fontWeight="600">
+                  <TText color="#60A5FA" fontSize={14} fontWeight="600">
                     Quên mật khẩu?
                   </TText>
                 </TouchableOpacity>
@@ -291,11 +290,11 @@ const LoginScreen = () => {
 
               {/* Footer */}
               <XStack justifyContent="center" alignItems="center" gap={6} paddingVertical={4}>
-                <TText color="#94a3b8" fontSize={14}>
+                <TText color="#8B949E" fontSize={14}>
                   Chưa có tài khoản?
                 </TText>
                 <TouchableOpacity onPress={() => router.push('/register')} activeOpacity={0.7}>
-                  <TText color="#818cf8" fontSize={14} fontWeight="700">
+                  <TText color="#60A5FA" fontSize={14} fontWeight="700">
                     Đăng ký ngay
                   </TText>
                 </TouchableOpacity>
@@ -323,7 +322,7 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0c0714',
+    backgroundColor: '#050507',
     position: 'relative'
   },
   scrollContent: {
@@ -340,21 +339,21 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: '#7c3aed',
+    backgroundColor: '#3B82F6',
     opacity: 0.12,
     position: 'absolute',
-    top: -50,
-    right: -50,
+    top: -60,
+    right: -60,
   },
   glow2: {
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: '#4f46e5',
-    opacity: 0.1,
+    backgroundColor: '#818CF8',
+    opacity: 0.08,
     position: 'absolute',
-    bottom: -50,
-    left: -50,
+    bottom: -60,
+    left: -60,
   },
   header: {
     alignItems: 'center',

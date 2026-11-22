@@ -15,15 +15,15 @@ const Input = ({
 }) => {
   const [focused, setFocused] = useState(false);
 
-  const bgColor = darkSurface ? 'rgba(255, 255, 255, 0.04)' : '$inputBg';
+  const bgColor = darkSurface ? '#101013' : '$inputBg';
   const borderColor = error
-    ? '#ef4444'
+    ? '#FB565B'
     : focused
-      ? '#6366f1'
+      ? '#3B82F6'
       : darkSurface
-        ? 'rgba(255, 255, 255, 0.1)'
+        ? '#2E2C2E'
         : '$borderColor';
-  const textColor = darkSurface ? '#ffffff' : '$color';
+  const textColor = darkSurface ? '#F2F2F2' : '$color';
 
   return (
     <YStack gap={6} width="100%" style={containerStyle}>

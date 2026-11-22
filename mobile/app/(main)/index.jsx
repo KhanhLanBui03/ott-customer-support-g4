@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, TextInput, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchConversations, setCurrentUserId, updateConversation, removeConversationLocal, pinConversation, unpinConversation, updateMemberFriendshipStatus } from '../../src/store/chatSlice';
@@ -13,10 +13,12 @@ import CreateGroupModal from '../../src/components/CreateGroupModal';
 import { TAGS, getTagByKey } from '../../src/constants/tags';
 import { conversationApi } from '../../src/api/chatApi';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import { getPreviewText } from '../../src/utils/messageUtils';
 import { useTranslation } from 'react-i18next';
 import * as SecureStore from 'expo-secure-store';
 
+const MONO_FONT = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
 
 const HomeScreen = () => {
   const { t } = useTranslation();
@@ -25,6 +27,8 @@ const HomeScreen = () => {
   const { conversations, loading } = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
   const { colors, isDark, toggleTheme } = useTheme();
+  const { isWideLayout, contentMaxWidth } = useResponsive();
+  const [searchFocused, setSearchFocused] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -384,10 +388,19 @@ const HomeScreen = () => {
       >
         <TouchableOpacity
           style={[
-            styles.conversationItem, 
-            { backgroundColor: colors.background, borderBottomColor: colors.border },
-            isUnread && { backgroundColor: isDark ? colors.surface200 : '#eef2ff' },
-            item.isPinned && { backgroundColor: isDark ? colors.surface100 : colors.background }
+            styles.conversationItem,
+            {
+              backgroundColor: isAIConv
+                ? (isDark ? 'rgba(129, 140, 248, 0.08)' : '#F5F3FF')
+                : colors.card,
+              borderColor: isAIConv
+                ? colors.aiBorder
+                : isUnread
+                  ? colors.primary
+                  : colors.border,
+              borderLeftWidth: isUnread || isAIConv ? 3 : 1,
+              borderLeftColor: isAIConv ? colors.aiAccent : (isUnread ? colors.primary : colors.border),
+            },
           ]}
           onPress={() => router.push({
             pathname: `/chat/${encodeURIComponent(item.conversationId)}`,
@@ -402,19 +415,21 @@ const HomeScreen = () => {
             setActionModalType('menu');
             setActionModalVisible(true);
           }}
-          activeOpacity={0.7}
+          activeOpacity={0.75}
         >
           <View style={styles.avatarContainer}>
             {isAIConv ? (
-              <View style={[styles.avatar, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }]}>
-                <Ionicons name="sparkles" size={20} color="#6366f1" />
+              <View style={[styles.avatar, { borderRadius: 16, backgroundColor: colors.aiSurface, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.aiAccent }]}>
+                <Ionicons name="sparkles" size={22} color={colors.aiAccent} />
               </View>
             ) : (
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+              <Image source={{ uri: avatarUrl }} style={[styles.avatar, { borderWidth: 1, borderColor: colors.border }]} />
             )}
-            {(isOnline || isAIConv) && <View style={[styles.onlineBadge, { borderColor: colors.background }]} />}
+            {(isOnline || isAIConv) && (
+              <View style={[styles.onlineBadge, { backgroundColor: isAIConv ? colors.aiAccent : colors.online, borderColor: colors.card }]} />
+            )}
             {item.isPinned && (
-              <View style={styles.pinBadge}>
+              <View style={[styles.pinBadge, { backgroundColor: colors.primary }]}>
                 <MaterialCommunityIcons name="pin" size={10} color="#fff" style={styles.pinIconTiny} />
               </View>
             )}
@@ -423,12 +438,17 @@ const HomeScreen = () => {
             <View style={styles.conversationHeader}>
               <View style={styles.nameRow}>
                 <Text style={[styles.conversationName, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
+                {isAIConv && (
+                  <View style={[styles.aiMiniChip, { backgroundColor: colors.aiSurface, borderColor: colors.aiBorder }]}>
+                    <Text style={[styles.aiMiniChipText, { color: colors.aiAccent }]}>AI</Text>
+                  </View>
+                )}
                 {tagInfo && (
                   <View style={[styles.tagDot, { backgroundColor: tagInfo.color }]} />
                 )}
               </View>
               <View style={styles.rightLabel}>
-                <Text style={[styles.conversationTime, { color: colors.textSubtle }]}>
+                <Text style={[styles.conversationTime, { color: isUnread ? colors.primaryText : colors.textSubtle, fontFamily: MONO_FONT }]}>
                   {item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </Text>
               </View>
@@ -440,11 +460,11 @@ const HomeScreen = () => {
               <View style={styles.rightActionsRow}>
                 {isMentioned && (
                   <View style={styles.mentionBadge}>
-                    <MaterialCommunityIcons name="at" size={16} color="#6366f1" />
+                    <MaterialCommunityIcons name="at" size={16} color={colors.primary} />
                   </View>
                 )}
                 {unreadCount > 0 && (
-                  <View style={styles.unreadBadge}>
+                  <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
                     <Text style={styles.unreadBadgeText}>{unreadText}</Text>
                   </View>
                 )}
@@ -460,62 +480,162 @@ const HomeScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Header chính */}
+        <View style={[{ flex: 1, width: '100%' }, isWideLayout && { maxWidth: Math.min(contentMaxWidth, 860), alignSelf: 'center' }]}>
+        {/* Command Header */}
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('chat.title')}</Text>
+          <View style={styles.brandRow}>
+            <View style={[styles.brandBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.16)' : '#DBEAFE', borderColor: colors.primary }]}>
+              <MaterialCommunityIcons name="flash" size={20} color={colors.primaryBright || colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('chat.title')}</Text>
+              <View style={styles.liveRow}>
+                <View style={[styles.liveDot, { backgroundColor: colors.online }]} />
+                <Text style={[styles.liveText, { color: colors.textSubtle, fontFamily: MONO_FONT }]}>F5 LIVE</Text>
+              </View>
+            </View>
+          </View>
           <View style={styles.headerButtons}>
             <TouchableOpacity 
-              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              style={[styles.headerButton, { backgroundColor: colors.surface100, borderColor: colors.border }]} 
               onPress={() => router.push('/qr-scanner')}
-              title="Quét mã QR đăng nhập web"
+              accessibilityLabel="Quét mã QR đăng nhập web"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <MaterialCommunityIcons name="qrcode-scan" size={22} color={colors.foreground} />
+              <MaterialCommunityIcons name="qrcode-scan" size={20} color={colors.foreground} />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              style={[styles.headerButton, { backgroundColor: colors.surface100, borderColor: colors.border }]} 
               onPress={toggleTheme}
+              accessibilityLabel="Chuyển chế độ sáng tối"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <Ionicons 
                 name={isDark ? "sunny" : "moon"} 
-                size={22} 
-                color={colors.foreground} 
+                size={20} 
+                color={isDark ? '#FFBA00' : colors.primary}
               />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              style={[styles.headerButton, { backgroundColor: colors.surface100, borderColor: colors.border }]} 
               onPress={() => setCreateGroupVisible(true)}
+              accessibilityLabel="Tạo nhóm mới"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <MaterialIcons name="group-add" size={24} color={colors.foreground} />
+              <MaterialIcons name="group-add" size={22} color={colors.foreground} />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.headerButton, { backgroundColor: colors.surface200 }]} 
+              style={[styles.headerButton, { backgroundColor: colors.surface100, borderColor: colors.border }]} 
               onPress={() => setSearchVisible(true)}
-              title="Tìm bạn mới"
+              accessibilityLabel="Tìm bạn mới"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <MaterialIcons name="person-add" size={24} color={colors.foreground} />
+              <MaterialIcons name="person-add" size={22} color={colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Search Bar (Conversation Filter) */}
+        {/* Search Bar (Command Input) */}
         <View style={styles.searchContainer}>
-          <View style={[styles.searchBar, { backgroundColor: isDark ? colors.surface200 : '#f3f4f6' }]}>
-            <MaterialIcons name="search" size={20} color={colors.textMuted} />
+          <View
+            style={[
+              styles.searchBar,
+              {
+                backgroundColor: colors.surface100,
+                borderColor: searchFocused ? colors.primary : colors.border,
+              },
+            ]}
+          >
+            <MaterialIcons name="search" size={20} color={searchFocused ? colors.primary : colors.textSubtle} />
             <TextInput
               placeholder={t('chat.search_placeholder', { type: t('chat.group').toLowerCase() })}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.textSubtle}
               style={[styles.searchInput, { color: colors.foreground }]}
               value={searchQuery}
               onChangeText={setSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={18} color={colors.textSubtle} />
               </TouchableOpacity>
             )}
           </View>
         </View>
+
+        {/* Active Signal Rail (Quick AI + Online Contacts) */}
+        {(() => {
+          const currentUserId = String(currentUser?.userId || currentUser?.id || '');
+          const onlinePeers = conversations
+            .filter(c => c.type !== 'GROUP' && !c.conversationId?.includes('shop-expert-ai-bot'))
+            .map(c => {
+              const other = c.members?.find(m => String(m.userId || m.id) !== currentUserId);
+              const isOnline = other?.status === 'ONLINE' || other?.isOnline === true;
+              if (!other || !isOnline) return null;
+              const name = other.fullName || other.name || c.name || 'User';
+              const rawAv = other.avatarUrl || other.avatar || c.avatarUrl || c.avatar;
+              const avatar = rawAv
+                ? (rawAv.startsWith('http') ? rawAv : `${BASE_URL}${rawAv.startsWith('/') ? '' : '/'}${rawAv}`)
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3B82F6&color=fff&size=128&bold=true`;
+              return { id: c.conversationId, name, avatar };
+            })
+            .filter(Boolean)
+            .slice(0, 12);
+
+          return (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.signalRailContent}
+              style={styles.signalRail}
+            >
+              <TouchableOpacity
+                style={styles.signalNode}
+                activeOpacity={0.75}
+                onPress={() => {
+                  if (currentUserId) {
+                    const participants = [currentUserId, 'shop-expert-ai-bot'].sort();
+                    const aiConvId = `SINGLE#${participants[0]}#${participants[1]}`;
+                    router.push({
+                      pathname: `/chat/${encodeURIComponent(aiConvId)}`,
+                      params: { name: 'ShopExpert AI', type: 'SINGLE' },
+                    });
+                  }
+                }}
+              >
+                <View style={[styles.signalAvatarRing, { borderColor: colors.aiAccent, backgroundColor: colors.aiSurface }]}>
+                  <Ionicons name="sparkles" size={22} color={colors.aiAccent} />
+                  <View style={[styles.signalOnlineDot, { backgroundColor: colors.aiAccent, borderColor: colors.background }]} />
+                </View>
+                <Text style={[styles.signalNodeLabel, { color: colors.aiAccent, fontWeight: '700' }]} numberOfLines={1}>
+                  AI Copilot
+                </Text>
+              </TouchableOpacity>
+
+              {onlinePeers.map((peer) => (
+                <TouchableOpacity
+                  key={peer.id}
+                  style={styles.signalNode}
+                  activeOpacity={0.75}
+                  onPress={() => router.push({
+                    pathname: `/chat/${encodeURIComponent(peer.id)}`,
+                    params: { name: peer.name, avatar: peer.avatar, type: 'SINGLE' },
+                  })}
+                >
+                  <View style={[styles.signalAvatarRing, { borderColor: colors.primary }]}>
+                    <Image source={{ uri: peer.avatar }} style={styles.signalAvatarImg} />
+                    <View style={[styles.signalOnlineDot, { backgroundColor: colors.online, borderColor: colors.background }]} />
+                  </View>
+                  <Text style={[styles.signalNodeLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                    {peer.name.split(' ').slice(-1)[0]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          );
+        })()}
 
 
         {/* Tabs Phân loại (Đồng bộ Web) */}
@@ -557,7 +677,7 @@ const HomeScreen = () => {
         */}
         {((loading || showInitialLoading) && conversations.length === 0 && !refreshing) ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366f1" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, { color: colors.textMuted, marginTop: 15 }]}>
               {t('chat.loading_content')}
             </Text>
@@ -809,42 +929,106 @@ const HomeScreen = () => {
             />
           );
         })()}
+        </View>
       </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#050507' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingHorizontal: 18,
+    paddingTop: 56,
     paddingBottom: 10,
   },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#1f2937' },
-  headerButtons: { flexDirection: 'row', gap: 10 },
-  headerButton: { padding: 8, backgroundColor: '#f3f4f6', borderRadius: 12 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  liveText: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  headerButtons: { flexDirection: 'row', gap: 8 },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   
   // Search Bar Styles
   searchContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    height: 48,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
     gap: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
     paddingVertical: 8,
+  },
+
+  // Active Signal Rail
+  signalRail: {
+    maxHeight: 84,
+    marginBottom: 4,
+  },
+  signalRailContent: {
+    paddingHorizontal: 18,
+    gap: 14,
+    alignItems: 'center',
+  },
+  signalNode: {
+    alignItems: 'center',
+    width: 58,
+  },
+  signalAvatarRing: {
+    width: 50,
+    height: 50,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  signalAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+  },
+  signalOnlineDot: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+  },
+  signalNodeLabel: {
+    fontSize: 11,
+    marginTop: 5,
+    fontWeight: '600',
   },
   
   // Filter Tabs Styles
@@ -852,10 +1036,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
   },
   tabsRow: {
     flexDirection: 'row',
@@ -869,12 +1052,12 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#8B949E',
   },
   tabTextActive: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#3b82f6',
+    color: '#3B82F6',
   },
   tabIndicator: {
     position: 'absolute',
@@ -882,7 +1065,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#3B82F6',
     borderRadius: 2,
   },
   filterButton: {
@@ -891,31 +1074,42 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   filterButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#3B82F6',
   },
   filterButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#8B949E',
   },
   filterButtonTextActive: {
     color: '#fff',
   },
 
-  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
+  listContent: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 120, gap: 8 },
   conversationItem: {
     flexDirection: 'row',
     paddingVertical: 12,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderRadius: 16,
   },
   conversationItemUnread: {
-    backgroundColor: '#eef2ff',
+    backgroundColor: '#0D2240',
+  },
+  aiMiniChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  aiMiniChipText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   nameRow: {
     flex: 1,
@@ -938,22 +1132,21 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   unreadBadge: {
-
     minWidth: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#4338ca',
+    backgroundColor: '#3B82F6',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 6,
   },
   unreadBadgeText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
   },
   avatarContainer: { position: 'relative' },
-  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#f3f4f6' },
+  avatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#18181D' },
   onlineBadge: {
     position: 'absolute',
     right: 2,

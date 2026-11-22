@@ -531,7 +531,7 @@ const Requirement = ({ met, text }) => (
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#0c0714',
+    backgroundColor: '#050507',
     position: 'relative'
   },
   scrollContent: { 
@@ -543,21 +543,21 @@ const styles = StyleSheet.create({
     width: 300, 
     height: 300, 
     borderRadius: 150, 
-    backgroundColor: '#7c3aed', 
+    backgroundColor: '#3B82F6', 
     opacity: 0.12,
     position: 'absolute', 
-    top: -50, 
-    right: -50,
+    top: -60, 
+    right: -60,
   },
   glow2: {
     width: 300, 
     height: 300, 
     borderRadius: 150, 
-    backgroundColor: '#4f46e5', 
-    opacity: 0.1,
+    backgroundColor: '#818CF8', 
+    opacity: 0.08,
     position: 'absolute', 
-    bottom: -50, 
-    left: -50,
+    bottom: -60, 
+    left: -60,
   },
   header: { 
     marginBottom: 24, 
