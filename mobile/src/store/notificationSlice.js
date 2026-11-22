@@ -101,7 +101,9 @@ export const fetchNotifications = createAsyncThunk(
 
       return allNotifications;
     } catch (error) {
-      console.error('Fetch notifications error:', error);
+      if (!error?.isSessionExpired && error?.response?.status !== 401) {
+        console.error('Fetch notifications error:', error);
+      }
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch notifications');
     }
   }

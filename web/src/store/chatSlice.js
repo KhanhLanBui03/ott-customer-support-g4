@@ -179,7 +179,13 @@ const getMessagePreviewText = (message) => {
   const firstMediaUrl = Array.isArray(message.mediaUrls) && message.mediaUrls.length > 0 ? message.mediaUrls[0] : '';
   const contentLower = (message.content || '').toLowerCase();
   const mediaLower = firstMediaUrl.toLowerCase();
-  const isGifUrl = contentLower.includes('.gif') || contentLower.includes('tenor.com') || mediaLower.includes('.gif') || mediaLower.includes('tenor.com');
+  const isGifUrl =
+    contentLower.includes('.gif') ||
+    contentLower.includes('tenor.com') ||
+    contentLower.includes('giphy.com') ||
+    mediaLower.includes('.gif') ||
+    mediaLower.includes('tenor.com') ||
+    mediaLower.includes('giphy.com');
 
   if (message.type === 'STICKER') {
     return '[Nhãn dán]';
@@ -603,9 +609,9 @@ const chatSlice = createSlice({
               lastMessage = "Tin nhắn thoại";
             } else if (lastMessage && (lastMessage.startsWith('http://') || lastMessage.startsWith('https://'))) {
               const lowerLast = lastMessage.toLowerCase();
-              if (lowerLast.includes('searchfilter=sticker') || lowerLast.includes('dicebear.com')) {
+              if (lowerLast.includes('searchfilter=sticker') || lowerLast.includes('dicebear.com') || lowerLast.includes('notoemoji') || lowerLast.includes('stickers_')) {
                 lastMessage = "[Nhãn dán]";
-              } else if (lowerLast.includes('.gif') || lowerLast.includes('tenor.com')) {
+              } else if (lowerLast.includes('.gif') || lowerLast.includes('tenor.com') || lowerLast.includes('giphy.com')) {
                 lastMessage = "[GIF]";
               }
             }

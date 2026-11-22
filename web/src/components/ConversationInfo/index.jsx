@@ -370,7 +370,9 @@ const ConversationInfo = ({ conversation, onClose, onClearHistory, openLightbox,
               lowerUrl.includes('/avatars/') ||
               lowerUrl.includes('amazonaws.com') ||
               lowerUrl.includes('s3.') ||
-              lowerUrl.includes('dicebear.com')
+              lowerUrl.includes('dicebear.com') ||
+              lowerUrl.includes('giphy.com') ||
+              lowerUrl.includes('notoemoji')
             ) {
               return;
             }

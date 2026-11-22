@@ -222,7 +222,9 @@ export const registerForPushNotificationsAsync = async () => {
     console.log('[PUSH] Registered Expo Push Token:', expoPushToken);
     return expoPushToken;
   } catch (err) {
-    console.warn('[PUSH] Failed to register Expo push token:', err?.message || err);
+    if (!err?.isSessionExpired && err?.response?.status !== 401) {
+      console.warn('[PUSH] Failed to register Expo push token:', err?.message || err);
+    }
     return null;
   }
 };

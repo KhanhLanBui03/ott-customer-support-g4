@@ -62,30 +62,16 @@ const VOICE_RECORDING_OPTIONS = {
 };
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-
-
+import {
+  EMOJI_CATEGORIES,
+  STICKER_SETS,
+  GIF_CATEGORIES,
+  filterEmojis,
+  fetchStickersData,
+  fetchGifsData,
+} from '../utils/mediaPickerData';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const emojiCategories = [
-  { id: 'smileys', label: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'] },
-  { id: 'gestures', label: '👋', emojis: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦿', '🦶', '👂', '🦻', '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄'] },
-  { id: 'animals', label: '🐶', emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦢', '🦉', '🦩', '🦚', '🦜', '🐸', '🐊', '🐢', '🦎', '🐍', '🐲', '🐉', '🦕', '🦖', '🐳', '🐋', '🐬', '🐟', '🐠', '🐡', '🦈', '🐙', '🐚', '🦀', '🦞', '🦐', '🦑'] },
-  { id: 'food', label: '🍏', emojis: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌽', '🥕', '👝', '🍟', '🍔', '🍕', '🌭', '🥪', '🌮', '🌯', '🥗', '🥘', '🍲', '🍱', '🥣', '🍛', '🍜', '🍜', '🍝', '🍠', '🍤', '🍣', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🍼', '☕', '🍵', '🍶', '🍷', '🍸', '🍹', '🍺', '🍻', '🥂', '🥃'] },
-  { id: 'activities', label: '⚽', emojis: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '⛸️', '🎿', '🛷', '🥌', '🎯', '🪀', '🎮', '🕹️', '🎰', '🎲', '🧩', '🧸', '♠️', '♥️', '♦️', '♣️', '♟️', '🃏', '🀄', '🎴', '🎭', '🎨', '🧵', '🧶'] },
-  { id: 'objects', label: '💡', emojis: ['⌚', '📱', '📲', '💻', '⌨️', '🖱️', '🖲️', '🕹️', '🗜️', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽️', '🎞️', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙️', '🎚️', '🎛️', '🧭', '⏱️', '⏲️', '⏰', '🕰️', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯️', '🪔', '🧯', '🛢️', '💸', '💵', '💴', '💶', '💷', '💰', '💳', '💎', '⚖️', '🧰', '🔧', '🔨', '⚒️', '🛠️', '⛏️', '🔩', '⚙️', '🧱', '⛓️', '🧲', '🔫', '💣', '🧨', '🪓', '🔪', '🗡️', '⚔️', '🛡️', '🚬', '⚰️', '⚱️', '🏺', '🔮', '📿', '🧿', '💈', '⚗️', '🔭', '🔬', '🕳️', '🩺', '💊', '💉', '🩸', '🧬', '🦠', '🧼', '🧽', '🪒', '🧺', '🧹', '🌡️', '🏷️', '🔖'] },
-  { id: 'symbols', label: '❤️', emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️', '🆘', '❌', '⭕', '🛑', '⛔', '📛', '🚫', '💯', '💢', '🤖', '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗', '❕', '❓', '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️', '🔰', '♻️', '✅', '🈯', '💹', '❇️', '✳️', '❎', '🌐', '💠', 'Ⓜ️', '🌀', '💤'] }
-];
-
-const stickerSets = [
-  { id: 'trending', label: '🔥' },
-  { id: 'cute', label: '🐱' },
-  { id: 'funny', label: '🤣' },
-  { id: 'love', label: '❤️' },
-  { id: 'cry', label: '😢' },
-  { id: 'angry', label: '😡' },
-  { id: 'pepe', label: '🐸' }
-];
 
 const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingChange, conversationType, onOpenPoll, members = [] }, ref) => {
   const { t } = useTranslation();
@@ -146,80 +132,61 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
     };
   }, []);
 
-  // Fetch Stickers from Tenor API
+  // Fetch Stickers (Giphy API with Noto Animated Emoji fallback)
   useEffect(() => {
     if (!showEmojis || activeTab !== 'sticker') return;
 
     let isMounted = true;
-    const fetchStickers = async () => {
+    const loadStickers = async () => {
       setStickersLoading(true);
       try {
-        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20&searchfilter=sticker';
-        const query = emojiSearchTerm.trim() || activeCategory;
-        if (query && query !== 'trending') {
-          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=LIVDSRZULELA&limit=20&searchfilter=sticker`;
-        }
-        const res = await fetch(url);
-        const data = await res.json();
-        if (isMounted && data.results) {
-          const formatted = data.results.map(item => ({
-            id: item.id,
-            url: item.media[0]?.gif?.url || item.url,
-            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
-            title: item.title || item.content_description || 'Sticker'
-          }));
-          setStickers(formatted);
-        }
+        const formatted = await fetchStickersData({
+          category: activeCategory,
+          searchTerm: emojiSearchTerm,
+          limit: 24,
+        });
+        if (isMounted) setStickers(formatted);
       } catch (err) {
-        console.error('Failed to fetch Tenor stickers on mobile:', err);
+        console.error('Failed to fetch stickers on mobile:', err);
       } finally {
         if (isMounted) setStickersLoading(false);
       }
     };
 
-    const timer = setTimeout(fetchStickers, emojiSearchTerm.trim() ? 500 : 0);
+    const timer = setTimeout(loadStickers, emojiSearchTerm.trim() ? 350 : 0);
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
   }, [showEmojis, activeTab, emojiSearchTerm, activeCategory]);
 
-  // Fetch GIFs from Tenor API
+  // Fetch GIFs (Giphy API with curated GIF fallback)
   useEffect(() => {
     if (!showEmojis || activeTab !== 'gif') return;
 
     let isMounted = true;
-    const fetchGifs = async () => {
+    const loadGifs = async () => {
       setGifsLoading(true);
       try {
-        let url = 'https://g.tenor.com/v1/trending?key=LIVDSRZULELA&limit=20';
-        if (emojiSearchTerm.trim()) {
-          url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(emojiSearchTerm.trim())}&key=LIVDSRZULELA&limit=20`;
-        }
-        const res = await fetch(url);
-        const data = await res.json();
-        if (isMounted && data.results) {
-          const formatted = data.results.map(item => ({
-            id: item.id,
-            url: item.media[0]?.gif?.url || item.url,
-            previewUrl: item.media[0]?.tinygif?.url || item.media[0]?.gif?.url || item.url,
-            title: item.title || item.content_description || 'GIF'
-          }));
-          setGifs(formatted);
-        }
+        const formatted = await fetchGifsData({
+          category: activeCategory,
+          searchTerm: emojiSearchTerm,
+          limit: 24,
+        });
+        if (isMounted) setGifs(formatted);
       } catch (err) {
-        console.error('Failed to fetch Tenor GIFs on mobile:', err);
+        console.error('Failed to fetch GIFs on mobile:', err);
       } finally {
         if (isMounted) setGifsLoading(false);
       }
     };
 
-    const timer = setTimeout(fetchGifs, emojiSearchTerm.trim() ? 500 : 0);
+    const timer = setTimeout(loadGifs, emojiSearchTerm.trim() ? 350 : 0);
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [showEmojis, activeTab, emojiSearchTerm]);
+  }, [showEmojis, activeTab, emojiSearchTerm, activeCategory]);
 
   const handleToggleEmojis = () => {
     if (!showEmojis) {
@@ -286,6 +253,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
             style={[styles.emojiTabButton, activeTab === 'gif' && { borderBottomColor: colors.primary }]}
             onPress={() => {
               setActiveTab('gif');
+              setActiveCategory('trending');
               setEmojiSearchTerm('');
             }}
           >
@@ -318,11 +286,17 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
         {/* Panel Content Scroll Area */}
         <View style={styles.emojiPanelContent}>
-          {activeTab === 'emoji' && (
-            <ScrollView contentContainerStyle={styles.emojiGrid}>
-              {((emojiCategories.find(c => c.id === activeCategory) || emojiCategories[0]).emojis)
-                .filter(e => emojiSearchTerm === '' || e.includes(emojiSearchTerm))
-                .map((emoji, i) => (
+          {activeTab === 'emoji' && (() => {
+            const filteredEmojis = filterEmojis(activeCategory, emojiSearchTerm);
+            return filteredEmojis.length === 0 ? (
+              <View style={styles.panelLoadingContainer}>
+                <Text style={{ color: colors.textSubtle, fontSize: 13 }}>
+                  Không tìm thấy biểu tượng nào
+                </Text>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={styles.emojiGrid}>
+                {filteredEmojis.map((emoji, i) => (
                   <TouchableOpacity
                     key={`${emoji}-${i}`}
                     onPress={() => handleEmojiPress(emoji)}
@@ -331,8 +305,9 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                     <Text style={styles.emojiText}>{emoji}</Text>
                   </TouchableOpacity>
                 ))}
-            </ScrollView>
-          )}
+              </ScrollView>
+            );
+          })()}
 
           {activeTab === 'sticker' && (
             stickersLoading && stickers.length === 0 ? (
@@ -388,30 +363,19 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
         </View>
 
         {/* Category Sub-Bar */}
-        {(activeTab === 'emoji' || activeTab === 'sticker') && (
-          <View style={[styles.categorySubBar, { borderTopColor: colors.border, backgroundColor: colors.input }]}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categorySubBarScroll}>
-              {activeTab === 'emoji' && emojiCategories.map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[styles.categorySubButton, activeCategory === category.id && { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.1)' }]}
-                  onPress={() => setActiveCategory(category.id)}
-                >
-                  <Text style={styles.categorySubLabel}>{category.label}</Text>
-                </TouchableOpacity>
-              ))}
-              {activeTab === 'sticker' && stickerSets.map((set) => (
-                <TouchableOpacity
-                  key={set.id}
-                  style={[styles.categorySubButton, activeCategory === set.id && { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.1)' }]}
-                  onPress={() => setActiveCategory(set.id)}
-                >
-                  <Text style={styles.categorySubLabel}>{set.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+        <View style={[styles.categorySubBar, { borderTopColor: colors.border, backgroundColor: colors.input }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categorySubBarScroll}>
+            {(activeTab === 'emoji' ? EMOJI_CATEGORIES : activeTab === 'sticker' ? STICKER_SETS : GIF_CATEGORIES).map((category) => (
+              <TouchableOpacity
+                key={category.id}
+                style={[styles.categorySubButton, activeCategory === category.id && { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.1)' }]}
+                onPress={() => setActiveCategory(category.id)}
+              >
+                <Text style={styles.categorySubLabel}>{category.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
     );
   };

@@ -174,8 +174,22 @@ export default function MainLayout() {
             let displayMessage = msg.content || 'Đã gửi một tệp đính kèm';
             const url = (msg.content || '').toLowerCase();
             const firstMediaUrl = ((msg.mediaUrls && msg.mediaUrls[0]) || '').toLowerCase();
-            const isStickerUrl = url.includes('searchfilter=sticker') || url.includes('dicebear.com') || firstMediaUrl.includes('searchfilter=sticker') || firstMediaUrl.includes('dicebear.com');
-            const isGifUrl = url.includes('.gif') || url.includes('tenor.com') || firstMediaUrl.includes('.gif') || firstMediaUrl.includes('tenor.com');
+            const isStickerUrl =
+              url.includes('searchfilter=sticker') ||
+              url.includes('dicebear.com') ||
+              url.includes('notoemoji') ||
+              url.includes('stickers_') ||
+              firstMediaUrl.includes('searchfilter=sticker') ||
+              firstMediaUrl.includes('dicebear.com') ||
+              firstMediaUrl.includes('notoemoji') ||
+              firstMediaUrl.includes('stickers_');
+            const isGifUrl =
+              url.includes('.gif') ||
+              url.includes('tenor.com') ||
+              url.includes('giphy.com') ||
+              firstMediaUrl.includes('.gif') ||
+              firstMediaUrl.includes('tenor.com') ||
+              firstMediaUrl.includes('giphy.com');
 
             if (msg.type === 'CALL_LOG') {
               displayMessage = getPreviewText(displayMessage);
