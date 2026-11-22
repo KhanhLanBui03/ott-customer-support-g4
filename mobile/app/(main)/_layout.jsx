@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Tabs, router } from 'expo-router';
-import { View, Text, Platform, Animated, Dimensions, TouchableOpacity, DeviceEventEmitter, AppState } from 'react-native';
+import { View, Text, Platform, Animated, TouchableOpacity, DeviceEventEmitter, AppState } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -18,13 +18,10 @@ import {
 } from '../../src/utils/pushNotificationService';
 import { playInAppNotificationSound } from '../../src/utils/soundService';
 import { useAgoraCall } from '../../src/hooks/useAgoraCall';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import VideoCall from '../../src/components/VideoCall';
 import MediaPermissionOnboardingModal from '../../src/components/common/MediaPermissionOnboardingModal';
 import { useTranslation } from 'react-i18next';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TAB_BAR_WIDTH = SCREEN_WIDTH - 32;
-const TAB_WIDTH = TAB_BAR_WIDTH / 5;
 
 const GlobalCallOverlay = React.memo(({ accessToken }) => {
   const {
@@ -324,6 +321,7 @@ export default function MainLayout() {
 }
 
 const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, badge }) => {
+  const { tabBarWidth, isCompactLandscape } = useResponsive();
   const translateX = useRef(new Animated.Value(0)).current;
   const user = useSelector((state) => state.auth.user);
 
@@ -352,7 +350,7 @@ const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, 
   // Tìm index thực tế trong danh sách Tab hiển thị
   const activeIndex = visibleRoutes.findIndex(route => route.name === activeTabName);
 
-  const actualTabWidth = visibleRoutes.length > 0 ? TAB_BAR_WIDTH / visibleRoutes.length : TAB_WIDTH;
+  const actualTabWidth = visibleRoutes.length > 0 ? tabBarWidth / visibleRoutes.length : tabBarWidth / 5;
 
   useEffect(() => {
     if (activeIndex >= 0) {
@@ -369,29 +367,40 @@ const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, 
     return null;
   }
 
+  const curveHalf = Math.min(35, actualTabWidth * 0.42);
   const pathData = `M 0 0 
-    L ${actualTabWidth / 2 - 35} 0 
-    C ${actualTabWidth / 2 - 20} 0 ${actualTabWidth / 2 - 15} 30 ${actualTabWidth / 2} 30 
-    C ${actualTabWidth / 2 + 15} 30 ${actualTabWidth / 2 + 20} 0 ${actualTabWidth / 2 + 35} 0 
+    L ${actualTabWidth / 2 - curveHalf} 0 
+    C ${actualTabWidth / 2 - curveHalf * 0.57} 0 ${actualTabWidth / 2 - curveHalf * 0.43} 30 ${actualTabWidth / 2} 30 
+    C ${actualTabWidth / 2 + curveHalf * 0.43} 30 ${actualTabWidth / 2 + curveHalf * 0.57} 0 ${actualTabWidth / 2 + curveHalf} 0 
     L ${actualTabWidth} 0 
     L ${actualTabWidth} 70 
     L 0 70 
     Z`;
 
   return (
-    <View style={styles.tabBarContainer}>
-      <View style={styles.tabBarInner}>
-        {/* Dải nền liên tục màu Tối sâu (Dark Slate) */}
-        <Animated.View style={[styles.slidingBackground, { transform: [{ translateX }] }]}>
-          <View style={styles.leftFill} />
-          <Svg width={actualTabWidth} height={70} viewBox={`0 0 ${actualTabWidth} 70`}>
-            <Path d={pathData} fill="#111827" />
-          </Svg>
-          <View style={styles.rightFill} />
-        </Animated.View>
-      </View>
+    <View style={[styles.tabBarContainer, isCompactLandscape && { bottom: 10 }]}>
+      <View style={[styles.tabBarShell, { width: tabBarWidth }]}>
+        <View style={[styles.tabBarInner, { width: tabBarWidth }]}>
+          {/* Dải nền liên tục màu Tối sâu (Dark Slate) */}
+          <Animated.View
+            style={[
+              styles.slidingBackground,
+              {
+                left: -tabBarWidth,
+                width: tabBarWidth * 3,
+                transform: [{ translateX }],
+              },
+            ]}
+          >
+            <View style={[styles.leftFill, { width: tabBarWidth }]} />
+            <Svg width={actualTabWidth} height={70} viewBox={`0 0 ${actualTabWidth} 70`}>
+              <Path d={pathData} fill="#111827" />
+            </Svg>
+            <View style={[styles.rightFill, { width: tabBarWidth * 2 }]} />
+          </Animated.View>
+        </View>
 
-      <View style={styles.itemsContainer}>
+        <View style={[styles.itemsContainer, { width: tabBarWidth }]}>
         {visibleRoutes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = activeIndex === index;
@@ -440,16 +449,18 @@ const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, 
                 focused={isFocused}
                 title={options.title}
                 badge={route.name === 'notifications' ? badge : null}
+                tabWidth={actualTabWidth}
               />
             </TouchableOpacity>
           );
         })}
+        </View>
       </View>
     </View>
   );
 };
 
-const TabIcon = ({ name, focused, title, badge }) => {
+const TabIcon = ({ name, focused, title, badge, tabWidth }) => {
   const translateY = useRef(new Animated.Value(0)).current;
   const iconScale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -474,7 +485,7 @@ const TabIcon = ({ name, focused, title, badge }) => {
   }, [focused]);
 
   return (
-    <View style={styles.iconWrapper}>
+    <View style={[styles.iconWrapper, tabWidth ? { width: tabWidth } : null]}>
       <Animated.View style={[
         styles.circle,
         {
@@ -522,13 +533,18 @@ const styles = {
     left: 16,
     right: 16,
     height: 70,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  tabBarShell: {
+    position: 'relative',
+    height: 70,
     backgroundColor: 'transparent',
   },
   tabBarInner: {
     position: 'absolute',
     bottom: 0,
     height: 70,
-    width: TAB_BAR_WIDTH,
     borderRadius: 35,
     overflow: 'hidden',
     backgroundColor: 'transparent',
@@ -536,24 +552,19 @@ const styles = {
   slidingBackground: {
     flexDirection: 'row',
     position: 'absolute',
-    left: -TAB_BAR_WIDTH,
-    width: TAB_BAR_WIDTH * 3,
     height: 70,
   },
   leftFill: {
-    width: TAB_BAR_WIDTH,
     height: 70,
     backgroundColor: '#111827',
   },
   rightFill: {
-    width: TAB_BAR_WIDTH * 2,
     height: 70,
     backgroundColor: '#111827',
   },
   itemsContainer: {
     flexDirection: 'row',
     height: 70,
-    width: TAB_BAR_WIDTH,
   },
   tabItem: {
     flex: 1,
@@ -564,7 +575,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: 70,
-    width: TAB_WIDTH,
+    width: '100%',
   },
   circle: {
     position: 'absolute',

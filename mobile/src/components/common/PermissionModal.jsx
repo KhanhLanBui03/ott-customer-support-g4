@@ -5,11 +5,8 @@ import {
   Modal,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-
-const { width } = Dimensions.get('window');
 
 const PermissionModal = ({ visible, onClose, onConfirm, type }) => {
   const config = {
@@ -88,6 +85,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     padding: 24,
     width: '100%',
+    maxWidth: 440,
     alignItems: 'center',
     elevation: 5,
     shadowColor: '#000',

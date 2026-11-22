@@ -6,7 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  Dimensions,
+  useWindowDimensions,
   Animated,
   TouchableWithoutFeedback,
   Platform,
@@ -15,16 +15,25 @@ import {
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 const UserActionModal = ({ visible, onClose, user, onMention, onMessage, onCall }) => {
   const { colors, isDark } = useTheme();
-  const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const isWide = screenWidth >= 680;
+  const slideAnim = React.useRef(new Animated.Value(screenHeight)).current;
   const isUserOnline = user?.isOnline === true || 
                        String(user?.status || user?.presence || '').toUpperCase() === 'ONLINE';
 
+  const prevVisibleRef = React.useRef(false);
+
   React.useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+
     if (visible) {
+      // Chỉ reset vị trí trượt từ đáy khi mới mở modal, tránh giật animation lúc xoay màn hình
+      if (!wasVisible) {
+        slideAnim.setValue(screenHeight);
+      }
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -33,12 +42,12 @@ const UserActionModal = ({ visible, onClose, user, onMention, onMessage, onCall 
       }).start();
     } else {
       Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
+        toValue: screenHeight,
         duration: 250,
         useNativeDriver: true,
       }).start();
     }
-  }, [visible]);
+  }, [visible, screenHeight]);
 
   if (!user && visible) return null;
 
@@ -66,6 +75,9 @@ const UserActionModal = ({ visible, onClose, user, onMention, onMessage, onCall 
             styles.sheet,
             {
               backgroundColor: colors.card,
+              maxWidth: isWide ? 520 : '100%',
+              width: '100%',
+              alignSelf: 'center',
               transform: [{ translateY: slideAnim }],
             },
           ]}

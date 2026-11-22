@@ -12,10 +12,13 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card, YStack } from 'tamagui';
 import { useAuth } from '../../src/hooks/useAuth';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import { useResponsive } from '../../src/hooks/useResponsive';
+import Button from '../../src/components/common/Button';
 
 /**
  * RegisterScreen (Mobile)
@@ -24,6 +27,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const RegisterScreen = () => {
   const router = useRouter();
+  const { isWideLayout, formMaxWidth } = useResponsive();
   const { register, sendOtp, verify, checkPhone, loading, error: authError, clearError } = useAuth();
   const COOLDOWN_MS = 2 * 60 * 1000;
 
@@ -257,10 +261,11 @@ const RegisterScreen = () => {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isWideLayout && { paddingHorizontal: 36 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          <YStack width="100%" maxWidth={isWideLayout ? 500 : formMaxWidth} alignSelf="center">
           <View style={styles.header}>
             <Text style={styles.title}>Đăng Ký</Text>
             <Text style={styles.subtitle}>
@@ -269,7 +274,7 @@ const RegisterScreen = () => {
           </View>
 
           {step === 'verify-email' ? (
-            <View style={styles.form}>
+            <Card bordered backgroundColor="rgba(255, 255, 255, 0.02)" borderColor="rgba(255, 255, 255, 0.06)" borderRadius={32} padding={24} gap={16}>
               <View style={[
                 styles.inputWrapper,
                 focusedInput === 'email' ? styles.inputActiveBorder : null
@@ -326,20 +331,18 @@ const RegisterScreen = () => {
                 </View>
               ) : null}
 
-              <TouchableOpacity
-                style={[styles.primaryButton, (loading || isSendingOtp || (step === 'verify-email' && isCooldownActive && !verificationSent)) && { opacity: 0.7 }]}
+              <Button
+                title={
+                  verificationSent
+                    ? 'XÁC THỰC OTP'
+                    : (isCooldownActive ? `THỬ LẠI SAU ${formatCooldown(cooldownRemainingSeconds)}` : 'GỬI MÃ XÁC THỰC')
+                }
                 onPress={verificationSent ? handleVerifyOtp : handleSendOtp}
+                loading={loading || isSendingOtp}
                 disabled={loading || isSendingOtp || (step === 'verify-email' && isCooldownActive && !verificationSent)}
-                activeOpacity={0.8}
-              >
-                {(loading || isSendingOtp) ? <ActivityIndicator color="#0c0714" /> : (
-                  <Text style={styles.buttonText}>
-                    {verificationSent 
-                      ? 'XÁC THỰC OTP' 
-                      : (isCooldownActive ? `THỬ LẠI SAU ${formatCooldown(cooldownRemainingSeconds)}` : 'GỬI MÃ XÁC THỰC')}
-                  </Text>
-                )}
-              </TouchableOpacity>
+                fullWidth
+                size="lg"
+              />
 
               {verificationSent && (
                 <View style={styles.otpFooterRow}>
@@ -364,9 +367,9 @@ const RegisterScreen = () => {
                   </TouchableOpacity>
                 </View>
               )}
-            </View>
+            </Card>
           ) : (
-            <View style={styles.form}>
+            <Card bordered backgroundColor="rgba(255, 255, 255, 0.02)" borderColor="rgba(255, 255, 255, 0.06)" borderRadius={32} padding={24} gap={16}>
                <View style={styles.row}>
                 <View style={[
                   styles.inputWrapper, 
@@ -494,20 +497,20 @@ const RegisterScreen = () => {
                 </View>
               ) : null}
 
-              <TouchableOpacity 
-                style={styles.primaryButton} 
-                onPress={handleRegister} 
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                {loading ? <ActivityIndicator color="#0c0714" /> : <Text style={styles.buttonText}>TẠO TÀI KHOẢN</Text>}
-              </TouchableOpacity>
-            </View>
+              <Button
+                title="TẠO TÀI KHOẢN"
+                onPress={handleRegister}
+                loading={loading}
+                fullWidth
+                size="lg"
+              />
+            </Card>
           )}
 
           <TouchableOpacity onPress={() => router.push('/login')} style={styles.footer} activeOpacity={0.7}>
             <Text style={styles.footerText}>Đã có tài khoản? <Text style={styles.linkText}>Đăng nhập</Text></Text>
           </TouchableOpacity>
+          </YStack>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

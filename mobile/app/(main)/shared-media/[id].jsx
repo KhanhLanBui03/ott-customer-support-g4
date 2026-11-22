@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   Image,
   ScrollView,
   Pressable,
-  Dimensions,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,14 +16,11 @@ import { getRealId } from '../../../src/store/chatSlice';
 import CONFIG from '../../../src/config';
 import MediaViewer from '../../../src/components/MediaViewer';
 import VideoThumbnail from '../../../src/components/VideoThumbnail';
-import { useState } from 'react';
-
-const { width } = Dimensions.get('window');
-const COLUMN_COUNT = 3;
-const SPACING = 1; // Giảm spacing để khít hơn
-const ITEM_SIZE = width / COLUMN_COUNT; // Tận dụng toàn bộ chiều ngang
+import { useResponsive } from '../../../src/hooks/useResponsive';
 
 const SharedMediaScreen = () => {
+  const { width, mediaColumns } = useResponsive();
+  const itemSize = Math.floor(width / mediaColumns);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id: encodedId } = useLocalSearchParams();
@@ -81,7 +77,7 @@ const SharedMediaScreen = () => {
           return (
             <Pressable 
               key={`${item.messageId}-${index}`} 
-              style={styles.mediaItem}
+              style={[styles.mediaItem, { width: itemSize, height: itemSize }]}
               onPress={() => {
                 const formattedList = data.map(m => ({
                   url: m.url.startsWith('http') ? m.url : `${BASE_URL}${m.url.startsWith('/') ? '' : '/'}${m.url}`,
@@ -172,8 +168,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap', 
   },
   mediaItem: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
     borderWidth: 0.5,
     borderColor: '#0f172a', // Màu trùng với background để tạo khoảng cách ảo
     overflow: 'hidden',

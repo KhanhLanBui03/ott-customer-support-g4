@@ -1,0 +1,70 @@
+import { createTamagui } from 'tamagui';
+import { defaultConfig } from '@tamagui/config/v5';
+import { COLORS } from './src/context/ThemeContext';
+
+const appThemes = {
+  ...defaultConfig.themes,
+  light: {
+    ...defaultConfig.themes.light,
+    background: COLORS.light.background,
+    backgroundHover: COLORS.light.surface200,
+    backgroundPress: COLORS.light.surface300,
+    backgroundFocus: COLORS.light.surface200,
+    color: COLORS.light.foreground,
+    colorHover: COLORS.light.foreground,
+    colorPress: COLORS.light.secondary,
+    borderColor: COLORS.light.border,
+    borderColorHover: COLORS.light.surface300,
+    borderColorFocus: COLORS.light.primary,
+    placeholderColor: COLORS.light.textSubtle,
+    primary: COLORS.light.primary,
+    secondary: COLORS.light.secondary,
+    card: COLORS.light.card,
+    surface100: COLORS.light.surface100,
+    surface200: COLORS.light.surface200,
+    surface300: COLORS.light.surface300,
+    textMuted: COLORS.light.textMuted,
+    textSubtle: COLORS.light.textSubtle,
+    inputBg: COLORS.light.input,
+    online: COLORS.light.online,
+    danger: COLORS.light.error,
+  },
+  dark: {
+    ...defaultConfig.themes.dark,
+    background: COLORS.dark.background,
+    backgroundHover: COLORS.dark.surface200,
+    backgroundPress: COLORS.dark.surface300,
+    backgroundFocus: COLORS.dark.surface200,
+    color: COLORS.dark.foreground,
+    colorHover: COLORS.dark.foreground,
+    colorPress: COLORS.dark.secondary,
+    borderColor: COLORS.dark.border,
+    borderColorHover: COLORS.dark.surface300,
+    borderColorFocus: COLORS.dark.primary,
+    placeholderColor: COLORS.dark.textSubtle,
+    primary: COLORS.dark.primary,
+    secondary: COLORS.dark.secondary,
+    card: COLORS.dark.card,
+    surface100: COLORS.dark.surface100,
+    surface200: COLORS.dark.surface200,
+    surface300: COLORS.dark.surface300,
+    textMuted: COLORS.dark.textMuted,
+    textSubtle: COLORS.dark.textSubtle,
+    inputBg: COLORS.dark.input,
+    online: COLORS.dark.online,
+    danger: COLORS.dark.error,
+  },
+};
+
+export const tamaguiConfig = createTamagui({
+  ...defaultConfig,
+  themes: appThemes,
+  media: {
+    ...defaultConfig.media,
+    gtSm: { minWidth: 640 },
+    gtMd: { minWidth: 768 },
+    gtLg: { minWidth: 1024 },
+  },
+});
+
+export default tamaguiConfig;

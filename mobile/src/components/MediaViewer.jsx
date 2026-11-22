@@ -5,13 +5,11 @@ import {
   TouchableOpacity, 
   Image, 
   StyleSheet, 
-  Dimensions,
+  useWindowDimensions,
   FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
-
-const { width, height } = Dimensions.get('window');
 
 const MediaVideoSlide = ({ uri, isActive }) => {
   const player = useVideoPlayer(uri, (p) => {
@@ -37,20 +35,37 @@ const MediaVideoSlide = ({ uri, isActive }) => {
 };
 
 const MediaViewer = ({ visible, onClose, allMedia = [], initialIndex = 0 }) => {
+  const { width, height } = useWindowDimensions();
   const flatListRef = useRef(null);
   const [activeIndex, setActiveIndex] = React.useState(initialIndex);
+  const activeIndexRef = useRef(initialIndex);
+
+  useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
 
   useEffect(() => {
     if (visible) {
       setActiveIndex(initialIndex);
-      if (flatListRef.current) {
-        // Nhảy tới đúng ảnh đã chọn khi mở modal
+      activeIndexRef.current = initialIndex;
+      if (flatListRef.current && allMedia.length > 0) {
+        const safeIndex = Math.min(Math.max(0, initialIndex), allMedia.length - 1);
         setTimeout(() => {
-          flatListRef.current.scrollToIndex({ index: initialIndex, animated: false });
+          flatListRef.current?.scrollToIndex({ index: safeIndex, animated: false });
         }, 50);
       }
     }
-  }, [visible, initialIndex]);
+  }, [visible, initialIndex, allMedia.length]);
+
+  // Giữ nguyên slide đang xem (không nhảy ngược về initialIndex) khi xoay ngang/dọc
+  useEffect(() => {
+    if (visible && flatListRef.current && allMedia.length > 0) {
+      const safeIndex = Math.min(Math.max(0, activeIndexRef.current), allMedia.length - 1);
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index: safeIndex, animated: false });
+      }, 60);
+    }
+  }, [width]);
 
   const handleScroll = (event) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width;
@@ -66,7 +81,7 @@ const MediaViewer = ({ visible, onClose, allMedia = [], initialIndex = 0 }) => {
     const isVideo = item.type === 'VIDEO';
     const isCurrent = index === activeIndex;
     return (
-      <View style={styles.slide}>
+      <View style={[styles.slide, { width, height }]}>
         {isVideo ? (
           <MediaVideoSlide uri={item.url} isActive={visible && isCurrent} />
         ) : (
@@ -131,8 +146,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   slide: {
-    width: width,
-    height: height,
     justifyContent: 'center',
     alignItems: 'center',
   },

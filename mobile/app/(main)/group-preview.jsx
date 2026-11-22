@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -17,8 +16,6 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useTheme } from '../../src/context/ThemeContext';
 import CONFIG from '../../src/config';
-
-const { width } = Dimensions.get('window');
 
 export default function GroupPreviewScreen() {
   const { conversationId } = useLocalSearchParams();

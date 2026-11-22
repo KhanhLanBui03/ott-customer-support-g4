@@ -8,6 +8,9 @@ import { restoreState, sessionExpired } from '../src/store/authSlice';
 import { Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { TamaguiProvider, Theme } from 'tamagui';
+import tamaguiConfig from '../tamagui.config';
+import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
 import InAppNotification from '../src/components/common/InAppNotification';
 import { configureNotificationHandler } from '../src/utils/pushNotificationService';
 import { useTranslation } from 'react-i18next';
@@ -104,14 +107,25 @@ function RootLayoutNav() {
   );
 }
 
-import { ThemeProvider } from '../src/context/ThemeContext';
+function TamaguiBridge({ children }) {
+  const { isDark } = useTheme();
+  const activeTheme = isDark ? 'dark' : 'light';
+
+  return (
+    <TamaguiProvider config={tamaguiConfig} defaultTheme={activeTheme}>
+      <Theme name={activeTheme}>{children}</Theme>
+    </TamaguiProvider>
+  );
+}
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
         <ThemeProvider>
-          <RootLayoutNav />
+          <TamaguiBridge>
+            <RootLayoutNav />
+          </TamaguiBridge>
         </ThemeProvider>
       </Provider>
     </GestureHandlerRootView>
