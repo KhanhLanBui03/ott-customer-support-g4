@@ -31,7 +31,9 @@ export const authApi = {
   },
 
   sendOtp: (email, purpose = 'REGISTRATION') => {
-    return axiosClient.post(`/auth/send-otp?email=${email}&purpose=${purpose}`);
+    return axiosClient.post('/auth/send-otp', null, {
+      params: { email, purpose },
+    });
   },
 
   checkUserStatus: (phoneNumber) => {

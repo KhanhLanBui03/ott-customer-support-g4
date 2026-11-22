@@ -40,6 +40,7 @@ const RegisterScreen = () => {
   const [otpCode, setOtpCode] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
   const [verifiedEmail, setVerifiedEmail] = useState('');
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
 
   const [localError, setLocalError] = useState('');
   const [phoneError, setPhoneError] = useState('');
@@ -113,6 +114,7 @@ const RegisterScreen = () => {
   const isPasswordValid = Object.values(passwordChecks).every(Boolean);
 
   const handleSendOtp = async () => {
+    if (isSendingOtp || loading) return;
     setLocalError('');
     const email = formData.email.trim().toLowerCase();
 
@@ -126,30 +128,54 @@ const RegisterScreen = () => {
       return;
     }
 
+    setIsSendingOtp(true);
     try {
       await sendOtp(email, 'REGISTRATION');
       await applyCooldown(email);
       setVerificationSent(true);
       Alert.alert('Thông báo', `Mã OTP đã được gửi đến ${email}`);
     } catch (err) {
-      setLocalError(err?.response?.data?.message || 'Không thể gửi mã OTP');
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        'Không thể gửi mã OTP';
+      setLocalError(msg);
+    } finally {
+      setIsSendingOtp(false);
     }
   };
 
   const handleVerifyOtp = async () => {
     setLocalError('');
-    if (!otpCode.trim()) {
+    const cleanOtp = otpCode.replace(/\D/g, '').trim();
+    if (!cleanOtp) {
       setLocalError('Vui lòng nhập mã OTP');
       return;
     }
+    if (cleanOtp.length !== 6) {
+      setLocalError('Mã OTP phải gồm đúng 6 chữ số');
+      return;
+    }
 
+    const email = formData.email.trim().toLowerCase();
     try {
-      await verify(formData.email.trim().toLowerCase(), otpCode.trim(), 'REGISTRATION').unwrap();
-      setVerifiedEmail(formData.email.trim().toLowerCase());
+      await verify(email, cleanOtp, 'REGISTRATION').unwrap();
+      setVerifiedEmail(email);
       setStep('register');
     } catch (err) {
-      setLocalError(typeof err === 'string' ? err : (err?.response?.data?.message || 'Mã OTP không chính xác'));
+      const msg =
+        typeof err === 'string'
+          ? err
+          : (err?.response?.data?.message || err?.message || 'Mã OTP không chính xác hoặc đã hết hạn');
+      setLocalError(msg);
     }
+  };
+
+  const handleChangeEmail = () => {
+    setVerificationSent(false);
+    setOtpCode('');
+    setLocalError('');
   };
 
   const validatePhone = async (phone) => {
@@ -200,13 +226,20 @@ const RegisterScreen = () => {
       await register({
         ...formData,
         email: verifiedEmail,
+        phoneNumber: formData.phoneNumber.trim(),
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
       }).unwrap();
 
       Alert.alert('Thành công', 'Tài khoản của bạn đã được tạo thành công!', [
-        { text: 'Đăng nhập ngay', onPress: () => router.replace('/login') }
+        { text: 'Đăng nhập ngay', onPress: () => router.replace('/(auth)/login') }
       ]);
     } catch (err) {
-      setLocalError(typeof err === 'string' ? err : (err?.response?.data?.message || 'Đăng ký thất bại'));
+      setLocalError(
+        typeof err === 'string'
+          ? err
+          : (err?.response?.data?.message || err?.message || 'Đăng ký thất bại')
+      );
     }
   };
 
@@ -274,10 +307,10 @@ const RegisterScreen = () => {
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Nhập mã OTP"
+                    placeholder="Nhập mã OTP (6 chữ số)"
                     placeholderTextColor="#475569"
                     value={otpCode}
-                    onChangeText={setOtpCode}
+                    onChangeText={(text) => setOtpCode(text.replace(/\D/g, ''))}
                     keyboardType="number-pad"
                     maxLength={6}
                     onFocus={() => setFocusedInput('otp')}
@@ -294,12 +327,12 @@ const RegisterScreen = () => {
               ) : null}
 
               <TouchableOpacity
-                style={[styles.primaryButton, (loading || (step === 'verify-email' && isCooldownActive && !verificationSent)) && { opacity: 0.7 }]}
+                style={[styles.primaryButton, (loading || isSendingOtp || (step === 'verify-email' && isCooldownActive && !verificationSent)) && { opacity: 0.7 }]}
                 onPress={verificationSent ? handleVerifyOtp : handleSendOtp}
-                disabled={loading || (step === 'verify-email' && isCooldownActive && !verificationSent)}
+                disabled={loading || isSendingOtp || (step === 'verify-email' && isCooldownActive && !verificationSent)}
                 activeOpacity={0.8}
               >
-                {loading ? <ActivityIndicator color="#fff" /> : (
+                {(loading || isSendingOtp) ? <ActivityIndicator color="#0c0714" /> : (
                   <Text style={styles.buttonText}>
                     {verificationSent 
                       ? 'XÁC THỰC OTP' 
@@ -309,16 +342,27 @@ const RegisterScreen = () => {
               </TouchableOpacity>
 
               {verificationSent && (
-                <TouchableOpacity 
-                  onPress={handleSendOtp} 
-                  style={[styles.resendButton, isCooldownActive && { opacity: 0.5 }]}
-                  disabled={loading || isCooldownActive}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.resendText}>
-                    {isCooldownActive ? `Gửi lại mã sau ${formatCooldown(cooldownRemainingSeconds)}` : 'Gửi lại mã'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.otpFooterRow}>
+                  <TouchableOpacity 
+                    onPress={handleSendOtp} 
+                    style={[styles.resendButton, isCooldownActive && { opacity: 0.5 }]}
+                    disabled={loading || isSendingOtp || isCooldownActive}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.resendText}>
+                      {isCooldownActive ? `Gửi lại mã sau ${formatCooldown(cooldownRemainingSeconds)}` : 'Gửi lại mã'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleChangeEmail}
+                    style={styles.resendButton}
+                    disabled={loading || isSendingOtp}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.changeEmailText}>Đổi Gmail</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           ) : (
@@ -614,13 +658,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1
   },
+  otpFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
   resendButton: { 
     alignItems: 'center', 
-    marginTop: 12 
+    paddingVertical: 6,
   },
   resendText: { 
     color: '#818cf8', 
     fontWeight: '700' 
+  },
+  changeEmailText: {
+    color: '#94a3b8',
+    fontWeight: '600',
   },
   reqContainer: { 
     backgroundColor: 'rgba(22, 15, 38, 0.2)',

@@ -14,38 +14,31 @@ export const loginUser = createAsyncThunk(
   async (credentials, { rejectWithValue }) => {
     try {
       const response = await authApi.login(credentials);
-      
+      const payload = response?.data || response || {};
+
       // Save tokens to SecureStore (Mobile) or localStorage (Web)
-      const { accessToken, refreshToken, sessionId } = response.data;
+      const { accessToken, refreshToken, sessionId } = payload;
+      const userObj = {
+        userId: payload.userId,
+        phoneNumber: payload.phoneNumber,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        avatarUrl: payload.avatarUrl,
+      };
+
       if (Platform.OS !== 'web') {
-        await SecureStore.setItemAsync('accessToken', accessToken);
-        await SecureStore.setItemAsync('refreshToken', refreshToken);
-        if (sessionId) {
-          await SecureStore.setItemAsync('sessionId', sessionId);
-        }
-        await SecureStore.setItemAsync('user', JSON.stringify({
-           userId: response.data.userId,
-           phoneNumber: response.data.phoneNumber,
-           firstName: response.data.firstName,
-           lastName: response.data.lastName,
-           avatarUrl: response.data.avatarUrl
-        }));
+        if (accessToken) await SecureStore.setItemAsync('accessToken', String(accessToken));
+        if (refreshToken) await SecureStore.setItemAsync('refreshToken', String(refreshToken));
+        if (sessionId) await SecureStore.setItemAsync('sessionId', String(sessionId));
+        if (userObj.userId) await SecureStore.setItemAsync('user', JSON.stringify(userObj));
       } else {
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        if (sessionId) {
-          localStorage.setItem('sessionId', sessionId);
-        }
-        localStorage.setItem('user', JSON.stringify({
-           userId: response.data.userId,
-           phoneNumber: response.data.phoneNumber,
-           firstName: response.data.firstName,
-           lastName: response.data.lastName,
-           avatarUrl: response.data.avatarUrl
-        }));
+        if (accessToken) localStorage.setItem('accessToken', String(accessToken));
+        if (refreshToken) localStorage.setItem('refreshToken', String(refreshToken));
+        if (sessionId) localStorage.setItem('sessionId', String(sessionId));
+        if (userObj.userId) localStorage.setItem('user', JSON.stringify(userObj));
       }
 
-      return response.data;
+      return payload;
     } catch (error) {
       return rejectWithValue(error.response?.data || { message: error.message || 'Login failed' });
     }
@@ -57,9 +50,15 @@ export const registerUser = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       const response = await authApi.register(userData);
-      return response.data;
+      // Backend /auth/register trả thẳng Map { email, registered: true } (không bọc ApiResponse.data)
+      return response?.data || response || {};
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Registration failed');
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.response?.data?.error?.message ||
+        error.message ||
+        'Đăng ký thất bại'
+      );
     }
   }
 );
@@ -69,57 +68,56 @@ export const verifyOtp = createAsyncThunk(
   async (otpData, { rejectWithValue }) => {
     try {
       const response = await authApi.verifyOtp(otpData);
-      
-      // Save tokens to SecureStore (Mobile) or localStorage (Web)
-      const { accessToken, refreshToken, sessionId } = response.data;
-      if (Platform.OS !== 'web') {
-        await SecureStore.setItemAsync('accessToken', accessToken);
-        await SecureStore.setItemAsync('refreshToken', refreshToken);
-        if (sessionId) {
-          await SecureStore.setItemAsync('sessionId', sessionId);
+      // Backend /auth/verify-otp trả thẳng Map { email, verified: true, purpose } (không có accessToken)
+      const payload = response?.data || response || {};
+      const { accessToken, refreshToken, sessionId } = payload;
+
+      // Chỉ lưu token vào SecureStore/localStorage nếu backend thực sự trả token (tránh lỗi SecureStore nhận undefined)
+      if (accessToken) {
+        const userToSave = payload.user || {
+          userId: payload.userId,
+          phoneNumber: payload.phoneNumber,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          avatarUrl: payload.avatarUrl,
+        };
+
+        if (Platform.OS !== 'web') {
+          await SecureStore.setItemAsync('accessToken', String(accessToken));
+          if (refreshToken) await SecureStore.setItemAsync('refreshToken', String(refreshToken));
+          if (sessionId) await SecureStore.setItemAsync('sessionId', String(sessionId));
+          await SecureStore.setItemAsync('user', JSON.stringify(userToSave));
+        } else {
+          localStorage.setItem('accessToken', String(accessToken));
+          if (refreshToken) localStorage.setItem('refreshToken', String(refreshToken));
+          if (sessionId) localStorage.setItem('sessionId', String(sessionId));
+          localStorage.setItem('user', JSON.stringify(userToSave));
         }
-        
-        let userToSave = response.data.user;
-        if (!userToSave) {
-          userToSave = {
-            userId: response.data.userId,
-            phoneNumber: response.data.phoneNumber,
-            firstName: response.data.firstName,
-            lastName: response.data.lastName,
-            avatarUrl: response.data.avatarUrl
-          };
-        }
-        await SecureStore.setItemAsync('user', JSON.stringify(userToSave));
-      } else {
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        if (sessionId) {
-          localStorage.setItem('sessionId', sessionId);
-        }
-        localStorage.setItem('user', JSON.stringify(response.data.user || {
-            userId: response.data.userId,
-            phoneNumber: response.data.phoneNumber,
-            firstName: response.data.firstName,
-            lastName: response.data.lastName,
-            avatarUrl: response.data.avatarUrl
-        }));
       }
 
-      return response.data;
+      return payload;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'OTP verification failed');
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.response?.data?.error?.message ||
+        error.message ||
+        'Xác thực OTP thất bại'
+      );
     }
   }
 );
 
 export const resendOtp = createAsyncThunk(
   'auth/resendOtp',
-  async (phoneNumber, { rejectWithValue }) => {
+  async (identifier, { rejectWithValue }) => {
     try {
-      const response = await authApi.resendOtp({ phoneNumber });
-      return response.data;
+      const body = typeof identifier === 'string' && identifier.includes('@')
+        ? { email: identifier }
+        : { phoneNumber: identifier };
+      const response = await authApi.resendOtp(body);
+      return response?.data || response || {};
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Resend OTP failed');
+      return rejectWithValue(error.response?.data?.message || error.message || 'Gửi lại OTP thất bại');
     }
   }
 );
@@ -238,8 +236,9 @@ const authSlice = createSlice({
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.otpPhone = action.payload.phoneNumber;
-        state.otpSent = true;
+        const payload = action.payload?.data || action.payload || {};
+        state.otpPhone = payload.phoneNumber || null;
+        state.otpSent = !payload.registered;
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
@@ -254,23 +253,24 @@ const authSlice = createSlice({
       })
       .addCase(verifyOtp.fulfilled, (state, action) => {
         state.loading = false;
-        
+
+        const payload = action.payload?.data || action.payload || {};
         // Chỉ đặt isAuthenticated nếu có token (trường hợp login sau OTP)
-        // Với REGISTRATION, backend không trả về token
-        if (action.payload.accessToken) {
+        // Với REGISTRATION, backend trả { email, verified: true, purpose } không kèm token
+        if (payload.accessToken) {
           state.isAuthenticated = true;
-          state.accessToken = action.payload.accessToken;
-          state.refreshToken = action.payload.refreshToken;
-          state.sessionId = action.payload.sessionId || null;
-          
-          if (action.payload.user) {
-            state.user = action.payload.user;
+          state.accessToken = payload.accessToken;
+          state.refreshToken = payload.refreshToken;
+          state.sessionId = payload.sessionId || null;
+
+          if (payload.user) {
+            state.user = payload.user;
           } else {
-            const { userId, phoneNumber, firstName, lastName, avatarUrl } = action.payload;
+            const { userId, phoneNumber, firstName, lastName, avatarUrl } = payload;
             state.user = { userId, phoneNumber, firstName, lastName, avatarUrl };
           }
         }
-        
+
         state.otpSent = false;
       })
       .addCase(verifyOtp.rejected, (state, action) => {
