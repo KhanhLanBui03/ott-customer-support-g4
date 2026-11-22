@@ -4,12 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-
-const { width } = Dimensions.get('window');
 
 const VoteMessage = ({ 
   message, 
@@ -21,6 +19,8 @@ const VoteMessage = ({
   isMe 
 }) => {
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
+  const cardWidth = Math.min(width * 0.75, 420);
   const vote = message.vote;
   if (!vote) return null;
 
@@ -35,7 +35,7 @@ const VoteMessage = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { width: cardWidth }]}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.iconBg}>
@@ -110,7 +110,6 @@ const VoteMessage = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: width * 0.75,
     backgroundColor: '#fff',
     borderRadius: 20,
     overflow: 'hidden',

@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card, Separator, Text as TText, XStack, YStack } from 'tamagui';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'expo-router';
@@ -20,12 +21,15 @@ import { userApi } from '../../src/api/userApi';
 import * as SecureStore from 'expo-secure-store';
 import DeleteAccountModal from '../../src/components/DeleteAccountModal';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useResponsive } from '../../src/hooks/useResponsive';
+import Avatar from '../../src/components/common/Avatar';
 import { useTranslation } from 'react-i18next';
 
 
 const ProfileScreen = () => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const { isWideLayout, isTablet, contentMaxWidth, horizontalPadding } = useResponsive();
   const dispatch = useDispatch();
 
   const router = useRouter();
@@ -102,14 +106,35 @@ const ProfileScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{
+          paddingBottom: 120,
+          alignItems: 'center',
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-
-        {/* Profile Card */}
-        <View style={[styles.headerCard, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <YStack
+          width="100%"
+          maxWidth={isWideLayout ? Math.min(contentMaxWidth, 820) : '100%'}
+          alignSelf="center"
+        >
+        {/* Profile Card (Tamagui Card + Avatar) */}
+        <Card
+          backgroundColor={colors.card}
+          borderBottomColor={colors.border}
+          borderBottomWidth={1}
+          borderBottomLeftRadius={30}
+          borderBottomRightRadius={30}
+          borderTopLeftRadius={isWideLayout ? 24 : 0}
+          borderTopRightRadius={isWideLayout ? 24 : 0}
+          marginTop={isWideLayout ? 16 : 0}
+          marginHorizontal={isWideLayout ? horizontalPadding : 0}
+          paddingVertical={28}
+          paddingHorizontal={20}
+          alignItems="center"
+          position="relative"
+        >
           <TouchableOpacity
             style={[styles.editIconBtn, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}
             onPress={() => router.push('/(main)/edit-profile')}
@@ -117,105 +142,144 @@ const ProfileScreen = () => {
             <MaterialIcons name="edit" size={22} color={colors.textMuted} />
           </TouchableOpacity>
 
-          <View style={styles.avatarContainer}>
-            <Image source={{ uri: displayUser.avatar }} style={[styles.avatar, { borderColor: colors.border, backgroundColor: colors.surface200 }]} />
-          </View>
+          <YStack marginBottom={14}>
+            <Avatar
+              uri={displayUser.avatar}
+              name={displayUser.fullName}
+              size={isTablet ? 112 : 100}
+              online={displayUser.status === 'online'}
+              borderColor={colors.border}
+              borderWidth={3}
+            />
+          </YStack>
 
-          <Text style={[styles.userName, { color: colors.foreground }]}>{displayUser.fullName}</Text>
-          <Text style={[styles.userPhone, { color: colors.textMuted }]}>{displayUser.phoneNumber}</Text>
+          <TText fontSize={isTablet ? 23 : 20} fontWeight="700" color={colors.foreground}>
+            {displayUser.fullName}
+          </TText>
+          <TText fontSize={13} color={colors.textMuted} marginTop={4} marginBottom={12}>
+            {displayUser.phoneNumber}
+          </TText>
 
-          <View style={[styles.statusBadge, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}>
-            <View style={[styles.statusDot, { backgroundColor: displayUser.status === 'online' ? '#10b981' : colors.textSubtle }]} />
-            <Text style={[styles.statusText, { color: colors.textMuted }]}>{displayUser.status === 'online' ? t('sidebar.online') : t('sidebar.offline')}</Text>
-          </View>
-        </View>
+          <XStack
+            alignItems="center"
+            backgroundColor={isDark ? colors.surface300 : '#f1f5f9'}
+            paddingHorizontal={12}
+            paddingVertical={5}
+            borderRadius={20}
+            gap={6}
+          >
+            <View style={[styles.statusDot, { marginRight: 0, backgroundColor: displayUser.status === 'online' ? '#10b981' : colors.textSubtle }]} />
+            <TText fontSize={11} fontWeight="600" color={colors.textMuted}>
+              {displayUser.status === 'online' ? t('sidebar.online') : t('sidebar.offline')}
+            </TText>
+          </XStack>
+        </Card>
 
+        {/* Details & Menu Sections (2 columns on Tablet/Landscape) */}
+        <XStack
+          flexDirection={isWideLayout ? 'row' : 'column'}
+          alignItems="flex-start"
+          paddingHorizontal={horizontalPadding}
+          gap={isWideLayout ? 20 : 0}
+        >
+          <YStack flex={isWideLayout ? 1 : undefined} width={isWideLayout ? undefined : '100%'}>
+            {/* Details Section */}
+            <YStack marginTop={22}>
+              <TText fontSize={12} fontWeight="700" color={colors.textSubtle} textTransform="uppercase" marginBottom={10} marginLeft={4}>
+                {t('info.privacy')}
+              </TText>
+              <Card backgroundColor={colors.card} borderRadius={16} padding={16} borderWidth={1} borderColor={colors.border}>
+                <YStack paddingVertical={6}>
+                  <TText fontSize={11} color={colors.textSubtle} marginBottom={4}>{t('profile.bio')}</TText>
+                  <TText fontSize={14} color={colors.foreground} fontWeight="500">{displayUser.bio}</TText>
+                </YStack>
+                <Separator borderColor={colors.border} marginVertical={6} />
+                <YStack paddingVertical={6}>
+                  <TText fontSize={11} color={colors.textSubtle} marginBottom={4}>{t('profile.email')}</TText>
+                  <TText fontSize={14} color={colors.foreground} fontWeight="500">{displayUser.email}</TText>
+                </YStack>
+                <Separator borderColor={colors.border} marginVertical={6} />
+                <YStack paddingVertical={6}>
+                  <TText fontSize={11} color={colors.textSubtle} marginBottom={4}>{t('profile.user_id')}</TText>
+                  <TText fontSize={14} color={colors.foreground} fontWeight="500" numberOfLines={1}>{displayUser.userId}</TText>
+                </YStack>
+              </Card>
+            </YStack>
 
-        {/* Details Section - Khôi phục đầy đủ */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('info.privacy')}</Text>
-          <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
-            <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>{t('profile.bio')}</Text>
-              <Text style={[styles.infoValue, { color: colors.foreground }]}>{displayUser.bio}</Text>
-            </View>
-            <View style={[styles.infoDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>{t('profile.email')}</Text>
-              <Text style={[styles.infoValue, { color: colors.foreground }]}>{displayUser.email}</Text>
-            </View>
-            <View style={[styles.infoDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: colors.textSubtle }]}>{t('profile.user_id')}</Text>
-              <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>{displayUser.userId}</Text>
-            </View>
-          </View>
-        </View>
+            {/* Personal Storage */}
+            <YStack marginTop={22}>
+              <TText fontSize={12} fontWeight="700" color={colors.textSubtle} textTransform="uppercase" marginBottom={10} marginLeft={4}>
+                {t('info.shared_media')}
+              </TText>
+              <Card backgroundColor={colors.card} borderRadius={16} overflow="hidden" borderWidth={1} borderColor={colors.border}>
+                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/my-cloud')}>
+                  <XStack alignItems="center" gap={12}>
+                    <Ionicons name="cloud-done-outline" size={20} color={colors.primary} />
+                    <TText fontSize={15} fontWeight="500" color={colors.foreground}>{t('cloud.title')}</TText>
+                  </XStack>
+                  <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+                </TouchableOpacity>
+              </Card>
+            </YStack>
+          </YStack>
 
+          <YStack flex={isWideLayout ? 1 : undefined} width={isWideLayout ? undefined : '100%'}>
+            {/* Settings */}
+            <YStack marginTop={22}>
+              <TText fontSize={12} fontWeight="700" color={colors.textSubtle} textTransform="uppercase" marginBottom={10} marginLeft={4}>
+                {t('settings.title')}
+              </TText>
+              <Card backgroundColor={colors.card} borderRadius={16} overflow="hidden" borderWidth={1} borderColor={colors.border}>
+                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/settings')}>
+                  <XStack alignItems="center" gap={12}>
+                    <Ionicons name="settings-outline" size={20} color={colors.primary} />
+                    <TText fontSize={15} fontWeight="500" color={colors.foreground}>{t('info.customization')}</TText>
+                  </XStack>
+                  <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+                </TouchableOpacity>
+              </Card>
+            </YStack>
 
-        {/* Personal Storage */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('info.shared_media')}</Text>
-          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/my-cloud')}>
-              <View style={styles.menuItemLeft}>
-                <Ionicons name="cloud-done-outline" size={20} color={colors.primary} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('cloud.title')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
-            </TouchableOpacity>
-          </View>
-        </View>
+            {/* Security & Logout */}
+            <YStack marginTop={22}>
+              <TText fontSize={12} fontWeight="700" color={colors.textSubtle} textTransform="uppercase" marginBottom={10} marginLeft={4}>
+                {t('info.privacy')}
+              </TText>
+              <Card backgroundColor={colors.card} borderRadius={16} overflow="hidden" borderWidth={1} borderColor={colors.border}>
+                <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => router.push('/(main)/change-password')}>
+                  <XStack alignItems="center" gap={12}>
+                    <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
+                    <TText fontSize={15} fontWeight="500" color={colors.foreground}>{t('password.title')}</TText>
+                  </XStack>
+                  <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
+                </TouchableOpacity>
 
-        {/* Settings */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('settings.title')}</Text>
-          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(main)/settings')}>
-              <View style={styles.menuItemLeft}>
-                <Ionicons name="settings-outline" size={20} color={colors.primary} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('info.customization')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
-            </TouchableOpacity>
-          </View>
-        </View>
+                <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={handleLogout}>
+                  <XStack alignItems="center" gap={12}>
+                    <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                    <TText fontSize={15} fontWeight="500" color="#ef4444">{t('logout.title')}</TText>
+                  </XStack>
+                </TouchableOpacity>
+              </Card>
+            </YStack>
 
-        {/* Settings & Support */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>{t('info.privacy')}</Text>
-          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
-            <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={() => router.push('/(main)/change-password')}>
-              <View style={styles.menuItemLeft}>
-                <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
-                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{t('password.title')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-              <View style={styles.menuItemLeft}>
-                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-                <Text style={[styles.menuItemText, { color: '#ef4444' }]}>{t('logout.title')}</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-
-        {/* Danger Zone */}
-        <View style={[styles.section, { marginBottom: 30 }]}>
-          <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>{t('delete_account.title')}</Text>
-          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => setShowDeleteModal(true)}>
-              <View style={styles.menuItemLeft}>
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                <Text style={[styles.menuItemText, { color: '#ef4444' }]}>{t('delete_account.title')}</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
+            {/* Danger Zone */}
+            <YStack marginTop={22} marginBottom={30}>
+              <TText fontSize={12} fontWeight="700" color="#ef4444" textTransform="uppercase" marginBottom={10} marginLeft={4}>
+                {t('delete_account.title')}
+              </TText>
+              <Card backgroundColor={colors.card} borderRadius={16} overflow="hidden" borderWidth={1} borderColor="rgba(239, 68, 68, 0.25)">
+                <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={() => setShowDeleteModal(true)}>
+                  <XStack alignItems="center" gap={12}>
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    <TText fontSize={15} fontWeight="500" color="#ef4444">{t('delete_account.title')}</TText>
+                  </XStack>
+                </TouchableOpacity>
+              </Card>
+            </YStack>
+          </YStack>
+        </XStack>
+        </YStack>
       </ScrollView>
 
       <DeleteAccountModal

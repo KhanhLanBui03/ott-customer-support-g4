@@ -11,7 +11,7 @@ import {
   Image,
   Alert,
   Modal,
-  Dimensions,
+  useWindowDimensions,
   LayoutAnimation,
   Keyboard,
   ScrollView,
@@ -71,9 +71,16 @@ import {
   fetchGifsData,
 } from '../utils/mediaPickerData';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingChange, conversationType, onOpenPoll, members = [] }, ref) => {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isWide = screenWidth >= 680;
+  const emojiCols = screenWidth >= 900 ? 12 : isWide ? 10 : 8;
+  const stickerCols = screenWidth >= 900 ? 7 : isWide ? 6 : 4;
+  const gifCols = screenWidth >= 900 ? 4 : isWide ? 3 : 2;
+  const emojiCellWidth = Math.floor((screenWidth - 16) / emojiCols);
+  const stickerCellSize = Math.floor((screenWidth - 24 - (stickerCols - 1) * 10) / stickerCols);
+  const gifCellWidth = Math.floor((screenWidth - 24 - (gifCols - 1) * 10) / gifCols);
+  const mentionListWidth = Math.min(screenWidth - 24, 480);
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const [message, setMessage] = useState('');
@@ -213,7 +220,8 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
   };
 
   const renderEmojiPanel = () => {
-    const panelHeight = isEmojiExpanded ? 500 : 310;
+    const maxPanelHeight = Math.max(200, Math.round(screenHeight * 0.55));
+    const panelHeight = Math.min(isEmojiExpanded ? 500 : 310, maxPanelHeight);
     return (
       <View style={[styles.emojiPanelContainer, { height: panelHeight, backgroundColor: isDark ? colors.surface200 : colors.background, borderTopColor: colors.border }]}>
         {/* Expand Handle */}
@@ -300,7 +308,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   <TouchableOpacity
                     key={`${emoji}-${i}`}
                     onPress={() => handleEmojiPress(emoji)}
-                    style={styles.emojiCell}
+                    style={[styles.emojiCell, { width: emojiCellWidth }]}
                   >
                     <Text style={styles.emojiText}>{emoji}</Text>
                   </TouchableOpacity>
@@ -326,7 +334,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   <TouchableOpacity
                     key={sticker.id}
                     onPress={() => handleSendSticker(sticker.url)}
-                    style={styles.stickerCell}
+                    style={[styles.stickerCell, { width: stickerCellSize, height: stickerCellSize }]}
                   >
                     <Image source={{ uri: sticker.previewUrl }} style={styles.stickerImage} />
                   </TouchableOpacity>
@@ -352,7 +360,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
                   <TouchableOpacity
                     key={gif.id}
                     onPress={() => handleSendGif(gif.url)}
-                    style={styles.gifCell}
+                    style={[styles.gifCell, { width: gifCellWidth }]}
                   >
                     <Image source={{ uri: gif.previewUrl }} style={styles.gifImage} />
                   </TouchableOpacity>
@@ -1055,7 +1063,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
             <View style={{ flex: 1, position: 'relative' }}>
               {showMentions && (
-                <View style={[styles.mentionList, { backgroundColor: colors.surface100, borderColor: colors.border, left: isExpanded ? -10 : -110 }]}>
+                <View style={[styles.mentionList, { width: mentionListWidth, backgroundColor: colors.surface100, borderColor: colors.border, left: isExpanded ? -10 : -110 }]}>
 
                   <View style={[styles.mentionHeader, { borderBottomColor: colors.border }]}>
                     <Text style={[styles.mentionHeaderText, { color: colors.textMuted }]}>{t('chat.mention_members_header')}</Text>
@@ -1440,7 +1448,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: '100%',
     left: -40,
-    width: SCREEN_WIDTH - 24,
     maxHeight: 300,
     borderWidth: 1,
     borderRadius: 16,
@@ -1561,7 +1568,6 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   emojiCell: {
-    width: SCREEN_WIDTH / 8 - 2,
     height: 42,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1578,8 +1584,6 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   stickerCell: {
-    width: (SCREEN_WIDTH - 24 - 30) / 4,
-    height: (SCREEN_WIDTH - 24 - 30) / 4,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1600,7 +1604,6 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   gifCell: {
-    width: (SCREEN_WIDTH - 24 - 10) / 2,
     height: 100,
     borderRadius: 12,
     overflow: 'hidden',

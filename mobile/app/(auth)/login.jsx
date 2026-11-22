@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  TextInput,
   TouchableOpacity,
-  Text,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card, Text as TText, XStack, YStack } from 'tamagui';
 import { useAuth } from '../../src/hooks/useAuth';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useResponsive } from '../../src/hooks/useResponsive';
+import Button from '../../src/components/common/Button';
+import Input from '../../src/components/common/Input';
 
 import AccountRestoreModal from '../../src/components/AccountRestore/AccountRestoreModal';
 
@@ -24,6 +25,7 @@ import AccountRestoreModal from '../../src/components/AccountRestore/AccountRest
 
 const LoginScreen = () => {
   const router = useRouter();
+  const { isWideLayout, isTablet, formMaxWidth } = useResponsive();
   const { login, loading, error: authError, clearError, accessToken } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -122,41 +124,80 @@ const LoginScreen = () => {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isWideLayout && styles.scrollContentWide,
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <MaterialCommunityIcons name="flash" size={42} color="#6366f1" />
-            </View>
-            <Text style={styles.appName}>
-              <Text style={styles.appNameHighlight}>F5</Text> Chat
-            </Text>
-            <Text style={styles.subtitle}>Kết nối tức thì, Bảo mật tuyệt đối</Text>
-          </View>
+          <YStack
+            width="100%"
+            maxWidth={isWideLayout ? 920 : formMaxWidth}
+            alignSelf="center"
+            flexDirection={isWideLayout ? 'row' : 'column'}
+            alignItems="center"
+            justifyContent="center"
+            gap={isWideLayout ? 36 : 24}
+          >
+            {/* Header / Brand Panel */}
+            <YStack
+              alignItems={isWideLayout ? 'flex-start' : 'center'}
+              flex={isWideLayout ? 1 : undefined}
+              maxWidth={isWideLayout ? 360 : undefined}
+              paddingHorizontal={isWideLayout ? 8 : 0}
+            >
+              <YStack
+                width={isTablet ? 92 : 80}
+                height={isTablet ? 92 : 80}
+                backgroundColor="rgba(99, 102, 241, 0.14)"
+                borderRadius={26}
+                justifyContent="center"
+                alignItems="center"
+                marginBottom={16}
+                borderWidth={1}
+                borderColor="rgba(99, 102, 241, 0.35)"
+              >
+                <MaterialCommunityIcons name="flash" size={isTablet ? 48 : 42} color="#818cf8" />
+              </YStack>
+              <TText
+                fontSize={isTablet ? 38 : 32}
+                fontWeight="900"
+                color="#ffffff"
+                marginBottom={8}
+                letterSpacing={-0.5}
+              >
+                <TText color="#6366f1" fontSize={isTablet ? 38 : 32} fontWeight="900">
+                  F5
+                </TText>{' '}
+                Chat
+              </TText>
+              <TText
+                fontSize={14}
+                color="#94a3b8"
+                textAlign={isWideLayout ? 'left' : 'center'}
+                fontWeight="500"
+                lineHeight={21}
+              >
+                Kết nối tức thì, Bảo mật tuyệt đối
+              </TText>
+            </YStack>
 
-          {/* Form */}
-          <View style={styles.form}>
-            {/* Email Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Gmail</Text>
-              <View style={[
-                styles.inputWrapper,
-                localError ? styles.inputErrorBorder : null,
-                focusedInput === 'email' ? styles.inputActiveBorder : null
-              ]}>
-                <MaterialCommunityIcons
-                  name="email-outline"
-                  size={20}
-                  color={focusedInput === 'email' ? '#6366f1' : '#64748b'}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
+            {/* Form Card (Tamagui Card + Input + Button) */}
+            <YStack width="100%" maxWidth={440} flex={isWideLayout ? 1.15 : undefined} gap={18}>
+              <Card
+                bordered
+                backgroundColor="rgba(255, 255, 255, 0.03)"
+                borderColor="rgba(255, 255, 255, 0.08)"
+                borderRadius={28}
+                padding={24}
+                gap={18}
+                elevate
+              >
+                <Input
+                  darkSurface
+                  label="Gmail"
                   placeholder="user@gmail.com"
-                  placeholderTextColor="#475569"
                   autoCapitalize="none"
                   keyboardType="email-address"
                   editable={!loading}
@@ -167,28 +208,19 @@ const LoginScreen = () => {
                     setEmail(text);
                     setLocalError('');
                   }}
+                  leftIcon={
+                    <MaterialCommunityIcons
+                      name="email-outline"
+                      size={20}
+                      color={focusedInput === 'email' ? '#6366f1' : '#64748b'}
+                    />
+                  }
                 />
-              </View>
-            </View>
 
-            {/* Password Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Mật khẩu</Text>
-              <View style={[
-                styles.inputWrapper,
-                localError ? styles.inputErrorBorder : null,
-                focusedInput === 'password' ? styles.inputActiveBorder : null
-              ]}>
-                <MaterialCommunityIcons
-                  name="lock-outline"
-                  size={20}
-                  color={focusedInput === 'password' ? '#6366f1' : '#64748b'}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
+                <Input
+                  darkSurface
+                  label="Mật khẩu"
                   placeholder="Nhập mật khẩu"
-                  placeholderTextColor="#475569"
                   secureTextEntry={!showPassword}
                   editable={!loading}
                   value={password}
@@ -198,58 +230,78 @@ const LoginScreen = () => {
                     setPassword(text);
                     setLocalError('');
                   }}
+                  leftIcon={
+                    <MaterialCommunityIcons
+                      name="lock-outline"
+                      size={20}
+                      color={focusedInput === 'password' ? '#6366f1' : '#64748b'}
+                    />
+                  }
+                  rightElement={
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(!showPassword)}
+                      style={styles.toggleButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <MaterialCommunityIcons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#94a3b8"
+                      />
+                    </TouchableOpacity>
+                  }
                 />
+
+                {localError ? (
+                  <XStack
+                    alignItems="center"
+                    backgroundColor="rgba(239, 68, 68, 0.12)"
+                    borderColor="rgba(239, 68, 68, 0.3)"
+                    borderWidth={1}
+                    borderRadius={14}
+                    paddingHorizontal={12}
+                    paddingVertical={10}
+                    gap={8}
+                  >
+                    <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#ef4444" />
+                    <TText color="#fca5a5" fontSize={13} flex={1} fontWeight="500">
+                      {localError}
+                    </TText>
+                  </XStack>
+                ) : null}
+
+                <Button
+                  title="ĐĂNG NHẬP"
+                  onPress={handleLogin}
+                  loading={loading}
+                  fullWidth
+                  size="lg"
+                />
+
                 <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.toggleButton}
+                  style={styles.forgotPasswordButton}
+                  onPress={() => router.push('/forgot-password')}
+                  activeOpacity={0.7}
                 >
-                  <MaterialCommunityIcons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                    color="#64748b"
-                  />
+                  <TText color="#818cf8" fontSize={14} fontWeight="600">
+                    Quên mật khẩu?
+                  </TText>
                 </TouchableOpacity>
-              </View>
-            </View>
+              </Card>
 
-            {/* Error Message */}
-            {localError ? (
-              <View style={styles.errorContainer}>
-                <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#ef4444" />
-                <Text style={styles.errorText}>{localError}</Text>
-              </View>
-            ) : null}
-
-            {/* Login Button */}
-            <TouchableOpacity
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color="#0c0714" />
-              ) : (
-                <Text style={styles.loginButtonText}>ĐĂNG NHẬP</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.forgotPasswordButton}
-              onPress={() => router.push('/forgot-password')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Chưa có tài khoản?</Text>
-            <TouchableOpacity onPress={() => router.push('/register')} activeOpacity={0.7}>
-              <Text style={styles.registerLink}>Đăng ký ngay</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Footer */}
+              <XStack justifyContent="center" alignItems="center" gap={6} paddingVertical={4}>
+                <TText color="#94a3b8" fontSize={14}>
+                  Chưa có tài khoản?
+                </TText>
+                <TouchableOpacity onPress={() => router.push('/register')} activeOpacity={0.7}>
+                  <TText color="#818cf8" fontSize={14} fontWeight="700">
+                    Đăng ký ngay
+                  </TText>
+                </TouchableOpacity>
+              </XStack>
+            </YStack>
+          </YStack>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -279,6 +331,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 32,
     justifyContent: 'center'
+  },
+  scrollContentWide: {
+    paddingHorizontal: 36,
+    paddingVertical: 24,
   },
   glow1: {
     width: 300,

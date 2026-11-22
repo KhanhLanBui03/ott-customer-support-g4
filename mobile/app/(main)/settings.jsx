@@ -4,10 +4,13 @@ import {
   Switch, Modal, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card, Separator, Text as TText, XStack, YStack } from 'tamagui';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useResponsive } from '../../src/hooks/useResponsive';
+import Button from '../../src/components/common/Button';
 import {
   loadNotificationPreferences,
   updateNotificationPreferences,
@@ -23,6 +26,7 @@ import {
 
 const SettingsScreen = () => {
   const { colors, isDark, toggleTheme } = useTheme();
+  const { isWideLayout, contentMaxWidth, modalMaxWidth } = useResponsive();
   const router = useRouter();
   const { t } = useTranslation();
   const [messageNotifications, setMessageNotifications] = useState(true);
@@ -100,14 +104,15 @@ const SettingsScreen = () => {
         <View style={{ width: 42 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120, alignItems: 'center' }}>
+        <YStack width="100%" maxWidth={isWideLayout ? Math.min(contentMaxWidth, 720) : '100%'} alignSelf="center">
         {/* ====== APPEARANCE ====== */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
+        <YStack paddingHorizontal={20} marginTop={22}>
+          <XStack alignItems="center" marginBottom={10} marginLeft={4} gap={6}>
             <Ionicons name="color-palette-outline" size={20} color={colors.textSubtle} />
-            <Text style={[styles.sectionTitle, { color: colors.textSubtle, marginLeft: 6 }]}>{t('settings.appearance')}</Text>
-          </View>
-          <View style={[styles.menuCard, { backgroundColor: colors.card }]}>
+            <TText fontSize={12} fontWeight="700" color={colors.textSubtle} textTransform="uppercase">{t('settings.appearance')}</TText>
+          </XStack>
+          <Card backgroundColor={colors.card} borderRadius={16} overflow="hidden" borderWidth={1} borderColor={colors.border}>
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name={isDark ? 'moon' : 'sunny-outline'} size={20} color={isDark ? '#fbbf24' : '#f59e0b'} />
@@ -121,7 +126,7 @@ const SettingsScreen = () => {
               />
             </View>
 
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            <Separator borderColor={colors.border} />
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -133,8 +138,8 @@ const SettingsScreen = () => {
               </View>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSubtle} />
             </TouchableOpacity>
-          </View>
-        </View>
+          </Card>
+        </YStack>
 
         {/* ====== NOTIFICATIONS ====== */}
         <View style={styles.section}>
@@ -250,6 +255,7 @@ const SettingsScreen = () => {
             </View>
           </View>
         </View>
+        </YStack>
       </ScrollView>
 
       {/* ====== SOUND / RINGTONE PICKER MODAL ====== */}
@@ -261,7 +267,16 @@ const SettingsScreen = () => {
       >
         <Pressable style={styles.modalOverlay} onPress={closePicker}>
           <Pressable
-            style={[styles.modalSheet, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                width: '100%',
+                maxWidth: isWideLayout ? modalMaxWidth : '100%',
+                alignSelf: 'center',
+              },
+            ]}
             onPress={() => {}}
           >
             <View style={styles.modalHandle} />
@@ -344,9 +359,13 @@ const SettingsScreen = () => {
               })}
             </ScrollView>
 
-            <TouchableOpacity style={styles.modalDoneBtn} onPress={closePicker}>
-              <Text style={styles.modalDoneText}>{t('common.close', 'Đóng')}</Text>
-            </TouchableOpacity>
+            <Button
+              title={t('common.close', 'Đóng')}
+              onPress={closePicker}
+              fullWidth
+              size="md"
+              style={{ marginTop: 14 }}
+            />
           </Pressable>
         </Pressable>
       </Modal>

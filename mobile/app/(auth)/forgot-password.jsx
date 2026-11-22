@@ -12,10 +12,13 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card, YStack } from 'tamagui';
 import { useAuth } from '../../src/hooks/useAuth';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import { useResponsive } from '../../src/hooks/useResponsive';
+import Button from '../../src/components/common/Button';
 
 /**
  * ForgotPasswordScreen (Mobile)
@@ -24,6 +27,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const ForgotPasswordScreen = () => {
   const router = useRouter();
+  const { isWideLayout, formMaxWidth } = useResponsive();
   const { forgotPassword, resetPassword, sendOtp, loading, clearError } = useAuth();
   const COOLDOWN_MS = 2 * 60 * 1000;
 
@@ -223,10 +227,11 @@ const ForgotPasswordScreen = () => {
         style={{ flex: 1 }}
       >
         <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isWideLayout && { paddingHorizontal: 36 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          <YStack width="100%" maxWidth={isWideLayout ? 500 : formMaxWidth} alignSelf="center">
           <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.7}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="#ffffff" />
           </TouchableOpacity>
@@ -240,7 +245,7 @@ const ForgotPasswordScreen = () => {
             </Text>
           </View>
 
-          <View style={styles.form}>
+          <Card bordered backgroundColor="rgba(255, 255, 255, 0.02)" borderColor="rgba(255, 255, 255, 0.06)" borderRadius={32} padding={24} gap={18}>
             {/* Email Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Gmail</Text>
@@ -378,22 +383,18 @@ const ForgotPasswordScreen = () => {
               </View>
             ) : null}
 
-            <TouchableOpacity
-              style={[styles.primaryButton, (loading || (step === 'request' && isCooldownActive)) && styles.disabledButton]}
+            <Button
+              title={
+                step === 'request'
+                  ? (isCooldownActive ? `THỬ LẠI SAU ${formatCooldown(cooldownRemainingSeconds)}` : 'GỬI MÃ OTP')
+                  : 'ĐẶT LẠI MẬT KHẨU'
+              }
               onPress={step === 'request' ? handleRequestOtp : handleResetPassword}
+              loading={loading}
               disabled={loading || (step === 'request' && isCooldownActive)}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color="#0c0714" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {step === 'request' 
-                    ? (isCooldownActive ? `THỬ LẠI SAU ${formatCooldown(cooldownRemainingSeconds)}` : 'GỬI MÃ OTP')
-                    : 'ĐẶT LẠI MẬT KHẨU'}
-                </Text>
-              )}
-            </TouchableOpacity>
+              fullWidth
+              size="lg"
+            />
 
             {step === 'reset' && (
               <TouchableOpacity 
@@ -407,7 +408,8 @@ const ForgotPasswordScreen = () => {
                 </Text>
               </TouchableOpacity>
             )}
-          </View>
+          </Card>
+          </YStack>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

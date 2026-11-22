@@ -7,16 +7,15 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import CONFIG from '../config';
 
-const { width, height } = Dimensions.get('window');
-
 const VoteDetailsModal = ({ visible, onClose, vote }) => {
+  const { height, width } = useWindowDimensions();
   const { t } = useTranslation();
   const conversations = useSelector(state => state.chat.conversations);
   const BASE_URL = CONFIG.BASE_URL;
@@ -47,7 +46,7 @@ const VoteDetailsModal = ({ visible, onClose, vote }) => {
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, { maxHeight: height * 0.8, maxWidth: Math.min(width - 40, 520) }]}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.iconBg}>
@@ -129,7 +128,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 32,
     width: '100%',
-    maxHeight: height * 0.8,
     overflow: 'hidden',
     elevation: 10,
     shadowColor: '#000',

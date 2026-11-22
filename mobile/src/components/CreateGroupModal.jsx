@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
@@ -24,8 +23,6 @@ import { mediaApi } from '../api/mediaApi';
 import { fetchConversations } from '../store/chatSlice';
 import { useRouter } from 'expo-router';
 import CONFIG from '../config';
-
-const { width, height } = Dimensions.get('window');
 
 const CreateGroupModal = ({ visible, onClose }) => {
   const router = useRouter();

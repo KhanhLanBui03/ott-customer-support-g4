@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Dimensions,
+  useWindowDimensions,
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
@@ -24,9 +24,9 @@ import { useRouter } from 'expo-router';
 import CONFIG from '../config';
 import { useTranslation } from 'react-i18next';
 
-const { width, height } = Dimensions.get('window');
-
 const SearchModal = ({ visible, onClose }) => {
+  const { width } = useWindowDimensions();
+  const modalWidth = Math.min(width * 0.9, 520);
   const { t } = useTranslation();
   const router = useRouter();
   const currentUser = useSelector(state => state.auth.user);
@@ -137,7 +137,7 @@ const SearchModal = ({ visible, onClose }) => {
           <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalContainer}
+              style={[styles.modalContainer, { width: modalWidth }]}
             >
               {/* Header */}
               <View style={styles.header}>
@@ -241,7 +241,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    width: width * 0.9,
     backgroundColor: '#fff',
     borderRadius: 24,
     overflow: 'hidden',

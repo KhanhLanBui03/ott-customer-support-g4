@@ -13,11 +13,14 @@ import {
 } from 'react-native';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Card, Spinner, Text as TText, XStack, YStack } from 'tamagui';
 import { useTheme } from '../../context/ThemeContext';
+import { useResponsive } from '../../hooks/useResponsive';
 import { chatApi } from '../../api/chatApi';
 
 const AIAssistantPanel = ({ conversationId }) => {
   const { colors, isDark } = useTheme();
+  const { isWideLayout, modalMaxWidth } = useResponsive();
   
   // Logic states
   const [loading, setLoading] = useState(false);
@@ -185,18 +188,24 @@ const AIAssistantPanel = ({ conversationId }) => {
   };
 
   const ActionCard = ({ icon, label, bgColor }) => (
-    <TouchableOpacity 
-      activeOpacity={0.7}
-      style={[
-        styles.actionCard, 
-        { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : colors.surface100 }
-      ]}
+    <Card
+      press={{ scale: 0.97, opacity: 0.85 }}
+      backgroundColor={isDark ? 'rgba(255, 255, 255, 0.05)' : colors.surface100}
+      borderWidth={1}
+      borderColor={colors.border}
+      borderRadius={18}
+      width={isWideLayout ? '23.5%' : '48%'}
+      paddingVertical={16}
+      paddingHorizontal={12}
+      alignItems="center"
+      justifyContent="center"
+      marginBottom={12}
       onPress={() => {
-        let actionMap = {
+        const actionMap = {
           'TÓM TẮT': 'summary',
           'THỐNG KÊ': 'stats',
           'LỊCH HẸN': 'tasks',
-          'BIÊN BẢN': 'announcement'
+          'BIÊN BẢN': 'announcement',
         };
         handleAction(actionMap[label]);
       }}
@@ -204,8 +213,10 @@ const AIAssistantPanel = ({ conversationId }) => {
       <View style={[styles.actionIconContainer, { backgroundColor: bgColor }]}>
         {icon}
       </View>
-      <Text style={[styles.actionLabel, { color: colors.textSubtle }]}>{label}</Text>
-    </TouchableOpacity>
+      <TText fontSize={11} fontWeight="800" letterSpacing={1} color={colors.textSubtle}>
+        {label}
+      </TText>
+    </Card>
   );
 
   return (
@@ -311,20 +322,27 @@ const AIAssistantPanel = ({ conversationId }) => {
 
       {/* Results Display */}
       {(loading || result) && (
-        <View style={[styles.resultContainer, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.05)' : '#f5f3ff', borderColor: 'rgba(99, 102, 241, 0.1)' }]}>
-          <View style={styles.resultHeader}>
+        <Card
+          bordered
+          borderRadius={20}
+          padding={16}
+          marginTop={14}
+          backgroundColor={isDark ? 'rgba(99, 102, 241, 0.08)' : '#f5f3ff'}
+          borderColor="rgba(99, 102, 241, 0.2)"
+        >
+          <XStack alignItems="center" marginBottom={result ? 10 : 0} gap={8}>
             {loading ? (
               <>
-                <ActivityIndicator size="small" color="#818cf8" style={{ marginRight: 8 }} />
-                <Text style={styles.resultTitle}>AI ĐANG XỬ LÝ...</Text>
+                <Spinner size="small" color="#818cf8" />
+                <TText fontSize={11} fontWeight="900" letterSpacing={1.5} color="#818cf8">AI ĐANG XỬ LÝ...</TText>
               </>
             ) : (
               <>
-                <MaterialIcons name="check-circle-outline" size={16} color="#818cf8" style={{ marginRight: 8 }} />
-                <Text style={styles.resultTitle}>KẾT QUẢ TỪ AI</Text>
+                <MaterialIcons name="check-circle-outline" size={16} color="#818cf8" />
+                <TText fontSize={11} fontWeight="900" letterSpacing={1.5} color="#818cf8">KẾT QUẢ TỪ AI</TText>
               </>
             )}
-          </View>
+          </XStack>
 
           {result && (
             <ScrollView style={styles.resultContent} nestedScrollEnabled>
@@ -341,7 +359,7 @@ const AIAssistantPanel = ({ conversationId }) => {
               <MaterialIcons name="chevron-right" size={14} color="#818cf8" />
             </TouchableOpacity>
           )}
-        </View>
+        </Card>
       )}
 
       {/* Modals & Pickers */}
@@ -351,7 +369,7 @@ const AIAssistantPanel = ({ conversationId }) => {
         <TouchableWithoutFeedback onPress={() => setShowTimeRangeModal(false)}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+              <View style={[styles.modalContent, { backgroundColor: colors.card, maxWidth: modalMaxWidth }]}>
                 <Text style={[styles.modalTitle, { color: colors.foreground }]}>Chọn mốc thời gian</Text>
                 {timeRanges.map((range) => (
                   <TouchableOpacity

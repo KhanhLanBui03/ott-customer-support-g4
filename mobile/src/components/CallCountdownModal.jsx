@@ -1,10 +1,8 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
-
-const { width, height } = Dimensions.get('window');
 
 const CallCountdownModal = ({ visible, countdown, onCancel, callType = 'video' }) => {
   const { t } = useTranslation();
