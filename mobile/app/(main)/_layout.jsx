@@ -9,11 +9,63 @@ import { addMessage, setCurrentUserId, fetchConversations } from '../../src/stor
 import { addNotification, setInAppNotification } from '../../src/store/notificationSlice';
 import { useAgoraCall } from '../../src/hooks/useAgoraCall';
 import VideoCall from '../../src/components/VideoCall';
+import MediaPermissionOnboardingModal from '../../src/components/common/MediaPermissionOnboardingModal';
 import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TAB_BAR_WIDTH = SCREEN_WIDTH - 32;
 const TAB_WIDTH = TAB_BAR_WIDTH / 5;
+
+const GlobalCallOverlay = React.memo(({ accessToken }) => {
+  const {
+    callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
+    camOn, micOn, remoteUsers, acceptCall, endCall, resetCall, connect: connectCall,
+    toggleMic, toggleCamera, agoraConfig, endCallReason, isGroup, hasHadRemote
+  } = useAgoraCall(null, null);
+
+  useEffect(() => {
+    if (accessToken) {
+      const disconnect = connectCall();
+      return () => disconnect?.();
+    }
+  }, [accessToken, connectCall]);
+
+  const handleAcceptCall = React.useCallback(() => acceptCall(incomingSignal), [acceptCall, incomingSignal]);
+  const handleHangup = React.useCallback((sendSignal = true, manualReason = null) => {
+    let reason = manualReason || 'ENDED';
+    if (callStatus === 'incoming') reason = 'REJECTED';
+    else if (callStatus === 'outgoing') reason = 'MISSED';
+
+    if (isGroup && callStatus === 'connected' && remoteUsers.length === 0 && !hasHadRemote && !manualReason) {
+      reason = 'MISSED';
+    }
+
+    endCall(sendSignal, reason);
+  }, [callStatus, isGroup, remoteUsers.length, hasHadRemote, endCall]);
+
+  return (
+    <VideoCall
+      callStatus={callStatus}
+      callType={callType}
+      callerName={callerName}
+      callerInfo={callerInfo}
+      incomingSignal={incomingSignal}
+      duration={duration}
+      formatDuration={formatDuration}
+      onAccept={handleAcceptCall}
+      onHangup={handleHangup}
+      onReset={resetCall}
+      onToggleMic={toggleMic}
+      onToggleCamera={toggleCamera}
+      micOn={micOn}
+      camOn={camOn}
+      remoteUsers={remoteUsers}
+      agoraConfig={agoraConfig}
+      endCallReason={endCallReason}
+      isGroup={isGroup}
+    />
+  );
+});
 
 export default function MainLayout() {
   const { t } = useTranslation();
@@ -83,40 +135,10 @@ export default function MainLayout() {
     return () => disconnectSocket();
   }, [accessToken, user?.userId, user?.id]);
 
-  // Global Call Integration
-  const {
-    callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
-    camOn, micOn, remoteUsers, setRemoteUsers, acceptCall, endCall, resetCall, connect: connectCall,
-    toggleMic, toggleCamera, agoraConfig, endCallReason, isGroup, hasHadRemote
-  } = useAgoraCall(null, null);
-
-
-
-  useEffect(() => {
-    if (accessToken) {
-      const disconnect = connectCall();
-      return () => disconnect?.();
-    }
-  }, [accessToken, connectCall]);
-
-  const handleAcceptCall = () => acceptCall(incomingSignal);
-  const handleHangup = (sendSignal = true, manualReason = null) => {
-    let reason = manualReason || 'ENDED';
-    if (callStatus === 'incoming') reason = 'REJECTED';
-    else if (callStatus === 'outgoing') reason = 'MISSED';
-    
-    // Nếu hết 30s mà chưa ai vào nhóm (đã connect nhưng remoteUsers = 0 và chưa có ai từng tham gia) thì chốt là MISSED
-    if (isGroup && callStatus === 'connected' && remoteUsers.length === 0 && !hasHadRemote && !manualReason) {
-        reason = 'MISSED';
-    }
-
-    endCall(sendSignal, reason);
-  };
-
-
   return (
     <View style={{ flex: 1 }}>
       <Tabs
+        backBehavior="firstRoute"
         tabBar={(props) => <CustomTabBar {...props} badge={badgeValue} />}
         screenOptions={{ headerShown: false }}
       >
@@ -126,53 +148,36 @@ export default function MainLayout() {
       <Tabs.Screen name="notifications" options={{ title: t('notifications.title'), icon: 'notifications' }} />
       <Tabs.Screen name="profile" options={{ title: t('profile.title'), icon: 'person' }} />
 
-      <Tabs.Screen name="edit-profile" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="change-password" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="chat/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="chat-info/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="shared-media/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="shared-files/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="shared-links/[id]" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="qr-scanner" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="group-preview" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="my-cloud" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
-      <Tabs.Screen name="settings" options={{ href: null, tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="edit-profile" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="change-password" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="chat/[id]" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="chat-info/[id]" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="shared-media/[id]" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="shared-files/[id]" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="shared-links/[id]" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="qr-scanner" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="group-preview" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="my-cloud" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="settings" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
+      <Tabs.Screen name="language-settings" options={{ tabBarTransparent: true, tabBarStyle: { display: 'none', position: 'absolute' } }} />
       </Tabs>
 
-      <VideoCall
-        callStatus={callStatus}
-        callType={callType}
-        callerName={callerName}
-        callerInfo={callerInfo}
-        incomingSignal={incomingSignal}
-        duration={duration}
-        formatDuration={formatDuration}
-        onAccept={handleAcceptCall}
-        onHangup={handleHangup}
-        onReset={resetCall}
-        onToggleMic={toggleMic}
-        onToggleCamera={toggleCamera}
-        micOn={micOn}
-        camOn={camOn}
-        remoteUsers={remoteUsers}
-        agoraConfig={agoraConfig}
-        endCallReason={endCallReason}
-        isGroup={isGroup}
+      <MediaPermissionOnboardingModal
+        isAuthenticated={Boolean(accessToken && (user?.userId || user?.id))}
       />
+
+      <GlobalCallOverlay accessToken={accessToken} />
 
     </View>
   );
 }
 
-const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
-  const focusedOptions = descriptors[state.routes[state.index].key].options;
-
-  if (focusedOptions.tabBarStyle?.display === 'none') {
-    return null;
-  }
-
+const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, badge }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const user = useSelector((state) => state.auth.user);
+
+  const focusedRoute = state.routes[state.index];
+  const focusedOptions = focusedRoute ? descriptors[focusedRoute.key]?.options : null;
 
   // Danh sách các Tab được phép hiển thị (Whitelist)
   const allowedTabs = ['index', 'contacts', 'shop-expert-ai', 'notifications', 'profile'];
@@ -182,20 +187,21 @@ const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
     'edit-profile': 'profile',
     'change-password': 'profile',
     'settings': 'profile',
-    // Thêm các ánh xạ khác nếu cần
+    'language-settings': 'profile',
+    'my-cloud': 'profile',
   };
 
   // Lọc lấy các route nằm trong danh sách cho phép
   const visibleRoutes = state.routes.filter(route => allowedTabs.includes(route.name));
 
   // Tìm tên Tab chính dựa trên route hiện tại
-  const currentRouteName = state.routes[state.index].name;
+  const currentRouteName = focusedRoute?.name || 'index';
   const activeTabName = routeMap[currentRouteName] || currentRouteName;
 
-  // Tìm index thực tế trong danh sách 4 Tab hiển thị
+  // Tìm index thực tế trong danh sách Tab hiển thị
   const activeIndex = visibleRoutes.findIndex(route => route.name === activeTabName);
 
-  const actualTabWidth = TAB_BAR_WIDTH / visibleRoutes.length;
+  const actualTabWidth = visibleRoutes.length > 0 ? TAB_BAR_WIDTH / visibleRoutes.length : TAB_WIDTH;
 
   useEffect(() => {
     if (activeIndex >= 0) {
@@ -206,7 +212,11 @@ const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
         tension: 40,
       }).start();
     }
-  }, [activeIndex]);
+  }, [activeIndex, actualTabWidth]);
+
+  if (!focusedRoute || focusedOptions?.tabBarStyle?.display === 'none' || visibleRoutes.length === 0) {
+    return null;
+  }
 
   const pathData = `M 0 0 
     L ${actualTabWidth / 2 - 35} 0 
@@ -251,9 +261,19 @@ const CustomTabBar = ({ state, descriptors, navigation, badge }) => {
               }
               return;
             }
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
+
+            const event = emitter?.emit
+              ? emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true })
+              : navigation?.emit?.({ type: 'tabPress', target: route.key, canPreventDefault: true });
+
+            if (!isFocused && !event?.defaultPrevented) {
+              if (navigateToTab) {
+                navigateToTab(route.key);
+              } else if (navigation?.navigate) {
+                navigation.navigate(route.name);
+              } else {
+                router.navigate(route.name === 'index' ? '/(main)' : `/(main)/${route.name}`);
+              }
             }
           };
 

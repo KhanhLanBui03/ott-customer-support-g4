@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import store from '../src/store/store';
 import { restoreState, sessionExpired } from '../src/store/authSlice';
 import { Alert } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import InAppNotification from '../src/components/common/InAppNotification';
 import { useTranslation } from 'react-i18next';
@@ -103,10 +104,12 @@ import { ThemeProvider } from '../src/context/ThemeContext';
 
 export default function RootLayout() {
   return (
-    <Provider store={store}>
-      <ThemeProvider>
-        <RootLayoutNav />
-      </ThemeProvider>
-    </Provider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Provider store={store}>
+        <ThemeProvider>
+          <RootLayoutNav />
+        </ThemeProvider>
+      </Provider>
+    </GestureHandlerRootView>
   );
 }

@@ -1,92 +1,76 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import { MaterialIcons } from '@expo/vector-icons';
 
 const VoicePlayer = ({ url, isOwn }) => {
-  const [sound, setSound] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [position, setPosition] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const player = useAudioPlayer(url ? { uri: url } : null, { updateInterval: 200 });
+  const status = useAudioPlayerStatus(player);
+  const [hasRequestedPlay, setHasRequestedPlay] = useState(false);
+  const [error, setError] = useState(null);
+
+  const isPlaying = Boolean(status?.playing);
+  const duration = Number.isFinite(status?.duration) ? status.duration : 0;
+  const position = Number.isFinite(status?.currentTime) ? status.currentTime : 0;
+  const isLoading = hasRequestedPlay && !error && (!status?.isLoaded || Boolean(status?.isBuffering));
 
   useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
+    setError(null);
+    setHasRequestedPlay(false);
+  }, [url]);
 
-  const onPlaybackStatusUpdate = (status) => {
-    if (status.isLoaded) {
-      setPosition(status.positionMillis);
-      setDuration(status.durationMillis);
-      setIsPlaying(status.isPlaying);
-      if (status.didJustFinish) {
-        setIsPlaying(false);
-        setPosition(0);
-        // Note: we don't call sound.setPositionAsync(0) here to avoid null ref errors.
-        // It will be reset on the next play call.
-      }
+  useEffect(() => {
+    if (status?.isLoaded || status?.error) {
+      setHasRequestedPlay(false);
     }
-  };
+    if (status?.error) {
+      let errorMsg = 'Không thể phát âm thanh này';
+      if (Platform.OS === 'ios' && url?.toLowerCase().endsWith('.webm')) {
+        errorMsg = 'Định dạng WebM không hỗ trợ trên iOS';
+      } else if (status.error.includes('code -11828')) {
+        errorMsg = 'Định dạng tệp không được hỗ trợ';
+      } else if (status.error.includes('code -1003')) {
+        errorMsg = 'Lỗi kết nối máy chủ';
+      }
+      setError(errorMsg);
+    }
+  }, [status?.isLoaded, status?.error, url]);
 
   const playPauseSound = async () => {
     try {
-      // Đảm bảo Audio Mode được thiết lập đúng cho iOS
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+      setError(null);
+      await setAudioModeAsync({
+        allowsRecording: false,
+        shouldPlayInBackground: true,
+        playsInSilentMode: true,
+        interruptionMode: 'duckOthers',
+        shouldRouteThroughEarpiece: false,
       });
 
-      if (sound === null) {
-        setIsLoading(true);
-        console.log('Loading sound from:', url);
-        
-        const newSound = new Audio.Sound();
-        setSound(newSound);
-
-        newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-
-        await newSound.loadAsync(
-          { uri: url },
-          { shouldPlay: true },
-          true // useNativeControls
-        );
-        
-        setIsLoading(false);
-      } else {
-        const status = await sound.getStatusAsync();
-        if (!status.isLoaded) {
-          // If sound exists but is not loaded, reset and try reloading
-          setSound(null);
-          return playPauseSound();
-        }
-
-        if (isPlaying) {
-          await sound.pauseAsync();
-        } else {
-          if (position >= duration) {
-            await sound.setPositionAsync(0);
-          }
-          await sound.playAsync();
-        }
+      if (isPlaying) {
+        player.pause();
+        return;
       }
-    } catch (error) {
-      console.error('Error playing sound detailed:', error);
-      setIsLoading(false);
-      
+
+      if (!status?.isLoaded) {
+        setHasRequestedPlay(true);
+      }
+
+      if (status?.didJustFinish || (duration > 0 && position >= duration)) {
+        await player.seekTo(0);
+      }
+      player.play();
+    } catch (err) {
+      console.error('Error playing sound detailed:', err);
+      setHasRequestedPlay(false);
+
       let errorMsg = 'Không thể phát âm thanh này';
-      if (Platform.OS === 'ios' && url.toLowerCase().endsWith('.webm')) {
+      if (Platform.OS === 'ios' && url?.toLowerCase().endsWith('.webm')) {
         errorMsg = 'Định dạng WebM không hỗ trợ trên iOS';
-      } else if (error.message) {
-        if (error.message.includes('code -11828')) {
+      } else if (err?.message) {
+        if (err.message.includes('code -11828')) {
           errorMsg = 'Định dạng tệp không được hỗ trợ';
-        } else if (error.message.includes('code -1003')) {
+        } else if (err.message.includes('code -1003')) {
           errorMsg = 'Lỗi kết nối máy chủ';
         }
       }
@@ -94,16 +78,15 @@ const VoicePlayer = ({ url, isOwn }) => {
     }
   };
 
-  const [error, setError] = useState(null);
-
-  const formatTime = (millis) => {
-    const totalSeconds = millis / 1000;
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  const formatTime = (seconds) => {
+    const safeSeconds = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+    const minutes = Math.floor(safeSeconds / 60);
+    const secs = Math.floor(safeSeconds % 60);
+    return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const progress = duration > 0 ? (position / duration) * 100 : 0;
+  const displayPosition = status?.didJustFinish ? 0 : position;
+  const progress = duration > 0 ? Math.min(100, (displayPosition / duration) * 100) : 0;
 
   return (
     <View style={[styles.container, isOwn ? styles.ownContainer : styles.otherContainer]}>
@@ -132,7 +115,7 @@ const VoicePlayer = ({ url, isOwn }) => {
             <Text style={styles.errorText}>{error}</Text>
           ) : (
             <Text style={[styles.timeText, isOwn ? styles.ownTimeText : styles.otherTimeText]}>
-              {formatTime(position)} / {formatTime(duration || 0)}
+              {formatTime(displayPosition)} / {formatTime(duration || 0)}
             </Text>
           )}
         </View>

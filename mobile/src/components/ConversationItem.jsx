@@ -5,7 +5,6 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
 } from 'react-native';
 
 import { getPreviewText } from '../utils/messageUtils';

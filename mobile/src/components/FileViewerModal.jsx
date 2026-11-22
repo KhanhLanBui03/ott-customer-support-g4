@@ -5,9 +5,9 @@ import {
   TouchableOpacity, 
   Text, 
   StyleSheet, 
-  SafeAreaView,
   ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView from 'react-native-webview';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { downloadFile } from '../utils/fileUtils';

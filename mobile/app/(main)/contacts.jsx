@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   TextInput,
   Alert,
   DeviceEventEmitter,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter, useFocusEffect } from 'expo-router';

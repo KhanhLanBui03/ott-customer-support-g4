@@ -19,8 +19,8 @@ const resources = {
 
 // Get device language
 const getDeviceLanguage = () => {
-  const locale = Localization.getLocales()[0].languageCode;
-  return resources[locale] ? locale : 'en';
+  const locale = Localization.getLocales?.()?.[0]?.languageCode;
+  return locale && resources[locale] ? locale : 'en';
 };
 
 i18n

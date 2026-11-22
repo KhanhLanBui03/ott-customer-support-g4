@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   DeviceEventEmitter,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchNotifications, markAsRead, removeNotification } from '../../src/store/notificationSlice';

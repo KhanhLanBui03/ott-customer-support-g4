@@ -20,6 +20,7 @@ const CreateVoteModal = ({ visible, onClose, onCreate }) => {
   const [options, setOptions] = useState(['', '']);
   const [allowMultiple, setAllowMultiple] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState(Platform.OS === 'ios' ? 'datetime' : 'date');
   const [deadline, setDeadline] = useState(null);
 
   const handleAddOption = () => {
@@ -39,10 +40,34 @@ const CreateVoteModal = ({ visible, onClose, onCreate }) => {
   };
 
   const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setDeadline(selectedDate);
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
     }
+    if (event?.type === 'dismissed' || !selectedDate) {
+      setShowDatePicker(false);
+      return;
+    }
+
+    if (Platform.OS === 'android' && pickerMode === 'date') {
+      const nextDate = new Date(deadline || new Date());
+      nextDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+      setDeadline(nextDate);
+      setTimeout(() => {
+        setPickerMode('time');
+        setShowDatePicker(true);
+      }, 100);
+      return;
+    }
+
+    if (Platform.OS === 'android' && pickerMode === 'time') {
+      const nextDate = new Date(deadline || new Date());
+      nextDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
+      setDeadline(nextDate);
+      setPickerMode('date');
+      return;
+    }
+
+    setDeadline(selectedDate);
   };
 
   const handleSubmit = () => {
@@ -144,7 +169,10 @@ const CreateVoteModal = ({ visible, onClose, onCreate }) => {
 
             <TouchableOpacity 
               style={styles.settingRow} 
-              onPress={() => setShowDatePicker(true)}
+              onPress={() => {
+                setPickerMode(Platform.OS === 'ios' ? 'datetime' : 'date');
+                setShowDatePicker(true);
+              }}
             >
               <View style={styles.settingInfo}>
                 <Ionicons name="time-outline" size={20} color="#64748b" />
@@ -167,10 +195,11 @@ const CreateVoteModal = ({ visible, onClose, onCreate }) => {
             {showDatePicker && (
               <DateTimePicker
                 value={deadline || new Date()}
-                mode="datetime"
+                mode={pickerMode}
+                is24Hour={true}
                 display="default"
                 onChange={handleDateChange}
-                minimumDate={new Date()}
+                minimumDate={pickerMode === 'time' ? undefined : new Date()}
               />
             )}
           </ScrollView>

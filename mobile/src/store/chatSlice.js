@@ -55,15 +55,18 @@ export const fetchConversationDetail = createAsyncThunk('chat/fetchConversationD
   }
 });
 
+const MESSAGE_PAGE_SIZE = 20;
+
 export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, { rejectWithValue, getState }) => {
   try {
     const id = typeof arg === 'string' ? arg : arg.conversationId;
     const isLoadMore = arg?.loadMore || false;
+    const limit = arg?.params?.limit ?? MESSAGE_PAGE_SIZE;
     const state = getState().chat;
     const myId = getState().auth.user?.userId || getState().auth.user?.id;
     const realId = getRealId(state, id, myId);
 
-    const params = { ...arg?.params, limit: -1 };
+    const params = { ...arg?.params, limit };
     if (isLoadMore && state.messages[realId]?.length > 0) {
       params.fromMessageId = state.messages[realId][0].messageId;
     }
@@ -72,7 +75,13 @@ export const fetchMessages = createAsyncThunk('chat/fetchMessages', async (arg, 
     const data = response.data.data || response.data;
     const messages = Array.isArray(data) ? data : (data.messages || []);
 
-    return { conversationId: realId, originalId: id, messages, isLoadMore };
+    return {
+      conversationId: realId,
+      originalId: id,
+      messages,
+      isLoadMore,
+      hasMore: limit > 0 ? messages.length >= limit : false,
+    };
   } catch (error) { return rejectWithValue(error.response?.data?.message); }
 });
 
@@ -178,7 +187,17 @@ export const unpinConversation = createAsyncThunk('chat/unpinConversation', asyn
 
 const chatSlice = createSlice({
   name: 'chat',
-  initialState: { conversations: [], messages: {}, typingUsers: {}, currentConversationId: null, currentUserId: null, loading: false, replyingTo: null },
+  initialState: {
+    conversations: [],
+    messages: {},
+    messagesLoading: {},
+    hasMoreMessages: {},
+    typingUsers: {},
+    currentConversationId: null,
+    currentUserId: null,
+    loading: false,
+    replyingTo: null,
+  },
   reducers: {
     setCurrentConversation: (state, action) => { state.currentConversationId = action.payload; },
     clearCurrentConversation: (state) => { state.currentConversationId = null; },
@@ -555,14 +574,33 @@ const chatSlice = createSlice({
           state.conversations.push(conv);
         }
       })
+      .addCase(fetchMessages.pending, (state, action) => {
+        const arg = action.meta.arg;
+        const id = typeof arg === 'string' ? arg : arg?.conversationId;
+        const isLoadMore = arg?.loadMore || false;
+        const realId = getRealId(state, id, state.currentUserId);
+        if (realId && !isLoadMore) {
+          state.messagesLoading[realId] = true;
+        }
+      })
       .addCase(fetchMessages.fulfilled, (state, action) => {
-        const { conversationId, messages, isLoadMore } = action.payload;
+        const { conversationId, messages, isLoadMore, hasMore } = action.payload;
+        state.messagesLoading[conversationId] = false;
+        state.hasMoreMessages[conversationId] = hasMore;
         if (isLoadMore) {
           const existing = state.messages[conversationId] || [];
           const filtered = messages.filter(nm => !existing.some(em => em.messageId === nm.messageId));
           state.messages[conversationId] = [...filtered, ...existing];
         } else {
           state.messages[conversationId] = messages;
+        }
+      })
+      .addCase(fetchMessages.rejected, (state, action) => {
+        const arg = action.meta.arg;
+        const id = typeof arg === 'string' ? arg : arg?.conversationId;
+        const realId = getRealId(state, id, state.currentUserId);
+        if (realId) {
+          state.messagesLoading[realId] = false;
         }
       })
       .addCase(recallMessage.fulfilled, (state, action) => {

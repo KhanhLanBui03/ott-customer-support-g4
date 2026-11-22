@@ -19,7 +19,7 @@ import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-ic
 import CONFIG from '../config';
 import { setReplyingTo } from '../store/chatSlice';
 import { openFile } from '../utils/fileUtils';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Paths } from 'expo-file-system';
 import MediaViewer from './MediaViewer';
 import VideoThumbnail from './VideoThumbnail';
 import FileViewerModal from './FileViewerModal';
@@ -106,10 +106,12 @@ const ChatBubble = ({
       if (url) {
         const fileName = url.split('/').pop();
         if (fileName) {
-          const fileUri = FileSystem.cacheDirectory + fileName;
-          FileSystem.getInfoAsync(fileUri).then(info => {
-            setFileExists(info.exists);
-          }).catch(() => setFileExists(false));
+          try {
+            const cachedFile = new File(Paths.cache, fileName.replace(/[\\/]/g, '_'));
+            setFileExists(Boolean(cachedFile.exists));
+          } catch {
+            setFileExists(false);
+          }
         }
       }
     }
@@ -866,71 +868,82 @@ const ChatBubble = ({
         </View>
       </TouchableOpacity>
 
-      <Modal visible={reactionModalVisible} transparent animationType="fade" onRequestClose={closeReactionDetail}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.modalTitle, { color: colors.foreground }]}>{t('chat.reaction_details')}</Text>
-              <TouchableOpacity onPress={closeReactionDetail} style={styles.closeButton}><Ionicons name="close" size={22} color={colors.foreground} /></TouchableOpacity>
-            </View>
-            <View style={styles.modalBody}>
-              <View style={[styles.modalEmojiColumn, { backgroundColor: isDark ? colors.surface100 : colors.surface200, borderRightColor: colors.border }]}>
-                {Object.entries(message.reactions || {}).map(([emoji, users]) => (
-                  <TouchableOpacity key={emoji} style={[styles.modalEmojiButton, { backgroundColor: colors.card }, selectedReactionEmoji === emoji && [styles.modalEmojiButtonActive, { backgroundColor: colors.primary }]]} onPress={() => setSelectedReactionEmoji(emoji)}>
-                    <Text style={styles.modalEmoji}>{emoji}</Text>
-                    <Text style={[styles.modalEmojiCount, { color: colors.textMuted }]}>{Array.isArray(users) ? users.length : 0}</Text>
-                  </TouchableOpacity>
-                ))}
+      {reactionModalVisible && (
+        <Modal visible={reactionModalVisible} transparent animationType="fade" onRequestClose={closeReactionDetail}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>{t('chat.reaction_details')}</Text>
+                <TouchableOpacity onPress={closeReactionDetail} style={styles.closeButton}><Ionicons name="close" size={22} color={colors.foreground} /></TouchableOpacity>
               </View>
-              <View style={styles.modalUserColumn}>
-                <Text style={[styles.modalSectionLabel, { color: colors.textSubtle }]}>{t('chat.people_reacted')}</Text>
-                <ScrollView contentContainerStyle={styles.modalUserList}>
-                  {(reactionUserNamesFor(selectedReactionEmoji) || []).length > 0 ? (
-                    reactionUserNamesFor(selectedReactionEmoji).map((name, index) => (
-                      <View key={`${selectedReactionEmoji}-${index}`} style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>{name}</Text></View>
-                    ))
-                  ) : (
-                    <View style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>{t('chat.no_reactions')}</Text></View>
-                  )}
-                </ScrollView>
+              <View style={styles.modalBody}>
+                <View style={[styles.modalEmojiColumn, { backgroundColor: isDark ? colors.surface100 : colors.surface200, borderRightColor: colors.border }]}>
+                  {Object.entries(message.reactions || {}).map(([emoji, users]) => (
+                    <TouchableOpacity key={emoji} style={[styles.modalEmojiButton, { backgroundColor: colors.card }, selectedReactionEmoji === emoji && [styles.modalEmojiButtonActive, { backgroundColor: colors.primary }]]} onPress={() => setSelectedReactionEmoji(emoji)}>
+                      <Text style={styles.modalEmoji}>{emoji}</Text>
+                      <Text style={[styles.modalEmojiCount, { color: colors.textMuted }]}>{Array.isArray(users) ? users.length : 0}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.modalUserColumn}>
+                  <Text style={[styles.modalSectionLabel, { color: colors.textSubtle }]}>{t('chat.people_reacted')}</Text>
+                  <ScrollView contentContainerStyle={styles.modalUserList}>
+                    {(reactionUserNamesFor(selectedReactionEmoji) || []).length > 0 ? (
+                      reactionUserNamesFor(selectedReactionEmoji).map((name, index) => (
+                        <View key={`${selectedReactionEmoji}-${index}`} style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>{name}</Text></View>
+                      ))
+                    ) : (
+                      <View style={[styles.modalUserItem, { backgroundColor: isDark ? colors.surface200 : colors.surface100 }]}><Text style={[styles.modalUserText, { color: colors.foreground }]}>{t('chat.no_reactions')}</Text></View>
+                    )}
+                  </ScrollView>
+                </View>
               </View>
             </View>
           </View>
+        </Modal>
+      )}
 
-        </View>
-      </Modal>
-
-      <MediaViewer visible={mediaViewerVisible} onClose={() => setMediaViewerVisible(false)} allMedia={imagesAndVideos.map(url => ({ url: getFullUrl(url), type: (isVideoUrl(url) || (message.type === 'VIDEO' && !isImageUrl(url))) ? 'VIDEO' : 'IMAGE' }))} initialIndex={selectedMediaIndex} />
-      <FileViewerModal visible={fileViewerVisible} onClose={() => setFileViewerVisible(false)} fileUrl={selectedFile.url} fileName={selectedFile.name} />
-      <VoteDetailsModal
-        visible={voteDetailsVisible}
-        onClose={() => setVoteDetailsVisible(false)}
-        vote={selectedVoteData}
-      />
-
-
-      <UserActionModal
-        visible={userActionVisible}
-        user={selectedUserForAction}
-        onClose={() => setUserActionVisible(false)}
-        onMention={(u) => {
-          // Gửi một hành động lên màn hình chat để chèn mention vào input
-          onPressMessage?.({ action: 'MENTION', user: u });
-        }}
-        onMessage={(u) => {
-          router.push({
-            pathname: `/chat/${encodeURIComponent(u.userId || u.id)}`,
-            params: {
-              name: u.fullName || u.name,
-              avatar: u.avatarUrl || u.avatar || u.profilePic,
-              type: 'SINGLE'
-            }
-          });
-        }}
-        onCall={(u) => {
-          onPressMessage?.({ action: 'CALL_BACK', callType: 'audio', targetUser: u });
-        }}
-      />
+      {mediaViewerVisible && (
+        <MediaViewer
+          visible={mediaViewerVisible}
+          onClose={() => setMediaViewerVisible(false)}
+          allMedia={imagesAndVideos.map(url => ({ url: getFullUrl(url), type: (isVideoUrl(url) || (message.type === 'VIDEO' && !isImageUrl(url))) ? 'VIDEO' : 'IMAGE' }))}
+          initialIndex={selectedMediaIndex}
+        />
+      )}
+      {fileViewerVisible && (
+        <FileViewerModal visible={fileViewerVisible} onClose={() => setFileViewerVisible(false)} fileUrl={selectedFile.url} fileName={selectedFile.name} />
+      )}
+      {voteDetailsVisible && (
+        <VoteDetailsModal
+          visible={voteDetailsVisible}
+          onClose={() => setVoteDetailsVisible(false)}
+          vote={selectedVoteData}
+        />
+      )}
+      {userActionVisible && (
+        <UserActionModal
+          visible={userActionVisible}
+          user={selectedUserForAction}
+          onClose={() => setUserActionVisible(false)}
+          onMention={(u) => {
+            onPressMessage?.({ action: 'MENTION', user: u });
+          }}
+          onMessage={(u) => {
+            router.push({
+              pathname: `/chat/${encodeURIComponent(u.userId || u.id)}`,
+              params: {
+                name: u.fullName || u.name,
+                avatar: u.avatarUrl || u.avatar || u.profilePic,
+                type: 'SINGLE'
+              }
+            });
+          }}
+          onCall={(u) => {
+            onPressMessage?.({ action: 'CALL_BACK', callType: 'audio', targetUser: u });
+          }}
+        />
+      )}
     </Animated.View>
 
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -6,15 +6,81 @@ import {
   ActivityIndicator,
   StyleSheet,
   Platform,
-  TouchableOpacity,
+  Animated,
 } from 'react-native';
 import ChatBubble from './ChatBubble';
 import { formatMessageDateSeparator } from '../utils/dateUtils';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-const MessageList = React.forwardRef(({
+const SKELETON_ROWS = [
+  { id: 's1', own: false, width: '62%', height: 42 },
+  { id: 's2', own: true, width: '48%', height: 38 },
+  { id: 's3', own: false, width: '74%', height: 56 },
+  { id: 's4', own: true, width: '58%', height: 44 },
+  { id: 's5', own: false, width: '44%', height: 36 },
+  { id: 's6', own: true, width: '68%', height: 50 },
+];
 
+const ChatSkeleton = ({ isDark, colors }) => {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.9, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View style={[styles.skeletonContainer, { backgroundColor: colors.background }]}>
+      {SKELETON_ROWS.map((row) => (
+        <View
+          key={row.id}
+          style={[
+            styles.skeletonRow,
+            row.own ? styles.skeletonRowOwn : styles.skeletonRowOther,
+          ]}
+        >
+          {!row.own && (
+            <Animated.View
+              style={[
+                styles.skeletonAvatar,
+                {
+                  opacity: pulse,
+                  backgroundColor: isDark ? colors.surface300 : '#e2e8f0',
+                },
+              ]}
+            />
+          )}
+          <Animated.View
+            style={[
+              styles.skeletonBubble,
+              {
+                width: row.width,
+                height: row.height,
+                opacity: pulse,
+                backgroundColor: row.own
+                  ? isDark
+                    ? 'rgba(99, 102, 241, 0.35)'
+                    : 'rgba(99, 102, 241, 0.2)'
+                  : isDark
+                    ? colors.surface200
+                    : '#e2e8f0',
+              },
+            ]}
+          />
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const MessageList = React.forwardRef(({
   messages = [],
   conversationId,
   currentUserId,
@@ -22,6 +88,7 @@ const MessageList = React.forwardRef(({
   onlineUsers = [],
   members = [],
   isLoading = false,
+  hasMoreProp = true,
   onLoadMore,
   onReact,
   onLongPress,
@@ -36,20 +103,53 @@ const MessageList = React.forwardRef(({
 }, ref) => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = React.useState(false);
-  const [hasMore, setHasMore] = React.useState(true);
-  const [isNearBottom, setIsNearBottom] = React.useState(true); // Track if user is near bottom
+  const [hasMore, setHasMore] = React.useState(hasMoreProp);
   const readMessageIds = useRef(new Set());
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const lastConversationRef = useRef(null);
+  const prevLatestMessageIdRef = useRef(null);
+  const isAtBottom = useRef(true);
+  const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
-    setHasMore(true);
-  }, [conversationId]);
+    setHasMore(hasMoreProp);
+  }, [hasMoreProp, conversationId]);
+
+  useEffect(() => {
+    if (lastConversationRef.current !== conversationId) {
+      lastConversationRef.current = conversationId;
+      prevLatestMessageIdRef.current = null;
+      isAtBottom.current = true;
+      isLoadingMoreRef.current = false;
+      setIsLoadingMoreMessages(false);
+      readMessageIds.current.clear();
+      fadeAnim.setValue(0);
+    }
+  }, [conversationId, fadeAnim]);
+
+  useEffect(() => {
+    if (!isLoading || messages.length > 0) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isLoading, messages.length, fadeAnim]);
 
   // Đảo ngược danh sách tin nhắn để dùng với inverted FlatList
   // Tin nhắn mới nhất sẽ ở index 0 (đáy màn hình)
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  // Ánh xạ nhanh messageId -> originalIndex để tránh findIndex O(n^2) khi render danh sách dài
+  const originalIndexById = useMemo(() => {
+    const map = new Map();
+    messages.forEach((m, idx) => {
+      if (m?.messageId) map.set(m.messageId, idx);
+    });
+    return map;
+  }, [messages]);
 
   const normalizeReaderId = (reader) => {
     if (!reader) return '';
@@ -57,15 +157,17 @@ const MessageList = React.forwardRef(({
     return String(reader);
   };
 
-  const isLatestReadBy = (message, readerId, messageIndex) => {
-    // Trong danh sách gốc (messages), tin nhắn sau nó là index + 1
-    // Nhưng ở đây ta dùng messages để check cho chuẩn
-    const originalIndex = messages.findIndex(m => m.messageId === message.messageId);
+  const isLatestReadBy = (message, readerId) => {
+    const originalIndex = originalIndexById.get(message.messageId) ?? -1;
     if (originalIndex === -1) return false;
 
-    return !messages.slice(originalIndex + 1).some((nextMessage) => {
-      return Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) === readerId);
-    });
+    for (let i = originalIndex + 1; i < messages.length; i++) {
+      const nextMessage = messages[i];
+      if (Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) === readerId)) {
+        return false;
+      }
+    }
+    return true;
   };
 
   const getLatestReadBy = (message) => {
@@ -82,34 +184,11 @@ const MessageList = React.forwardRef(({
     }, []);
   };
 
-  const handlePressMessage = (item) => {
-    if (!conversationId || !onPressMessage || !item || String(item.senderId) === String(currentUserId)) return;
-    const messageId = String(item.messageId || '');
-    if (!messageId || messageId.startsWith('temp-') || readMessageIds.current.has(messageId)) return;
-
-    const alreadyRead = Array.isArray(item.readBy) && item.readBy.some((id) => normalizeReaderId(id) === String(currentUserId));
-    if (alreadyRead) return;
-
-    readMessageIds.current.add(messageId);
-    onPressMessage(item);
-  };
-
-  const isAtBottom = useRef(true);
-  const isLoadingMore = useRef(false);
-
-  const handleScroll = (event) => {
+  const handleScroll = useCallback((event) => {
     const { contentOffset } = event.nativeEvent;
-    // Trong danh sách INVERTED: y = 0 là ĐÁY (tin nhắn mới nhất)
-    // Khi cuộn LÊN (xem tin nhắn cũ), y sẽ TĂNG LÊN.
-    const paddingToBottom = 50;
-    const isAtTheBottom = contentOffset.y <= paddingToBottom;
-    
-    isAtBottom.current = isAtTheBottom;
-    setIsNearBottom(isAtTheBottom);
-  };
+    isAtBottom.current = contentOffset.y <= 60;
+  }, []);
 
-
-  // Sử dụng Ref để lưu trữ props mới nhất cho callback ổn định
   const propsRef = useRef({ conversationId, sendReadReceipt, currentUserId });
   useEffect(() => {
     propsRef.current = { conversationId, sendReadReceipt, currentUserId };
@@ -142,46 +221,50 @@ const MessageList = React.forwardRef(({
     itemVisiblePercentThreshold: 50,
   }).current;
 
+  // CHỈ cuộn mượt về đáy khi có tin nhắn MỚI THẬT SỰ được thêm ở cuối (không nhảy khi load trang đầu hay load tin cũ)
   useEffect(() => {
-    readMessageIds.current.clear();
-  }, [conversationId]);
+    if (messages.length === 0 || highlightedMessageId) return;
+    const latestMessage = messages[messages.length - 1];
+    const latestId = latestMessage?.messageId || latestMessage?.id;
 
-  useEffect(() => {
-    // Chỉ tự động cuộn xuống khi messages.length thay đổi (có tin nhắn mới/cũ)
-    // Và KHÔNG thực hiện nếu đang trong chế độ highlight tin nhắn reply
-    if (messages.length > 0 && !isRefreshing && !isLoadingMoreMessages && !highlightedMessageId) {
-      const lastMessage = messages[messages.length - 1];
-      const isMyMessage = String(lastMessage?.senderId) === String(currentUserId);
+    if (!prevLatestMessageIdRef.current) {
+      prevLatestMessageIdRef.current = latestId;
+      return;
+    }
 
-      // Nếu đang ở đáy HOẶC vừa gửi tin nhắn mới, thì mới cuộn xuống đáy
+    if (latestId && latestId !== prevLatestMessageIdRef.current) {
+      prevLatestMessageIdRef.current = latestId;
+      const isMyMessage = String(latestMessage?.senderId) === String(currentUserId);
       if (isAtBottom.current || isMyMessage) {
-        setTimeout(() => {
-          const listRef = ref?.current || null;
-          listRef?.scrollToOffset({ offset: 0, animated: true });
-        }, 100);
+        requestAnimationFrame(() => {
+          ref?.current?.scrollToOffset({ offset: 0, animated: true });
+        });
       }
     }
-  }, [messages.length, isRefreshing, isLoadingMoreMessages, currentUserId, highlightedMessageId]);
+  }, [messages, currentUserId, highlightedMessageId, ref]);
 
-  const onRefresh = async () => {
-    if (onLoadMore && !isRefreshing) {
-      setIsRefreshing(true);
-      await onLoadMore();
-      setIsRefreshing(false);
-    }
-  };
+  const handleLoadOlder = useCallback(() => {
+    if (isLoadingMoreRef.current || !onLoadMore || messages.length === 0 || !hasMore) return;
+    isLoadingMoreRef.current = true;
+    setIsLoadingMoreMessages(true);
+    Promise.resolve(onLoadMore())
+      .then((moreExist) => {
+        if (moreExist === false) {
+          setHasMore(false);
+        }
+      })
+      .finally(() => {
+        isLoadingMoreRef.current = false;
+        setIsLoadingMoreMessages(false);
+      });
+  }, [onLoadMore, messages.length, hasMore]);
 
   const renderMessage = ({ item, index }) => {
-    // When blocked by other, treat them as offline to show single checkmark only
     const otherOnline = !isBlockedByOther && onlineUsers.some(id => String(id) !== String(currentUserId || ''));
     const latestReadBy = getLatestReadBy(item);
+    const originalIndex = originalIndexById.get(item.messageId) ?? -1;
 
-    // Logic hiển thị trạng thái "Đã gửi/Đã nhận"
-    const originalIndex = messages.findIndex(m => m.messageId === item.messageId);
-
-    // ✅ TỰ ĐỘNG ẨN: Nếu tin nhắn này là "Cuộc gọi đang diễn ra" nhưng đã có tin nhật ký mới hơn
-    // (VD: Đã kết thúc), thì ẩn tin "Đang diễn ra" này đi để chat gọn gàng.
-    if (item.type === 'CALL_LOG') {
+    if (item.type === 'CALL_LOG' && originalIndex !== -1) {
       try {
         const callData = typeof item.content === 'string' ? JSON.parse(item.content) : (item.content || {});
         if (callData.status === 'ONGOING') {
@@ -191,14 +274,19 @@ const MessageList = React.forwardRef(({
       } catch (e) {}
     }
 
-    const shouldShowStatus = !latestReadBy.length && !messages.slice(originalIndex + 1).some((nextMessage) => {
-      return Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) !== String(currentUserId || ''));
-    });
+    let hasNewerOtherRead = false;
+    if (originalIndex !== -1 && !latestReadBy.length) {
+      for (let i = originalIndex + 1; i < messages.length; i++) {
+        const nextMessage = messages[i];
+        if (Array.isArray(nextMessage.readBy) && nextMessage.readBy.some((reader) => normalizeReaderId(reader) !== String(currentUserId || ''))) {
+          hasNewerOtherRead = true;
+          break;
+        }
+      }
+    }
+    const shouldShowStatus = !latestReadBy.length && !hasNewerOtherRead;
 
-
-    // Logic Date Separator cho danh sách Inverted
     const currentMsgDate = item.createdAt ? new Date(item.createdAt).toDateString() : null;
-    // Tin nhắn cũ hơn trong danh sách đảo ngược là index + 1
     const olderMsgDate = index < reversedMessages.length - 1 && reversedMessages[index + 1].createdAt
       ? new Date(reversedMessages[index + 1].createdAt).toDateString()
       : null;
@@ -226,10 +314,8 @@ const MessageList = React.forwardRef(({
           onLongPress={() => onLongPress(item)}
           onPressMessage={(data) => {
             if (data && typeof data === 'object') {
-              // Nếu là object (VOTE, CALL_BACK...) thì gọi onPressMessage
               onPressMessage?.(data);
             } else {
-              // Nếu là string (messageId) thì gọi onPressReply (để scroll tới tin nhắn đó)
               onPressReply?.(data);
             }
           }}
@@ -240,7 +326,6 @@ const MessageList = React.forwardRef(({
           translationLoading={translationLoading}
           onTranslate={onTranslate}
         />
-
       </View>
     );
   };
@@ -267,7 +352,6 @@ const MessageList = React.forwardRef(({
           <Text style={[styles.typingText, { color: colors.textMuted }]}>{typingText}</Text>
         </View>
       </View>
-
     );
   };
 
@@ -279,61 +363,31 @@ const MessageList = React.forwardRef(({
         <Text style={[styles.loadingMoreText, { color: colors.textSubtle }]}>{t('chat.loading_more')}</Text>
       </View>
     );
-
   };
 
   if (isLoading && messages.length === 0) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.primary }]}>{t('chat.loading')}</Text>
-      </View>
-    );
-
+    return <ChatSkeleton isDark={isDark} colors={colors} />;
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <FlatList
         ref={ref}
-        inverted // QUAN TRỌNG: Đảo ngược danh sách để luôn bắt đầu từ đáy
+        inverted
         data={reversedMessages}
         renderItem={renderMessage}
         keyExtractor={(item, index) => item.messageId || item.id || String(item.createdAt) || index.toString()}
-        // Với inverted: Header ở Đáy, Footer ở Đỉnh
         ListHeaderComponent={renderTypingIndicator}
         ListFooterComponent={renderLoadingMoreIndicator}
         contentContainerStyle={styles.listContent}
-        onContentSizeChange={(w, h) => {
-          if (isAtBottom.current && !isRefreshing && !isLoadingMoreMessages && !highlightedMessageId && reversedMessages.length > 0) {
-            const listRef = ref?.current || null;
-            listRef?.scrollToOffset({ offset: 0, animated: true });
-          }
-        }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        refreshing={false}
-        onRefresh={onRefresh}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        onEndReached={() => {
-          if (!isLoadingMoreMessages && !isRefreshing && onLoadMore && messages.length > 0 && hasMore) {
-            setIsLoadingMoreMessages(true);
-            onLoadMore()
-              .then((moreExist) => {
-                if (moreExist === false) {
-                  setHasMore(false);
-                }
-              })
-              .finally(() => {
-                setIsLoadingMoreMessages(false);
-              });
-          }
-        }}
-        onEndReachedThreshold={0.5}
+        onEndReached={handleLoadOlder}
+        onEndReachedThreshold={0.35}
         onScrollToIndexFailed={(info) => {
-          const wait = new Promise(resolve => setTimeout(resolve, 500));
-          wait.then(() => {
+          setTimeout(() => {
             if (ref?.current && reversedMessages.length > info.index) {
               try {
                 ref.current.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
@@ -341,18 +395,16 @@ const MessageList = React.forwardRef(({
                 console.warn('Scroll to index failed after retry:', e);
               }
             }
-          });
+          }, 350);
         }}
-        // Tối ưu hiệu năng cuộn
         removeClippedSubviews={Platform.OS === 'android'}
-        initialNumToRender={15}
-        maxToRenderPerBatch={10}
-        windowSize={10}
+        initialNumToRender={12}
+        maxToRenderPerBatch={6}
+        updateCellsBatchingPeriod={40}
+        windowSize={7}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-
       />
-
-    </View>
+    </Animated.View>
   );
 });
 
@@ -436,6 +488,32 @@ const styles = StyleSheet.create({
   loadingMoreText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  skeletonContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 14,
+    paddingBottom: 18,
+    gap: 14,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  skeletonRowOwn: {
+    justifyContent: 'flex-end',
+  },
+  skeletonRowOther: {
+    justifyContent: 'flex-start',
+  },
+  skeletonAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  skeletonBubble: {
+    borderRadius: 18,
   },
 });
 

@@ -1,10 +1,11 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { PermissionsAndroid, Platform, Alert } from 'react-native';
+import { PermissionsAndroid, Platform, Alert, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Audio } from 'expo-av';
-import { requestCameraPermissionsAsync, requestMicrophonePermissionsAsync } from 'expo-camera';
+import { createAudioPlayer, setAudioModeAsync, requestRecordingPermissionsAsync } from 'expo-audio';
+import { Camera } from 'expo-camera';
 import { onCallSignal, offCallSignal, emitCallSignal } from '../utils/socket';
+import { isNativeAgoraAvailable } from '../utils/agoraNativeLoader';
 import { callApi } from '../api/callApi';
 import { chatApi } from '../api/chatApi';
 import { addMessage } from '../store/chatSlice';
@@ -34,19 +35,45 @@ const sanitizeChannelId = (id) => {
 
 const toNumericUid = (id) => {
     if (!id) return 0;
-    // Thêm hậu tố _mobile để tránh trùng UID khi test cùng 1 tài khoản trên Web & Mobile
-    const s = String(id) + '_mobile';
+    // Phân tách UID theo nền tảng (ios/android) để không bao giờ xung đột UID khi gọi chéo thiết bị
+    const s = String(id) + '_' + Platform.OS;
     let hash = 0;
     for (let i = 0; i < s.length; i++) {
         hash = (hash << 5) - hash + s.charCodeAt(i);
         hash |= 0;
     }
-    return Math.abs(hash);
+    return Math.abs(hash) || 1;
 };
 
 
 let serverTimeOffset = 0; // localTime - serverTime
 let isCalibratingTime = false;
+let sharedResetTimer = null;
+let sharedIsEndingCall = false;
+let sharedActiveChannelId = null;
+let sharedRemoteUserId = null;
+let sharedCallerId = null;
+let sharedIsGroup = false;
+let sharedIsInitiator = false;
+let sharedStartTime = null;
+let sharedLogSent = false;
+
+const clearSharedResetTimer = () => {
+    if (sharedResetTimer) {
+        clearTimeout(sharedResetTimer);
+        sharedResetTimer = null;
+    }
+};
+
+const resetSharedCallMeta = () => {
+    sharedActiveChannelId = null;
+    sharedRemoteUserId = null;
+    sharedCallerId = null;
+    sharedIsGroup = false;
+    sharedIsInitiator = false;
+    sharedStartTime = null;
+    sharedLogSent = false;
+};
 
 const getTrueTime = () => Date.now() - serverTimeOffset;
 
@@ -73,22 +100,41 @@ async function calibrateServerTime() {
 const getPermissions = async (type = 'video') => {
     try {
         if (Platform.OS === 'android') {
-            const audioGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-            if (audioGranted !== PermissionsAndroid.RESULTS.GRANTED) {
-                return false;
+            const alreadyAudio = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+            let audioOk = alreadyAudio;
+            if (!audioOk) {
+                const audioGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+                audioOk = audioGranted === PermissionsAndroid.RESULTS.GRANTED;
             }
+            if (!audioOk) {
+                const expoAudioPerm = await requestRecordingPermissionsAsync().catch(() => ({ granted: false }));
+                audioOk = Boolean(expoAudioPerm?.granted);
+            }
+            console.log('🎙️ [useAgoraCall] Android RECORD_AUDIO granted:', audioOk);
+            if (!audioOk) return false;
+
             if (type === 'video') {
-                const cameraGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
-                return cameraGranted === PermissionsAndroid.RESULTS.GRANTED;
+                const alreadyCam = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+                let camOk = alreadyCam;
+                if (!camOk) {
+                    const cameraGranted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+                    camOk = cameraGranted === PermissionsAndroid.RESULTS.GRANTED;
+                }
+                if (!camOk) {
+                    const expoCamPerm = await Camera.requestCameraPermissionsAsync().catch(() => ({ granted: false }));
+                    camOk = Boolean(expoCamPerm?.granted || expoCamPerm?.status === 'granted');
+                }
+                console.log('📷 [useAgoraCall] Android CAMERA granted:', camOk);
+                return camOk;
             }
             return true;
         } else if (Platform.OS === 'ios') {
-            const { status: microphoneStatus } = await requestMicrophonePermissionsAsync();
+            const { status: microphoneStatus } = await Camera.requestMicrophonePermissionsAsync();
             if (microphoneStatus !== 'granted') {
                 return false;
             }
             if (type === 'video') {
-                const { status: cameraStatus } = await requestCameraPermissionsAsync();
+                const { status: cameraStatus } = await Camera.requestCameraPermissionsAsync();
                 return cameraStatus === 'granted';
             }
             return true;
@@ -178,8 +224,12 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             try {
                 const s = soundRef.current;
                 soundRef.current = null;
-                await s.stopAsync().catch(() => { });
-                await s.unloadAsync().catch(() => { });
+                try {
+                    s.pause();
+                } catch {}
+                try {
+                    s.remove();
+                } catch {}
                 console.log('🔊 [useAgoraCall] Sound stopped and unloaded');
             } catch (e) {
                 console.warn('🔊 [useAgoraCall] stopSound error:', e);
@@ -190,6 +240,9 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
     // getPermissions is now defined outside the hook to remain static
     useEffect(() => {
         callStatusRef.current = callStatus;
+        if (callStatus === 'idle' || callStatus === 'outgoing' || callStatus === 'incoming' || callStatus === 'connected') {
+            sharedIsEndingCall = false;
+        }
     }, [callStatus]);
 
     useEffect(() => {
@@ -232,23 +285,60 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
                     if (!file) return;
 
-                    const { sound } = await Audio.Sound.createAsync(
-                        file,
-                        { isLooping: true, shouldPlay: true, volume: 1.0 }
-                    );
+                    await setAudioModeAsync({
+                        playsInSilentMode: true,
+                        shouldPlayInBackground: false,
+                        interruptionMode: 'duckOthers',
+                        allowsRecording: false,
+                        shouldRouteThroughEarpiece: false,
+                    });
+
+                    const sound = createAudioPlayer(file);
 
                     if (!isActive) {
-                        await sound.stopAsync().catch(() => { });
-                        await sound.unloadAsync().catch(() => { });
+                        try { sound.pause(); } catch {}
+                        try { sound.remove(); } catch {}
                         return;
                     }
+
+                    sound.loop = true;
+                    sound.volume = 1.0;
+                    sound.play();
 
                     soundRef.current = sound;
                 } catch (e) {
                     console.warn('🔊 [useAgoraCall] Sound error:', e);
                 }
+            } else if (callStatus === 'connected') {
+                await stopSound();
+                // Nếu đang dùng Agora Native SDK thì để Agora tự quản lý hoàn toàn AVAudioSession / AudioManager.
+                // Chỉ gọi setAudioModeAsync trên iOS khi fallback sang WebView (Expo Go).
+                if (Platform.OS === 'ios' && !isNativeAgoraAvailable()) {
+                    try {
+                        await setAudioModeAsync({
+                            allowsRecording: true,
+                            playsInSilentMode: true,
+                            shouldPlayInBackground: true,
+                            interruptionMode: 'mixWithOthers',
+                            shouldRouteThroughEarpiece: false,
+                        });
+                    } catch (e) {
+                        console.warn('🔊 [useAgoraCall] Failed to configure iOS connected call audio mode:', e);
+                    }
+                }
             } else {
                 await stopSound();
+                try {
+                    await setAudioModeAsync({
+                        allowsRecording: false,
+                        playsInSilentMode: true,
+                        shouldPlayInBackground: false,
+                        interruptionMode: 'mixWithOthers',
+                        shouldRouteThroughEarpiece: false,
+                    });
+                } catch (e) {
+                    // Ignore audio mode reset errors on idle
+                }
             }
         };
 
@@ -291,11 +381,25 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
     }, [duration]);
 
     const endCall = useCallback(async (sendSignal = true, reason = 'ENDED') => {
-        const cid = activeChannelRef.current || activeConversationId || callState.activeConversationId;
+        if (callStatusRef.current === 'ended' && sendSignal) {
+            clearSharedResetTimer();
+            resetSharedCallMeta();
+            sharedIsEndingCall = false;
+            dispatch(resetCall());
+            return;
+        }
+        if (sharedIsEndingCall || callStatusRef.current === 'idle' || callStatusRef.current === 'ended') {
+            return;
+        }
+        sharedIsEndingCall = true;
+        clearSharedResetTimer();
+
+        const cid = sharedActiveChannelId || activeChannelRef.current || activeConversationId || callState.activeConversationId || activeConvIdRef.current;
         // Phân biệt chính xác Nhóm vs 1-1 để gửi đúng loại tín hiệu
         const isActuallyGroup = (cid && (String(cid).includes('SINGLE') || String(cid).includes('SINGLE#')))
             ? false
-            : (isGroupRef.current ||
+            : (sharedIsGroup ||
+               isGroupRef.current ||
                isGroup ||
                (cid && String(cid).includes('GROUP')) ||
                (activeConversation && activeConversation.type === 'GROUP') ||
@@ -306,7 +410,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
         // 1. Gửi tín hiệu Socket NGAY LẬP TỨC
         if (sendSignal && cid) {
             if (isActuallyGroup) {
-                const isCancelingBeforeJoin = isInitiatorRef.current && !hasHadRemote;
+                const isCancelingBeforeJoin = (sharedIsInitiator || isInitiatorRef.current) && !hasHadRemote;
                 if (isCancelingBeforeJoin) {
                     console.log('📤 [useAgoraCall] Initiator canceling group call (Group mode):', cid);
                     emitCallSignal(cid, {
@@ -322,7 +426,6 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                         conversationType: 'GROUP'
                     });
                 }
-                // Nếu callStatus là 'incoming' (người nghe từ chối cuộc gọi đến), ta không gửi bất kỳ tín hiệu nào để tránh tắt màn hình của người khác.
             } else {
                 console.log('📤 [useAgoraCall] Instant-sending HANGUP (1-1 mode):', cid);
                 emitCallSignal(cid, {
@@ -333,27 +436,25 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             }
         }
 
-        // 2. Tiếp tục logic dọn dẹp local...
+        // 2. Dừng timer & tính thời lượng
         if (ringTimerRef.current) {
             clearTimeout(ringTimerRef.current);
             ringTimerRef.current = null;
         }
 
-        // Cập nhật trạng thái ngay lập tức để UI phản hồi nhanh
+        const effectiveStartTime = sharedStartTime || startTimeRef.current;
         let callDuration = 0;
-        if (startTimeRef.current) callDuration = Math.floor((getTrueTime() - startTimeRef.current) / 1000);
+        if (effectiveStartTime) callDuration = Math.floor((getTrueTime() - effectiveStartTime) / 1000);
 
-        const isCaller = !incomingSignal && isInitiatorRef.current;
+        const isCaller = !incomingSignal && (sharedIsInitiator || isInitiatorRef.current);
         const isManual = sendSignal;
 
-        // LOGIC CHỐT CUỘC GỌI:
         let shouldLog = false;
         const isCallConnected = callStatus === 'connected';
 
         if (!isActuallyGroup) {
             shouldLog = isManual || (isCaller && ['MISSED', 'REJECTED', 'UNREACHABLE', 'BUSY'].includes(reason));
         } else {
-            // Nhóm: Chỉ ghi log SUCCESS nếu là người cuối cùng rời phòng và cuộc gọi ĐÃ THỰC SỰ BẮT ĐẦU (có người tham gia)
             const actuallyStarted = hasHadRemote || callDuration > 0;
             shouldLog = (isCallConnected && isLastPerson && actuallyStarted && (reason === 'ENDED' || reason === 'SUCCESS')) ||
                 (isCaller && ['REJECTED', 'MISSED', 'BUSY'].includes(reason));
@@ -361,14 +462,14 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
         console.log(`🏁 [EndCall] CID: ${cid} | shouldLog: ${shouldLog} | isGroup: ${isActuallyGroup} | isLast: ${isLastPerson} | Reason: ${reason}`);
 
-        if (cid && shouldLog && !logSentRef.current && ['connected', 'outgoing', 'incoming', 'ringing', 'ended'].includes(callStatus)) {
+        if (cid && shouldLog && !sharedLogSent && !logSentRef.current && ['connected', 'outgoing', 'incoming', 'ringing'].includes(callStatus)) {
+            sharedLogSent = true;
             logSentRef.current = true;
 
             try {
-                // Nhóm: Chỉ coi là SUCCESS nếu thực sự có người khác đã tham gia (hasHadRemote)
                 const actuallyStarted = isActuallyGroup 
                     ? hasHadRemote 
-                    : (callDuration > 0 || startTimeRef.current !== null || callStatus === 'connected');
+                    : (callDuration > 0 || effectiveStartTime !== null || callStatus === 'connected');
 
                 let statusStr = 'MISSED';
                 if (actuallyStarted) {
@@ -392,10 +493,20 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             }
         }
 
-        // Cập nhật trạng thái sau cùng
+        // 3. Cập nhật Redux NGAY LẬP TỨC (không chờ async) để WebView unmount & UI phản hồi 0ms
+        let msg = t('chat.ended');
+        if (reason === 'REJECTED') msg = t('chat.rejected');
+        else if (reason === 'BUSY') msg = t('chat.busy');
+        else if (reason === 'MISSED') msg = t('chat.missed_call');
+        else if (reason === 'ACCEPTED_ELSEWHERE') msg = t('chat.accepted_elsewhere');
+
+        callStatusRef.current = 'ended';
+        dispatch(setEndCallReason(msg));
+        dispatch(setAgoraConfig(null));
         dispatch(setCallStatus('ended'));
 
-        // QUAN TRỌNG: Reset toàn bộ refs để không bị dính logic của cuộc gọi trước
+        // Reset toàn bộ refs dùng chung & cục bộ
+        resetSharedCallMeta();
         startTimeRef.current = null;
         isInitiatorRef.current = false;
         isGroupRef.current = false;
@@ -404,28 +515,17 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
         processedSignals.current.clear();
         logSentRef.current = false;
 
-        await stopSound();
-        if (ringTimerRef.current) {
-            clearTimeout(ringTimerRef.current);
-            ringTimerRef.current = null;
-        }
+        stopSound().catch(() => {});
 
-
-
-        let msg = t('chat.ended');
-        if (reason === 'REJECTED') msg = t('chat.rejected');
-        else if (reason === 'BUSY') msg = t('chat.busy');
-        else if (reason === 'MISSED') msg = t('chat.missed_call');
-        else if (reason === 'ACCEPTED_ELSEWHERE') msg = t('chat.accepted_elsewhere');
-        dispatch(setEndCallReason(msg));
-
-        // Tự động quay lại chat sau 2s (theo yêu cầu)
-        setTimeout(() => {
+        // Tự động quay lại chat sau 1.6s (nút thoát có thể đóng ngay lập tức trước đó)
+        sharedResetTimer = setTimeout(() => {
+            sharedResetTimer = null;
+            sharedIsEndingCall = false;
             console.log('⏰ [useAgoraCall] Final resetCall triggered.');
             dispatch(resetCall());
-        }, 2000);
+        }, 1600);
 
-    }, [activeConversationId, callStatus, callType, dispatch, incomingSignal, remoteUsers, activeConversation, user, hasHadRemote, isInitiator, isGroup]);
+    }, [activeConversationId, callState.activeConversationId, callStatus, callType, dispatch, incomingSignal, remoteUsers, activeConversation, user, hasHadRemote, isInitiator, isGroup, myFullName, t]);
 
 
 
@@ -453,10 +553,13 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
 
             if (signal.type === 'CALL_INVITE') {
-                if (callStatusRef.current !== 'idle') {
+                if (callStatusRef.current !== 'idle' && callStatusRef.current !== 'ended') {
                     emitCallSignal(signalConvId, { type: 'HANGUP', reason: 'BUSY' });
                     return;
                 }
+                clearSharedResetTimer();
+                sharedIsEndingCall = false;
+                dispatch(resetCall());
                 console.log('📩 [useAgoraCall] Incoming CALL_INVITE:', JSON.stringify(signal));
 
                 const isGroupCall = signal.isGroup === true ||
@@ -466,7 +569,9 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                     signalConvId.startsWith('GROUP#');
 
                 isGroupRef.current = isGroupCall;
+                sharedIsGroup = isGroupCall;
                 callerIdRef.current = cleanSenderId;
+                sharedCallerId = cleanSenderId;
                 dispatch(setIsGroup(isGroupCall));
 
 
@@ -526,8 +631,11 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                 // QUAN TRỌNG: Không ghi đè config của mình bằng config của đối phương khi nhận lời mời để tránh trùng UID/collision
                 // if (signal.agoraConfig) dispatch(setAgoraConfig(signal.agoraConfig));
                 activeChannelRef.current = signalConvId;
+                sharedActiveChannelId = signalConvId;
                 callerIdRef.current = senderId;
+                sharedCallerId = senderId;
                 remoteUserIdRef.current = senderId;
+                sharedRemoteUserId = senderId;
                 dispatch(setActiveConversationId(signalConvId));
                 dispatch(setCallStatus('incoming'));
             } else if (signal.type === 'CALL_ACCEPTED') {
@@ -538,7 +646,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                 processedSignals.current.add(sigId);
 
                 // Kiểm tra xem đây có phải cuộc gọi mình đang thực hiện không
-                const activeCid = String(activeChannelRef.current || activeConvIdRef.current || '').trim();
+                const activeCid = String(sharedActiveChannelId || activeChannelRef.current || activeConvIdRef.current || '').trim();
                 const sSignal = sanitizeChannelId(signalConvId);
                 const sActive = sanitizeChannelId(activeCid);
                 const isMyCall = sSignal === sActive;
@@ -552,25 +660,27 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                 }
 
                 // Nếu mình là người gọi (đang ở trạng thái outgoing) thì vào việc ngay khi đối phương nghe máy
-                const shouldConnect = isInitiatorRef.current || (callStatusRef.current === 'outgoing' && isMyCall);
+                const shouldConnect = sharedIsInitiator || isInitiatorRef.current || (callStatusRef.current === 'outgoing' && isMyCall);
 
                 if (shouldConnect && callStatusRef.current === 'outgoing') {
                     console.log('🚀 [useAgoraCall] Connection confirmed, switching to connected state.');
                     dispatch(setCallStatus('connected'));
-                    if (!startTimeRef.current) startTimeRef.current = getTrueTime();
+                    if (!sharedStartTime) sharedStartTime = getTrueTime();
+                    if (!startTimeRef.current) startTimeRef.current = sharedStartTime;
                 } else {
                     console.log('ℹ️ [useAgoraCall] CALL_ACCEPTED ignored (not my outgoing call or already connected)');
                 }
             } else if (signal.type === 'HANGUP' || signal.type === 'LEAVE') {
 
                 console.log(`📩 [useAgoraCall] Termination signal: ${signal.type} from ${senderName || senderId}`);
-                const activeCid = String(activeChannelRef.current || activeConvIdRef.current || '').trim();
+                const activeCid = String(sharedActiveChannelId || activeChannelRef.current || activeConvIdRef.current || '').trim();
 
                 const reason = signal.reason || actualData.reason || 'ENDED';
 
                 const isActuallyGroup = (activeCid && (String(activeCid).includes('SINGLE') || String(activeCid).includes('SINGLE#')))
                     ? false
-                    : (isGroupRef.current ||
+                    : (sharedIsGroup ||
+                       isGroupRef.current ||
                        callState.isGroup ||
                        activeCid.includes('GROUP') ||
                        signalConvId.includes('GROUP') ||
@@ -581,36 +691,32 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                     return;
                 }
 
-
                 console.log(`🛑 [useAgoraCall] ${signal.type} received. SignalCID:`, signalConvId, 'ActiveCID:', activeCid);
 
                 const cleanSenderId = senderId && senderId !== 'undefined' && senderId !== 'null' ? String(senderId).trim() : null;
                 const myIdStr = user?.userId || user?.id ? String(user?.userId || user?.id).trim() : null;
-                const partnerIdStr = remoteUserIdRef.current ? String(remoteUserIdRef.current).trim() : null;
+                const partnerIdStr = (sharedRemoteUserId || remoteUserIdRef.current) ? String(sharedRemoteUserId || remoteUserIdRef.current).trim() : null;
 
                 const isSelfSync = cleanSenderId && myIdStr && cleanSenderId === myIdStr;
                 const isPartnerSignal = !isActuallyGroup && partnerIdStr && cleanSenderId && cleanSenderId === partnerIdStr;
-                const cidMatch = (signalConvId === activeCid) || (sanitizeChannelId(signalConvId) === sanitizeChannelId(activeCid));
+                const cidMatch = Boolean(activeCid) && ((signalConvId === activeCid) || (sanitizeChannelId(signalConvId) === sanitizeChannelId(activeCid)));
 
-                // Quy trình xử lý tia chớp: Chấp nhận nếu khớp CID HOẶC khớp ID người dùng (Partner/Self)
-                // isSelfSync (đồng bộ đa thiết bị) chỉ kích hoạt kết thúc nếu thực sự khớp CID cuộc gọi đang diễn ra
                 let shouldEnd = false;
                 if (isActuallyGroup) {
-                    const initiatorId = callerIdRef.current || callerInfo?.id || incomingSignal?.senderId || callerId;
+                    const initiatorId = sharedCallerId || callerIdRef.current || callerInfo?.id || incomingSignal?.senderId || callerId;
                     const isFromInitiator = initiatorId && cleanSenderId && String(cleanSenderId) === String(initiatorId);
                     if (callStatusRef.current !== 'connected' && (isFromInitiator || (isSelfSync && cidMatch))) {
                         shouldEnd = true;
                     }
                 } else {
-                    shouldEnd = cidMatch || isPartnerSignal || (isSelfSync && cidMatch);
+                    // Trong cuộc gọi 1-1: chỉ cần khớp CID, khớp partner, hoặc đang có cuộc gọi 1-1 mà đối phương gửi HANGUP
+                    shouldEnd = cidMatch || isPartnerSignal || (!isSelfSync && Boolean(signalConvId) && !activeCid);
                 }
 
                 if (shouldEnd && callStatusRef.current !== 'idle' && callStatusRef.current !== 'ended') {
                     console.log('🛑 [useAgoraCall] Valid termination signal, ending call.');
                     endCallRef.current?.(false, reason);
                 }
-
-
             }
         };
         onCallSignal(handler);
@@ -675,7 +781,9 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                     const mid = m.userId || m.id || m._id;
                     return mid && mid !== 'undefined' && mid !== 'null' && String(mid).trim() !== String(myId).trim();
                 });
-                remoteUserIdRef.current = other?.userId || other?.id || other?._id;
+                const partnerId = other?.userId || other?.id || other?._id;
+                remoteUserIdRef.current = partnerId;
+                sharedRemoteUserId = partnerId;
 
                 dispatch(setCallStatus('outgoing'));
             }
@@ -692,15 +800,25 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
         const cid = String(targetCid || receiverInfo?.conversationId || activeConversationId || '').trim();
         if (!cid || joiningRef.current) return;
         try {
+            clearSharedResetTimer();
+            resetSharedCallMeta();
+            sharedIsEndingCall = false;
+            dispatch(resetCall());
+
             joiningRef.current = true;
             isInitiatorRef.current = true;
+            sharedIsInitiator = true;
             logSentRef.current = false;
 
             const permissionsGranted = await getPermissions(type);
             if (!permissionsGranted) {
                 Alert.alert(
-                    t('common.error') || 'Lỗi',
-                    t('chat.no_permission') || 'Ứng dụng cần cấp quyền camera và microphone để thực hiện cuộc gọi.'
+                    t('common.error') || 'Cần cấp quyền truy cập',
+                    t('chat.no_permission') || 'Ứng dụng cần cấp quyền micro và camera để thực hiện cuộc gọi. Hãy bật trong Cài đặt thiết bị.',
+                    [
+                        { text: t('common.cancel') || 'Để sau', style: 'cancel' },
+                        { text: 'Mở Cài đặt', onPress: () => Linking.openSettings().catch(() => {}) }
+                    ]
                 );
                 joiningRef.current = false;
                 return;
@@ -713,6 +831,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
                    cid.includes('GROUP') ||
                    (!cid.includes('SINGLE') && !cid.includes('SINGLE#')));
             isGroupRef.current = isGroupCall;
+            sharedIsGroup = isGroupCall;
             dispatch(setIsGroup(isGroupCall));
 
             // Tự tìm thông tin đối phương nếu là 1-1 mà thiếu info
@@ -725,7 +844,9 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             const finalName = receiverInfo?.name || activeConversation?.name || partner?.fullName || partner?.name || t('common.user');
             const finalAvatar = receiverInfo?.avatar || activeConversation?.avatar || activeConversation?.avatarUrl || partner?.avatar || partner?.avatarUrl;
 
-            dispatch(setCallerInfo({ name: finalName, avatar: finalAvatar, id: partner?.userId || partner?.id || partner?._id }));
+            const partnerId = partner?.userId || partner?.id || partner?._id;
+            sharedRemoteUserId = partnerId || null;
+            dispatch(setCallerInfo({ name: finalName, avatar: finalAvatar, id: partnerId }));
 
             dispatch(setEndCallReason(null));
             dispatch(setCallType(type));
@@ -733,6 +854,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             dispatch(setMicOn(true));
 
             activeChannelRef.current = cid;
+            sharedActiveChannelId = cid;
             dispatch(setActiveConversationId(cid));
 
             const numericUid = toNumericUid(user?.userId || user?.id);
@@ -743,6 +865,7 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
 
             const isJoining = receiverInfo?.isJoin === true;
             isInitiatorRef.current = !isJoining;
+            sharedIsInitiator = !isJoining;
             dispatch(setIsInitiator(!isJoining));
             logSentRef.current = false;
 
@@ -781,6 +904,8 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
     const acceptCall = useCallback(async (signalData) => {
         if (joiningRef.current) return;
         try {
+            clearSharedResetTimer();
+            sharedIsEndingCall = false;
             joiningRef.current = true;
             isInitiatorRef.current = false;
             dispatch(setIsInitiator(false));
@@ -790,8 +915,12 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             const permissionsGranted = await getPermissions(type);
             if (!permissionsGranted) {
                 Alert.alert(
-                    t('common.error') || 'Lỗi',
-                    t('chat.no_permission') || 'Ứng dụng cần cấp quyền camera và microphone để nhận cuộc gọi.'
+                    t('common.error') || 'Cần cấp quyền truy cập',
+                    t('chat.no_permission') || 'Ứng dụng cần cấp quyền micro và camera để nhận cuộc gọi. Hãy bật trong Cài đặt thiết bị.',
+                    [
+                        { text: t('common.cancel') || 'Để sau', style: 'cancel' },
+                        { text: 'Mở Cài đặt', onPress: () => Linking.openSettings().catch(() => {}) }
+                    ]
                 );
                 endCallRef.current?.(false, 'REJECTED');
                 joiningRef.current = false;
@@ -803,9 +932,14 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             dispatch(setCamOn(type === 'video'));
             dispatch(setMicOn(true));
 
-            const cid = signalData?.conversationId || activeConversationId;
+            const cid = signalData?.conversationId || activeConversationId || callState.activeConversationId;
+            activeChannelRef.current = cid;
+            sharedActiveChannelId = cid;
+            dispatch(setActiveConversationId(cid));
             const isGroupCall = signalData?.conversationType === 'GROUP' || callState.isGroup || String(cid).includes('GROUP');
             isGroupRef.current = isGroupCall;
+            sharedIsGroup = isGroupCall;
+            sharedIsInitiator = false;
             dispatch(setIsGroup(isGroupCall));
             const numericUid = toNumericUid(user?.userId || user?.id);
             const safeChannelId = sanitizeChannelId(cid);
@@ -818,19 +952,28 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
             }
 
             dispatch(setCallStatus('connected'));
-            if (!startTimeRef.current) {
+            if (!sharedStartTime) {
                 const signalInviteTime = signalData?.inviteTime || signalData?.signal?.inviteTime;
-                startTimeRef.current = signalInviteTime || getTrueTime();
+                sharedStartTime = signalInviteTime || getTrueTime();
+                startTimeRef.current = sharedStartTime;
             }
         } catch (e) {
             console.error('❌ [useAgoraCall] acceptCall ERROR:', e);
             endCallRef.current?.(false);
         } finally { joiningRef.current = false; }
-    }, [activeConversationId, user, callState.isGroup, callState.callType, incomingSignal, dispatch, myFullName, t]);
+    }, [activeConversationId, callState.activeConversationId, user, callState.isGroup, callState.callType, incomingSignal, dispatch, myFullName, t]);
+
+    const handleResetCall = useCallback(() => {
+        clearSharedResetTimer();
+        resetSharedCallMeta();
+        sharedIsEndingCall = false;
+        dispatch(resetCall());
+    }, [dispatch]);
 
     return {
         callStatus, callType, callerName, callerInfo, incomingSignal, duration, formatDuration,
         camOn, micOn, remoteUsers, startCall, acceptCall, endCall, cancelCountdown,
+        resetCall: handleResetCall,
         countdown, showCountdown,
         toggleMic: () => dispatch(setMicOn(!micOn)),
 
@@ -839,6 +982,6 @@ export const useAgoraCall = (activeConversationId = null, activeConversation = n
         setRemoteUsers: (u) => dispatch(setRemoteUsers(u)),
         endCallReason, isGroup,
         hasHadRemote,
-        onRequestClose: () => dispatch(resetCall())
+        onRequestClose: handleResetCall
     };
 };

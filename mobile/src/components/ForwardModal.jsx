@@ -14,7 +14,7 @@ import {
 import { MaterialIcons, Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { sendMessage } from '../store/chatSlice';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Paths } from 'expo-file-system';
 import myCloudApi from '../api/myCloudApi';
 import axiosClient from '../api/axiosClient';
 import { useTranslation } from 'react-i18next';
@@ -161,19 +161,19 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
       if (isText) {
         const text = messageToForward.content || '';
         const fileName = `forwarded_${Date.now()}.txt`;
-        const tempUri = `${FileSystem.cacheDirectory}${fileName}`;
+        const tempFile = new File(Paths.cache, fileName);
         try {
-          await FileSystem.writeAsStringAsync(tempUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+          await tempFile.write(text);
 
           const formData = new FormData();
           formData.append('file', {
-            uri: Platform.OS === 'ios' ? tempUri.replace('file://', '') : tempUri,
+            uri: Platform.OS === 'ios' ? tempFile.uri.replace('file://', '') : tempFile.uri,
             name: fileName,
             type: 'text/plain',
           });
           await myCloudApi.uploadFile(formData);
         } finally {
-          await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+          try { if (tempFile.exists) tempFile.delete(); } catch {}
         }
       } else {
         const mediaUrls = messageToForward.mediaUrls || messageToForward.media_urls || [];
@@ -188,37 +188,39 @@ const ForwardModal = ({ visible, onClose, messageToForward }) => {
                name = cleanFileName(url);
             }
             
-            const tempUri = `${FileSystem.cacheDirectory}${name}`;
+            const safeName = name.replace(/[\\/]/g, '_');
+            const tempFile = new File(Paths.cache, safeName);
             try {
-              const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
+              const downloadedFile = await File.downloadFileAsync(freshUrl, tempFile, { idempotent: true });
 
               const formData = new FormData();
               formData.append('file', {
-                uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
-                name: name,
-                type: getMimeType(name)
+                uri: Platform.OS === 'ios' ? downloadedFile.uri.replace('file://', '') : downloadedFile.uri,
+                name: safeName,
+                type: getMimeType(safeName)
               });
               await myCloudApi.uploadFile(formData);
             } finally {
-              await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+              try { if (tempFile.exists) tempFile.delete(); } catch {}
             }
           }
         } else if (messageToForward.content && messageToForward.content.startsWith('http')) {
            const freshUrl = await getFreshUrl(messageToForward.content);
            let name = messageToForward.fileName || cleanFileName(messageToForward.content);
-           const tempUri = `${FileSystem.cacheDirectory}${name}`;
+           const safeName = name.replace(/[\\/]/g, '_');
+           const tempFile = new File(Paths.cache, safeName);
            try {
-             const downloadResult = await FileSystem.downloadAsync(freshUrl, tempUri);
+             const downloadedFile = await File.downloadFileAsync(freshUrl, tempFile, { idempotent: true });
 
              const formData = new FormData();
              formData.append('file', {
-               uri: Platform.OS === 'ios' ? downloadResult.uri.replace('file://', '') : downloadResult.uri,
-               name: name,
-               type: getMimeType(name)
+               uri: Platform.OS === 'ios' ? downloadedFile.uri.replace('file://', '') : downloadedFile.uri,
+               name: safeName,
+               type: getMimeType(safeName)
              });
              await myCloudApi.uploadFile(formData);
            } finally {
-             await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(() => {});
+             try { if (tempFile.exists) tempFile.delete(); } catch {}
            }
         }
       }

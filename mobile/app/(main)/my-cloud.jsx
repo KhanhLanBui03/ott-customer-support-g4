@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   TextInput,
   FlatList,
@@ -18,13 +17,15 @@ import {
   ScrollView,
   BackHandler,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSelector, useDispatch } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as Clipboard from 'expo-clipboard';
+import { File, Paths } from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 
 import { useTheme } from '../../src/context/ThemeContext';
@@ -432,15 +433,15 @@ const MyCloudScreen = () => {
     const text = (messageText || '').trim();
     if (!text) return;
     setUploading(true);
-    let tempUri = null;
+    let tempFile = null;
     try {
       const fileName = `message_${Date.now()}.txt`;
-      tempUri = `${FileSystem.cacheDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(tempUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      tempFile = new File(Paths.cache, fileName);
+      await tempFile.write(text);
 
       const formData = new FormData();
       formData.append('file', {
-        uri: Platform.OS === 'ios' ? tempUri.replace('file://', '') : tempUri,
+        uri: Platform.OS === 'ios' ? tempFile.uri.replace('file://', '') : tempFile.uri,
         name: fileName,
         type: 'text/plain',
       });
@@ -470,8 +471,8 @@ const MyCloudScreen = () => {
       Alert.alert(t('common.error', 'Lỗi'), t('cloud.save_message_failed', 'Không thể lưu tin nhắn.'));
     } finally {
       setUploading(false);
-      if (tempUri) {
-        await FileSystem.deleteAsync(tempUri, { idempotent: true });
+      if (tempFile) {
+        try { if (tempFile.exists) tempFile.delete(); } catch {}
       }
     }
   };
@@ -624,19 +625,13 @@ const MyCloudScreen = () => {
         handleOpenForward(file);
         break;
       case 'copy':
-        try {
-          const { Clipboard } = require('react-native');
+        {
           const txt = getDisplayMessageText(file) || file.fileName || '';
-          if (Clipboard && Clipboard.setString) {
-            Clipboard.setString(txt);
-          } else {
-            const { NativeModules } = require('react-native');
-            if (NativeModules.Clipboard) {
-              NativeModules.Clipboard.setString(txt);
-            }
+          if (txt) {
+            Clipboard.setStringAsync(String(txt)).catch((e) => {
+              console.log('Clipboard not available', e);
+            });
           }
-        } catch (e) {
-          console.log('Clipboard not available');
         }
         break;
       case 'delete':

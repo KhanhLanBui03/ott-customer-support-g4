@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Keyboard, Platform, Image, ActivityIndicator, Alert, ImageBackground, DeviceEventEmitter } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Keyboard, Platform, Image, ActivityIndicator, Alert, DeviceEventEmitter } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MaterialIcons, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -85,7 +86,8 @@ const ChatDetailScreen = () => {
   }, [realId, conversationId]);
 
   const wallpaperUrl = conversation?.wallpaperUrl || null;
-  const isLoading = chatState.loading;
+  const isLoading = Boolean(chatState.messagesLoading?.[realId]) || (chatState.loading && messages.length === 0);
+  const hasMoreMessages = chatState.hasMoreMessages?.[realId] !== false;
 
   const myRole = useMemo(() =>
     conversation?.members?.find(m => String(m.userId || m.id) === String(currentUser?.userId || currentUser?.id))?.role || 'MEMBER',
@@ -219,22 +221,6 @@ const ChatDetailScreen = () => {
 
   const isOngoingInChat = lastCallMsg?.status === 'ONGOING' && (conversation?.type === 'GROUP' || (realId && !realId.includes('SINGLE#')));
   const showOngoingBanner = isOngoingInChat && callStatus === 'idle';
-
-  console.log('💎 [ChatDetailScreen] Render values - callStatus:', callStatus, 'isOngoingInChat:', isOngoingInChat, 'showOngoingBanner:', showOngoingBanner);
-
-  useEffect(() => {
-    console.log('[DEBUG-BANNER] ------------------');
-    console.log('[DEBUG-BANNER] conversationId:', conversationId);
-    console.log('[DEBUG-BANNER] realId:', realId);
-    console.log('[DEBUG-BANNER] messages count:', messages?.length);
-    console.log('[DEBUG-BANNER] lastCallMsgRaw:', lastCallMsgRaw);
-    console.log('[DEBUG-BANNER] lastCallMsg:', lastCallMsg);
-    console.log('[DEBUG-BANNER] conversation type:', conversation?.type);
-    console.log('[DEBUG-BANNER] callStatus:', callStatus);
-    console.log('[DEBUG-BANNER] isOngoingInChat:', isOngoingInChat);
-    console.log('[DEBUG-BANNER] showOngoingBanner:', showOngoingBanner);
-    console.log('[DEBUG-BANNER] ------------------');
-  }, [conversationId, realId, messages, lastCallMsgRaw, lastCallMsg, conversation, callStatus, isOngoingInChat, showOngoingBanner]);
 
 
   // Wrap sendReadReceipt - chỉ gửi khi screen đang focused
@@ -620,7 +606,7 @@ const ChatDetailScreen = () => {
         if (result?.messages && result.messages.length > 0) {
           const currentMsgs = messagesRef.current || [];
           const hasNew = result.messages.some(nm => !currentMsgs.some(em => em.messageId === nm.messageId));
-          return hasNew;
+          return hasNew && result.hasMore !== false;
         }
         return false;
       } catch (error) {
@@ -665,19 +651,10 @@ const ChatDetailScreen = () => {
         dispatch(setReplyingTo(message));
         break;
       case 'copy':
-        // Sử dụng Clipboard an toàn
-        try {
-          const { Clipboard } = require('react-native');
-          if (Clipboard && Clipboard.setString) {
-            Clipboard.setString(message.content);
-          } else {
-            const { NativeModules } = require('react-native');
-            if (NativeModules.Clipboard) {
-              NativeModules.Clipboard.setString(message.content);
-            }
-          }
-        } catch (e) {
-          console.log('Clipboard not available');
+        if (message?.content) {
+          Clipboard.setStringAsync(String(message.content)).catch((e) => {
+            console.log('Clipboard not available', e);
+          });
         }
         break;
       case 'delete':
@@ -733,11 +710,7 @@ const ChatDetailScreen = () => {
         <View style={[styles.messagesHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <TouchableOpacity
             onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(main)');
-              }
+              router.replace('/(main)');
             }}
             style={styles.backButton}
           >
@@ -995,26 +968,24 @@ const ChatDetailScreen = () => {
           </View>
         )}
         <View style={[styles.chatArea, { backgroundColor: colors.background }]}>
-          {isLoading && messages.length === 0 ? (
-            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-
-          ) : wallpaperUrl ? (
+          {wallpaperUrl ? (
             <View style={{ flex: 1, backgroundColor: '#000' }}>
-              <ImageBackground
-                source={{ uri: wallpaperUrl }}
-                style={styles.wallpaperBackground}
-                imageStyle={styles.wallpaperImage}
-                blurRadius={10}
-              >
+              <View style={styles.wallpaperBackground}>
+                <Image
+                  source={{ uri: wallpaperUrl }}
+                  style={[StyleSheet.absoluteFill, styles.wallpaperImage]}
+                  blurRadius={10}
+                />
                 <MessageList
                   ref={flatListRef}
                   messages={messages}
                   conversationId={realId}
                   currentUserId={currentUser?.userId || currentUser?.id}
                   onlineUsers={onlineUsers}
+                  members={conversation?.members || []}
                   typingUsers={chatState.typingUsers?.[realId] || []}
+                  isLoading={isLoading}
+                  hasMoreProp={hasMoreMessages}
                   sendReadReceipt={guardedSendReadReceipt}
                   onPressMessage={handlePressMessage}
                   onLoadMore={handleLoadMore}
@@ -1027,7 +998,7 @@ const ChatDetailScreen = () => {
                   translationLoading={translationLoading}
                   onTranslate={handleTranslate}
                 />
-              </ImageBackground>
+              </View>
             </View>
           ) : (
             <MessageList
@@ -1038,7 +1009,8 @@ const ChatDetailScreen = () => {
               onlineUsers={onlineUsers}
               members={conversation?.members || []}
               typingUsers={chatState.typingUsers?.[realId] || []}
-
+              isLoading={isLoading}
+              hasMoreProp={hasMoreMessages}
               sendReadReceipt={guardedSendReadReceipt}
               onPressMessage={handlePressMessage}
               onLoadMore={handleLoadMore}

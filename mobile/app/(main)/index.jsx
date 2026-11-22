@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, Animated, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ActivityIndicator, RefreshControl, Modal, TouchableWithoutFeedback, ScrollView, Alert, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchConversations, setCurrentUserId, updateConversation, removeConversationLocal, pinConversation, unpinConversation, updateMemberFriendshipStatus } from '../../src/store/chatSlice';
 import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { friendApi } from '../../src/api/friendApi';
 import ReportModal from '../../src/components/ReportModal';
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import CONFIG from '../../src/config';
 import SearchModal from '../../src/components/SearchModal';
 import CreateGroupModal from '../../src/components/CreateGroupModal';
@@ -287,21 +287,16 @@ const HomeScreen = () => {
     );
   };
 
-  const renderRightActions = (progress, dragX, item, displayName) => {
-    const trans = dragX.interpolate({
-      inputRange: [-100, 0],
-      outputRange: [0, 100],
-    });
-
+  const renderRightActions = (_progress, _translation, item, displayName) => {
     return (
       <TouchableOpacity 
         style={styles.deleteActionContainer} 
         onPress={() => handleDeleteConversation(item.conversationId, displayName)}
       >
-        <Animated.View style={[styles.deleteActionItem, { transform: [{ translateX: 0 }] }]}>
+        <View style={styles.deleteActionItem}>
           <MaterialCommunityIcons name="trash-can-outline" size={28} color="#fff" />
           <Text style={styles.deleteActionText}>{t('common.delete')}</Text>
-        </Animated.View>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -464,8 +459,7 @@ const HomeScreen = () => {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header chính */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t('chat.title')}</Text>
@@ -816,7 +810,6 @@ const HomeScreen = () => {
           );
         })()}
       </View>
-    </GestureHandlerRootView>
   );
 };
 

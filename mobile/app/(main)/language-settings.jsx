@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  SafeAreaView, ActivityIndicator,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -96,7 +97,7 @@ const LanguageSettingsScreen = () => {
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(main)/settings')}
         >
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>

@@ -1,8 +1,9 @@
 import React from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  SafeAreaView, Switch,
+  Switch,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +19,7 @@ const SettingsScreen = () => {
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: isDark ? colors.surface300 : '#f1f5f9' }]}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(main)/profile')}
         >
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>

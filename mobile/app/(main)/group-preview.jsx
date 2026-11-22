@@ -8,9 +8,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
-  SafeAreaView,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';

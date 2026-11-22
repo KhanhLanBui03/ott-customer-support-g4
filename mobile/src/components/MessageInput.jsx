@@ -26,8 +26,40 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { mediaApi } from '../api/chatApi';
 import CONFIG from '../config';
-import { Audio } from 'expo-av';
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  AudioQuality,
+  IOSOutputFormat,
+  getRecordingPermissionsAsync,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import PermissionModal from './common/PermissionModal';
+
+const VOICE_RECORDING_OPTIONS = {
+  ...RecordingPresets.HIGH_QUALITY,
+  extension: '.m4a',
+  sampleRate: 44100,
+  numberOfChannels: Platform.OS === 'ios' ? 1 : 2,
+  bitRate: 128000,
+  android: {
+    outputFormat: 'mpeg4',
+    audioEncoder: 'aac',
+  },
+  ios: {
+    extension: '.m4a',
+    outputFormat: IOSOutputFormat.MPEG4AAC,
+    audioQuality: AudioQuality.HIGH,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    bitsPerSecond: 128000,
+  },
+};
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
@@ -73,7 +105,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
 
   // Voice recording state
-  const [recording, setRecording] = useState(null);
+  const audioRecorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const recordingIntervalRef = useRef(null);
@@ -407,44 +439,20 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
 
   const startRecording = async () => {
     try {
-      const granted = await requestPermission('mic', () => Audio.requestPermissionsAsync());
+      const granted = await requestPermission('mic', () => requestRecordingPermissionsAsync());
       if (!granted) return;
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        interruptionMode: 'duckOthers',
+        shouldRouteThroughEarpiece: false,
       });
 
-      // Explicit options for m4a (AAC)
-      const recordingOptions = {
-        android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
-          sampleRate: 44100,
-          numberOfChannels: 2,
-          bitRate: 128000,
-        },
-        ios: {
-          extension: '.m4a',
-          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-          audioQuality: Audio.IOSAudioQuality.HIGH,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        web: {
-          mimeType: 'audio/webm',
-          bitsPerSecond: 128000,
-        },
-      };
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
 
-      const { recording } = await Audio.Recording.createAsync(recordingOptions);
-
-      setRecording(recording);
       setIsRecording(true);
       setRecordingDuration(0);
 
@@ -457,14 +465,18 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
   };
 
   const stopRecording = async () => {
-    if (!recording) return;
+    if (!isRecording) return;
 
     try {
       if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
       setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri || audioRecorder.getStatus()?.url;
+
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+      }).catch(() => {});
 
       // Upload and send
       if (uri) {
@@ -496,12 +508,15 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
   };
 
   const cancelRecording = async () => {
-    if (!recording) return;
+    if (!isRecording) return;
     if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
     try {
       setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      setRecording(null);
+      await audioRecorder.stop();
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+      }).catch(() => {});
     } catch (err) {
       console.error('Failed to cancel recording', err);
     }
@@ -622,7 +637,7 @@ const MessageInput = forwardRef(({ onSendMessage, isLoading = false, onTypingCha
     let checkFunc;
     if (type === 'camera') checkFunc = () => ImagePicker.getCameraPermissionsAsync();
     else if (type === 'gallery') checkFunc = () => ImagePicker.getMediaLibraryPermissionsAsync();
-    else if (type === 'mic') checkFunc = () => Audio.getPermissionsAsync();
+    else if (type === 'mic') checkFunc = () => getRecordingPermissionsAsync();
 
     console.log(`[Permission] Requesting ${type}...`);
     if (checkFunc) {
