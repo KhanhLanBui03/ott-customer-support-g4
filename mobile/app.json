@@ -23,8 +23,11 @@
         "CAMERA",
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "plugins": [
@@ -36,6 +39,18 @@
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-localization",
+      [
+        "expo-notifications",
+        {
+          "color": "#6366f1",
+          "sounds": [
+            "./assets/sounds/notif_ding.wav",
+            "./assets/sounds/notif_pop.wav",
+            "./assets/sounds/notif_chime.wav",
+            "./assets/sounds/notif_tri.wav"
+          ]
+        }
+      ],
       [
         "expo-camera",
         {

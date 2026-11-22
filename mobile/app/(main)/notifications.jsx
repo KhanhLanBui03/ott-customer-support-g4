@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import { friendApi } from '../../src/api/friendApi';
 import { conversationApi } from '../../src/api/chatApi';
 import { Alert } from 'react-native';
 import { useTheme } from '../../src/context/ThemeContext';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { notificationApi } from '../../src/api/userApi';
 import CONFIG from '../../src/config';
 import { useTranslation } from 'react-i18next';
@@ -56,10 +56,14 @@ const NotificationsScreen = () => {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
-  useEffect(() => {
-    const myId = currentUser?.userId || currentUser?.id;
-    dispatch(fetchNotifications(myId));
-  }, [dispatch, currentUser]);
+  useFocusEffect(
+    useCallback(() => {
+      const myId = currentUser?.userId || currentUser?.id;
+      if (myId) {
+        dispatch(fetchNotifications(myId));
+      }
+    }, [dispatch, currentUser])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -72,9 +76,13 @@ const NotificationsScreen = () => {
     if (!(item.isRead || item.read)) {
       dispatch(markAsRead(item.id || item.notificationId));
     }
-    if (item.type === 'FRIEND_ACCEPT' || item.type === 'FRIEND_ACCEPTED') {
+    if ((item.type === 'FRIEND_ACCEPT' || item.type === 'FRIEND_ACCEPTED') && item.senderId) {
+      const myId = currentUser?.userId || currentUser?.id;
+      const singleConvId = myId
+        ? `SINGLE#${[String(myId), String(item.senderId)].sort().join('#')}`
+        : `SINGLE#${item.senderId}`;
       router.push({
-        pathname: `/chat/SINGLE#${item.senderId}`,
+        pathname: `/chat/${encodeURIComponent(singleConvId)}`,
         params: {
           name: item.fullName || item.message || 'Bạn bè',
           avatar: item.avatarUrl || '',

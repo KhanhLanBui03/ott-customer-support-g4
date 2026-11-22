@@ -26,6 +26,7 @@ public class FriendshipService {
     private final com.chatapp.modules.conversation.service.ConversationService conversationService;
     private final com.chatapp.modules.notification.service.NotificationService notificationService;
     private final com.chatapp.modules.notification.repository.NotificationRepository notificationRepository;
+    private final com.chatapp.modules.notification.service.PushNotificationService pushNotificationService;
 
     public void sendFriendRequest(String requesterId, String addresseeId) {
         log.info("Sending friend request from {} to {}", requesterId, addresseeId);
@@ -76,6 +77,12 @@ public class FriendshipService {
                 .message(requesterName + " đã gửi lời mời kết bạn.")
                 .build();
             notificationService.createNotification(notifReq);
+            pushNotificationService.sendToUser(
+                    addresseeId,
+                    "Lời mời kết bạn",
+                    requesterName + " đã gửi lời mời kết bạn.",
+                    Map.of("type", "FRIEND_REQUEST", "senderId", requesterId)
+            );
         } catch (Exception e) {
             log.error("Failed to create persistent notification for friend request", e);
         }
@@ -124,6 +131,12 @@ public class FriendshipService {
                     .message(accepterName + " đã chấp nhận lời mời kết bạn.")
                     .build();
                 notificationService.createNotification(notifReq);
+                pushNotificationService.sendToUser(
+                        requesterId,
+                        "Chấp nhận kết bạn",
+                        accepterName + " đã chấp nhận lời mời kết bạn.",
+                        Map.of("type", "FRIEND_ACCEPTED", "senderId", addresseeId)
+                );
             } catch (Exception e) {
                 log.error("Failed to create persistent notification for friend accept", e);
             }
@@ -230,6 +243,12 @@ public class FriendshipService {
                 
                 // Real-time broadcast to the requester
                 publishNotification(requesterId, "NOTIFICATION", notifResponse);
+                pushNotificationService.sendToUser(
+                        requesterId,
+                        "Thông báo",
+                        rejecterName + " đã từ chối lời mời kết bạn.",
+                        Map.of("type", "FRIEND_REJECTED", "senderId", addresseeId)
+                );
             } catch (Exception e) {
                 log.error("Failed to create and broadcast persistent notification for friend reject", e);
             }

@@ -17,8 +17,6 @@ import {
   updateMemberRoleLocal,
   fetchMessages,
 } from '../store/chatSlice';
-import { setInAppNotification } from '../store/notificationSlice';
-import { getPreviewText, isVoiceMessage } from '../utils/messageUtils';
 import {
   onMessageReceive,
   offMessageReceive,
@@ -142,43 +140,8 @@ export const useWebSocket = () => {
         console.log('[WS] ✅ Sending auto-read receipt for:', message.messageId);
         emitReadReceipt(message.messageId, message.conversationId);
         dispatch(markConversationRead(message.conversationId));
-      } else if (!isFromMe && activeConversationId !== message.conversationId) {
-        // THÔNG BÁO TRONG APP (NHƯ WEB)
-        // Nếu nhận tin nhắn từ hội thoại KHÁC hội thoại đang mở
-        const conversations = conversationsRef.current;
-        const conv = conversations.find(c => c.conversationId === message.conversationId);
-
-        let displayMessage = message.content || "Đã gửi một tệp đính kèm";
-        const url = (message.content || '').toLowerCase();
-        const firstMediaUrl = (message.mediaUrls && message.mediaUrls[0] || '').toLowerCase();
-        const isStickerUrl = url.includes('searchfilter=sticker') || url.includes('dicebear.com') || firstMediaUrl.includes('searchfilter=sticker') || firstMediaUrl.includes('dicebear.com');
-        const isGifUrl = url.includes('.gif') || url.includes('tenor.com') || firstMediaUrl.includes('.gif') || firstMediaUrl.includes('tenor.com');
-
-        if (message.type === 'CALL_LOG') {
-          displayMessage = getPreviewText(displayMessage);
-        } else if (message.type === 'VOICE' || isVoiceMessage(message)) {
-          displayMessage = "Tin nhắn thoại";
-        } else if (message.type === 'STICKER' || isStickerUrl) {
-          displayMessage = "[Sticker]";
-        } else if (isGifUrl) {
-          displayMessage = "[GIF]";
-        } else if (message.type === 'IMAGE') {
-          displayMessage = "[Hình ảnh]";
-        } else if (message.type === 'VIDEO') {
-          displayMessage = "[Video]";
-        } else if (message.type === 'FILE') {
-          displayMessage = "[Tệp tin]";
-        } else if (message.type === 'VOTE') {
-          displayMessage = "[Bình chọn]";
-        }
-
-        dispatch(setInAppNotification({
-          conversationId: message.conversationId,
-          title: conv?.name || message.senderName || message.fullName || "Tin nhắn mới",
-          message: displayMessage,
-          avatarUrl: conv?.avatarUrl || message.avatarUrl || null,
-        }));
       }
+      // In-app/push notifications for messages from other conversations are dispatched globally in app/(main)/_layout.jsx
 
       // Khi có tin nhắn mới, Redux addMessage đã cập nhật lastMessage và unreadCount
       // Không gọi fetchConversations ở đây để tránh ghi đè state local bằng data server cũ (race condition)

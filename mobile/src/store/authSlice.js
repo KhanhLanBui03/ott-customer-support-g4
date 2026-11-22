@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import authApi from '../api/authApi';
+import { unregisterPushTokenAsync } from '../utils/pushNotificationService';
 
 /**
  * Auth Slice - Redux state management for authentication
@@ -126,7 +127,12 @@ export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (_, { rejectWithValue }) => {
     try {
-      // 1. Try to notify backend first while tokens are still present in SecureStore
+      // 1. Unregister push token & notify backend while tokens are still present in SecureStore
+      try {
+        await unregisterPushTokenAsync();
+      } catch (err) {
+        console.log('Push token unregister failed:', err);
+      }
       try {
         await authApi.logout();
       } catch (err) {

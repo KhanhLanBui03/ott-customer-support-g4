@@ -9,8 +9,12 @@ import { Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import InAppNotification from '../src/components/common/InAppNotification';
+import { configureNotificationHandler } from '../src/utils/pushNotificationService';
 import { useTranslation } from 'react-i18next';
 import '../src/locales/i18n';
+
+// Configure OS notification behavior early at startup
+configureNotificationHandler();
 
 // Keep splash screen visible while we fetch auth state
 SplashScreen.preventAutoHideAsync();
@@ -91,11 +95,11 @@ function RootLayoutNav() {
 
   return (
     <SafeAreaProvider>
-      <InAppNotification />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(main)" options={{ headerShown: false }} />
       </Stack>
+      <InAppNotification />
     </SafeAreaProvider>
   );
 }

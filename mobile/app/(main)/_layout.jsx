@@ -1,12 +1,22 @@
 import React, { useEffect, useRef } from 'react';
 import { Tabs, router } from 'expo-router';
-import { View, Text, Platform, Animated, Dimensions, TouchableOpacity, DeviceEventEmitter } from 'react-native';
+import { View, Text, Platform, Animated, Dimensions, TouchableOpacity, DeviceEventEmitter, AppState } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
+import * as Notifications from 'expo-notifications';
 import { initializeSocket, disconnectSocket } from '../../src/utils/socket';
 import { addMessage, setCurrentUserId, fetchConversations } from '../../src/store/chatSlice';
-import { addNotification, setInAppNotification } from '../../src/store/notificationSlice';
+import { addNotification, fetchNotifications, setInAppNotification } from '../../src/store/notificationSlice';
+import store from '../../src/store/store';
+import { getPreviewText, isVoiceMessage } from '../../src/utils/messageUtils';
+import {
+  registerForPushNotificationsAsync,
+  getNotificationPreferencesSync,
+  scheduleLocalNotificationAsync,
+  handleNotificationNavigation,
+} from '../../src/utils/pushNotificationService';
+import { playInAppNotificationSound } from '../../src/utils/soundService';
 import { useAgoraCall } from '../../src/hooks/useAgoraCall';
 import VideoCall from '../../src/components/VideoCall';
 import MediaPermissionOnboardingModal from '../../src/components/common/MediaPermissionOnboardingModal';
@@ -73,15 +83,135 @@ export default function MainLayout() {
   const dispatch = useDispatch();
   const { unreadCount } = useSelector((state) => state.notifications);
   const badgeValue = unreadCount > 0 ? (unreadCount > 5 ? '5+' : unreadCount) : null;
+  const hasRemotePushTokenRef = useRef(false);
+
+  // Sync OS app icon badge count with unread notifications
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    Notifications.setBadgeCountAsync(unreadCount || 0).catch(() => {});
+  }, [unreadCount]);
+
+  // Register Expo Push Notifications & handle taps on system notifications
+  useEffect(() => {
+    const myId = user?.userId || user?.id;
+    if (!accessToken || !myId) return;
+
+    let isMounted = true;
+    registerForPushNotificationsAsync().then((token) => {
+      if (isMounted) {
+        hasRemotePushTokenRef.current = Boolean(token);
+      }
+    });
+
+    // Handle notification tap when app was killed/cold-started
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        const data = response?.notification?.request?.content?.data;
+        if (data) {
+          handleNotificationNavigation(data, router);
+        }
+      })
+      .catch(() => {});
+
+    // Handle notification tap while app is running or backgrounded
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response?.notification?.request?.content?.data;
+      if (data) {
+        handleNotificationNavigation(data, router);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      responseSub.remove();
+    };
+  }, [accessToken, user?.userId, user?.id]);
 
   useEffect(() => {
     if (accessToken && (user?.userId || user?.id)) {
       const myId = user.userId || user.id;
       dispatch(setCurrentUserId(String(myId)));
+      dispatch(fetchNotifications(myId));
+
+      const showBannerOrLocalPush = (notifPayload, pushData = {}) => {
+        const prefs = getNotificationPreferencesSync();
+        if (!prefs.messageNotifications) return;
+
+        if (AppState.currentState === 'active') {
+          dispatch(setInAppNotification(notifPayload));
+          playInAppNotificationSound();
+        } else if (!hasRemotePushTokenRef.current) {
+          // Fallback local OS notification when backgrounded without a remote Expo Push token
+          const bodyText = notifPayload.subMessage
+            ? `${notifPayload.message || ''} ${notifPayload.subMessage}`.trim()
+            : (notifPayload.message || 'Bạn có thông báo mới');
+          scheduleLocalNotificationAsync({
+            title: notifPayload.title || 'F5 Chat',
+            body: bodyText,
+            data: pushData,
+          });
+        }
+      };
+
       initializeSocket(accessToken, myId, (event) => {
         const { eventType, conversationId, payload } = event;
-        if (eventType === 'MESSAGE_SEND') {
-          dispatch(addMessage({ conversationId, message: payload, myId }));
+        if (eventType === 'MESSAGE_SEND' || eventType === 'MESSAGE_NEW') {
+          const msg = payload || {};
+          const msgConvId = msg.conversationId || conversationId;
+          dispatch(addMessage({ conversationId: msgConvId, message: msg, currentUserId: myId }));
+
+          const isFromMe = String(msg.senderId) === String(myId);
+          const isSystem = String(msg.senderId || '').toUpperCase() === 'SYSTEM';
+          const chatState = store.getState().chat;
+          const activeConvId = chatState?.currentConversationId;
+          const isViewingThisConv = activeConvId && String(activeConvId) === String(msgConvId);
+
+          if (!isFromMe && !isSystem && !(isViewingThisConv && AppState.currentState === 'active')) {
+            const conv = (chatState?.conversations || []).find(
+              (c) => String(c.conversationId) === String(msgConvId)
+            );
+
+            let displayMessage = msg.content || 'Đã gửi một tệp đính kèm';
+            const url = (msg.content || '').toLowerCase();
+            const firstMediaUrl = ((msg.mediaUrls && msg.mediaUrls[0]) || '').toLowerCase();
+            const isStickerUrl = url.includes('searchfilter=sticker') || url.includes('dicebear.com') || firstMediaUrl.includes('searchfilter=sticker') || firstMediaUrl.includes('dicebear.com');
+            const isGifUrl = url.includes('.gif') || url.includes('tenor.com') || firstMediaUrl.includes('.gif') || firstMediaUrl.includes('tenor.com');
+
+            if (msg.type === 'CALL_LOG') {
+              displayMessage = getPreviewText(displayMessage);
+            } else if (msg.type === 'VOICE' || isVoiceMessage(msg)) {
+              displayMessage = 'Tin nhắn thoại';
+            } else if (msg.type === 'STICKER' || isStickerUrl) {
+              displayMessage = '[Sticker]';
+            } else if (isGifUrl) {
+              displayMessage = '[GIF]';
+            } else if (msg.type === 'IMAGE') {
+              displayMessage = '[Hình ảnh]';
+            } else if (msg.type === 'VIDEO') {
+              displayMessage = '[Video]';
+            } else if (msg.type === 'FILE') {
+              displayMessage = '[Tệp tin]';
+            } else if (msg.type === 'VOTE') {
+              displayMessage = '[Bình chọn]';
+            }
+
+            const title = conv?.name || msg.senderName || msg.fullName || t('chat.title', 'Tin nhắn mới');
+            showBannerOrLocalPush(
+              {
+                conversationId: msgConvId,
+                title,
+                message: displayMessage,
+                avatarUrl: conv?.avatarUrl || msg.avatarUrl || null,
+                type: 'MESSAGE',
+              },
+              {
+                type: 'MESSAGE',
+                conversationId: msgConvId,
+                conversationName: title,
+                conversationType: conv?.type || 'SINGLE',
+              }
+            );
+          }
         } else if (['CONVERSATION_UPDATE', 'MEMBER_UPDATE', 'CONVERSATION_RECREATED', 'JOIN_REQUEST_PROCESSED', 'GROUP_JOIN_REQUEST_PROCESSED'].includes(eventType)) {
           dispatch(fetchConversations());
         } else if (['FRIEND_DELETE', 'FRIEND_BLOCK', 'FRIEND_UNBLOCK', 'FRIEND_REQUEST_REJECTED', 'FRIEND_REQUEST_CANCELLED'].includes(eventType)) {
@@ -91,28 +221,23 @@ export default function MainLayout() {
           let finalPayload = payload;
           if (eventType === 'FRIEND_REQUEST') {
             finalPayload = { id: `fr_${Date.now()}`, title: t('notifications.friend_requests'), message: payload.fullName || t('notifications.someone'), subMessage: t('notifications.want_to_be_friend'), type: 'FRIEND_REQUEST', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
-            dispatch(setInAppNotification(finalPayload));
+            showBannerOrLocalPush(finalPayload, { type: 'FRIEND_REQUEST', senderId: payload.userId });
             DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'FRIEND_ACCEPT') {
-            finalPayload = { id: `fa_${Date.now()}`, title: t('friends.accept'), message: payload.fullName || t('notifications.someone'), subMessage: t('chat.user_joined', { name: '' }).replace(' đã tham gia phòng', ''), type: 'FRIEND_ACCEPT', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
-            // Note: Since I don't have a perfect key for "accepted your friend request", I'll try to find a better one or just use existing
-            finalPayload.title = t('friends.accept'); // Using "Chấp nhận" for now or just hardcoding if translation missing?
-            // Better: use 'friends.accepted_notif' if possible but it expects {{name}}
-            finalPayload.subMessage = t('friends.accepted_notif', { name: '' }).trim();
-
-            dispatch(setInAppNotification(finalPayload));
+            finalPayload = { id: `fa_${Date.now()}`, title: t('notifications.title_friend_accept'), message: payload.fullName || t('notifications.someone'), subMessage: t('friends.accepted_notif', { name: '' }).trim(), type: 'FRIEND_ACCEPT', senderId: payload.userId, avatarUrl: payload.avatarUrl, fullName: payload.fullName, createdAt: new Date().toISOString(), isRead: false };
+            showBannerOrLocalPush(finalPayload, { type: 'FRIEND_ACCEPTED', senderId: payload.userId });
             dispatch(fetchConversations()); // Sync friend status immediately
             DeviceEventEmitter.emit('friendship_changed');
           } else if (eventType === 'GROUP_INVITE') {
             finalPayload = { id: `gi_${Date.now()}`, title: t('notifications.group_invites'), message: payload.groupName || t('chat.default_group_name'), subMessage: `${t('notifications.inviter_prefix')} ${payload.inviterName || t('notifications.someone')}`, type: 'GROUP_INVITE', invitationId: payload.invitationId, conversationId: payload.conversationId, senderId: payload.inviterId, avatarUrl: payload.groupAvatar, fullName: payload.groupName, createdAt: new Date().toISOString(), isRead: false };
-            dispatch(setInAppNotification(finalPayload));
+            showBannerOrLocalPush(finalPayload, { type: 'GROUP_INVITE', conversationId: payload.conversationId, invitationId: payload.invitationId });
             dispatch(fetchConversations()); // Refresh list to show new group invitation if any
           } else if (eventType === 'NEW_JOIN_REQUEST') {
             finalPayload = {
               id: `jr_${Date.now()}`,
-              title: t('chat.report_modal.title'), // Not quite right, but let's see
+              title: t('info.pending_join_requests', { count: '' }).trim(),
               message: payload.groupName || t('chat.default_group_name'),
-              subMessage: `${payload.requesterName || t('notifications.someone')} ${t('chat.is_typing').replace('đang soạn tin...', 'muốn gia nhập')}`, // Hacky
+              subMessage: t('chat.is_typing', { name: payload.requesterName || t('notifications.someone') }).replace('đang soạn tin...', 'muốn gia nhập'),
               type: 'JOIN_REQUEST',
               conversationId: conversationId,
               senderId: payload.requesterId,
@@ -121,14 +246,26 @@ export default function MainLayout() {
               createdAt: new Date().toISOString(),
               isRead: false
             };
-            // Actually, I should check if there are specific keys for join request.
-            // Let's use more generic ones if missing.
-            finalPayload.title = t('info.pending_join_requests', { count: '' }).trim();
-            finalPayload.subMessage = t('chat.is_typing', { name: payload.requesterName || t('notifications.someone') }).replace('đang soạn tin...', 'muốn gia nhập');
-
-            dispatch(setInAppNotification(finalPayload));
+            showBannerOrLocalPush(finalPayload, { type: 'JOIN_REQUEST', conversationId });
+          } else if (eventType === 'NOTIFICATION' && payload) {
+            finalPayload = {
+              id: payload.id || payload.notificationId || `notif_${Date.now()}`,
+              notificationId: payload.id || payload.notificationId,
+              title: payload.title || t('notifications.title'),
+              message: payload.message || '',
+              subMessage: payload.subMessage || '',
+              type: payload.type || 'OTHER',
+              senderId: payload.senderId,
+              avatarUrl: payload.senderAvatar || payload.avatarUrl || null,
+              fullName: payload.senderName || payload.fullName || '',
+              createdAt: payload.createdAt || new Date().toISOString(),
+              isRead: Boolean(payload.isRead || payload.read),
+            };
+            showBannerOrLocalPush(finalPayload, { type: finalPayload.type });
           }
-          dispatch(addNotification(finalPayload));
+          if (finalPayload) {
+            dispatch(addNotification(finalPayload));
+          }
         }
       });
     }
