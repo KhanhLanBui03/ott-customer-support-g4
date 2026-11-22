@@ -44,17 +44,17 @@ public class AIService {
         return geminiApiKeys[index];
     }
 
-    @Value("${spring.ai.google.genai.chat.options.model:gemini-2.5-flash}")
+    @Value("${spring.ai.google.genai.chat.options.model:gemini-flash-lite-latest}")
     private String geminiModel;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // Fallback models to try if primary model fails (429/503)
+    // Fallback models to try if primary model fails (429/503/404)
     private static final String[] FALLBACK_MODELS = {
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite"
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3-flash-preview",
+        "gemini-flash-latest"
     };
 
     public String generateResponse(String userMessage) {
