@@ -177,7 +177,7 @@ const LoginScreen = () => {
                 color="#B8B3B0"
                 textAlign={isWideLayout ? 'left' : 'center'}
                 fontWeight="500"
-                lineHeight={21}
+                lineHeight="21px"
               >
                 Kết nối tức thì · Trợ lý AI thông minh · Bảo mật tuyệt đối
               </TText>
