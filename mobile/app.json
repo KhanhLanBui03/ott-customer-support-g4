@@ -63,11 +63,9 @@
     "experiments": {
       "typedRoutes": true
     },
+    "owner": "phamhinh",
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "8be3f988-3209-4b85-a92f-3ec9bc619268"
-      }
+      "router": {}
     }
   }
 }
