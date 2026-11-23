@@ -97,8 +97,10 @@ npx expo start
 # Press 'w' for web, 'i' for iOS, 'a' for Android
 ```
 
-**📲 Tải xuống ứng dụng (Android):**
-* Bạn có thể tải trực tiếp file cài đặt APK đã đóng gói sẵn tại đây: **[F5chat.apk](./F5chat.apk)**
+**📲 Tải xuống ứng dụng (Android APK - phân phối qua Internet):**
+* Tải trực tiếp bản APK mới nhất (EAS Build Cloud): **[Tải F5 Chat APK](https://expo.dev/artifacts/eas/WE02BWLLUAokgJB7maeztPhkM7zRTJhq3R4xaquMlKU.apk)**
+* Trang chi tiết bản build & mã QR cài đặt (EAS): https://expo.dev/accounts/phamhinhs-team/projects/chat-app/builds/1cafcbb3-9403-4215-bfdc-a0c88ff27aa9
+* Backend API Production (HTTPS/WSS trên AWS EC2): `https://44-192-41-31.sslip.io`
 
 ---
 
