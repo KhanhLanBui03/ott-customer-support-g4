@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aab
+*.log
+check_*.js
+compare_keys.js
+search_use_agora.js
