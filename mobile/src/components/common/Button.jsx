@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button as TamaguiButton, Spinner, Text } from 'tamagui';
+import { Pressable } from 'react-native';
+import { Spinner, Text, XStack } from 'tamagui';
 
 const VARIANT_STYLES = {
   primary: {
@@ -59,43 +60,46 @@ const Button = ({
   const isDisabled = disabled || loading;
 
   return (
-    <TamaguiButton
+    <Pressable
       onPress={onPress}
       disabled={isDisabled}
-      height={metrics.height}
-      paddingHorizontal={metrics.paddingHorizontal}
-      borderRadius={metrics.borderRadius}
-      backgroundColor={palette.backgroundColor}
-      borderWidth={palette.borderColor === 'transparent' ? 0 : 1}
-      borderColor={palette.borderColor}
-      width={fullWidth ? '100%' : undefined}
-      opacity={isDisabled ? 0.65 : 1}
-      press={{ scale: 0.98, backgroundColor: palette.pressBg }}
-      alignItems="center"
-      justifyContent="center"
-      flexDirection="row"
-      gap={8}
-      style={style}
+      style={[{ width: fullWidth ? '100%' : undefined }, style]}
       {...rest}
     >
-      {loading ? (
-        <Spinner size="small" color={palette.color} />
-      ) : (
-        <>
-          {icon}
-          {children || (
-            <Text
-              color={palette.color}
-              fontSize={metrics.fontSize}
-              fontWeight="700"
-              style={textStyle}
-            >
-              {title}
-            </Text>
+      {({ pressed }) => (
+        <XStack
+          height={metrics.height}
+          paddingHorizontal={metrics.paddingHorizontal}
+          borderRadius={metrics.borderRadius}
+          backgroundColor={pressed && !isDisabled ? palette.pressBg : palette.backgroundColor}
+          borderWidth={palette.borderColor === 'transparent' ? 0 : 1}
+          borderColor={palette.borderColor}
+          width={fullWidth ? '100%' : undefined}
+          opacity={isDisabled ? 0.65 : pressed ? 0.92 : 1}
+          alignItems="center"
+          justifyContent="center"
+          gap={8}
+        >
+          {loading ? (
+            <Spinner size="small" color={palette.color} />
+          ) : (
+            <>
+              {icon}
+              {children || (
+                <Text
+                  color={palette.color}
+                  fontSize={metrics.fontSize}
+                  fontWeight="700"
+                  style={textStyle}
+                >
+                  {title}
+                </Text>
+              )}
+            </>
           )}
-        </>
+        </XStack>
       )}
-    </TamaguiButton>
+    </Pressable>
   );
 };
 

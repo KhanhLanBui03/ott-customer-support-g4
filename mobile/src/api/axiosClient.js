@@ -73,6 +73,7 @@ let isUnauthorizedAlertShowing = false;
 let refreshPromise = null;
 
 const clearAuthAndExpireSession = async () => {
+  const hadAuth = Boolean(store?.getState?.()?.auth?.accessToken);
   await Promise.allSettled([
     SecureStore.deleteItemAsync('accessToken'),
     SecureStore.deleteItemAsync('refreshToken'),
@@ -80,7 +81,7 @@ const clearAuthAndExpireSession = async () => {
     SecureStore.deleteItemAsync('user'),
   ]);
 
-  if (store && !isUnauthorizedAlertShowing) {
+  if (store && hadAuth && !isUnauthorizedAlertShowing) {
     isUnauthorizedAlertShowing = true;
     store.dispatch({ type: 'auth/sessionExpired' });
     Alert.alert(

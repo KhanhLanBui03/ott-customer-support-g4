@@ -7,11 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "chatapp",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/images/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#050507"
-    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -23,7 +18,7 @@
     },
     "android": {
       "package": "com.chatapp",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#050507"
@@ -49,6 +44,14 @@
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.png",
+          "backgroundColor": "#050507",
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-notifications",
         {

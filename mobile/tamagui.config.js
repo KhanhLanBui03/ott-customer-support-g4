@@ -1,5 +1,5 @@
 import { createTamagui } from 'tamagui';
-import { defaultConfig } from '@tamagui/config/v5';
+import { defaultConfig } from '@tamagui/config/v6';
 import { COLORS } from './src/context/ThemeContext';
 
 const appThemes = {

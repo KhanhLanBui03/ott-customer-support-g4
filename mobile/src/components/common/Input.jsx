@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Input as TamaguiInput, Text, XStack, YStack } from 'tamagui';
+import { TextInput } from 'react-native';
+import { Text, XStack, YStack } from 'tamagui';
 
 const Input = ({
   label,
@@ -23,7 +24,8 @@ const Input = ({
       : darkSurface
         ? '#2E2C2E'
         : '$borderColor';
-  const textColor = darkSurface ? '#F2F2F2' : '$color';
+  const textColor = darkSurface ? '#F2F2F2' : '#0F172A';
+  const placeholderColor = darkSurface ? '#64748b' : '#64748B';
 
   return (
     <YStack gap={6} width="100%" style={containerStyle}>
@@ -50,16 +52,18 @@ const Input = ({
         gap={10}
       >
         {leftIcon}
-        <TamaguiInput
-          flex={1}
-          borderWidth={0}
-          backgroundColor="transparent"
-          paddingHorizontal={0}
-          height={48}
-          color={textColor}
-          placeholderTextColor={darkSurface ? '#64748b' : '$placeholderColor'}
-          fontSize={15}
-          focus={{ borderWidth: 0 }}
+        <TextInput
+          style={[
+            {
+              flex: 1,
+              height: 48,
+              color: textColor,
+              fontSize: 15,
+              paddingHorizontal: 0,
+            },
+            inputStyle,
+          ]}
+          placeholderTextColor={placeholderColor}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -68,14 +72,13 @@ const Input = ({
             setFocused(false);
             onBlur?.(e);
           }}
-          style={inputStyle}
           {...rest}
         />
         {rightElement}
       </XStack>
 
       {error ? (
-        <Text fontSize={12} color="#ef4444" marginLeft={4}>
+        <Text fontSize={12} color="#FB565B" marginLeft={4}>
           {error}
         </Text>
       ) : null}

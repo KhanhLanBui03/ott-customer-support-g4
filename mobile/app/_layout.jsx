@@ -142,13 +142,19 @@ function RootLayoutNav() {
     return null;
   }
 
+  const isAuthenticated = Boolean(accessToken);
+
   return (
     <SafeAreaProvider>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(main)" options={{ headerShown: false }} />
+        <Stack.Protected guard={!isAuthenticated}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={isAuthenticated}>
+          <Stack.Screen name="(main)" options={{ headerShown: false }} />
+        </Stack.Protected>
       </Stack>
-      <InAppNotification />
+      {isAuthenticated ? <InAppNotification /> : null}
     </SafeAreaProvider>
   );
 }

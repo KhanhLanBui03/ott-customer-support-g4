@@ -190,19 +190,9 @@ const AIAssistantPanel = ({ conversationId }) => {
   const MONO_FONT = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
 
   const ActionCard = ({ code, icon, label, bgColor, accentColor }) => (
-    <Card
-      press={{ scale: 0.97, opacity: 0.85 }}
-      backgroundColor={isDark ? '#101013' : colors.surface100}
-      borderWidth={1}
-      borderColor={colors.border}
-      borderRadius={16}
-      width={isWideLayout ? '23.5%' : '48%'}
-      paddingVertical={14}
-      paddingHorizontal={12}
-      alignItems="flex-start"
-      justifyContent="space-between"
-      marginBottom={12}
-      gap={10}
+    <TouchableOpacity
+      activeOpacity={0.8}
+      style={{ width: isWideLayout ? '23.5%' : '48%', marginBottom: 12 }}
       onPress={() => {
         const actionMap = {
           'TÓM TẮT': 'summary',
@@ -213,18 +203,31 @@ const AIAssistantPanel = ({ conversationId }) => {
         handleAction(actionMap[label]);
       }}
     >
-      <XStack width="100%" justifyContent="space-between" alignItems="center">
-        <View style={[styles.actionIconContainer, { backgroundColor: bgColor, marginBottom: 0 }]}>
-          {icon}
-        </View>
-        <TText fontSize={10} fontWeight="700" color={accentColor} style={{ fontFamily: MONO_FONT }}>
-          {code}
+      <Card
+        backgroundColor={isDark ? '#101013' : colors.surface100}
+        borderWidth={1}
+        borderColor={colors.border}
+        borderRadius={16}
+        width="100%"
+        paddingVertical={14}
+        paddingHorizontal={12}
+        alignItems="flex-start"
+        justifyContent="space-between"
+        gap={10}
+      >
+        <XStack width="100%" justifyContent="space-between" alignItems="center">
+          <View style={[styles.actionIconContainer, { backgroundColor: bgColor, marginBottom: 0 }]}>
+            {icon}
+          </View>
+          <TText fontSize={10} fontWeight="700" color={accentColor} style={{ fontFamily: MONO_FONT }}>
+            {code}
+          </TText>
+        </XStack>
+        <TText fontSize={11} fontWeight="800" letterSpacing={1} color={colors.foreground}>
+          {label}
         </TText>
-      </XStack>
-      <TText fontSize={11} fontWeight="800" letterSpacing={1} color={colors.foreground}>
-        {label}
-      </TText>
-    </Card>
+      </Card>
+    </TouchableOpacity>
   );
 
   return (

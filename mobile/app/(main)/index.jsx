@@ -26,6 +26,7 @@ const HomeScreen = () => {
   const dispatch = useDispatch();
   const { conversations, loading } = useSelector((state) => state.chat);
   const currentUser = useSelector((state) => state.auth.user);
+  const accessToken = useSelector((state) => state.auth.accessToken);
   const { colors, isDark, toggleTheme } = useTheme();
   const { isWideLayout, contentMaxWidth } = useResponsive();
   const [searchFocused, setSearchFocused] = useState(false);
@@ -94,11 +95,12 @@ const HomeScreen = () => {
   const BASE_URL = CONFIG.BASE_URL;
 
   useEffect(() => {
+    if (!accessToken) return;
     dispatch(fetchConversations());
     if (currentUser?.userId || currentUser?.id) {
       dispatch(setCurrentUserId(String(currentUser.userId || currentUser.id)));
     }
-  }, [currentUser, dispatch]);
+  }, [accessToken, currentUser, dispatch]);
 
   const onRefresh = async () => {
     setRefreshing(true);
