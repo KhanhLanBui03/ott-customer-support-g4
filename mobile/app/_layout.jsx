@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import store from '../src/store/store';
 import { restoreState, sessionExpired } from '../src/store/authSlice';
-import { Alert } from 'react-native';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TamaguiProvider, Theme } from 'tamagui';
@@ -17,10 +17,54 @@ import { useTranslation } from 'react-i18next';
 import '../src/locales/i18n';
 
 // Configure OS notification behavior early at startup
-configureNotificationHandler();
+try {
+  configureNotificationHandler();
+} catch (e) {
+  console.warn('Notification handler init skipped:', e);
+}
 
 // Keep splash screen visible while we fetch auth state
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMessage: String(error?.stack || error?.message || error) };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[AppErrorBoundary]', error, info?.componentStack);
+    SplashScreen.hideAsync().catch(() => {});
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#050507', padding: 24, justifyContent: 'center' }}>
+          <Text style={{ color: '#60A5FA', fontSize: 18, fontWeight: '800', marginBottom: 12 }}>
+            F5 Chat gặp lỗi khởi chạy
+          </Text>
+          <ScrollView style={{ maxHeight: 360, backgroundColor: '#101013', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#2E2C2E' }}>
+            <Text style={{ color: '#F2F2F2', fontSize: 12 }} selectable>
+              {this.state.errorMessage}
+            </Text>
+          </ScrollView>
+          <TouchableOpacity
+            onPress={() => this.setState({ hasError: false, errorMessage: '' })}
+            style={{ marginTop: 16, backgroundColor: '#3B82F6', paddingVertical: 14, borderRadius: 14, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function RootLayoutNav() {
   const { i18n } = useTranslation();
@@ -70,7 +114,9 @@ function RootLayoutNav() {
         console.error('Failed to restore token:', err);
       } finally {
         setIsReady(true);
-        await SplashScreen.hideAsync();
+        try {
+          await SplashScreen.hideAsync();
+        } catch {}
       }
     };
 
@@ -120,14 +166,16 @@ function TamaguiBridge({ children }) {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Provider store={store}>
-        <ThemeProvider>
-          <TamaguiBridge>
-            <RootLayoutNav />
-          </TamaguiBridge>
-        </ThemeProvider>
-      </Provider>
-    </GestureHandlerRootView>
+    <AppErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Provider store={store}>
+          <ThemeProvider>
+            <TamaguiBridge>
+              <RootLayoutNav />
+            </TamaguiBridge>
+          </ThemeProvider>
+        </Provider>
+      </GestureHandlerRootView>
+    </AppErrorBoundary>
   );
 }
