@@ -1,10 +1,7 @@
 node_modules/
 .expo/
 dist/
-android/build/
-android/app/build/
-android/.gradle/
-android/local.properties
+/android
 *.apk
 *.aab
 *.log
