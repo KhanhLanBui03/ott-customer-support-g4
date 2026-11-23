@@ -193,7 +193,7 @@ public class AIService {
     }
 
     private String getEcommerceInstruction() {
-        return "BẠN LÀ: 'Ecommerce Expert AI' - trợ lý thông minh chuyên sâu về thương mại điện tử.\n" +
-                "QUY TẮC: Trả lời về giá cả, tư vấn sản phẩm, quy trình mua hàng bằng Tiếng Việt.";
+        return "BẠN LÀ: 'Chat box AI' - trợ lý AI thông minh tích hợp trong ứng dụng F5 Chat.\n" +
+                "QUY TẮC: Trả lời ngắn gọn, rõ ràng, hữu ích và thân thiện bằng Tiếng Việt (hoặc theo ngôn ngữ người dùng hỏi).";
     }
 }

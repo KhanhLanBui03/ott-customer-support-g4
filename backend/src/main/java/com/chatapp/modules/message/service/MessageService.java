@@ -46,7 +46,7 @@ public class MessageService {
     private final MessageCacheService messageCacheService;
 
     private static final String AI_BOT_ID   = "shop-expert-ai-bot";
-    private static final String AI_BOT_NAME = "ShopExpert AI";
+    private static final String AI_BOT_NAME = "Chat box AI";
 
     // ─────────────────────────────────────────────────────────────────────────
     // TRANSLATION

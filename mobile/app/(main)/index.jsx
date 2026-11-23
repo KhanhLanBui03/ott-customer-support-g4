@@ -377,7 +377,8 @@ const HomeScreen = () => {
     
     // Lấy thông tin tag
     const tagInfo = item.tag ? getTagByKey(item.tag) : null;
-    const isAIConv = item.conversationId?.includes('shop-expert-ai-bot') || displayName?.toLowerCase()?.includes('shopexpert');
+    const isAIConv = item.conversationId?.includes('shop-expert-ai-bot') || displayName?.toLowerCase()?.includes('shopexpert') || displayName?.toLowerCase()?.includes('chat box ai');
+    const resolvedDisplayName = isAIConv ? 'Chat box AI' : displayName;
 
     return (
       <Swipeable
@@ -407,7 +408,7 @@ const HomeScreen = () => {
           onPress={() => router.push({
             pathname: `/chat/${encodeURIComponent(item.conversationId)}`,
             params: {
-              name: displayName,
+              name: resolvedDisplayName,
               avatar: avatarUrl,
               type: item.type
             }
@@ -439,7 +440,7 @@ const HomeScreen = () => {
           <View style={styles.conversationInfo}>
             <View style={styles.conversationHeader}>
               <View style={styles.nameRow}>
-                <Text style={[styles.conversationName, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
+                <Text style={[styles.conversationName, { color: colors.foreground }]} numberOfLines={1}>{resolvedDisplayName}</Text>
                 {isAIConv && (
                   <View style={[styles.aiMiniChip, { backgroundColor: colors.aiSurface, borderColor: colors.aiBorder }]}>
                     <Text style={[styles.aiMiniChipText, { color: colors.aiAccent }]}>AI</Text>
@@ -602,7 +603,7 @@ const HomeScreen = () => {
                     const aiConvId = `SINGLE#${participants[0]}#${participants[1]}`;
                     router.push({
                       pathname: `/chat/${encodeURIComponent(aiConvId)}`,
-                      params: { name: 'ShopExpert AI', type: 'SINGLE' },
+                      params: { name: 'Chat box AI', type: 'SINGLE' },
                     });
                   }
                 }}
@@ -612,7 +613,7 @@ const HomeScreen = () => {
                   <View style={[styles.signalOnlineDot, { backgroundColor: colors.aiAccent, borderColor: colors.background }]} />
                 </View>
                 <Text style={[styles.signalNodeLabel, { color: colors.aiAccent, fontWeight: '700' }]} numberOfLines={1}>
-                  AI Copilot
+                  Chat box AI
                 </Text>
               </TouchableOpacity>
 

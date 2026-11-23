@@ -498,7 +498,7 @@ const ChatBubble = ({
       )}
 
       <TouchableOpacity activeOpacity={message.isRecalled ? 1 : 0.8} onPress={() => !message.isRecalled && onPressMessage?.(message)} onLongPress={() => !message.isRecalled && onLongPress?.()} style={[styles.messageWrapper, isOwn ? styles.ownWrapper : styles.otherWrapper]}>
-        {!isOwn && <Text style={[styles.senderName, { color: isAIMessage ? colors.aiAccent : colors.textMuted }]}>{senderInfo?.fullName || senderInfo?.name || message.senderName || 'User'}</Text>}
+        {!isOwn && <Text style={[styles.senderName, { color: isAIMessage ? colors.aiAccent : colors.textMuted }]}>{isAIMessage ? 'Chat box AI' : (senderInfo?.fullName || senderInfo?.name || message.senderName || 'User')}</Text>}
 
         <View style={[styles.bubbleContainer, isOwn ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
           <Animated.View style={[
@@ -519,7 +519,7 @@ const ChatBubble = ({
               <View style={[styles.aiHeaderChip, { borderBottomColor: colors.aiBorder }]}>
                 <Ionicons name="sparkles" size={11} color={colors.aiAccent} />
                 <Text style={[styles.aiHeaderChipText, { color: colors.aiAccent, fontFamily: MONO_FONT }]}>
-                  SHOPEXPERT AI · NEURAL
+                  CHAT BOX AI
                 </Text>
               </View>
             )}

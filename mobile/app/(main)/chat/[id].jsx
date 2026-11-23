@@ -439,6 +439,7 @@ const ChatDetailScreen = () => {
   };
 
   const displayName = useMemo(() => {
+    if (isAI) return 'Chat box AI';
     if (conversation?.type === 'GROUP') return conversation.name || 'Nhóm chat';
 
     if (conversation?.type === 'SINGLE' || paramType === 'SINGLE' || (!conversation && paramName)) {
@@ -511,7 +512,7 @@ const ChatDetailScreen = () => {
   const showStrangerBar = useMemo(() => {
     if (isAI) return false;
     if (!conversation || conversation.type !== 'SINGLE') return false;
-    if (conversation.isAI || displayName?.toLowerCase()?.includes('assistant') || displayName?.toLowerCase()?.includes('copilot') || displayName?.toLowerCase()?.includes('shopexpert')) return false;
+    if (conversation.isAI || displayName?.toLowerCase()?.includes('assistant') || displayName?.toLowerCase()?.includes('copilot') || displayName?.toLowerCase()?.includes('shopexpert') || displayName?.toLowerCase()?.includes('chat box ai')) return false;
     // Only show the bar if we have CONFIRMED the friendship status from the backend
     // otherMember must exist and have a friendshipStatus field set by the server
     if (!otherMember) return false;

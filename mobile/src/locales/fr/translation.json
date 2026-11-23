@@ -189,7 +189,7 @@
     "reload_translation": "Retraduire",
     "translation_failed": "Échec de la traduction",
     "ai_expert_name": "AI Expert",
-    "ai_bot_name": "AI Bot",
+    "ai_bot_name": "Chat box AI",
     "view_all_pins_tooltip": "Voir tous les messages épinglés",
     "file_limit_alert": "Vous pouvez envoyer au maximum {{count}} fichier(s) à la fois.",
     "attachment_fallback": "Pièce jointe",

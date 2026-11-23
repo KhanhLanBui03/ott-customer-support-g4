@@ -414,7 +414,7 @@ const CustomTabBar = ({ state, descriptors, emitter, navigateToTab, navigation, 
                 router.push({
                   pathname: `/chat/${encodeURIComponent(aiConvId)}`,
                   params: {
-                    name: 'ShopExpert AI',
+                    name: 'Chat box AI',
                     type: 'SINGLE'
                   }
                 });

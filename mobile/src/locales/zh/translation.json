@@ -189,7 +189,7 @@
     "reload_translation": "重新翻译",
     "translation_failed": "翻译失败",
     "ai_expert_name": "AI Expert",
-    "ai_bot_name": "AI Bot",
+    "ai_bot_name": "Chat box AI",
     "view_all_pins_tooltip": "查看所有置顶消息",
     "file_limit_alert": "您一次最多只能发送 {{count}} 个文件。",
     "attachment_fallback": "附件",

@@ -15,7 +15,7 @@ export default function ShopExpertAIScreen() {
       router.replace({
         pathname: `/chat/${encodeURIComponent(aiConvId)}`,
         params: {
-          name: 'ShopExpert AI',
+          name: 'Chat box AI',
           type: 'SINGLE'
         }
       });
