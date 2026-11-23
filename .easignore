@@ -1,0 +1,22 @@
+# Ignore non-mobile monorepo folders & generated native folder so EAS runs clean Expo CNG prebuild
+backend/
+web/
+whisper/
+logs/
+.agents/
+.msw-agent/
+.agent_tmp/
+mobile/android/
+mobile/ios/
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+node_modules/
+*.apk
+*.aab
+*.log
+*.gz
+dasd
+mobile/check_*.js
+mobile/compare_keys.js
+mobile/search_use_agora.js
