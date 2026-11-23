@@ -98,8 +98,8 @@ npx expo start
 ```
 
 **📲 Tải xuống ứng dụng (Android APK - phân phối qua Internet):**
-* Tải trực tiếp bản APK mới nhất (EAS Build Cloud): **[Tải F5 Chat APK](https://expo.dev/artifacts/eas/WE02BWLLUAokgJB7maeztPhkM7zRTJhq3R4xaquMlKU.apk)**
-* Trang chi tiết bản build & mã QR cài đặt (EAS): https://expo.dev/accounts/phamhinhs-team/projects/chat-app/builds/1cafcbb3-9403-4215-bfdc-a0c88ff27aa9
+* Tải trực tiếp bản APK mới nhất (EAS Build Cloud): **[Tải F5 Chat APK](https://expo.dev/artifacts/eas/KSERFU8gWh9uA8HawjO2zf3zDHupLGYKzS3Gz_esc7g.apk)**
+* Trang chi tiết bản build & mã QR cài đặt (EAS): https://expo.dev/accounts/phamhinhs-team/projects/chat-app/builds/8821f60a-73fc-4452-b07f-19f8d9a512fc
 * Backend API Production (HTTPS/WSS trên AWS EC2): `https://44-192-41-31.sslip.io`
 
 ---
