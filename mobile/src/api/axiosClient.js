@@ -1,9 +1,10 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Alert } from 'react-native';
+import CONFIG from '../config';
 
-// Sử dụng biến môi trường từ Expo
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+// Sử dụng biến môi trường từ Expo (có fallback an toàn qua CONFIG)
+const API_BASE_URL = CONFIG.API_URL;
 
 const PUBLIC_AUTH_PATHS = [
   '/auth/login',

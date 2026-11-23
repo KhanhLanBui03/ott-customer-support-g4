@@ -12,10 +12,20 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://44-192-41-31.sslip.io/api/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "wss://44-192-41-31.sslip.io/ws/mobile",
+        "EXPO_PUBLIC_ENV": "production"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://44-192-41-31.sslip.io/api/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "wss://44-192-41-31.sslip.io/ws/mobile",
+        "EXPO_PUBLIC_ENV": "production"
+      }
     }
   },
   "submit": {

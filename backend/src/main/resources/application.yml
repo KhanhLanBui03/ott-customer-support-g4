@@ -109,6 +109,7 @@ cors:
     - "http://*.local:*"
     - "https://*.f5chat.online"
     - "https://f5chat.online"
+    - "https://*.sslip.io"
   allowed-methods:
     - GET
     - POST

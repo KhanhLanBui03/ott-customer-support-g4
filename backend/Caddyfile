@@ -1,0 +1,11 @@
+44-192-41-31.sslip.io {
+    encode gzip
+
+    request_body {
+        max_size 100MB
+    }
+
+    reverse_proxy backend:8080 {
+        flush_interval -1
+    }
+}

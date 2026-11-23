@@ -107,6 +107,7 @@ public class SecurityConfig {
                                 "http://10.*:*",
                                 "https://*.f5chat.online",
                                 "https://f5chat.online",
+                                "https://*.sslip.io",
                                 "https://*.pages.dev",
                                 "https://f5chat-app.pages.dev"));
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
